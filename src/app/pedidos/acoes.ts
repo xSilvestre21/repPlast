@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import type { StatusPedido } from "@/generated/prisma/enums";
+import { recalcularAposMudancaDeStatus } from "@/lib/comissao-apuracao";
 import { type DbOrganizacao, dbParaOrganizacao } from "@/lib/db";
 import { enviarEmail } from "@/lib/email";
 import { lerNumeroBr } from "@/lib/numero-br";
@@ -143,7 +144,7 @@ export async function criarPedido(
       }),
       db.fornecedor.findFirst({
         where: { id: fornecedorId, organizacaoId },
-        select: { id: true, ipiPercentual: true, comissaoPercentual: true },
+        select: { id: true, ipiPercentual: true },
       }),
     ]);
 
@@ -165,10 +166,13 @@ export async function criarPedido(
         clienteId,
         fornecedorId,
         numero: contador.proximoNumeroPedido - 1,
-        // IPI e comissão são congelados aqui: um reajuste no cadastro do
-        // fornecedor não pode mudar pedidos já lançados.
+        // O IPI é congelado aqui: um reajuste no cadastro do fornecedor não
+        // pode mudar o valor de um pedido já lançado.
         ipiPercentual: fornecedor.ipiPercentual,
-        comissaoPercentual: fornecedor.comissaoPercentual,
+        // A comissão NÃO é copiada de propósito. Vazio significa "siga a regra
+        // da indústria", e é isso que permite às faixas de volume funcionarem:
+        // um percentual gravado aqui vira exceção e ignora a apuração mensal.
+        comissaoPercentual: null,
         // As observações do cliente já entram preenchidas — são recados que se
         // repetem em todo pedido dele.
         observacoes: cliente.observacoes,
@@ -426,7 +430,12 @@ async function mudarStatus(pedidoId: string, status: StatusPedido, exigido: Stat
 
   const pedido = await db.pedido.findFirst({
     where: { id: pedidoId, organizacaoId },
-    select: { status: true, _count: { select: { itens: true } } },
+    select: {
+      status: true,
+      fornecedorId: true,
+      enviadoEm: true,
+      _count: { select: { itens: true } },
+    },
   });
 
   if (!pedido) throw new Error("Pedido não encontrado.");
@@ -438,16 +447,27 @@ async function mudarStatus(pedidoId: string, status: StatusPedido, exigido: Stat
     throw new Error("Não dá para enviar um pedido sem itens.");
   }
 
+  const enviadoEm =
+    status === "ENVIADO" ? new Date() : status === "ABERTO" ? null : pedido.enviadoEm;
+
   await db.pedido.update({
     where: { id: pedidoId },
     data: {
       status,
-      enviadoEm: status === "ENVIADO" ? new Date() : status === "ABERTO" ? null : undefined,
+      enviadoEm: status === "CANCELADO" ? undefined : enviadoEm,
       canceladoEm: status === "CANCELADO" ? new Date() : null,
     },
   });
 
+  // A competência ANTIGA também precisa ser refeita: desmarcar o envio tira o
+  // pedido do mês em que ele estava, e a apuração de lá muda.
+  await recalcularAposMudancaDeStatus(db, organizacaoId, pedido.fornecedorId, [
+    pedido.enviadoEm,
+    enviadoEm,
+  ]);
+
   revalidatePath("/pedidos");
+  revalidatePath("/comissoes");
   revalidatePath(`/pedidos/${pedidoId}`);
 }
 
@@ -524,16 +544,23 @@ export async function enviarPedidoPorEmail(
     if (!resultado.enviado) return { erro: resultado.motivo };
 
     if (pedido.status === "ABERTO") {
-      await db.pedido.updateMany({
-        where: { id: pedidoId, organizacaoId },
-        data: { status: "ENVIADO", enviadoEm: new Date(), canceladoEm: null },
+      const enviadoEm = new Date();
+
+      const atualizado = await db.pedido.update({
+        where: { id: pedidoId },
+        data: { status: "ENVIADO", enviadoEm, canceladoEm: null },
+        select: { fornecedorId: true },
       });
+
+      // O envio é o gatilho da comissão: a apuração do mês muda agora.
+      await recalcularAposMudancaDeStatus(db, organizacaoId, atualizado.fornecedorId, [enviadoEm]);
     }
   } catch (erro) {
     return { erro: erro instanceof Error ? erro.message : "Não foi possível enviar." };
   }
 
   revalidatePath("/pedidos");
+  revalidatePath("/comissoes");
   revalidatePath(`/pedidos/${pedidoId}`);
   return {};
 }

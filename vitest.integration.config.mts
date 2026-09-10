@@ -18,5 +18,10 @@ export default defineConfig({
     // O banco é compartilhado entre os arquivos; rodar em série evita
     // interferência entre eles.
     fileParallelism: false,
+    // O padrão de 5s do Vitest é pensado para teste unitário. Aqui cada
+    // operação vai até um Postgres na nuvem, e um teste que monta o cenário
+    // faz várias — o limite precisa acomodar a latência da rede.
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
   },
 });

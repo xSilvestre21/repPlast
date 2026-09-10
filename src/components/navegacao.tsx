@@ -7,6 +7,7 @@ import { AlternadorTema } from "./alternador-tema";
 
 const ITENS = [
   { href: "/pedidos", rotulo: "Pedidos" },
+  { href: "/comissoes", rotulo: "Comissões" },
   { href: "/clientes", rotulo: "Clientes" },
   { href: "/produtos", rotulo: "Produtos" },
   { href: "/fornecedores", rotulo: "Fornecedores" },
