@@ -1,42 +1,12 @@
 "use client";
 
+import { BadgeCheck, MapPin, MessageSquareText, Phone } from "lucide-react";
 import { useActionState } from "react";
 
 import { AreaTexto, Botao, Campo, MensagemErro, SecaoCartao } from "@/components/ui";
 
 import type { EstadoFormulario } from "./acoes";
-
-export type ValoresCliente = {
-  apelido: string;
-  razaoSocial: string;
-  cnpj: string;
-  ie: string;
-  endereco: string;
-  bairro: string;
-  cep: string;
-  municipio: string;
-  uf: string;
-  telefone: string;
-  email: string;
-  emailNfe: string;
-  observacoes: string;
-};
-
-export const VALORES_VAZIOS: ValoresCliente = {
-  apelido: "",
-  razaoSocial: "",
-  cnpj: "",
-  ie: "",
-  endereco: "",
-  bairro: "",
-  cep: "",
-  municipio: "",
-  uf: "",
-  telefone: "",
-  email: "",
-  emailNfe: "",
-  observacoes: "",
-};
+import type { ValoresCliente } from "./valores";
 
 export function FormularioCliente({
   acao,
@@ -54,6 +24,7 @@ export function FormularioCliente({
       <MensagemErro>{estado.erro}</MensagemErro>
 
       <SecaoCartao
+        icone={BadgeCheck}
         titulo="Identificação"
         descricao="A razão social, o CNPJ e a IE saem impressos no cabeçalho do pedido."
       >
@@ -90,7 +61,7 @@ export function FormularioCliente({
         </div>
       </SecaoCartao>
 
-      <SecaoCartao titulo="Endereço">
+      <SecaoCartao icone={MapPin} titulo="Endereço">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Campo
             name="endereco"
@@ -122,7 +93,7 @@ export function FormularioCliente({
         </div>
       </SecaoCartao>
 
-      <SecaoCartao titulo="Contato">
+      <SecaoCartao icone={Phone} titulo="Contato">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Campo name="telefone" rotulo="Telefone" defaultValue={valores.telefone} />
           <Campo name="email" rotulo="E-mail" type="email" defaultValue={valores.email} />
@@ -137,6 +108,7 @@ export function FormularioCliente({
       </SecaoCartao>
 
       <SecaoCartao
+        icone={MessageSquareText}
         titulo="Observações"
         descricao="Recados que costumam se repetir nos pedidos deste cliente — horário de recebimento, exigências de entrega."
       >
@@ -152,7 +124,7 @@ export function FormularioCliente({
       </SecaoCartao>
 
       <div className="flex justify-end">
-        <Botao type="submit" disabled={enviando}>
+        <Botao type="submit" carregando={enviando}>
           {enviando ? "Salvando…" : rotuloEnvio}
         </Botao>
       </div>

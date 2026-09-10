@@ -1,5 +1,14 @@
 "use client";
 
+import {
+  CircleDot,
+  Disc3,
+  Factory,
+  FileText,
+  FlaskConical,
+  Layers,
+  Ruler,
+} from "lucide-react";
 import { useActionState, useMemo, useState } from "react";
 
 import {
@@ -16,6 +25,7 @@ import { lerNumeroBr } from "@/lib/numero-br";
 import { type Aditivo, fatorEfetivo, precoMilheiroSaco } from "@/lib/precificacao";
 
 import type { EstadoFormulario } from "./acoes";
+import type { ValoresProduto } from "./valores";
 
 export type AditivoOpcao = Aditivo & { id: string };
 
@@ -24,50 +34,6 @@ export type FornecedorOpcao = {
   nome: string;
   fatorKgPadrao: string | null;
   aditivos: AditivoOpcao[];
-};
-
-export type ValoresProduto = {
-  fornecedorId: string;
-  familia: string;
-  codigoFornecedor: string;
-  descricao: string;
-  material: string;
-  complemento: string;
-  larguraCm: string;
-  comprimentoCm: string;
-  espessuraMm: string;
-  sanfona: string;
-  fatorKg: string;
-  larguraMm: string;
-  metragemM: string;
-  micragem: string;
-  unidadesPorCaixa: string;
-  precoUnidade: string;
-  precoCaixa: string;
-  precoKg: string;
-  aditivos: string[];
-};
-
-export const VALORES_VAZIOS: ValoresProduto = {
-  fornecedorId: "",
-  familia: "SACO",
-  codigoFornecedor: "",
-  descricao: "",
-  material: "",
-  complemento: "",
-  larguraCm: "",
-  comprimentoCm: "",
-  espessuraMm: "",
-  sanfona: "",
-  fatorKg: "",
-  larguraMm: "",
-  metragemM: "",
-  micragem: "",
-  unidadesPorCaixa: "",
-  precoUnidade: "",
-  precoCaixa: "",
-  precoKg: "",
-  aditivos: [],
 };
 
 const FAMILIAS = [
@@ -194,7 +160,7 @@ export function FormularioProduto({
     <form action={enviar} className="space-y-5">
       <MensagemErro>{estado.erro}</MensagemErro>
 
-      <SecaoCartao titulo="Origem">
+      <SecaoCartao icone={Factory} titulo="Origem">
         <div className="grid gap-4 sm:grid-cols-2">
           <Selecao
             name="fornecedorId"
@@ -275,6 +241,7 @@ export function FormularioProduto({
 
       {ehSaco && (
         <SecaoCartao
+          icone={Ruler}
           titulo="Medidas"
           descricao="São elas que formam o preço. A sanfona entra só na descrição."
         >
@@ -331,7 +298,7 @@ export function FormularioProduto({
       )}
 
       {ehFita && (
-        <SecaoCartao titulo="Fita" descricao="Preço de tabela, vendida por unidade e por caixa.">
+        <SecaoCartao icone={CircleDot} titulo="Fita" descricao="Preço de tabela, vendida por unidade e por caixa.">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Campo
               name="precoUnidade"
@@ -386,6 +353,7 @@ export function FormularioProduto({
 
       {!ehSaco && !ehFita && (
         <SecaoCartao
+          icone={campos.familia === "BOBINA" ? Disc3 : Layers}
           titulo={campos.familia === "BOBINA" ? "Bobina" : "Stretch"}
           descricao="Vendido por quilo. A quantidade em kg é informada no pedido."
         >
@@ -420,6 +388,7 @@ export function FormularioProduto({
 
       {campos.fornecedorId && (
         <SecaoCartao
+          icone={FlaskConical}
           titulo="Aditivos"
           descricao={
             aditivosDisponiveis.length === 0
@@ -439,8 +408,8 @@ export function FormularioProduto({
                     key={aditivo.id}
                     className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm cursor-pointer transition-colors ${
                       marcado
-                        ? "border-acento bg-acento-fraco text-texto"
-                        : "border-borda hover:border-borda-forte text-texto-suave"
+                        ? "border-acento bg-carimbo-fraco text-tinta"
+                        : "border-filete hover:border-filete-forte text-tinta-2"
                     }`}
                   >
                     <input
@@ -459,7 +428,7 @@ export function FormularioProduto({
                       className="accent-acento"
                     />
                     {aditivo.nome}
-                    <span className="text-xs text-texto-fraco numerico">
+                    <span className="text-xs text-tinta-3 numerico">
                       +{formatarMoeda(Number(aditivo.valor))}
                       {aditivo.tipo === "POR_KG" ? "/kg" : "/mil"}
                     </span>
@@ -472,6 +441,7 @@ export function FormularioProduto({
       )}
 
       <SecaoCartao
+        icone={FileText}
         titulo="Como sai no pedido"
         descricao="A descrição é montada a partir das medidas, mas você pode ajustar."
       >
@@ -488,7 +458,7 @@ export function FormularioProduto({
           <button
             type="button"
             onClick={() => setDescricaoManual(null)}
-            className="mt-2 text-xs text-texto-fraco hover:text-acento transition-colors"
+            className="mt-2 text-xs text-tinta-3 hover:text-carimbo transition-colors"
           >
             Voltar para a gerada: <span className="font-mono">{descricaoGerada}</span>
           </button>
@@ -497,13 +467,13 @@ export function FormularioProduto({
         {calculo && (
           <Cartao className="mt-4 p-4 bg-fundo">
             <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-              <div className="text-sm text-texto-suave">Preço do milheiro</div>
-              <div className="text-2xl font-semibold texto-gradiente numerico">
+              <div className="text-sm text-tinta-2">Preço do milheiro</div>
+              <div className="text-2xl font-semibold cifra numerico">
                 {formatarMoeda(calculo.precoMilheiro.toNumber())}
               </div>
             </div>
 
-            <div className="mt-3 pt-3 border-t border-borda text-xs text-texto-fraco font-mono numerico leading-relaxed">
+            <div className="mt-3 pt-3 border-t border-filete text-xs text-tinta-3 font-mono numerico leading-relaxed">
               {formatarNumero(calculo.largura)} × {formatarNumero(calculo.comprimento)} ×{" "}
               {formatarNumero(calculo.espessura, 2)} ×{" "}
               {formatarNumero(calculo.fatorEfetivo.toNumber(), 2)} ÷ 10
@@ -519,7 +489,7 @@ export function FormularioProduto({
       </SecaoCartao>
 
       <div className="flex justify-end">
-        <Botao type="submit" disabled={enviando}>
+        <Botao type="submit" carregando={enviando}>
           {enviando ? "Salvando…" : rotuloEnvio}
         </Botao>
       </div>

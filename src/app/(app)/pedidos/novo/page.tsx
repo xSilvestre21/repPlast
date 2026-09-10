@@ -4,6 +4,8 @@ import { organizacaoAtual } from "@/lib/sessao";
 
 import { criarPedido } from "../acoes";
 import { FormularioNovoPedido } from "./formulario";
+import { FilePlus2, UserRoundPlus } from "lucide-react";
+import { Pagina } from "@/components/pagina";
 
 export default async function PaginaNovoPedido() {
   const organizacaoId = await organizacaoAtual();
@@ -24,11 +26,15 @@ export default async function PaginaNovoPedido() {
 
   if (clientes.length === 0 || fornecedores.length === 0) {
     return (
-      <>
+      <Pagina>
         <Cabecalho
+          icone={FilePlus2}
           titulo="Novo pedido"
           acao={
-            <BotaoLink href={clientes.length === 0 ? "/clientes/novo" : "/fornecedores/novo"}>
+            <BotaoLink
+              href={clientes.length === 0 ? "/clientes/novo" : "/fornecedores/novo"}
+              icone={UserRoundPlus}
+            >
               {clientes.length === 0 ? "Cadastrar cliente" : "Cadastrar indústria"}
             </BotaoLink>
           }
@@ -37,13 +43,14 @@ export default async function PaginaNovoPedido() {
           Falta cadastrar {clientes.length === 0 ? "um cliente" : "uma indústria"} antes de lançar
           pedido.
         </EstadoVazio>
-      </>
+      </Pagina>
     );
   }
 
   return (
-    <>
+    <Pagina>
       <Cabecalho
+        icone={FilePlus2}
         titulo="Novo pedido"
         descricao="O número é gerado na sequência desta indústria."
       />
@@ -60,6 +67,6 @@ export default async function PaginaNovoPedido() {
           detalhe: `IPI ${Number(f.ipiPercentual).toLocaleString("pt-BR")}%`,
         }))}
       />
-    </>
+    </Pagina>
   );
 }

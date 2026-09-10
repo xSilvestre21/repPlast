@@ -1,5 +1,6 @@
 "use client";
 
+import { Handshake } from "lucide-react";
 import { useActionState } from "react";
 
 import { Botao, MensagemErro, SecaoCartao, Selecao } from "@/components/ui";
@@ -24,6 +25,7 @@ export function FormularioNovoPedido({
       <MensagemErro>{estado.erro}</MensagemErro>
 
       <SecaoCartao
+        icone={Handshake}
         titulo="Para quem e de quem"
         descricao="Um pedido vai para uma única indústria — é ela que fatura e é dela a comissão. Se o cliente quer produtos de duas, são dois pedidos."
       >
@@ -62,7 +64,7 @@ export function FormularioNovoPedido({
       </SecaoCartao>
 
       <div className="flex justify-end">
-        <Botao type="submit" disabled={enviando}>
+        <Botao type="submit" carregando={enviando}>
           {enviando ? "Criando…" : "Criar pedido"}
         </Botao>
       </div>

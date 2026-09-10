@@ -112,6 +112,82 @@ Módulos que nunca podem ir para o navegador — `db`, `sessao`, `senha`, `email
 Como esse pacote só é inofensivo sob a condição `react-server`, os scripts em Node puro (seed,
 setup) precisam passar `--conditions react-server`.
 
+## Identidade visual: Papel & Tinta
+
+**O que este sistema produz é um documento impresso.** O pedido em PDF é o que a indústria recebe,
+guarda e confere — então a tela se parece com a versão boa do papel que ela gera: fundo de papel
+quente, tinta quase preta, filete no lugar de cartão, número em serifada, e uma segunda tinta, o
+vermelhão de carimbo.
+
+As regras que não se quebram estão no topo de [`src/app/globals.css`](src/app/globals.css):
+
+- **Separa-se com filete, não com caixa.** Traço de 1px, canto de 3px. Nada de cartão arredondado
+  com sombra difusa.
+- **O preto é a tinta principal** — é ele que preenche o botão de ação primária.
+- **O vermelho é o carimbo.** Marca a aba ativa, o pedido enviado e o que é destrutivo. Nunca
+  decora. Cheio significa "feito"; em contorno, "cuidado".
+- **Nada brilha:** sem gradiente, sem vidro fosco, sem sombra colorida.
+
+Toda a paleta vive em **variáveis CSS puras**, e não em classes do Tailwind: é o que permite trocar
+de tema em tempo de execução. O `@theme inline` só aponta as utilidades para essas variáveis. A
+ordem das regras é o que faz o tema funcionar: `:root` é claro, `prefers-color-scheme` acompanha o
+sistema, e `data-tema` (a escolha do usuário) vence os dois. O escuro é **tinta invertida quente** —
+marrom-preto, não azul-preto.
+
+Todos os pares de cor passam de 4,5:1 nos dois temas, inclusive papel sobre o vermelho da aba ativa.
+
+### A troca de aba
+
+A barra do topo tem uma **ordem**, e a animação usa isso: ir para um item mais à direita empurra o
+conteúdo para a esquerda, como virar a página de um fichário; voltar faz o contrário. Sem direção,
+ir e voltar seriam a mesma animação e o movimento não diria nada.
+
+Feito com a [View Transitions API](https://nextjs.org/docs/app/guides/view-transitions) através do
+`<ViewTransition>` do React — **sem biblioteca de animação**:
+
+| Peça | Papel |
+| --- | --- |
+| [`Pagina`](src/components/pagina.tsx) | envelope de cada `page.tsx`; recebe a direção pelo tipo da transição |
+| [`Navegacao`](src/components/navegacao.tsx) | decide a direção pela posição na barra e nomeia o marcador |
+
+Três detalhes que custaram tempo e viraram comentário no código:
+
+- **O marcador existe uma vez só na árvore**, sempre dentro do item ativo. Renderizar uma lista por
+  tamanho de tela duplicaria o nome de view transition, e nome repetido faz o navegador abortar a
+  animação inteira.
+- **`::view-transition-group` é só a moldura; quem tem pixels são as fotos.** Zerar a opacidade da
+  foto antiga *e* da nova fazia o marcador sumir durante a viagem inteira.
+- **O `root` precisa ser desligado.** O navegador cruza a foto de tudo o que não recebeu nome, e
+  esse cruzamento se somava ao deslize: o efeito lido era um esmaecimento geral em vez de uma
+  página entrando pelo lado.
+
+O envelope fica em cada `page.tsx`, e não no layout, porque layout persiste entre navegações —
+entrada e saída nunca disparariam lá. É o preço de ter a barra do topo parada enquanto o conteúdo
+troca.
+
+`prefers-reduced-motion` recebe o **estado final**, não o inicial, e o deslize lateral some inteiro.
+
+### Tipografia
+
+| Fonte | Papel |
+| --- | --- |
+| **Newsreader** | títulos e todo número de dinheiro — o gesto central da identidade |
+| **IBM Plex Sans** | interface |
+| **IBM Plex Mono** | medida (`99x166x0,08`), COD.FORN, descrição gerada |
+
+### Ícones
+
+[`lucide-react`](https://lucide.dev), em traço fino e na cor da tinta — sem placa colorida atrás,
+que é vocabulário de aplicativo. Nunca emoji.
+
+Uma armadilha vale registro: **um componente de ícone não atravessa de um Server Component para um
+Client Component como prop.** O React recusa com *"Only plain objects can be passed to Client
+Components"*. Onde isso acontece — [`AcaoPedido`](src/app/(app)/pedidos/[id]/acoes-status.tsx) —
+passa-se o **nome** do ícone e uma tabela do lado do cliente o resolve.
+
+O sistema completo, com o que foi adotado da consultoria de UI e o que foi recusado, está em
+[`design-system/repplast/MASTER.md`](design-system/repplast/MASTER.md).
+
 ## Isolamento entre escritórios (multi-tenant)
 
 São **duas camadas, ambas obrigatórias**:

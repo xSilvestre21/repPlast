@@ -17,6 +17,8 @@ import { FormularioFornecedor } from "../formulario";
 import { SecaoAditivos } from "./aditivos";
 import { BotaoExcluir } from "./botao-excluir";
 import { SecaoLogo } from "./logo-industria";
+import { Factory } from "lucide-react";
+import { Pagina } from "@/components/pagina";
 
 export default async function PaginaFornecedor({ params }: PageProps<"/fornecedores/[id]">) {
   const { id } = await params;
@@ -37,8 +39,9 @@ export default async function PaginaFornecedor({ params }: PageProps<"/fornecedo
   if (!fornecedor) notFound();
 
   return (
-    <>
+    <Pagina>
       <Cabecalho
+        icone={Factory}
         titulo={fornecedor.nome}
         descricao="Condições comerciais, logo e aditivos desta indústria."
         acao={
@@ -88,6 +91,6 @@ export default async function PaginaFornecedor({ params }: PageProps<"/fornecedo
           remover={removerAditivo.bind(null, fornecedor.id)}
         />
       </div>
-    </>
+    </Pagina>
   );
 }

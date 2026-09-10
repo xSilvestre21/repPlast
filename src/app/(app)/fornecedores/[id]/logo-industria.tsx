@@ -2,6 +2,8 @@
 
 import { useActionState, useRef, useState } from "react";
 
+import { ImageUp } from "lucide-react";
+
 import { Botao, BotaoTexto, MensagemErro, SecaoCartao } from "@/components/ui";
 
 import type { EstadoFormulario } from "../acoes";
@@ -30,6 +32,7 @@ export function SecaoLogo({
 
   return (
     <SecaoCartao
+      icone={ImageUp}
       titulo="Logo da indústria"
       descricao="Vai no cabeçalho do PDF do pedido. É o logo da indústria, não o do seu escritório — é assim que o cliente dela está acostumado a receber."
     >
@@ -37,7 +40,7 @@ export function SecaoLogo({
 
       <form action={enviar} className="flex flex-wrap items-center gap-5 mt-3">
         <div
-          className="grid place-items-center shrink-0 size-28 rounded-xl border border-borda bg-fundo-elevado overflow-hidden"
+          className="grid place-items-center shrink-0 size-28 rounded-[3px] border border-filete bg-folha overflow-hidden"
           aria-live="polite"
         >
           {src ? (
@@ -50,7 +53,7 @@ export function SecaoLogo({
               className="max-h-full max-w-full object-contain"
             />
           ) : (
-            <span className="text-xs text-texto-fraco text-center px-2">sem logo</span>
+            <span className="text-xs text-tinta-3 text-center px-2">sem logo</span>
           )}
         </div>
 
@@ -64,13 +67,13 @@ export function SecaoLogo({
               const arquivo = evento.target.files?.[0];
               setPrevia(arquivo ? URL.createObjectURL(arquivo) : null);
             }}
-            className="block w-full text-sm text-texto-suave
+            className="block w-full text-sm text-tinta-2
               file:mr-3 file:rounded-full file:border-0 file:px-4 file:py-2 file:text-sm
-              file:font-medium file:cursor-pointer file:fundo-gradiente file:text-sobre-acento
+              file:font-medium file:cursor-pointer file:bg-tinta text-papel file:text-papel
               hover:file:brightness-110 file:transition-all"
           />
 
-          <p className="text-xs text-texto-fraco">
+          <p className="text-xs text-tinta-3">
             PNG, JPEG ou WebP, até 2 MB. Fundo transparente fica melhor no papel.
           </p>
 

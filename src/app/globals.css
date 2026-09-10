@@ -1,189 +1,525 @@
 @import "tailwindcss";
 
 /*
- * Aurora — identidade visual do RepPlast.
+ * Papel & Tinta — identidade visual do RepPlast.
  *
- * Dois temas, claro e escuro, com o mesmo par de acentos (violeta → ciano).
- * A paleta vive em variáveis CSS puras para poder trocar em tempo de execução;
- * o bloco `@theme inline` só aponta as utilidades do Tailwind para elas.
+ * O QUE ESTE SISTEMA PRODUZ É UM DOCUMENTO IMPRESSO. O pedido em PDF é o que a
+ * indústria recebe, guarda e confere. Então a tela se parece com a versão boa
+ * do papel que ela gera: fundo de papel quente, tinta quase preta, filete no
+ * lugar de cartão, número em serifada, e UMA segunda tinta — o vermelhão de
+ * carimbo.
+ *
+ * As regras que não se quebram:
+ *   · Sem gradiente. Sem vidro fosco. Sem sombra colorida.
+ *   · O preto é a tinta principal — é ele que preenche o botão primário.
+ *   · O vermelho é o CARIMBO: marca a aba ativa, o pedido enviado e o que é
+ *     destrutivo. Ele nunca decora; sempre significa alguma coisa.
+ *   · O verde é a segunda tinta, e existe só para a meta batida.
  *
  * Ordem das regras, e o motivo:
- *   1. `:root`                      escuro, o visual nativo da Aurora
- *   2. `prefers-color-scheme: light` acompanha o sistema, salvo escolha explícita
- *   3. `[data-tema]`                 a escolha do usuário vence tudo
+ *   1. `:root`                       claro, que é o estado natural do papel
+ *   2. `prefers-color-scheme: dark`  acompanha o sistema, salvo escolha
+ *   3. `[data-tema]`                 a escolha do usuário vence as duas
  */
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
-  --fundo: #0a0a12;
-  --fundo-elevado: #12121d;
-  --superficie: rgb(255 255 255 / 0.04);
-  --superficie-alta: rgb(255 255 255 / 0.07);
-  --borda: rgb(255 255 255 / 0.09);
-  --borda-forte: rgb(255 255 255 / 0.16);
+  /* Papel: a mesa. Folha: o que está em cima dela. */
+  --papel: #faf8f3;
+  --folha: #fffdf9;
+  --folha-2: #f2eee6;
 
-  --texto: #ececf4;
-  --texto-suave: #a5a5bd;
-  --texto-fraco: #6e6e8a;
+  /* Filete, não borda: a espessura de um traço de caneta fina. */
+  --filete: rgb(22 19 15 / 0.13);
+  --filete-forte: rgb(22 19 15 / 0.3);
 
-  --acento-1: #8b5cf6;
-  --acento-2: #22d3ee;
-  /* Texto que fica POR CIMA do gradiente. */
-  --sobre-acento: #0a0a12;
-  --acento-fraco: rgb(139 92 246 / 0.16);
+  --tinta: #16130f;
+  --tinta-2: #57514a;
+  --tinta-3: #756c62;
 
-  --perigo: #fb7185;
-  --perigo-fraco: rgb(251 113 133 / 0.14);
-  --aviso: #fbbf24;
+  /* A segunda cor da impressão. */
+  --carimbo: #c8341e;
+  --carimbo-fraco: rgb(200 52 30 / 0.09);
 
-  --sombra-cartao: 0 8px 30px rgb(0 0 0 / 0.35);
-  --brilho-acento: 0 14px 40px rgb(139 92 246 / 0.22);
+  /* A terceira, reservada à meta batida. */
+  --verde: #1f6f4a;
+  --verde-fraco: rgb(31 111 74 / 0.1);
 
-  /* Intensidade do brilho de fundo. O tema claro pede bem menos. */
-  --aurora-forca: 0.42;
-  --aurora-blur: 60px;
+  --perigo: #9a2010;
+  --perigo-fraco: rgb(154 32 16 / 0.08);
+
+  /*
+   * Sombra quase inexistente, e cinza-quente em vez de preta.
+   * Papel sobre papel não flutua: ele encosta.
+   */
+  --sombra: 0 1px 2px rgb(22 19 15 / 0.05);
+  --sombra-alta: 0 2px 8px rgb(22 19 15 / 0.09);
+
+  --grao-forca: 0.035;
 }
 
-@media (prefers-color-scheme: light) {
-  :root:not([data-tema="escuro"]) {
-    color-scheme: light;
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]) {
+    color-scheme: dark;
 
-    --fundo: #fbfbff;
-    --fundo-elevado: #ffffff;
-    --superficie: rgb(255 255 255 / 0.72);
-    --superficie-alta: rgb(255 255 255 / 0.95);
-    --borda: rgb(23 23 55 / 0.09);
-    --borda-forte: rgb(23 23 55 / 0.18);
+    /*
+     * Escuro é tinta invertida, e a tinta é QUENTE — marrom-preto, não
+     * azul-preto. O azul-preto é o padrão de todo painel escuro que existe, e
+     * é justamente o que este projeto está fugindo.
+     */
+    --papel: #14110e;
+    --folha: #1d1915;
+    --folha-2: #262119;
 
-    --texto: #17172e;
-    --texto-suave: #55557a;
-    --texto-fraco: #8a8aa8;
+    --filete: rgb(242 237 228 / 0.13);
+    --filete-forte: rgb(242 237 228 / 0.3);
 
-    --acento-1: #7c3aed;
-    --acento-2: #0891b2;
-    --sobre-acento: #ffffff;
-    --acento-fraco: rgb(124 58 237 / 0.1);
+    --tinta: #f2ede4;
+    --tinta-2: #b0a79b;
+    --tinta-3: #948b7f;
 
-    --perigo: #e11d48;
-    --perigo-fraco: rgb(225 29 72 / 0.08);
-    --aviso: #b45309;
+    --carimbo: #e8563c;
+    --carimbo-fraco: rgb(232 86 60 / 0.14);
 
-    --sombra-cartao: 0 6px 24px rgb(23 23 55 / 0.07);
-    --brilho-acento: 0 12px 32px rgb(124 58 237 / 0.16);
+    --verde: #4fb286;
+    --verde-fraco: rgb(79 178 134 / 0.14);
 
-    --aurora-forca: 0.2;
-    --aurora-blur: 80px;
+    --perigo: #f26b50;
+    --perigo-fraco: rgb(242 107 80 / 0.12);
+
+    --sombra: 0 1px 2px rgb(0 0 0 / 0.4);
+    --sombra-alta: 0 2px 10px rgb(0 0 0 / 0.5);
+
+    --grao-forca: 0.05;
   }
 }
 
-:root[data-tema="claro"] {
-  color-scheme: light;
+:root[data-tema="escuro"] {
+  color-scheme: dark;
 
-  --fundo: #fbfbff;
-  --fundo-elevado: #ffffff;
-  --superficie: rgb(255 255 255 / 0.72);
-  --superficie-alta: rgb(255 255 255 / 0.95);
-  --borda: rgb(23 23 55 / 0.09);
-  --borda-forte: rgb(23 23 55 / 0.18);
+  --papel: #14110e;
+  --folha: #1d1915;
+  --folha-2: #262119;
 
-  --texto: #17172e;
-  --texto-suave: #55557a;
-  --texto-fraco: #8a8aa8;
+  --filete: rgb(242 237 228 / 0.13);
+  --filete-forte: rgb(242 237 228 / 0.3);
 
-  --acento-1: #7c3aed;
-  --acento-2: #0891b2;
-  --sobre-acento: #ffffff;
-  --acento-fraco: rgb(124 58 237 / 0.1);
+  --tinta: #f2ede4;
+  --tinta-2: #b0a79b;
+  --tinta-3: #948b7f;
 
-  --perigo: #e11d48;
-  --perigo-fraco: rgb(225 29 72 / 0.08);
-  --aviso: #b45309;
+  --carimbo: #e8563c;
+  --carimbo-fraco: rgb(232 86 60 / 0.14);
 
-  --sombra-cartao: 0 6px 24px rgb(23 23 55 / 0.07);
-  --brilho-acento: 0 12px 32px rgb(124 58 237 / 0.16);
+  --verde: #4fb286;
+  --verde-fraco: rgb(79 178 134 / 0.14);
 
-  --aurora-forca: 0.2;
-  --aurora-blur: 80px;
+  --perigo: #f26b50;
+  --perigo-fraco: rgb(242 107 80 / 0.12);
+
+  --sombra: 0 1px 2px rgb(0 0 0 / 0.4);
+  --sombra-alta: 0 2px 10px rgb(0 0 0 / 0.5);
+
+  --grao-forca: 0.05;
 }
 
 @theme inline {
-  --color-fundo: var(--fundo);
-  --color-fundo-elevado: var(--fundo-elevado);
-  --color-superficie: var(--superficie);
-  --color-superficie-alta: var(--superficie-alta);
-  --color-borda: var(--borda);
-  --color-borda-forte: var(--borda-forte);
+  --color-papel: var(--papel);
+  --color-folha: var(--folha);
+  --color-folha-2: var(--folha-2);
+  --color-filete: var(--filete);
+  --color-filete-forte: var(--filete-forte);
 
-  --color-texto: var(--texto);
-  --color-texto-suave: var(--texto-suave);
-  --color-texto-fraco: var(--texto-fraco);
+  --color-tinta: var(--tinta);
+  --color-tinta-2: var(--tinta-2);
+  --color-tinta-3: var(--tinta-3);
 
-  --color-acento: var(--acento-1);
-  --color-acento-2: var(--acento-2);
-  --color-acento-fraco: var(--acento-fraco);
-  --color-sobre-acento: var(--sobre-acento);
-
+  --color-carimbo: var(--carimbo);
+  --color-carimbo-fraco: var(--carimbo-fraco);
+  --color-verde: var(--verde);
+  --color-verde-fraco: var(--verde-fraco);
   --color-perigo: var(--perigo);
   --color-perigo-fraco: var(--perigo-fraco);
-  --color-aviso: var(--aviso);
 
-  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
-  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-sans: var(--fonte-sans), system-ui, sans-serif;
+  --font-serif: var(--fonte-serif), Georgia, serif;
+  --font-mono: var(--fonte-mono), ui-monospace, monospace;
+
+  /* Cantos de papel cortado, não de botão de aplicativo. */
+  --radius-folha: 3px;
 }
 
 body {
-  background: var(--fundo);
-  color: var(--texto);
-  /* A troca de tema não deve piscar. */
-  transition: background-color 0.3s ease, color 0.3s ease;
-}
-
-/* -------------------------------------------------------------------------- */
-/* O brilho que dá nome à Aurora                                              */
-/*                                                                            */
-/* Fica atrás de tudo, preso à viewport, e respira devagar. É o que separa    */
-/* este visual de mais um tema escuro qualquer.                               */
-/* -------------------------------------------------------------------------- */
-
-.aurora-fundo {
-  position: fixed;
-  inset: -25%;
-  z-index: -1;
-  pointer-events: none;
-  opacity: var(--aurora-forca);
-  filter: blur(var(--aurora-blur));
-  background:
-    radial-gradient(30% 34% at 18% 12%, var(--acento-1), transparent 70%),
-    radial-gradient(28% 30% at 82% 24%, var(--acento-2), transparent 70%),
-    radial-gradient(26% 28% at 60% 88%, var(--acento-1), transparent 70%);
-  animation: aurora-respirar 18s ease-in-out infinite alternate;
-}
-
-@keyframes aurora-respirar {
-  from { transform: translate3d(-1.5%, -1%, 0) scale(1); }
-  to   { transform: translate3d(1.5%, 2%, 0) scale(1.1); }
+  background: var(--papel);
+  color: var(--tinta);
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 /**
- * Meta batida.
+ * Foco visível no carimbo.
  *
- * A comemoração acontece no BRILHO DE FUNDO, e não nos tokens da marca: mudar
- * os acentos recoloriria botões, valores e selos, e a tela viraria outra coisa.
- * Assim o ambiente muda — dourado, mais forte, respirando mais rápido — sem
- * atrapalhar a leitura dos números.
+ * Fica por fora do elemento, então nunca é engolido por um canto arredondado —
+ * e num sistema de filetes finos o anel precisa ser a coisa mais grossa da
+ * tela para ser encontrado.
  */
-.aurora-fundo.comemorando {
-  background:
-    radial-gradient(32% 36% at 20% 14%, #f59e0b, transparent 70%),
-    radial-gradient(30% 32% at 80% 26%, #ec4899, transparent 70%),
-    radial-gradient(28% 30% at 55% 86%, #fbbf24, transparent 70%);
-  opacity: calc(var(--aurora-forca) * 1.5);
-  animation-duration: 9s;
+:focus-visible {
+  outline: 2px solid var(--carimbo);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Papel                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * O grão do papel.
+ *
+ * Um fundo chapado de 100% de opacidade é tela, não papel. O ruído fino é a
+ * única textura do sistema, e é o que impede a superfície de parecer plástico.
+ */
+.grao {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--grao-forca);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='r'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23r)'/%3E%3C/svg%3E");
+}
+
+/**
+ * Folha: uma superfície apoiada no papel.
+ *
+ * Filete de 1px e canto de 3px — o suficiente para separar, longe demais do
+ * cartão arredondado com sombra difusa que todo painel usa.
+ */
+.folha {
+  background: var(--folha);
+  border: 1px solid var(--filete);
+  border-radius: var(--radius-folha);
+}
+
+/** Folha com a lombada marcada: um traço de carimbo na borda esquerda. */
+.folha-marcada {
+  border-left: 2px solid var(--carimbo);
+}
+
+/**
+ * Barra do topo: papel opaco, não vidro.
+ *
+ * Translúcido deixaria o conteúdo rolar por trás do nome do produto. Aqui ela
+ * é uma faixa sólida, separada por um filete — como o cabeçalho de um
+ * formulário impresso.
+ */
+.barra-topo {
+  background: var(--papel);
+  border-bottom: 1px solid var(--filete);
+}
+
+/**
+ * Rolagem sem barra à mostra.
+ *
+ * A fila de abas rola no celular, e a barra do navegador desenhada por baixo
+ * dela vira um segundo filete cinza que não significa nada. O conteúdo continua
+ * rolando por toque, roda e teclado — só a barra some.
+ */
+.rolagem-limpa {
+  scrollbar-width: none;
+}
+
+.rolagem-limpa::-webkit-scrollbar {
+  display: none;
+}
+
+/** Filete horizontal, usado para separar seções sem desenhar caixa. */
+.regra {
+  border: 0;
+  border-top: 1px solid var(--filete);
+}
+
+/** Filete grosso, para fechar um bloco de totais. */
+.regra-forte {
+  border: 0;
+  border-top: 2px solid var(--tinta);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Tipografia                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Números em serifada.
+ *
+ * Este é o gesto central da identidade: o valor que a pessoa abriu o sistema
+ * para ver é impresso, não renderizado. A serifada dá peso a um número do
+ * mesmo jeito que dá a um título de jornal.
+ */
+.cifra {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.02em;
+}
+
+/**
+ * Dígitos de mesma largura. Numa tabela de pedido isso é legibilidade, não
+ * estética: os valores alinham na vertical e o erro salta aos olhos.
+ */
+.numerico {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/** Rótulo de campo: caixa alta espaçada, como legenda de formulário. */
+.rotulo {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tinta-3);
+}
+
+/**
+ * Título de seção com filete que corre até o fim da linha.
+ *
+ * Vem da diagramação de jornal: o traço prende o título à coluna e diz onde a
+ * seção começa, sem precisar de caixa em volta.
+ */
+.titulo-regra {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.titulo-regra::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--filete);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Marcas                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Carimbo: o selo do pedido enviado.
+ *
+ * Levemente inclinado e com a borda mais grossa que tudo o mais na tela,
+ * porque é isso que um carimbo é — tinta aplicada por cima do documento
+ * depois de ele estar pronto.
+ */
+.carimbo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.5rem;
+  border: 1.5px solid var(--carimbo);
+  border-radius: 2px;
+  color: var(--carimbo);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transform: rotate(-1.5deg);
+}
+
+.carimbo-verde {
+  border-color: var(--verde);
+  color: var(--verde);
+}
+
+.carimbo-apagado {
+  border-color: var(--filete-forte);
+  color: var(--tinta-3);
+  transform: none;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Interação                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Realce de linha.
+ *
+ * Sem elevação e sem escala: a linha não sobe, ela apenas escurece o papel,
+ * do jeito que uma régua de leitura marca a linha que você está olhando.
+ */
+.realcavel {
+  transition: background-color 0.15s ease;
+}
+
+.realcavel:hover {
+  background: var(--folha-2);
+}
+
+/**
+ * Marca-texto do item ativo na navegação.
+ *
+ * É um retângulo sólido de carimbo atrás do rótulo. Recebe nome de view
+ * transition, então ao trocar de aba o navegador o anima DESLIZANDO de um item
+ * para o outro em vez de apagar aqui e acender lá.
+ */
+.marca-nav {
+  position: absolute;
+  inset: 0;
+  border-radius: 2px;
+  background: var(--carimbo);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Movimento                                                                  */
+/* -------------------------------------------------------------------------- */
+
+.surgir {
+  animation: surgir 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes surgir {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/**
+ * Entrada em cascata, sem JavaScript.
+ *
+ * Bem mais curta que num visual com efeito: aqui o movimento serve para dar
+ * ordem de leitura, não para impressionar. Passa dos oito itens e o atraso
+ * para de crescer.
+ */
+.palco > * {
+  animation: surgir 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.palco > *:nth-child(1) { animation-delay: 0.01s; }
+.palco > *:nth-child(2) { animation-delay: 0.05s; }
+.palco > *:nth-child(3) { animation-delay: 0.09s; }
+.palco > *:nth-child(4) { animation-delay: 0.13s; }
+.palco > *:nth-child(5) { animation-delay: 0.17s; }
+.palco > *:nth-child(6) { animation-delay: 0.21s; }
+.palco > *:nth-child(7) { animation-delay: 0.25s; }
+.palco > *:nth-child(n + 8) { animation-delay: 0.28s; }
+
+/** `--alvo` é a largura final, escrita no `style` do elemento. */
+.barra-preenche {
+  animation: preencher 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+}
+
+@keyframes preencher {
+  from { width: 0; }
+  to   { width: var(--alvo); }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Troca de aba                                                               */
+/*                                                                            */
+/* A direção carrega significado: a barra do topo tem uma ORDEM, e ir para a   */
+/* direita nela empurra o conteúdo para a esquerda, como virar a página de um  */
+/* fichário. Voltar faz o contrário. Sem isso, ir e voltar seriam a mesma      */
+/* animação, e o movimento não diria nada.                                    */
+/* -------------------------------------------------------------------------- */
+
+::view-transition-old(.nav-direita) {
+  --deslocamento: -32px;
+  animation: 130ms ease-in both esmaecer reverse,
+             340ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar reverse;
+}
+
+::view-transition-new(.nav-direita) {
+  --deslocamento: 32px;
+  animation: 190ms ease-out 130ms both esmaecer,
+             340ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar;
+}
+
+::view-transition-old(.nav-esquerda) {
+  --deslocamento: 32px;
+  animation: 130ms ease-in both esmaecer reverse,
+             340ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar reverse;
+}
+
+::view-transition-new(.nav-esquerda) {
+  --deslocamento: -32px;
+  animation: 190ms ease-out 130ms both esmaecer,
+             340ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar;
+}
+
+@keyframes esmaecer {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes deslizar {
+  from { translate: var(--deslocamento); }
+  to   { translate: 0; }
+}
+
+/**
+ * O marca-texto desliza; ele não pisca.
+ *
+ * As fotos do estado antigo e do novo são idênticas — um retângulo vermelho —,
+ * então deixá-las esmaecer uma sobre a outra só produziria uma borra no meio do
+ * caminho. A antiga some, a nova fica **opaca do primeiro quadro ao último**, e
+ * o grupo carrega essa foto de um item ao outro.
+ *
+ * Zerar as duas seria o erro fácil aqui: o grupo é só a moldura, quem tem
+ * pixels são as fotos, e o marcador sumiria durante a viagem inteira.
+ */
+::view-transition-group(marca-nav) {
+  animation-duration: 340ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1;
+}
+
+::view-transition-old(marca-nav) {
+  animation: none;
+  opacity: 0;
+}
+
+::view-transition-new(marca-nav) {
+  animation: none;
+  opacity: 1;
+}
+
+/**
+ * O resto da página não faz nada.
+ *
+ * `root` é a foto de tudo o que não recebeu nome — fundo, grão, margens. O
+ * navegador cruza essa foto por padrão, e esse cruzamento se somava ao deslize
+ * do conteúdo: o efeito lido era um esmaecimento geral, e não uma página
+ * entrando pelo lado. Desligado, sobra só o movimento que significa algo.
+ */
+::view-transition-group(root),
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+/**
+ * A barra do topo fica parada.
+ *
+ * Ela é o ponto de referência que diz ao olho que quem se moveu foi o
+ * CONTEÚDO, e não a tela inteira. Sem o `display: none` no quadro antigo,
+ * aparece um piscar com as duas barras sobrepostas.
+ */
+::view-transition-group(barra-topo) {
+  animation: none;
+  z-index: 100;
+}
+
+::view-transition-old(barra-topo) { display: none; }
+::view-transition-new(barra-topo) { animation: none; }
+
+/**
+ * Enquanto a transição roda, a camada de cima engole os cliques. Deixá-los
+ * passar evita perder o toque de quem já sabe para onde vai.
+ */
+::view-transition {
+  pointer-events: none;
 }
 
 /* -------------------------------------------------------------------------- */
 /* Confete                                                                    */
+/*                                                                            */
+/* Papel picado, nas cores das tintas do sistema — não em arco-íris.          */
 /* -------------------------------------------------------------------------- */
 
 .confete {
@@ -197,9 +533,8 @@ body {
 .confete span {
   position: absolute;
   top: -16px;
-  width: 8px;
-  height: 14px;
-  border-radius: 2px;
+  width: 7px;
+  height: 11px;
   animation: confete-cair var(--duracao) cubic-bezier(0.4, 0.1, 0.6, 1) var(--atraso) forwards;
 }
 
@@ -214,68 +549,38 @@ body {
   }
 }
 
+/* -------------------------------------------------------------------------- */
+/* Movimento reduzido                                                         */
+/*                                                                            */
+/* Quem pediu menos movimento recebe o ESTADO FINAL, não o inicial — desligar  */
+/* a animação sem isso deixaria a barra de progresso em zero e os itens em     */
+/* cascata invisíveis.                                                        */
+/* -------------------------------------------------------------------------- */
+
 @media (prefers-reduced-motion: reduce) {
   .confete { display: none; }
-  .aurora-fundo.comemorando { animation: none; }
-}
 
-/* -------------------------------------------------------------------------- */
-/* Utilidades                                                                 */
-/* -------------------------------------------------------------------------- */
+  .surgir,
+  .palco > * {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
 
-/** Texto pintado com o gradiente da marca. */
-.texto-gradiente {
-  background: linear-gradient(100deg, var(--acento-1), var(--acento-2));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
+  .barra-preenche {
+    animation: none;
+    width: var(--alvo);
+  }
 
-.fundo-gradiente {
-  background: linear-gradient(120deg, var(--acento-1), var(--acento-2));
-}
+  /* O deslize lateral é o efeito com maior risco para quem tem sensibilidade
+     a movimento: some inteiro, e a troca de aba volta a ser instantânea. */
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
 
-/** Vidro fosco: superfície translúcida sobre o brilho de fundo. */
-.vidro {
-  background: var(--superficie);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-}
-
-/**
- * Barra fixa do topo.
- *
- * Precisa de fosco bem mais denso que `.vidro`: como ela não sai da tela, o
- * conteúdo rola por baixo e a 4% de opacidade o texto continuava legível
- * atrás da marca. A saturação extra evita que o fundo desbotado pareça sujo.
- */
-.barra-topo {
-  background: color-mix(in oklab, var(--fundo) 86%, transparent);
-  backdrop-filter: blur(18px) saturate(150%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
-}
-
-/**
- * Dígitos de mesma largura. Numa tabela de pedido isso é legibilidade, não
- * estética: os valores alinham na vertical e o erro salta aos olhos.
- */
-.numerico {
-  font-variant-numeric: tabular-nums;
-}
-
-/** Entrada suave de conteúdo que aparece depois de uma ação. */
-.surgir {
-  animation: surgir 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-@keyframes surgir {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .aurora-fundo { animation: none; }
-  .surgir { animation: none; }
   *,
   *::before,
   *::after {

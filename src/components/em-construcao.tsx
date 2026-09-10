@@ -1,3 +1,5 @@
+import { HardHat } from "lucide-react";
+
 import { Cabecalho, EstadoVazio } from "@/components/ui";
 
 /**
@@ -7,8 +9,8 @@ import { Cabecalho, EstadoVazio } from "@/components/ui";
 export function EmConstrucao({ titulo }: { titulo: string }) {
   return (
     <>
-      <Cabecalho titulo={titulo} />
-      <EstadoVazio>Esta parte ainda não foi construída.</EstadoVazio>
+      <Cabecalho icone={HardHat} titulo={titulo} />
+      <EstadoVazio icone={HardHat}>Esta parte ainda não foi construída.</EstadoVazio>
     </>
   );
 }

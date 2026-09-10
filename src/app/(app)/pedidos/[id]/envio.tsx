@@ -1,5 +1,6 @@
 "use client";
 
+import { Mail } from "lucide-react";
 import { useActionState } from "react";
 
 import { Botao, MensagemErro } from "@/components/ui";
@@ -32,7 +33,9 @@ export function BotaoEnviarEmail({
         <Botao
           type="submit"
           variante={jaEnviado ? "secundaria" : "primaria"}
-          disabled={enviando || semDestinatario}
+          icone={Mail}
+          carregando={enviando}
+          disabled={semDestinatario}
           title={
             semDestinatario
               ? "A indústria não tem e-mail cadastrado"

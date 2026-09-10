@@ -8,6 +8,8 @@ import { atualizarProduto, excluirProduto } from "../acoes";
 import { carregarFornecedores, paraCampo } from "../dados";
 import { FormularioProduto } from "../formulario";
 import { BotaoExcluirProduto } from "./botao-excluir";
+import { Package } from "lucide-react";
+import { Pagina } from "@/components/pagina";
 
 export default async function PaginaProduto({ params }: PageProps<"/produtos/[id]">) {
   const { id } = await params;
@@ -26,8 +28,9 @@ export default async function PaginaProduto({ params }: PageProps<"/produtos/[id
   if (!produto) notFound();
 
   return (
-    <>
+    <Pagina>
       <Cabecalho
+        icone={Package}
         titulo="Produto"
         descricao={produto.descricao}
         acao={
@@ -64,6 +67,6 @@ export default async function PaginaProduto({ params }: PageProps<"/produtos/[id
           aditivos: produto.aditivos.map((a) => a.aditivoId),
         }}
       />
-    </>
+    </Pagina>
   );
 }

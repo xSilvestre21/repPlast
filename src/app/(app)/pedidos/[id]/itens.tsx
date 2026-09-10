@@ -2,6 +2,8 @@
 
 import { useActionState, useMemo, useState } from "react";
 
+import { ListOrdered } from "lucide-react";
+
 import { Botao, Campo, MensagemErro, SecaoCartao, Selecao, formatarMoeda } from "@/components/ui";
 import { escreverNumeroBr, lerNumeroBr } from "@/lib/numero-br";
 import type { Aditivo } from "@/lib/precificacao";
@@ -78,6 +80,7 @@ export function SecaoItens({
 
   return (
     <SecaoCartao
+      icone={ListOrdered}
       titulo={`Itens (${itens.length})`}
       descricao={
         editavel
@@ -86,12 +89,12 @@ export function SecaoItens({
       }
     >
       {itens.length === 0 ? (
-        <p className="text-sm text-texto-fraco mb-4">Nenhum item ainda.</p>
+        <p className="text-sm text-tinta-3 mb-4">Nenhum item ainda.</p>
       ) : (
         <div className="overflow-x-auto -mx-1 px-1 mb-4">
           <table className="w-full text-sm border-collapse min-w-160">
             <thead>
-              <tr className="text-xs text-texto-fraco text-left border-b border-borda">
+              <tr className="text-xs text-tinta-3 text-left border-b border-filete">
                 <th className="py-2 pr-3 font-normal">COD.FORN</th>
                 <th className="py-2 pr-3 font-normal">COD.CLI</th>
                 <th className="py-2 pr-3 font-normal">DESCRIÇÃO</th>
@@ -105,7 +108,7 @@ export function SecaoItens({
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-borda">
+            <tbody className="divide-y divide-filete">
               {itens.map((item) => (
                 <LinhaItem
                   key={item.id}
@@ -120,13 +123,13 @@ export function SecaoItens({
         </div>
       )}
 
-      <div className="flex flex-col items-end gap-1 text-sm numerico border-t border-borda pt-4">
+      <div className="flex flex-col items-end gap-1 text-sm numerico border-t border-filete pt-4">
         <div className="flex gap-8">
-          <span className="text-texto-suave">Subtotal s/ IPI:</span>
+          <span className="text-tinta-2">Subtotal s/ IPI:</span>
           <span className="w-32 text-right">{formatarMoeda(totais.subtotalSemIpi)}</span>
         </div>
         <div className="flex gap-8">
-          <span className="text-texto-suave">
+          <span className="text-tinta-2">
             {totais.comIpi
               ? `IPI (${Number(totais.ipiPercentual).toLocaleString("pt-BR")}%):`
               : "Sem IPI:"}
@@ -135,12 +138,12 @@ export function SecaoItens({
         </div>
         <div className="flex gap-8 text-base font-semibold mt-1">
           <span>TOTAL GERAL:</span>
-          <span className="w-32 text-right texto-gradiente">{formatarMoeda(totais.totalGeral)}</span>
+          <span className="w-32 text-right cifra">{formatarMoeda(totais.totalGeral)}</span>
         </div>
       </div>
 
       {editavel && (
-        <div className="mt-5 pt-5 border-t border-borda">
+        <div className="mt-5 pt-5 border-t border-filete">
           <MensagemErro>{estadoAdicao.erro}</MensagemErro>
           <FormularioAdicao produtos={produtos} enviar={enviarAdicao} enviando={adicionando} />
         </div>
@@ -166,8 +169,8 @@ function LinhaItem({
 
   return (
     <tr>
-      <td className={`${celula} numerico text-texto-suave`}>{item.codigoFornecedor ?? "—"}</td>
-      <td className={`${celula} numerico text-texto-suave`}>{item.codigoCliente ?? ""}</td>
+      <td className={`${celula} numerico text-tinta-2`}>{item.codigoFornecedor ?? "—"}</td>
+      <td className={`${celula} numerico text-tinta-2`}>{item.codigoCliente ?? ""}</td>
       <td className={`${celula} font-mono text-xs`}>{item.descricao}</td>
 
       {editavel ? (
@@ -180,11 +183,11 @@ function LinhaItem({
                 inputMode="decimal"
                 defaultValue={escreverNumeroBr(item.quantidade, 0)}
                 aria-label="Quantidade"
-                className="w-20 rounded border border-borda bg-fundo px-2 py-1 text-right numerico outline-none focus:border-acento/60"
+                className="w-20 rounded border border-filete bg-fundo px-2 py-1 text-right numerico outline-none focus:border-acento/60"
               />
             </form>
           </td>
-          <td className={`${celula} text-texto-suave`}>{ROTULO_UNIDADE[item.unidade]}</td>
+          <td className={`${celula} text-tinta-2`}>{ROTULO_UNIDADE[item.unidade]}</td>
           <td className={celula}>
             <input
               form={`item-${item.id}`}
@@ -194,7 +197,7 @@ function LinhaItem({
               // faria o total errar centavos ao salvar a linha.
               defaultValue={escreverNumeroBr(item.precoUnitario, 2, 6)}
               aria-label="Preço unitário"
-              className="w-28 rounded border border-borda bg-fundo px-2 py-1 text-right numerico outline-none focus:border-acento/60"
+              className="w-28 rounded border border-filete bg-fundo px-2 py-1 text-right numerico outline-none focus:border-acento/60"
             />
           </td>
         </>
@@ -203,13 +206,13 @@ function LinhaItem({
           <td className={`${celula} text-right numerico`}>
             {escreverNumeroBr(item.quantidade, 0)}
           </td>
-          <td className={`${celula} text-texto-suave`}>{ROTULO_UNIDADE[item.unidade]}</td>
+          <td className={`${celula} text-tinta-2`}>{ROTULO_UNIDADE[item.unidade]}</td>
           <td className={`${celula} text-right numerico`}>{formatarMoeda(item.precoUnitario)}</td>
         </>
       )}
 
       <td className={`${celula} text-right numerico`}>{formatarMoeda(item.totalSemIpi)}</td>
-      <td className={`${celula} text-right numerico text-texto-suave`}>
+      <td className={`${celula} text-right numerico text-tinta-2`}>
         {formatarMoeda(item.valorIpi)}
       </td>
       <td className={`${celula} text-right numerico`}>{formatarMoeda(item.total)}</td>
@@ -220,7 +223,7 @@ function LinhaItem({
             type="submit"
             form={`item-${item.id}`}
             disabled={salvando}
-            className="text-xs text-texto-fraco hover:text-acento transition-colors px-1 disabled:opacity-50"
+            className="text-xs text-tinta-3 hover:text-carimbo transition-colors px-1 disabled:opacity-50"
           >
             {salvando ? "…" : "salvar"}
           </button>
@@ -229,7 +232,7 @@ function LinhaItem({
             <button
               type="submit"
               aria-label={`Remover ${item.descricao}`}
-              className="text-xs text-texto-fraco hover:text-perigo transition-colors px-1"
+              className="text-xs text-tinta-3 hover:text-perigo transition-colors px-1"
             >
               remover
             </button>
@@ -360,7 +363,7 @@ function FormularioAdicao({
       </div>
 
       {totalPrevisto !== null && (
-        <p className="text-xs text-texto-fraco numerico">
+        <p className="text-xs text-tinta-3 numerico">
           Este item entra por {formatarMoeda(totalPrevisto)} antes do IPI.
         </p>
       )}

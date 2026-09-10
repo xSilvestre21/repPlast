@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LogOut } from "lucide-react";
+import { ViewTransition } from "react";
 
 import { sair } from "@/app/(entrada)/acoes";
 
@@ -22,10 +24,11 @@ function MenuUsuario({ nome }: { nome: string }) {
     .join("");
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1">
       <span
         title={nome}
-        className="grid place-items-center size-9 rounded-full fundo-gradiente text-sobre-acento text-xs font-semibold shrink-0"
+        className="grid place-items-center size-8 shrink-0 border border-filete-forte
+          text-[0.6875rem] font-semibold tracking-wide text-tinta-2"
       >
         {iniciais || "?"}
       </span>
@@ -33,15 +36,25 @@ function MenuUsuario({ nome }: { nome: string }) {
       <form action={sair}>
         <button
           type="submit"
-          className="text-xs text-texto-fraco hover:text-texto transition-colors whitespace-nowrap"
+          title="Sair"
+          className="grid place-items-center size-8 text-tinta-3 cursor-pointer
+            transition-colors hover:text-carimbo"
         >
-          sair
+          <LogOut size={15} strokeWidth={1.5} aria-hidden="true" />
+          <span className="sr-only">Sair</span>
         </button>
       </form>
     </div>
   );
 }
 
+/**
+ * A ORDEM importa.
+ *
+ * É ela que define a direção do deslize ao trocar de aba: ir para um item mais
+ * à direita empurra o conteúdo para a esquerda, como virar a página de um
+ * fichário. Reordenar esta lista muda o significado da animação.
+ */
 const ITENS = [
   { href: "/", rotulo: "Painel" },
   { href: "/pedidos", rotulo: "Pedidos" },
@@ -51,64 +64,88 @@ const ITENS = [
   { href: "/fornecedores", rotulo: "Fornecedores" },
 ];
 
+function estaAtivo(href: string, caminho: string) {
+  // A raiz precisa de comparação exata: `startsWith("/")` casaria com todas as
+  // rotas e deixaria o Painel sempre aceso.
+  if (href === "/") return caminho === "/";
+  return caminho === href || caminho.startsWith(`${href}/`);
+}
+
 export function Navegacao({ nomeUsuario }: { nomeUsuario: string }) {
   const caminho = usePathname();
+  const indiceAtual = ITENS.findIndex((item) => estaAtivo(item.href, caminho));
 
   return (
-    // A barra precisa de fundo próprio: sendo fixa e translúcida, o conteúdo
-    // rolava por trás e colidia com a marca. O vidro fosco mantém o ar da
-    // Aurora sem deixar o texto se sobrepor.
-    <header className="sticky top-0 z-40 barra-topo border-b border-borda">
+    // `view-transition-name` prende a barra: durante o deslize ela é o ponto
+    // fixo que diz ao olho que quem se moveu foi o conteúdo, não a tela.
+    <header
+      className="sticky top-0 z-40 barra-topo"
+      style={{ viewTransitionName: "barra-topo" }}
+    >
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6">
         {/*
-          No desktop a navegação fica centralizada de verdade, por posicionamento
-          absoluto — assim a marca e o alternador não empurram o centro.
-          No celular vira duas linhas, porque não cabe.
+          Uma linha no desktop, duas no celular — e a fila de abas é a mesma
+          nos dois casos, movida por `order`. Renderizar duas listas (uma por
+          tamanho de tela) duplicaria o nome de view transition do marcador, e
+          nome repetido faz o navegador abortar a animação inteira.
         */}
-        <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-3">
-          <div className="flex items-center justify-between">
-            <Link
-              href="/"
-              className="font-semibold tracking-tight shrink-0 text-base hover:opacity-80 transition-opacity"
-            >
-              Rep<span className="texto-gradiente">Plast</span>
-            </Link>
+        <div className="flex flex-wrap items-center gap-x-4 py-2 sm:h-14 sm:flex-nowrap sm:py-0">
+          <Link
+            href="/"
+            className="order-1 shrink-0 font-serif text-lg font-medium tracking-tight
+              transition-colors hover:text-carimbo"
+          >
+            RepPlast
+          </Link>
 
-            <div className="sm:hidden flex items-center gap-2">
-              <MenuUsuario nome={nomeUsuario} />
-              <AlternadorTema />
-            </div>
-          </div>
-
-          <nav className="sm:absolute sm:left-1/2 sm:-translate-x-1/2 flex justify-center">
-            <div className="flex gap-1 p-1 rounded-full border border-borda vidro shadow-[var(--sombra-cartao)] overflow-x-auto max-w-full">
-              {ITENS.map((item) => {
-                // A raiz precisa de comparação exata: `startsWith("/")` casaria
-                // com todas as rotas e deixaria o Painel sempre aceso.
-                const ativo =
-                  item.href === "/"
-                    ? caminho === "/"
-                    : caminho === item.href || caminho.startsWith(`${item.href}/`);
+          {/*
+            No celular a fila de abas ocupa a segunda linha inteira e rola
+            sozinha. Manter os rótulos por extenso em vez de virar ícones é
+            deliberado: são seis seções de nomes curtos, e o nome é mais
+            rápido de reconhecer que o desenho.
+          */}
+          <nav className="order-3 w-full overflow-x-auto rolagem-limpa pt-1 pb-0.5
+            sm:order-2 sm:w-auto sm:flex-1 sm:min-w-0 sm:pt-0 sm:pb-0">
+            <ul className="flex items-center justify-start sm:justify-center gap-0.5">
+              {ITENS.map((item, indice) => {
+                const ativo = indice === indiceAtual;
 
                 return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    aria-current={ativo ? "page" : undefined}
-                    className={`px-3.5 py-1.5 rounded-full text-sm whitespace-nowrap transition-all duration-200 ${
-                      ativo
-                        ? "fundo-gradiente text-sobre-acento font-semibold"
-                        : "text-texto-suave hover:text-texto hover:bg-superficie-alta"
-                    }`}
-                  >
-                    {item.rotulo}
-                  </Link>
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      aria-current={ativo ? "page" : undefined}
+                      // A direção sai da posição na barra, não do histórico.
+                      transitionTypes={[
+                        indice > indiceAtual ? "nav-direita" : "nav-esquerda",
+                      ]}
+                      className={`relative isolate block px-3 py-1.5 text-sm whitespace-nowrap
+                        transition-colors duration-150 ${
+                          ativo
+                            ? "text-papel font-medium"
+                            : "text-tinta-2 hover:text-tinta"
+                        }`}
+                    >
+                      {/*
+                        O marca-texto existe UMA vez na árvore, sempre dentro
+                        do item ativo. Ao trocar de aba ele desmonta aqui e
+                        monta ali — e como carrega um nome de view transition,
+                        o navegador anima a viagem em vez de apagar e acender.
+                      */}
+                      {ativo && (
+                        <ViewTransition name="marca-nav">
+                          <span aria-hidden="true" className="marca-nav -z-10" />
+                        </ViewTransition>
+                      )}
+                      {item.rotulo}
+                    </Link>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           </nav>
 
-          <div className="hidden sm:flex items-center gap-2">
+          <div className="order-2 ml-auto flex items-center gap-1 shrink-0 sm:order-3 sm:ml-0">
             <MenuUsuario nome={nomeUsuario} />
             <AlternadorTema />
           </div>

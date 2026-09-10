@@ -5,20 +5,32 @@ import { AlternadorTema } from "@/components/alternador-tema";
 /**
  * Telas de entrada: login e cadastro.
  *
- * Sem navegação — quem está aqui ainda não tem para onde navegar. O cartão fica
- * centralizado na tela, com o brilho da Aurora ao fundo fazendo o trabalho de
- * apresentação do produto.
+ * Sem navegação — quem está aqui ainda não tem para onde navegar. A tela é a
+ * folha de rosto do produto: nome em serifada, um filete, o formulário. Nada de
+ * ilustração nem de brilho; o que apresenta o sistema é o mesmo cuidado
+ * tipográfico que ele vai ter depois do login.
  */
 export default function LayoutEntrada({ children }: LayoutProps<"/">) {
   return (
     <main className="flex-1 flex flex-col items-center justify-center px-4 py-10">
-      <div className="w-full max-w-md">
-        <div className="flex items-center justify-between mb-8">
-          <Link href="/" className="text-lg font-semibold tracking-tight">
-            Rep<span className="texto-gradiente">Plast</span>
+      {/* O alternador fica no canto, fora da coluna: é ferramenta, não conteúdo. */}
+      <div className="fixed top-3 right-3 z-10">
+        <AlternadorTema />
+      </div>
+
+      <div className="w-full max-w-sm surgir">
+        <header className="text-center mb-9">
+          <Link
+            href="/"
+            className="font-serif text-[2.5rem] leading-none tracking-tight transition-colors hover:text-carimbo"
+          >
+            RepPlast
           </Link>
-          <AlternadorTema />
-        </div>
+
+          <hr className="regra my-4" />
+
+          <p className="rotulo">Pedidos · PDF para a indústria · comissão</p>
+        </header>
 
         {children}
       </div>

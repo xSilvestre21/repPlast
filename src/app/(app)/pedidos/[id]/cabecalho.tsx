@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 
+import { ClipboardList, MessageSquareText, Percent } from "lucide-react";
+
 import { AreaTexto, Botao, Campo, MensagemErro, SecaoCartao, Selecao } from "@/components/ui";
 
 import type { EstadoFormulario } from "../acoes";
@@ -35,6 +37,7 @@ export function SecaoCabecalho({
       <MensagemErro>{estado.erro}</MensagemErro>
 
       <SecaoCartao
+        icone={ClipboardList}
         titulo="Condições"
         descricao="Tudo daqui sai impresso no cabeçalho do pedido, menos a comissão."
       >
@@ -77,7 +80,7 @@ export function SecaoCabecalho({
         </fieldset>
       </SecaoCartao>
 
-      <SecaoCartao titulo="Impostos e comissão">
+      <SecaoCartao icone={Percent} titulo="Impostos e comissão">
         <fieldset disabled={!editavel} className="grid gap-4 sm:grid-cols-3 items-start">
           <label className="flex items-center gap-2 text-sm sm:pt-8">
             <input
@@ -110,6 +113,7 @@ export function SecaoCabecalho({
       </SecaoCartao>
 
       <SecaoCartao
+        icone={MessageSquareText}
         titulo="Observações"
         descricao="Recados para a indústria. Vêm preenchidos com as observações do cliente."
       >
@@ -123,7 +127,7 @@ export function SecaoCabecalho({
 
       {editavel && (
         <div className="flex justify-end">
-          <Botao type="submit" disabled={enviando}>
+          <Botao type="submit" carregando={enviando}>
             {enviando ? "Salvando…" : "Salvar condições"}
           </Botao>
         </div>

@@ -1,3 +1,5 @@
+import { FilePlus2, Plus, ScrollText } from "lucide-react";
+
 import { SeloStatus } from "@/components/selo-status";
 import {
   BotaoLink,
@@ -9,6 +11,7 @@ import {
 } from "@/components/ui";
 import { dbParaOrganizacao } from "@/lib/db";
 import { organizacaoAtual } from "@/lib/sessao";
+import { Pagina } from "@/components/pagina";
 
 const DATA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" });
 
@@ -27,31 +30,36 @@ export default async function PaginaPedidos() {
   });
 
   return (
-    <>
+    <Pagina>
       <Cabecalho
+        icone={ScrollText}
         titulo="Pedidos"
         descricao="A numeração é própria de cada indústria — o nº 133 de uma não colide com o 133 de outra."
-        acao={<BotaoLink href="/pedidos/novo">Novo pedido</BotaoLink>}
+        acao={
+          <BotaoLink href="/pedidos/novo" icone={Plus}>
+            Novo pedido
+          </BotaoLink>
+        }
       />
 
       {pedidos.length === 0 ? (
-        <EstadoVazio>
+        <EstadoVazio icone={FilePlus2}>
           Nenhum pedido lançado.
           <br />
           Comece escolhendo o cliente e a indústria.
         </EstadoVazio>
       ) : (
-        <Cartao className="divide-y divide-borda">
+        <Cartao className="divide-y divide-filete overflow-hidden palco">
           {pedidos.map((pedido) => (
             <LinhaLista key={pedido.id} href={`/pedidos/${pedido.id}`}>
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                <span className="font-semibold numerico shrink-0 texto-gradiente">
+              <div className="flex items-center gap-3 min-w-0 basis-full sm:basis-0 sm:flex-1">
+                <span className="font-semibold numerico shrink-0 cifra">
                   #{pedido.numero}
                 </span>
 
                 <div className="min-w-0">
                   <div className="truncate">{pedido.cliente.apelido}</div>
-                  <div className="text-xs text-texto-suave truncate">
+                  <div className="text-xs text-tinta-2 truncate">
                     {pedido.fornecedor.nome} · {pedido._count.itens} item(ns) ·{" "}
                     {DATA.format(pedido.criadoEm)}
                   </div>
@@ -62,8 +70,8 @@ export default async function PaginaPedidos() {
                 <span
                   className={`numerico font-semibold ${
                     pedido.status === "CANCELADO"
-                      ? "text-texto-fraco line-through"
-                      : "texto-gradiente"
+                      ? "text-tinta-3 line-through"
+                      : "cifra"
                   }`}
                 >
                   {formatarMoeda(pedido.totalGeral.toString())}
@@ -74,6 +82,6 @@ export default async function PaginaPedidos() {
           ))}
         </Cartao>
       )}
-    </>
+    </Pagina>
   );
 }

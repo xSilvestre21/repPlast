@@ -1,12 +1,16 @@
 import { Cabecalho } from "@/components/ui";
 
 import { criarCliente } from "../acoes";
-import { FormularioCliente, VALORES_VAZIOS } from "../formulario";
+import { FormularioCliente } from "../formulario";
+import { VALORES_VAZIOS } from "../valores";
+import { UserRoundPlus } from "lucide-react";
+import { Pagina } from "@/components/pagina";
 
 export default function PaginaNovoCliente() {
   return (
-    <>
+    <Pagina>
       <Cabecalho
+        icone={UserRoundPlus}
         titulo="Novo cliente"
         descricao="Depois de salvar você poderá registrar os códigos que este cliente usa para cada produto."
       />
@@ -15,6 +19,6 @@ export default function PaginaNovoCliente() {
         valores={VALORES_VAZIOS}
         rotuloEnvio="Cadastrar cliente"
       />
-    </>
+    </Pagina>
   );
 }

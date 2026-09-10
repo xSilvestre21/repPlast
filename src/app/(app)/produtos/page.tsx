@@ -1,7 +1,19 @@
 import {
+  CircleDot,
+  Disc3,
+  Layers,
+  Package,
+  PackagePlus,
+  Plus,
+  ShoppingBag,
+  type LucideIcon,
+} from "lucide-react";
+
+import {
   BotaoLink,
   Cabecalho,
   Cartao,
+  Emblema,
   EstadoVazio,
   LinhaLista,
   formatarMoeda,
@@ -9,12 +21,27 @@ import {
 import { dbParaOrganizacao } from "@/lib/db";
 import { precoMilheiroSaco } from "@/lib/precificacao";
 import { organizacaoAtual } from "@/lib/sessao";
+import { Pagina } from "@/components/pagina";
 
 const ROTULO_FAMILIA: Record<string, string> = {
   SACO: "Saco plástico",
   FITA: "Fita",
   STRETCH: "Stretch",
   BOBINA: "Bobina",
+};
+
+/**
+ * Um ícone por família.
+ *
+ * A descrição gerada é uma sequência de medidas, e num catálogo longo todas se
+ * parecem. O ícone dá à linha uma forma reconhecível antes de o olho começar a
+ * ler números.
+ */
+const ICONE_FAMILIA: Record<string, LucideIcon> = {
+  SACO: ShoppingBag,
+  FITA: CircleDot,
+  STRETCH: Layers,
+  BOBINA: Disc3,
 };
 
 export default async function PaginaProdutos() {
@@ -63,29 +90,40 @@ export default async function PaginaProdutos() {
   }
 
   return (
-    <>
+    <Pagina>
       <Cabecalho
+        icone={Package}
         titulo="Produtos"
         descricao="O preço do saco é calculado pelas medidas; as demais famílias usam preço de tabela."
-        acao={<BotaoLink href="/produtos/novo">Novo produto</BotaoLink>}
+        acao={
+          <BotaoLink href="/produtos/novo" icone={Plus}>
+            Novo produto
+          </BotaoLink>
+        }
       />
 
       {produtos.length === 0 ? (
-        <EstadoVazio>
+        <EstadoVazio icone={PackagePlus}>
           Nenhum produto cadastrado.
           <br />
           Cadastre a indústria primeiro, depois volte aqui.
         </EstadoVazio>
       ) : (
-        <Cartao className="divide-y divide-borda">
+        <Cartao className="divide-y divide-filete overflow-hidden palco">
           {produtos.map((produto) => {
             const preco = precoDe(produto);
 
             return (
               <LinhaLista key={produto.id} href={`/produtos/${produto.id}`}>
+                <Emblema
+                  icone={ICONE_FAMILIA[produto.familia] ?? Package}
+                  tom="fraco"
+                  className="size-4"
+                />
+
                 <div className="min-w-0 flex-1">
                   <div className="font-mono text-sm truncate">{produto.descricao}</div>
-                  <div className="text-xs text-texto-suave truncate mt-0.5">
+                  <div className="text-xs text-tinta-2 truncate mt-0.5">
                     {produto.fornecedor.nome}
                     {" · "}
                     {ROTULO_FAMILIA[produto.familia] ?? produto.familia}
@@ -95,10 +133,10 @@ export default async function PaginaProdutos() {
 
                 {preco && (
                   <div className="text-right">
-                    <div className="numerico texto-gradiente font-semibold">
+                    <div className="numerico cifra font-semibold">
                       {formatarMoeda(preco.valor)}
                     </div>
-                    <div className="text-xs text-texto-fraco">por {preco.unidade}</div>
+                    <div className="text-xs text-tinta-3">por {preco.unidade}</div>
                   </div>
                 )}
               </LinhaLista>
@@ -106,6 +144,6 @@ export default async function PaginaProdutos() {
           })}
         </Cartao>
       )}
-    </>
+    </Pagina>
   );
 }

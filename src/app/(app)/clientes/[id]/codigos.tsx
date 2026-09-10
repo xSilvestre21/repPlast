@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 
+import { Hash } from "lucide-react";
+
 import { Botao, Campo, MensagemErro, SecaoCartao, Selecao } from "@/components/ui";
 
 import type { EstadoFormulario } from "../acoes";
@@ -24,12 +26,13 @@ export function SecaoCodigos({
 
   return (
     <SecaoCartao
+      icone={Hash}
       titulo="Códigos deste cliente"
       descricao="O código que ELE usa para cada produto. Sai na coluna COD.CLI do pedido e é opcional — quando não houver, a coluna sai vazia."
     >
-      <div className="mb-4 rounded-md border border-borda bg-fundo divide-y divide-borda">
+      <div className="mb-4 rounded-md border border-filete bg-fundo divide-y divide-filete">
         {codigos.length === 0 ? (
-          <p className="px-3 py-2.5 text-sm text-texto-fraco">
+          <p className="px-3 py-2.5 text-sm text-tinta-3">
             Nenhum código registrado para este cliente.
           </p>
         ) : (
@@ -41,12 +44,12 @@ export function SecaoCodigos({
               <span className="font-mono text-sm min-w-0 truncate">{codigo.descricao}</span>
 
               <div className="flex items-center gap-3">
-                <span className="font-mono text-sm text-acento numerico">{codigo.codigo}</span>
+                <span className="font-mono text-sm text-carimbo numerico">{codigo.codigo}</span>
                 <form action={remover}>
                   <input type="hidden" name="produtoId" value={codigo.produtoId} />
                   <button
                     type="submit"
-                    className="text-xs text-texto-fraco hover:text-perigo transition-colors px-1"
+                    className="text-xs text-tinta-3 hover:text-perigo transition-colors px-1"
                     aria-label={`Remover código de ${codigo.descricao}`}
                   >
                     remover
@@ -59,7 +62,7 @@ export function SecaoCodigos({
       </div>
 
       {produtos.length === 0 ? (
-        <p className="text-sm text-texto-fraco">
+        <p className="text-sm text-tinta-3">
           Cadastre produtos antes de registrar os códigos do cliente.
         </p>
       ) : (
@@ -84,7 +87,7 @@ export function SecaoCodigos({
               className="flex-1 min-w-40"
             />
 
-            <Botao type="submit" variante="secundaria" disabled={enviando}>
+            <Botao type="submit" variante="secundaria" carregando={enviando}>
               {enviando ? "Salvando…" : "Salvar código"}
             </Botao>
           </div>

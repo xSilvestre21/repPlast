@@ -12,17 +12,20 @@ export default async function PaginaEntrar() {
   if (await sessaoAtual()) redirect("/");
 
   return (
-    <Cartao className="p-6 sm:p-8 surgir">
-      <h1 className="text-xl font-semibold tracking-tight mb-1">Entrar</h1>
-      <p className="text-sm text-texto-suave mb-6">
+    <Cartao className="px-6 py-7 sm:px-8">
+      <h1 className="font-serif text-2xl leading-none">Entrar</h1>
+      <p className="text-sm text-tinta-2 mt-2 mb-7">
         Seus pedidos, produtos e comissões do jeito que você deixou.
       </p>
 
       <FormularioEntrada acao={entrar} rotulo="Entrar" />
 
-      <p className="text-sm text-texto-suave mt-6 text-center">
+      <p className="text-sm text-tinta-2 mt-6 text-center">
         Ainda não tem conta?{" "}
-        <Link href="/comecar" className="text-acento hover:underline">
+        <Link
+          href="/comecar"
+          className="text-carimbo underline underline-offset-4 decoration-carimbo/40 hover:decoration-carimbo"
+        >
           Criar um escritório
         </Link>
       </p>

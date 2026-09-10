@@ -2,6 +2,8 @@
 
 import { useActionState } from "react";
 
+import { FlaskConical } from "lucide-react";
+
 import { Botao, Campo, MensagemErro, SecaoCartao, Selecao, formatarMoeda } from "@/components/ui";
 
 import type { EstadoFormulario } from "../acoes";
@@ -27,12 +29,13 @@ export function SecaoAditivos({
 
   return (
     <SecaoCartao
+      icone={FlaskConical}
       titulo="Aditivos"
       descricao="Somam um valor ao preço e um sufixo à descrição impressa. Ex.: deslizante leva o fator de 13,50 para 15,60."
     >
-      <div className="mb-4 rounded-md border border-borda bg-fundo divide-y divide-borda">
+      <div className="mb-4 rounded-md border border-filete bg-fundo divide-y divide-filete">
         {aditivos.length === 0 ? (
-          <p className="px-3 py-2.5 text-sm text-texto-fraco">
+          <p className="px-3 py-2.5 text-sm text-tinta-3">
             Nenhum aditivo cadastrado para esta indústria.
           </p>
         ) : (
@@ -43,7 +46,7 @@ export function SecaoAditivos({
             >
               <div className="min-w-0">
                 <div className="text-sm">{aditivo.nome}</div>
-                <div className="text-xs text-texto-fraco font-mono truncate">
+                <div className="text-xs text-tinta-3 font-mono truncate">
                   {aditivo.sufixoDescricao}
                 </div>
               </div>
@@ -51,7 +54,7 @@ export function SecaoAditivos({
               <div className="flex items-center gap-3">
                 <span className="text-sm numerico">
                   +{formatarMoeda(aditivo.valor)}
-                  <span className="text-texto-fraco text-xs ml-1">
+                  <span className="text-tinta-3 text-xs ml-1">
                     {aditivo.tipo === "POR_KG" ? "/ kg" : "/ milheiro"}
                   </span>
                 </span>
@@ -59,7 +62,7 @@ export function SecaoAditivos({
                   <input type="hidden" name="aditivoId" value={aditivo.id} />
                   <button
                     type="submit"
-                    className="text-xs text-texto-fraco hover:text-perigo transition-colors px-1"
+                    className="text-xs text-tinta-3 hover:text-perigo transition-colors px-1"
                     aria-label={`Remover aditivo ${aditivo.nome}`}
                   >
                     remover
@@ -101,7 +104,7 @@ export function SecaoAditivos({
         </div>
 
         <div className="flex justify-end">
-          <Botao type="submit" variante="secundaria" disabled={enviando}>
+          <Botao type="submit" variante="secundaria" carregando={enviando}>
             {enviando ? "Adicionando…" : "Adicionar aditivo"}
           </Botao>
         </div>

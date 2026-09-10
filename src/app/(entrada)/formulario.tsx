@@ -32,7 +32,7 @@ export function FormularioEntrada({ acao, rotulo }: { acao: Acao; rotulo: string
         required
       />
 
-      <Botao type="submit" disabled={enviando} className="w-full">
+      <Botao type="submit" carregando={enviando} className="w-full">
         {enviando ? "Entrando…" : rotulo}
       </Botao>
     </form>
@@ -73,7 +73,7 @@ export function FormularioCadastro({ acao }: { acao: Acao }) {
         required
       />
 
-      <Botao type="submit" disabled={enviando} className="w-full">
+      <Botao type="submit" carregando={enviando} className="w-full">
         {enviando ? "Criando…" : "Criar meu escritório"}
       </Botao>
     </form>

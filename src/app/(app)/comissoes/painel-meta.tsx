@@ -1,14 +1,31 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { PartyPopper, Pencil, Target, Wallet } from "lucide-react";
+import { useActionState, useEffect, useRef, useState, type CSSProperties } from "react";
 
-import { Botao, BotaoTexto, Campo, Cartao, MensagemErro, formatarMoeda } from "@/components/ui";
+import {
+  Botao,
+  BotaoTexto,
+  Campo,
+  Cartao,
+  Emblema,
+  MensagemErro,
+  formatarMoeda,
+} from "@/components/ui";
 
 import type { EstadoFormulario } from "./acoes";
 
 /** Quantidade de confetes. O suficiente para parecer festa sem pesar a página. */
 const PECAS = 60;
-const CORES = ["#f59e0b", "#ec4899", "#8b5cf6", "#22d3ee", "#fbbf24", "#4ade80"];
+
+/**
+ * Papel picado nas tintas da casa.
+ *
+ * Confete arco-íris seria a única coisa da tela que não sai da mesma gráfica.
+ * Aqui caem lascas de carimbo, de tinta e da segunda cor — o mesmo papel do
+ * resto do sistema, cortado.
+ */
+const CORES = ["#c8341e", "#1f6f4a", "#16130f", "#e8c07a", "#c8341e", "#f2eee6"];
 
 export function PainelMeta({
   competencia,
@@ -34,22 +51,31 @@ export function PainelMeta({
     <>
       {batida && <Comemoracao competencia={competencia} />}
 
-      <Cartao className="p-5 sm:p-6 mb-5">
+      <Cartao marcada className="p-5 sm:p-7 mb-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="text-xs text-texto-fraco uppercase tracking-wide">
-              Comissão do mês
+            <div className="flex items-center gap-2">
+              <Emblema icone={Wallet} className="size-4" />
+              <span className="rotulo">Comissão do mês</span>
             </div>
-            <div className="text-3xl font-semibold texto-gradiente numerico mt-0.5">
+            <div className="text-3xl sm:text-5xl font-extrabold tracking-tighter cifra numerico mt-2 leading-none">
               {formatarMoeda(alcancado)}
             </div>
           </div>
 
           {!editando && meta !== null && (
             <div className="text-right">
-              <div className="text-xs text-texto-fraco uppercase tracking-wide">Sua meta</div>
-              <div className="numerico">{formatarMoeda(meta)}</div>
-              <BotaoTexto type="button" onClick={() => setEditando(true)} className="mt-0.5">
+              <span className="rotulo inline-flex items-center gap-1.5">
+                <Target size={12} aria-hidden="true" />
+                Sua meta
+              </span>
+              <div className="numerico font-semibold text-lg">{formatarMoeda(meta)}</div>
+              <BotaoTexto
+                type="button"
+                onClick={() => setEditando(true)}
+                className="mt-0.5 inline-flex items-center gap-1"
+              >
+                <Pencil size={11} aria-hidden="true" />
                 alterar
               </BotaoTexto>
             </div>
@@ -60,29 +86,32 @@ export function PainelMeta({
           <div className="mt-5">
             <div className="flex justify-between text-sm mb-2">
               {batida ? (
-                <span className="font-medium">
-                  🎉 Meta batida — e você já passou dela em{" "}
-                  <strong className="numerico">
-                    {formatarMoeda(alcancado - Number(meta))}
-                  </strong>
-                  .
+                <span className="flex items-center gap-2 font-medium">
+                  <PartyPopper size={15} className="text-verde shrink-0" aria-hidden="true" />
+                  <span>
+                    Meta batida — e você já passou dela em{" "}
+                    <strong className="numerico">
+                      {formatarMoeda(alcancado - Number(meta))}
+                    </strong>
+                    .
+                  </span>
                 </span>
               ) : (
-                <span className="text-texto-suave">
+                <span className="text-tinta-2">
                   Faltam{" "}
-                  <strong className="text-texto numerico">{formatarMoeda(falta ?? 0)}</strong> para
+                  <strong className="text-tinta numerico">{formatarMoeda(falta ?? 0)}</strong> para
                   a sua meta
                 </span>
               )}
-              <span className="numerico text-texto-suave">{Math.round(progresso)}%</span>
+              <span className="numerico text-tinta-2">{Math.round(progresso)}%</span>
             </div>
 
-            <div className="h-2 rounded-full bg-superficie-alta overflow-hidden">
+            <div className="h-2.5 rounded-full bg-folha-2 overflow-hidden border border-filete">
               <div
-                className={`h-full rounded-full transition-all duration-700 ${
-                  batida ? "bg-aviso" : "fundo-gradiente"
+                style={{ "--alvo": `${progresso}%` } as CSSProperties}
+                className={`barra-preenche h-full rounded-full ${
+                  batida ? "bg-verde" : "bg-tinta text-papel"
                 }`}
-                style={{ width: `${progresso}%` }}
               />
             </div>
           </div>
@@ -104,7 +133,7 @@ export function PainelMeta({
                 className="flex-1 min-w-48"
               />
 
-              <Botao type="submit" variante="secundaria" disabled={salvando}>
+              <Botao type="submit" variante="secundaria" carregando={salvando}>
                 {salvando ? "Salvando…" : "Salvar meta"}
               </Botao>
 
@@ -124,10 +153,12 @@ export function PainelMeta({
 /**
  * A festa.
  *
- * O brilho de fundo vira dourado enquanto a meta estiver batida — é estado, não
- * evento, então acompanha o mês. Já o confete é evento: dispara UMA vez por
- * competência. Bater a meta é notícia; ver o mesmo confete a cada carregamento
- * de página vira incômodo.
+ * Dispara UMA vez por competência. Bater a meta é notícia; ver o mesmo confete
+ * a cada carregamento de página vira incômodo.
+ *
+ * O estado permanente de "meta batida" é dito pela própria apuração — o rótulo
+ * e a barra ficam verdes o mês inteiro. Não há mudança de ambiente: papel não
+ * brilha, e inventar um brilho aqui seria trair o resto do sistema.
  */
 function Comemoracao({ competencia }: { competencia: string }) {
   const confete = useRef<HTMLDivElement>(null);
@@ -139,9 +170,6 @@ function Comemoracao({ competencia }: { competencia: string }) {
    * Mostrar e esconder um elemento já renderizado evita as duas coisas.
    */
   useEffect(() => {
-    const aurora = document.getElementById("aurora");
-    aurora?.classList.add("comemorando");
-
     const chave = `comemorou:${competencia}`;
     let jaComemorou = true;
 
@@ -163,10 +191,7 @@ function Comemoracao({ competencia }: { competencia: string }) {
       }, 5000);
     }
 
-    return () => {
-      clearTimeout(esconder);
-      aurora?.classList.remove("comemorando");
-    };
+    return () => clearTimeout(esconder);
   }, [competencia]);
 
   return (
@@ -178,9 +203,9 @@ function Comemoracao({ competencia }: { competencia: string }) {
             {
               left: `${(indice * 97) % 100}%`,
               background: CORES[indice % CORES.length],
-              "--duracao": `${2.4 + ((indice * 13) % 18) / 10}s`,
-              "--atraso": `${((indice * 29) % 20) / 10}s`,
-              "--giro": `${((indice * 71) % 4) * 180 + 360}deg`,
+"--duracao": `${2.4 + ((indice * 13) % 18) / 10}s`,
+"--atraso": `${((indice * 29) % 20) / 10}s`,
+"--giro": `${((indice * 71) % 4) * 180 + 360}deg`,
             } as React.CSSProperties
           }
         />

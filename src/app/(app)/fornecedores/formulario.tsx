@@ -1,30 +1,12 @@
 "use client";
 
+import { BadgeCheck, Percent } from "lucide-react";
 import { useActionState } from "react";
 
 import { Botao, Campo, MensagemErro, SecaoCartao } from "@/components/ui";
 
 import type { EstadoFormulario } from "./acoes";
-
-export type ValoresFornecedor = {
-  nome: string;
-  razaoSocial: string;
-  cnpj: string;
-  emailsPedido: string;
-  ipiPercentual: string;
-  comissaoPercentual: string;
-  fatorKgPadrao: string;
-};
-
-export const VALORES_VAZIOS: ValoresFornecedor = {
-  nome: "",
-  razaoSocial: "",
-  cnpj: "",
-  emailsPedido: "",
-  ipiPercentual: "",
-  comissaoPercentual: "",
-  fatorKgPadrao: "",
-};
+import type { ValoresFornecedor } from "./valores";
 
 export function FormularioFornecedor({
   acao,
@@ -41,7 +23,7 @@ export function FormularioFornecedor({
     <form action={enviar} className="space-y-5">
       <MensagemErro>{estado.erro}</MensagemErro>
 
-      <SecaoCartao titulo="Identificação">
+      <SecaoCartao icone={BadgeCheck} titulo="Identificação">
         <div className="grid gap-4 sm:grid-cols-2">
           <Campo
             name="nome"
@@ -68,6 +50,7 @@ export function FormularioFornecedor({
       </SecaoCartao>
 
       <SecaoCartao
+        icone={Percent}
         titulo="Condições comerciais"
         descricao="Valores usados no cálculo do pedido e da sua comissão."
       >
@@ -102,7 +85,7 @@ export function FormularioFornecedor({
       </SecaoCartao>
 
       <div className="flex justify-end">
-        <Botao type="submit" disabled={enviando}>
+        <Botao type="submit" carregando={enviando}>
           {enviando ? "Salvando…" : rotuloEnvio}
         </Botao>
       </div>

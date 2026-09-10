@@ -13,6 +13,8 @@ import {
 import { FormularioCliente } from "../formulario";
 import { BotaoExcluirCliente } from "./botao-excluir";
 import { SecaoCodigos } from "./codigos";
+import { Building2 } from "lucide-react";
+import { Pagina } from "@/components/pagina";
 
 export default async function PaginaCliente({ params }: PageProps<"/clientes/[id]">) {
   const { id } = await params;
@@ -40,8 +42,9 @@ export default async function PaginaCliente({ params }: PageProps<"/clientes/[id
   if (!cliente) notFound();
 
   return (
-    <>
+    <Pagina>
       <Cabecalho
+        icone={Building2}
         titulo={cliente.apelido}
         descricao={cliente.razaoSocial}
         acao={
@@ -88,6 +91,6 @@ export default async function PaginaCliente({ params }: PageProps<"/clientes/[id
           remover={removerCodigoProduto.bind(null, cliente.id)}
         />
       </div>
-    </>
+    </Pagina>
   );
 }

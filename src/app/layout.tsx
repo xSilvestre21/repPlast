@@ -1,12 +1,41 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { IBM_Plex_Mono, IBM_Plex_Sans, Newsreader } from "next/font/google";
 
 import { SCRIPT_TEMA } from "@/components/alternador-tema";
 
 import "./globals.css";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+/*
+ * Três vozes, e cada uma tem um trabalho.
+ *
+ * Newsreader é a serifada dos NÚMEROS e dos títulos. É o gesto central da
+ * identidade: o valor que a pessoa abriu o sistema para ver sai impresso, com
+ * o peso que uma serifada dá a uma manchete.
+ *
+ * IBM Plex Sans conduz a interface. Foi desenhada para uma empresa que fazia
+ * máquinas, e carrega isso — é neutra sem ser a fonte de todo mundo.
+ *
+ * IBM Plex Mono cuida do que é código: medida (99x166x0,08), COD.FORN,
+ * descrição gerada. São dados que a indústria confere caractere a caractere.
+ */
+const serifada = Newsreader({
+  variable: "--fonte-serif",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
+});
+
+const sans = IBM_Plex_Sans({
+  variable: "--fonte-sans",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+});
+
+const mono = IBM_Plex_Mono({
+  variable: "--fonte-mono",
+  subsets: ["latin"],
+  weight: ["400", "500"],
+});
 
 export const metadata: Metadata = {
   title: "RepPlast",
@@ -33,7 +62,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="pt-BR"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${sans.variable} ${serifada.variable} ${mono.variable} h-full antialiased`}
       // O tema escolhido é aplicado pelo script abaixo, antes da pintura.
       suppressHydrationWarning
     >
@@ -54,8 +83,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
       </head>
       <body className="min-h-full flex flex-col font-sans">
-        {/* O id permite ao painel de meta virar este brilho em comemoração. */}
-        <div id="aurora" className="aurora-fundo" aria-hidden="true" />
+        {/* O grão é a única textura do sistema: sem ele o fundo é tela, não papel. */}
+        <div className="grao" aria-hidden="true" />
         {children}
       </body>
     </html>

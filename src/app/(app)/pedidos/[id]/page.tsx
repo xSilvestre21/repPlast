@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Building2, FileText } from "lucide-react";
 
 import { SeloStatus } from "@/components/selo-status";
-import { BotaoLink, Cartao } from "@/components/ui";
+import { BotaoLink, Cartao, Emblema } from "@/components/ui";
 import { dbParaOrganizacao } from "@/lib/db";
 import { escreverNumeroBr } from "@/lib/numero-br";
 import { organizacaoAtual } from "@/lib/sessao";
@@ -24,6 +25,7 @@ import { AcaoPedido } from "./acoes-status";
 import { SecaoCabecalho } from "./cabecalho";
 import { BotaoEnviarEmail } from "./envio";
 import { SecaoItens } from "./itens";
+import { Pagina } from "@/components/pagina";
 
 const DATA_HORA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
 
@@ -56,16 +58,16 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
   const texto = (v: { toString(): string } | null) => (v === null ? null : v.toString());
 
   return (
-    <>
+    <Pagina>
       <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-xl font-semibold tracking-tight numerico">
-              Pedido #{pedido.numero}
+            <h1 className="font-serif text-3xl sm:text-[2.375rem] font-medium tracking-tight leading-none">
+              Pedido <span className="numerico">{pedido.numero}</span>
             </h1>
             <SeloStatus status={pedido.status} />
           </div>
-          <p className="text-sm text-texto-suave mt-1">
+          <p className="text-sm text-tinta-2 mt-1">
             {pedido.fornecedor.nome} · criado em {DATA_HORA.format(pedido.criadoEm)}
             {pedido.enviadoEm && ` · enviado em ${DATA_HORA.format(pedido.enviadoEm)}`}
           </p>
@@ -78,6 +80,7 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
                 href={`/pedidos/${pedido.id}/pdf?abrir`}
                 target="_blank"
                 variante="secundaria"
+                icone={FileText}
               >
                 Ver PDF
               </BotaoLink>
@@ -95,6 +98,7 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
               rotulo="Marcar como enviado"
               rotuloOcupado="Marcando…"
               variante="secundaria"
+              icone="enviar"
               confirmacao="Marcar como enviado trava o pedido e passa a contar a comissão. Confirma?"
               acao={marcarEnviado.bind(null, pedido.id)}
             />
@@ -104,6 +108,7 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
             <AcaoPedido
               rotulo="Desmarcar envio"
               rotuloOcupado="Desmarcando…"
+              icone="desfazer"
               acao={desmarcarEnvio.bind(null, pedido.id)}
             />
           )}
@@ -111,6 +116,7 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
           <AcaoPedido
             rotulo="Duplicar"
             rotuloOcupado="Duplicando…"
+            icone="duplicar"
             acao={duplicarPedido.bind(null, pedido.id)}
           />
 
@@ -118,6 +124,7 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
             <AcaoPedido
               rotulo="Reabrir"
               rotuloOcupado="Reabrindo…"
+              icone="reabrir"
               acao={reabrirPedido.bind(null, pedido.id)}
             />
           ) : (
@@ -125,6 +132,7 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
               rotulo="Cancelar"
               rotuloOcupado="Cancelando…"
               variante="perigo"
+              icone="cancelar"
               confirmacao="Cancelar o pedido estorna a comissão dele. Confirma?"
               acao={cancelarPedido.bind(null, pedido.id)}
             />
@@ -135,6 +143,7 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
               rotulo="Apagar"
               rotuloOcupado="Apagando…"
               variante="perigo"
+              icone="apagar"
               confirmacao="Apagar remove o pedido de vez. Confirma?"
               acao={excluirPedido.bind(null, pedido.id)}
             />
@@ -142,16 +151,17 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
         </div>
       </div>
 
-      <div className="space-y-5">
+      <div className="space-y-5 palco">
         <Cartao className="p-4 sm:p-5">
-          <h2 className="font-medium mb-3">Cliente</h2>
-          <Link
-            href={`/clientes/${pedido.cliente.id}`}
-            className="block hover:text-acento transition-colors"
-          >
-            <div className="font-medium">{pedido.cliente.apelido}</div>
-            <div className="text-sm text-texto-suave">{pedido.cliente.razaoSocial}</div>
-          </Link>
+          <div className="flex items-start gap-3 mb-3">
+            <Emblema icone={Building2} tom="fraco" className="size-4" />
+            <Link href={`/clientes/${pedido.cliente.id}`} className="group min-w-0 block">
+              <div className="font-semibold truncate transition-colors group-hover:text-carimbo">
+                {pedido.cliente.apelido}
+              </div>
+              <div className="text-sm text-tinta-2 truncate">{pedido.cliente.razaoSocial}</div>
+            </Link>
+          </div>
           <dl className="grid gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3 mt-3 text-sm">
             <Info rotulo="CNPJ" valor={pedido.cliente.cnpj} />
             <Info rotulo="IE" valor={pedido.cliente.ie} />
@@ -237,7 +247,7 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
           }}
         />
       </div>
-    </>
+    </Pagina>
   );
 }
 
@@ -246,7 +256,7 @@ function Info({ rotulo, valor }: { rotulo: string; valor: string | null }) {
 
   return (
     <div className="flex gap-2 min-w-0">
-      <dt className="text-texto-fraco shrink-0">{rotulo}:</dt>
+      <dt className="text-tinta-3 shrink-0">{rotulo}:</dt>
       <dd className="truncate">{valor}</dd>
     </div>
   );
