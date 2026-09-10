@@ -12,11 +12,14 @@ import {
   excluirFornecedor,
   removerAditivo,
   removerFaixa,
+  removerLogo,
+  salvarLogo,
 } from "../acoes";
 import { FormularioFornecedor } from "../formulario";
 import { SecaoAditivos } from "./aditivos";
 import { BotaoExcluir } from "./botao-excluir";
 import { SecaoFaixas } from "./faixas";
+import { SecaoLogo } from "./logo-industria";
 
 export default async function PaginaFornecedor({ params }: PageProps<"/fornecedores/[id]">) {
   const { id } = await params;
@@ -26,6 +29,9 @@ export default async function PaginaFornecedor({ params }: PageProps<"/fornecedo
 
   const fornecedor = await db.fornecedor.findFirst({
     where: { id, organizacaoId },
+    // `omit` do logo: são bytes que não têm uso nesta página, e trazê-los a
+    // cada carregamento seria desperdício. A imagem vem pela rota própria.
+    omit: { logo: true },
     include: {
       faixas: { orderBy: { minimo: "asc" } },
       aditivos: { orderBy: { nome: "asc" } },
@@ -64,6 +70,15 @@ export default async function PaginaFornecedor({ params }: PageProps<"/fornecedo
               ? escreverNumeroBr(fornecedor.fatorKgPadrao.toString(), 2)
               : "",
           }}
+        />
+
+        <SecaoLogo
+          fornecedorId={fornecedor.id}
+          nome={fornecedor.nome}
+          temLogo={fornecedor.logoTipo !== null}
+          versao={String(fornecedor.atualizadoEm.getTime())}
+          salvar={salvarLogo.bind(null, fornecedor.id)}
+          remover={removerLogo.bind(null, fornecedor.id)}
         />
 
         <SecaoFaixas

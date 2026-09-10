@@ -189,6 +189,19 @@ body {
 }
 
 /**
+ * Barra fixa do topo.
+ *
+ * Precisa de fosco bem mais denso que `.vidro`: como ela não sai da tela, o
+ * conteúdo rola por baixo e a 4% de opacidade o texto continuava legível
+ * atrás da marca. A saturação extra evita que o fundo desbotado pareça sujo.
+ */
+.barra-topo {
+  background: color-mix(in oklab, var(--fundo) 86%, transparent);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+}
+
+/**
  * Dígitos de mesma largura. Numa tabela de pedido isso é legibilidade, não
  * estética: os valores alinham na vertical e o erro salta aos olhos.
  */

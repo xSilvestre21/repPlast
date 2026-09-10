@@ -16,7 +16,10 @@ export function Navegacao() {
   const caminho = usePathname();
 
   return (
-    <header className="sticky top-0 z-40">
+    // A barra precisa de fundo próprio: sendo fixa e translúcida, o conteúdo
+    // rolava por trás e colidia com a marca. O vidro fosco mantém o ar da
+    // Aurora sem deixar o texto se sobrepor.
+    <header className="sticky top-0 z-40 barra-topo border-b border-borda">
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6">
         {/*
           No desktop a navegação fica centralizada de verdade, por posicionamento

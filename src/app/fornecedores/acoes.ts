@@ -125,6 +125,85 @@ export async function excluirFornecedor(id: string, _formData: FormData): Promis
 }
 
 /* -------------------------------------------------------------------------- */
+/* Logo da indústria                                                          */
+/* -------------------------------------------------------------------------- */
+
+const LIMITE_LOGO = 2 * 1024 * 1024;
+
+/**
+ * Descobre o tipo da imagem pelos BYTES, e não pelo que o navegador declarou.
+ *
+ * O arquivo volta a ser servido pela rota `/fornecedores/[id]/logo`, então
+ * confiar no `type` enviado pelo cliente seria deixar alguém escolher o
+ * Content-Type de uma resposta nossa. Também é o que impede subir um SVG (que
+ * pode conter script) travestido de PNG.
+ */
+function detectarTipoImagem(bytes: Uint8Array): string | null {
+  const comeca = (...assinatura: number[]) =>
+    assinatura.every((valor, indice) => bytes[indice] === valor);
+
+  if (comeca(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return "image/png";
+  if (comeca(0xff, 0xd8, 0xff)) return "image/jpeg";
+
+  // WebP: "RIFF" .... "WEBP"
+  if (comeca(0x52, 0x49, 0x46, 0x46)) {
+    const marca = String.fromCharCode(...bytes.slice(8, 12));
+    if (marca === "WEBP") return "image/webp";
+  }
+
+  return null;
+}
+
+export async function salvarLogo(
+  fornecedorId: string,
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    const { organizacaoId, db } = await contexto();
+
+    const arquivo = formData.get("logo");
+    if (!(arquivo instanceof File) || arquivo.size === 0) {
+      return { erro: "Escolha um arquivo de imagem." };
+    }
+
+    if (arquivo.size > LIMITE_LOGO) {
+      return { erro: "A imagem passa de 2 MB. Reduza antes de enviar." };
+    }
+
+    const bytes = new Uint8Array(await arquivo.arrayBuffer());
+    const tipo = detectarTipoImagem(bytes);
+
+    if (!tipo) {
+      return { erro: "Formato não reconhecido. Envie PNG, JPEG ou WebP." };
+    }
+
+    const { count } = await db.fornecedor.updateMany({
+      where: { id: fornecedorId, organizacaoId },
+      data: { logo: bytes, logoTipo: tipo },
+    });
+
+    if (count === 0) return { erro: "Indústria não encontrada." };
+  } catch (erro) {
+    return { erro: erro instanceof Error ? erro.message : "Não foi possível enviar o logo." };
+  }
+
+  revalidatePath(`/fornecedores/${fornecedorId}`);
+  return {};
+}
+
+export async function removerLogo(fornecedorId: string, _formData: FormData): Promise<void> {
+  const { organizacaoId, db } = await contexto();
+
+  await db.fornecedor.updateMany({
+    where: { id: fornecedorId, organizacaoId },
+    data: { logo: null, logoTipo: null },
+  });
+
+  revalidatePath(`/fornecedores/${fornecedorId}`);
+}
+
+/* -------------------------------------------------------------------------- */
 /* Faixas de comissão                                                         */
 /* -------------------------------------------------------------------------- */
 

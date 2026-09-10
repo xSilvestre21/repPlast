@@ -150,7 +150,11 @@ model Fornecedor {
   razaoSocial String?
   cnpj        String?
   /// Logo da INDÚSTRIA — é ele que vai no cabeçalho do PDF, não o do escritório.
-  logoUrl     String?
+  /// Guardado no próprio banco: são arquivos pequenos, e assim o sistema não
+  /// depende de storage externo para funcionar.
+  logo        Bytes?
+  /// Content-Type do logo, para servir o arquivo com o cabeçalho certo.
+  logoTipo    String?
   /// Destinatários do e-mail com o pedido em anexo.
   emailsPedido String[] @default([])
 
