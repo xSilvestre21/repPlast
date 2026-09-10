@@ -12,7 +12,7 @@ import Decimal from "decimal.js";
 
 import { arredondarDinheiro, fatorEfetivo, precoMilheiroSaco, type Aditivo } from "./precificacao";
 import { calcularTotaisPedido, totalItemBruto } from "./totais";
-import { descricaoSaco, formatarNumero } from "./descricao";
+import { descricaoFita, descricaoRolo, descricaoSaco, formatarNumero } from "./descricao";
 
 const IPI_QUALYPLAST = 9.75;
 
@@ -195,5 +195,33 @@ describe("descrição gerada", () => {
     expect(formatarNumero(0.006, 2)).toBe("0,006");
     expect(formatarNumero(0.08, 2)).toBe("0,08");
     expect(formatarNumero(99)).toBe("99");
+  });
+});
+
+describe("descrição das demais famílias", () => {
+  it("monta descrição de fita", () => {
+    expect(
+      descricaoFita({ larguraMm: 48, metragemM: 100, micragem: 45, material: "BOPP" }),
+    ).toBe("48mm x 100m 45 MIC BOPP");
+  });
+
+  it("omite medidas ausentes na fita", () => {
+    expect(descricaoFita({ larguraMm: 48, material: "BOPP" })).toBe("48mm BOPP");
+    expect(descricaoFita({ material: "BOPP" })).toBe("BOPP");
+  });
+
+  it("monta descrição de stretch e bobina", () => {
+    expect(descricaoRolo({ familia: "STRETCH", larguraMm: 500, micragem: 25 })).toBe(
+      "STRETCH 500mm 25 MIC",
+    );
+    expect(descricaoRolo({ familia: "BOBINA", larguraMm: 400, material: "PEBD" })).toBe(
+      "BOBINA 400mm PEBD",
+    );
+  });
+
+  it("acrescenta os sufixos de aditivo em qualquer família", () => {
+    expect(
+      descricaoRolo({ familia: "STRETCH", larguraMm: 500, adicionais: ["C/ IMPRESSAO"] }),
+    ).toBe("STRETCH 500mm C/ IMPRESSAO");
   });
 });

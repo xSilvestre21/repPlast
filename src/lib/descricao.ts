@@ -54,12 +54,71 @@ export function descricaoSaco(saco: DescricaoSaco): string {
 
   const sanfona = saco.sanfona?.trim();
 
-  return [
+  return juntar([
     medidas,
     sanfona ? `SF ${sanfona}` : null,
     saco.material.trim(),
-    ...(saco.adicionais ?? []).map((a) => a.trim()).filter(Boolean),
-  ]
-    .filter(Boolean)
+    ...(saco.adicionais ?? []),
+  ]);
+}
+
+function juntar(partes: (string | null | undefined)[]): string {
+  return partes
+    .map((p) => p?.trim())
+    .filter((p): p is string => Boolean(p))
     .join(" ");
+}
+
+/* -------------------------------------------------------------------------- */
+/* Demais famílias                                                            */
+/*                                                                            */
+/* ⚠️ FORMATO PROVISÓRIO. Diferente do saco, não há pedido real de fita,      */
+/* stretch ou bobina para servir de referência — estes formatos são uma       */
+/* proposta. Por isso a descrição do produto é EDITÁVEL na tela: o que sai    */
+/* daqui é só o ponto de partida, e o usuário corrige quando não bater com o  */
+/* que a indústria espera ver impresso.                                       */
+/* -------------------------------------------------------------------------- */
+
+export interface DescricaoFita {
+  /** Largura em milímetros, ex.: 48. */
+  larguraMm?: Decimal.Value | null;
+  /** Metragem do rolo, ex.: 100. */
+  metragemM?: Decimal.Value | null;
+  /** Espessura em micras, ex.: 45. */
+  micragem?: Decimal.Value | null;
+  material?: string | null;
+  adicionais?: string[];
+}
+
+export function descricaoFita(fita: DescricaoFita): string {
+  const medidas = [
+    fita.larguraMm != null ? `${formatarNumero(fita.larguraMm)}mm` : null,
+    fita.metragemM != null ? `${formatarNumero(fita.metragemM)}m` : null,
+  ].filter(Boolean);
+
+  return juntar([
+    medidas.length > 0 ? medidas.join(" x ") : null,
+    fita.micragem != null ? `${formatarNumero(fita.micragem)} MIC` : null,
+    fita.material,
+    ...(fita.adicionais ?? []),
+  ]);
+}
+
+export interface DescricaoRolo {
+  /** STRETCH ou BOBINA. */
+  familia: "STRETCH" | "BOBINA";
+  larguraMm?: Decimal.Value | null;
+  micragem?: Decimal.Value | null;
+  material?: string | null;
+  adicionais?: string[];
+}
+
+export function descricaoRolo(rolo: DescricaoRolo): string {
+  return juntar([
+    rolo.familia,
+    rolo.larguraMm != null ? `${formatarNumero(rolo.larguraMm)}mm` : null,
+    rolo.micragem != null ? `${formatarNumero(rolo.micragem)} MIC` : null,
+    rolo.material,
+    ...(rolo.adicionais ?? []),
+  ]);
 }
