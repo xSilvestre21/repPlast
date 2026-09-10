@@ -88,6 +88,30 @@ Enviar o e-mail **também marca o pedido como enviado**, porque é o mesmo fato:
 chegou à indústria mas ficou "aberto" no sistema seria uma mentira no controle de comissão. O
 e-mail vai primeiro; se falhar, nada é marcado.
 
+## Autenticação
+
+Login por e-mail e senha. A senha é guardada com `scrypt`, que já vem no Node — sem dependência
+externa para algo tão sensível. A sessão é um cookie assinado com HMAC que carrega **apenas o id
+do usuário**: quem manda é o banco, então desativar um escritório tem efeito imediato, sem esperar
+o cookie expirar.
+
+O `.env` precisa de uma chave de assinatura:
+
+```
+SESSAO_SECRET="uma chave aleatória com 32 caracteres ou mais"
+```
+
+Gere a sua com `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`.
+
+O guarda de sessão vive em um lugar só, [`src/app/(app)/layout.tsx`](src/app/(app)/layout.tsx), e
+vale para tudo sob aquele grupo de rotas — assim **uma página nova nasce protegida**. As rotas de
+arquivo (PDF, logo) não passam por layout e por isso se protegem sozinhas, respondendo 401.
+
+Módulos que nunca podem ir para o navegador — `db`, `sessao`, `senha`, `email` — importam
+`server-only`, o que transforma um import acidental em erro de build em vez de falha em produção.
+Como esse pacote só é inofensivo sob a condição `react-server`, os scripts em Node puro (seed,
+setup) precisam passar `--conditions react-server`.
+
 ## Isolamento entre escritórios (multi-tenant)
 
 São **duas camadas, ambas obrigatórias**:

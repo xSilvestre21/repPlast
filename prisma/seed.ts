@@ -13,6 +13,7 @@ import "dotenv/config";
 
 import { dbAdministrativo } from "../src/lib/db";
 import { descricaoFita, descricaoRolo, descricaoSaco } from "../src/lib/descricao";
+import { gerarHashSenha } from "../src/lib/senha";
 
 const db = dbAdministrativo();
 
@@ -22,6 +23,23 @@ async function main() {
     (await db.organizacao.create({ data: { nome: "Representação Modelo" } }));
 
   const organizacaoId = organizacao.id;
+
+  // --- Usuário de desenvolvimento ----------------------------------------
+  // Senha fraca de propósito e SÓ para desenvolvimento: existe para conseguir
+  // entrar no sistema local sem passar pelo cadastro toda vez.
+  const email = "dev@repplast.local";
+
+  if (!(await db.usuario.findUnique({ where: { email }, select: { id: true } }))) {
+    await db.usuario.create({
+      data: {
+        organizacaoId,
+        nome: "Valquiria Silvestre",
+        email,
+        senhaHash: await gerarHashSenha("repplast123"),
+      },
+    });
+    console.log(`  usuário de desenvolvimento: ${email} / repplast123`);
+  }
 
   // --- Indústria ---------------------------------------------------------
   const qualyplast =

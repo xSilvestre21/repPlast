@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import Script from "next/script";
 
 import { SCRIPT_TEMA } from "@/components/alternador-tema";
-import { Navegacao } from "@/components/navegacao";
 
 import "./globals.css";
 
@@ -25,6 +23,12 @@ export const metadata: Metadata = {
  */
 export const dynamic = "force-dynamic";
 
+/**
+ * Layout raiz: só o essencial que vale para TODA página, logada ou não.
+ *
+ * A navegação e o guarda de sessão vivem em `(app)/layout.tsx`, porque as
+ * telas de login e cadastro não têm nem uma nem outro.
+ */
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
@@ -35,24 +39,24 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     >
       <head>
         {/*
-          `beforeInteractive` coloca o script no HTML inicial e o executa antes
-          da hidratação — que é o único momento em que ele serve. Um <script>
-          solto dentro do componente funcionaria no primeiro carregamento, mas
-          o React avisa (com razão) que ele nunca roda em navegação de cliente.
+          Padrão documentado pelo Next para evitar o flash de tema
+          (docs/app/guides/preventing-flash-before-hydration).
+
+          O React avisa no console que "scripts dentro de componentes nunca
+          executam na renderização do cliente". O aviso é verdadeiro e
+          irrelevante aqui: este script existe para rodar durante a análise do
+          HTML, ANTES da primeira pintura, que é o único momento em que ele
+          serve. Em navegação de cliente o tema já está aplicado.
+
+          Tentar contornar com `next/script` e `beforeInteractive` produz
+          exatamente o mesmo aviso, sem ganho.
         */}
-        <Script
-          id="tema-inicial"
-          strategy="beforeInteractive"
-          dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }}
-        />
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
       </head>
       <body className="min-h-full flex flex-col font-sans">
         {/* O id permite ao painel de meta virar este brilho em comemoração. */}
         <div id="aurora" className="aurora-fundo" aria-hidden="true" />
-        <Navegacao />
-        <main className="flex-1 w-full max-w-6xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
-          {children}
-        </main>
+        {children}
       </body>
     </html>
   );

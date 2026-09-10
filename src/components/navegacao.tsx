@@ -3,7 +3,44 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { sair } from "@/app/(entrada)/acoes";
+
 import { AlternadorTema } from "./alternador-tema";
+
+/**
+ * Quem está logado, e a saída.
+ *
+ * O nome vem do layout, que já leu a sessão — evita uma segunda consulta e
+ * mantém este componente sem acesso a dados.
+ */
+function MenuUsuario({ nome }: { nome: string }) {
+  const iniciais = nome
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((parte) => parte[0]?.toUpperCase())
+    .join("");
+
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        title={nome}
+        className="grid place-items-center size-9 rounded-full fundo-gradiente text-sobre-acento text-xs font-semibold shrink-0"
+      >
+        {iniciais || "?"}
+      </span>
+
+      <form action={sair}>
+        <button
+          type="submit"
+          className="text-xs text-texto-fraco hover:text-texto transition-colors whitespace-nowrap"
+        >
+          sair
+        </button>
+      </form>
+    </div>
+  );
+}
 
 const ITENS = [
   { href: "/", rotulo: "Painel" },
@@ -14,7 +51,7 @@ const ITENS = [
   { href: "/fornecedores", rotulo: "Fornecedores" },
 ];
 
-export function Navegacao() {
+export function Navegacao({ nomeUsuario }: { nomeUsuario: string }) {
   const caminho = usePathname();
 
   return (
@@ -37,7 +74,8 @@ export function Navegacao() {
               Rep<span className="texto-gradiente">Plast</span>
             </Link>
 
-            <div className="sm:hidden">
+            <div className="sm:hidden flex items-center gap-2">
+              <MenuUsuario nome={nomeUsuario} />
               <AlternadorTema />
             </div>
           </div>
@@ -70,7 +108,8 @@ export function Navegacao() {
             </div>
           </nav>
 
-          <div className="hidden sm:block">
+          <div className="hidden sm:flex items-center gap-2">
+            <MenuUsuario nome={nomeUsuario} />
             <AlternadorTema />
           </div>
         </div>

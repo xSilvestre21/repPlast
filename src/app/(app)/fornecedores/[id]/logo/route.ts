@@ -1,5 +1,5 @@
 import { dbParaOrganizacao } from "@/lib/db";
-import { organizacaoAtual } from "@/lib/sessao";
+import { sessaoAtual } from "@/lib/sessao";
 
 /**
  * Serve o logo da indústria.
@@ -16,7 +16,11 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  const organizacaoId = await organizacaoAtual();
+  // Rota de arquivo não passa por layout: o guarda de sessão é aqui.
+  const sessao = await sessaoAtual();
+  if (!sessao) return new Response("Não autenticado", { status: 401 });
+
+  const organizacaoId = sessao.organizacaoId;
   const db = dbParaOrganizacao(organizacaoId);
 
   const fornecedor = await db.fornecedor.findFirst({

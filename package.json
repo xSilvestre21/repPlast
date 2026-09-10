@@ -11,8 +11,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "test:db": "vitest run --config vitest.integration.config.mts",
-    "db:setup": "node scripts/setup-db-role.mjs",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:setup": "node --conditions react-server scripts/setup-db-role.mjs",
+    "db:seed": "tsx --conditions react-server prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",
@@ -24,6 +24,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "resend": "^6.27.0",
+    "server-only": "^0.0.1",
     "zod": "^4.6.1"
   },
   "devDependencies": {

@@ -6,6 +6,8 @@
  * clara em vez de um erro cru do provedor.
  */
 
+import "server-only";
+
 import { Resend } from "resend";
 
 export type Anexo = { nome: string; conteudo: Buffer };

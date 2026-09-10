@@ -1,5 +1,5 @@
 import { carregarPedidoParaPdf, gerarPdfPedido } from "@/lib/pdf/gerar-pedido";
-import { organizacaoAtual } from "@/lib/sessao";
+import { sessaoAtual } from "@/lib/sessao";
 
 /**
  * Gera o PDF do pedido sob demanda.
@@ -15,8 +15,13 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  const organizacaoId = await organizacaoAtual();
-  const pedido = await carregarPedidoParaPdf(id, organizacaoId);
+  // Rota de arquivo não passa por layout, então o guarda de sessão é aqui.
+  // Responde 401 em vez de deixar `organizacaoAtual()` lançar: sem sessão não
+  // é erro do servidor, e um 500 poluiria o log de problemas de verdade.
+  const sessao = await sessaoAtual();
+  if (!sessao) return new Response("Não autenticado", { status: 401 });
+
+  const pedido = await carregarPedidoParaPdf(id, sessao.organizacaoId);
 
   if (!pedido) return new Response("Pedido não encontrado", { status: 404 });
 
