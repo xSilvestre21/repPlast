@@ -47,3 +47,6 @@ next-env.d.ts
 /.windsurf
 /.claude
 /skills-lock.json
+
+# Documentos de referência (pedidos reais de clientes) — nunca versionar
+/referencia
