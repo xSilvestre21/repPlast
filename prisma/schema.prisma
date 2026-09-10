@@ -231,7 +231,12 @@ model Produto {
   codigoFornecedor String?
   /// Descrição gerada a partir das medidas; é ela que sai impressa.
   descricao        String
+  /// Texto que abre a descrição nas famílias fita/stretch/bobina
+  /// ("Fita adesiva", "FILM STRETCH") e que a fecha no saco ("PEAD").
   material         String?
+  /// Texto livre acrescentado ao fim da descrição: cor, acabamento, peso da
+  /// bobina. Vem dos pedidos reais — "transparente", "BOBINA 4KG PESO LÍQUIDO".
+  complemento      String?
 
   // --- SACO: os únicos campos que alimentam a fórmula de preço ---
   larguraCm     Decimal? @db.Decimal(10, 2)

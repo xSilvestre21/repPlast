@@ -39,9 +39,11 @@ export interface DescricaoSaco {
    * A sanfona não entra em nenhum cálculo — só na descrição.
    */
   sanfona?: string;
-  /** Material, ex.: "PEAD", "PEBD". */
+  /** Material, ex.: "PEAD", "PEBD". No saco ele vem DEPOIS das medidas. */
   material: string;
-  /** Características extras, ex.: ["C/ DESLIZANTE"]. */
+  /** Texto livre ao fim, ex.: cor ou acabamento. */
+  complemento?: string | null;
+  /** Sufixos vindos dos aditivos, ex.: ["C/ DESLIZANTE"]. */
   adicionais?: string[];
 }
 
@@ -57,7 +59,8 @@ export function descricaoSaco(saco: DescricaoSaco): string {
   return juntar([
     medidas,
     sanfona ? `SF ${sanfona}` : null,
-    saco.material.trim(),
+    saco.material,
+    saco.complemento,
     ...(saco.adicionais ?? []),
   ]);
 }
@@ -72,53 +75,68 @@ function juntar(partes: (string | null | undefined)[]): string {
 /* -------------------------------------------------------------------------- */
 /* Demais famílias                                                            */
 /*                                                                            */
-/* ⚠️ FORMATO PROVISÓRIO. Diferente do saco, não há pedido real de fita,      */
-/* stretch ou bobina para servir de referência — estes formatos são uma       */
-/* proposta. Por isso a descrição do produto é EDITÁVEL na tela: o que sai    */
-/* daqui é só o ponto de partida, e o usuário corrige quando não bater com o  */
-/* que a indústria espera ver impresso.                                       */
+/* Formatos extraídos dos pedidos reais 133 e 146 (indústria ERIPACK):        */
+/*                                                                            */
+/*     Fita adesiva 45x100 transparente                                       */
+/*     FILM STRETCH 500X25 BOBINA 4KG PESO LÍQUIDO                            */
+/*                                                                            */
+/* Diferente do saco, aqui o `material` ABRE a descrição ("Fita adesiva",     */
+/* "FILM STRETCH") e o `complemento` a fecha ("transparente",                 */
+/* "BOBINA 4KG PESO LÍQUIDO"). Note que não há sufixo de unidade nas medidas: */
+/* é "45x100", não "45mm x 100m".                                             */
 /* -------------------------------------------------------------------------- */
 
 export interface DescricaoFita {
-  /** Largura em milímetros, ex.: 48. */
+  /** Texto que abre a descrição, ex.: "Fita adesiva". */
+  material?: string | null;
+  /** Largura em milímetros, ex.: 45. */
   larguraMm?: Decimal.Value | null;
   /** Metragem do rolo, ex.: 100. */
   metragemM?: Decimal.Value | null;
-  /** Espessura em micras, ex.: 45. */
-  micragem?: Decimal.Value | null;
-  material?: string | null;
+  /** Texto livre ao fim, ex.: "transparente". */
+  complemento?: string | null;
   adicionais?: string[];
 }
 
 export function descricaoFita(fita: DescricaoFita): string {
-  const medidas = [
-    fita.larguraMm != null ? `${formatarNumero(fita.larguraMm)}mm` : null,
-    fita.metragemM != null ? `${formatarNumero(fita.metragemM)}m` : null,
-  ].filter(Boolean);
-
   return juntar([
-    medidas.length > 0 ? medidas.join(" x ") : null,
-    fita.micragem != null ? `${formatarNumero(fita.micragem)} MIC` : null,
     fita.material,
+    medidasSeparadas([fita.larguraMm, fita.metragemM], "x"),
+    fita.complemento,
     ...(fita.adicionais ?? []),
   ]);
 }
 
 export interface DescricaoRolo {
-  /** STRETCH ou BOBINA. */
-  familia: "STRETCH" | "BOBINA";
-  larguraMm?: Decimal.Value | null;
-  micragem?: Decimal.Value | null;
+  /** Texto que abre a descrição, ex.: "FILM STRETCH". */
   material?: string | null;
+  /** Largura em milímetros, ex.: 500. */
+  larguraMm?: Decimal.Value | null;
+  /** Espessura em micras, ex.: 25. */
+  micragem?: Decimal.Value | null;
+  /** Texto livre ao fim, ex.: "BOBINA 4KG PESO LÍQUIDO". */
+  complemento?: string | null;
   adicionais?: string[];
 }
 
 export function descricaoRolo(rolo: DescricaoRolo): string {
   return juntar([
-    rolo.familia,
-    rolo.larguraMm != null ? `${formatarNumero(rolo.larguraMm)}mm` : null,
-    rolo.micragem != null ? `${formatarNumero(rolo.micragem)} MIC` : null,
     rolo.material,
+    // Maiúsculo porque é assim que a indústria imprime: "500X25".
+    medidasSeparadas([rolo.larguraMm, rolo.micragem], "X"),
+    rolo.complemento,
     ...(rolo.adicionais ?? []),
   ]);
+}
+
+/** Junta as medidas presentes com o separador dado, ou devolve null se não houver nenhuma. */
+function medidasSeparadas(
+  valores: (Decimal.Value | null | undefined)[],
+  separador: string,
+): string | null {
+  const presentes = valores
+    .filter((v) => v !== null && v !== undefined && v !== "")
+    .map((v) => formatarNumero(v as Decimal.Value));
+
+  return presentes.length > 0 ? presentes.join(separador) : null;
 }

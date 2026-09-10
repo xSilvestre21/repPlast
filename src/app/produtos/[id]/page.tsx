@@ -48,6 +48,7 @@ export default async function PaginaProduto({ params }: PageProps<"/produtos/[id
           codigoFornecedor: produto.codigoFornecedor ?? "",
           descricao: produto.descricao,
           material: produto.material ?? "",
+          complemento: produto.complemento ?? "",
           larguraCm: paraCampo(produto.larguraCm),
           comprimentoCm: paraCampo(produto.comprimentoCm),
           espessuraMm: paraCampo(produto.espessuraMm),

@@ -12,7 +12,7 @@
 import "dotenv/config";
 
 import { dbAdministrativo } from "../src/lib/db";
-import { descricaoSaco } from "../src/lib/descricao";
+import { descricaoFita, descricaoRolo, descricaoSaco } from "../src/lib/descricao";
 
 const db = dbAdministrativo();
 
@@ -200,9 +200,115 @@ async function main() {
     console.log(`  produto ${p.codigoFornecedor}: ${descricao}`);
   }
 
+  await semearEripack(organizacaoId);
+
   console.log(`\nOrganização: ${organizacao.nome} (${organizacaoId})`);
-  console.log(`Fornecedor:  ${qualyplast.nome} — IPI 9,75%, comissão 3%`);
-  console.log(`Clientes:    ${mariol.apelido}, ${lemepack.apelido}`);
+  console.log(`Fornecedores: ${qualyplast.nome} (IPI 9,75%), ERIPACK (IPI 15%)`);
+  console.log(`Clientes:     ${mariol.apelido}, ${lemepack.apelido}, CASTRO-MACHI, AN-PARAFUSOS`);
+}
+
+/**
+ * Segunda indústria, dos pedidos 133 e 146.
+ *
+ * Vale a pena estar no seed por dois motivos: prova que o IPI é mesmo por
+ * fornecedor (15% aqui contra 9,75% da QUALYPLAST) e traz as famílias fita e
+ * stretch, que não aparecem nos pedidos da QUALYPLAST.
+ */
+async function semearEripack(organizacaoId: string) {
+  const eripack =
+    (await db.fornecedor.findFirst({ where: { organizacaoId, nome: "ERIPACK" } })) ??
+    (await db.fornecedor.create({
+      data: {
+        organizacaoId,
+        nome: "ERIPACK",
+        razaoSocial: "ERIPACK EMBALAGENS INDUSTRIAIS",
+        ipiPercentual: "15",
+        // O percentual de comissão da ERIPACK não consta nos pedidos de
+        // referência — fica zero até o usuário informar.
+        comissaoPercentual: "0",
+        proximoNumeroPedido: 147,
+      },
+    }));
+
+  const clientes = [
+    {
+      apelido: "CASTRO-MACHI",
+      razaoSocial: "CASTRO & MACHI INDUSTRIA E COMERCIO LTDA",
+      cnpj: "45.592.600/0001-24",
+      ie: "606.369.999.114",
+      uf: "SP",
+      endereco: "Rua Ricardo Fracassi, 590",
+      bairro: "Distrito Industrial",
+      cep: "13457-209",
+      municipio: "Santa Barbara D'Oeste",
+      telefone: "(19) 99687-3399",
+      emailNfe: "castro.machi.ind@gmail.com",
+    },
+    {
+      apelido: "AN-PARAFUSOS",
+      razaoSocial: "AN PARAFUSOS LTDA -EPP",
+      cnpj: "10.781.464/0001-36",
+      ie: "286.299.251.116",
+      uf: "SP",
+      endereco: "Av. Dom Pedro I 1154",
+      bairro: "Vila Conceição",
+      cep: "09991-000",
+      municipio: "Diadema",
+      telefone: "(11) 4043-1468",
+      emailNfe: "financeiro@anparafusos.com.br",
+    },
+  ];
+
+  for (const cliente of clientes) {
+    const existente = await db.cliente.findFirst({
+      where: { organizacaoId, apelido: cliente.apelido },
+    });
+
+    if (!existente) await db.cliente.create({ data: { organizacaoId, ...cliente } });
+  }
+
+  const produtos = [
+    {
+      familia: "FITA" as const,
+      material: "Fita adesiva",
+      larguraMm: 45,
+      metragemM: 100,
+      complemento: "transparente",
+      precoCaixa: "368.76",
+    },
+    {
+      familia: "STRETCH" as const,
+      material: "FILM STRETCH",
+      larguraMm: 500,
+      micragem: 25,
+      complemento: "BOBINA 4KG PESO LÍQUIDO",
+      precoKg: "17.40",
+    },
+    {
+      familia: "STRETCH" as const,
+      material: "FILM STRETCH",
+      larguraMm: 500,
+      micragem: 25,
+      complemento: "BOBINAS 2KG PESO LÍQUIDO",
+      precoKg: "17.40",
+    },
+  ];
+
+  for (const p of produtos) {
+    const descricao = p.familia === "FITA" ? descricaoFita(p) : descricaoRolo(p);
+
+    const existente = await db.produto.findFirst({
+      where: { organizacaoId, fornecedorId: eripack.id, descricao },
+    });
+
+    if (!existente) {
+      await db.produto.create({
+        data: { organizacaoId, fornecedorId: eripack.id, descricao, ...p },
+      });
+    }
+
+    console.log(`  produto ERIPACK: ${descricao}`);
+  }
 }
 
 main()

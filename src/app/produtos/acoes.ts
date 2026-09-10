@@ -65,6 +65,7 @@ function dadosDoFormulario(formData: FormData) {
     descricao,
     codigoFornecedor: lerTexto(formData.get("codigoFornecedor")),
     material: lerTexto(formData.get("material")),
+    complemento: lerTexto(formData.get("complemento")),
   };
 
   if (familia === "SACO") {

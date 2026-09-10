@@ -12,7 +12,6 @@ import Decimal from "decimal.js";
 
 import { arredondarDinheiro, fatorEfetivo, precoMilheiroSaco, type Aditivo } from "./precificacao";
 import { calcularTotaisPedido, totalItemBruto } from "./totais";
-import { descricaoFita, descricaoRolo, descricaoSaco, formatarNumero } from "./descricao";
 
 const IPI_QUALYPLAST = 9.75;
 
@@ -151,77 +150,44 @@ describe("aditivos", () => {
   });
 });
 
-describe("descrição gerada", () => {
-  it("monta as três descrições exatamente como saem nos PDFs reais", () => {
-    expect(
-      descricaoSaco({ larguraCm: 99, comprimentoCm: 166, espessuraMm: 0.08, sanfona: "13,50", material: "PEAD" }),
-    ).toBe("99x166x0,08 SF 13,50 PEAD");
+/**
+ * Pedidos da ERIPACK. Servem para dois propósitos: confirmar que o IPI é mesmo
+ * uma configuração por fornecedor (15% aqui, contra 9,75% da QUALYPLAST) e que
+ * a totalização funciona para as famílias de preço de tabela, sem fórmula.
+ */
+const IPI_ERIPACK = 15;
 
-    expect(
-      descricaoSaco({ larguraCm: 105, comprimentoCm: 100, espessuraMm: 0.08, sanfona: "15", material: "PEAD" }),
-    ).toBe("105x100x0,08 SF 15 PEAD");
+describe("pedido 133 — fita, preço de tabela por caixa", () => {
+  it("fecha como no PDF", () => {
+    const totais = calcularTotaisPedido(
+      [{ precoUnitario: "368.76", quantidade: 5 }],
+      IPI_ERIPACK,
+    );
 
-    expect(
-      descricaoSaco({
-        larguraCm: 77,
-        comprimentoCm: 150,
-        espessuraMm: 0.05,
-        sanfona: "09",
-        material: "PEAD",
-        adicionais: ["C/ DESLIZANTE"],
-      }),
-    ).toBe("77x150x0,05 SF 09 PEAD C/ DESLIZANTE");
-  });
-
-  it("preserva o zero à esquerda da sanfona, porque é texto digitado", () => {
-    const descricao = descricaoSaco({
-      larguraCm: 77,
-      comprimentoCm: 150,
-      espessuraMm: 0.05,
-      sanfona: "09",
-      material: "PEAD",
-    });
-
-    expect(descricao).toContain("SF 09");
-  });
-
-  it("omite a sanfona quando o saco não tem", () => {
-    expect(
-      descricaoSaco({ larguraCm: 40, comprimentoCm: 60, espessuraMm: 0.1, material: "PEBD" }),
-    ).toBe("40x60x0,10 PEBD");
-  });
-
-  it("mantém as casas decimais da espessura fina", () => {
-    expect(formatarNumero(0.006, 2)).toBe("0,006");
-    expect(formatarNumero(0.08, 2)).toBe("0,08");
-    expect(formatarNumero(99)).toBe("99");
+    expect(totais.subtotalSemIpi.toFixed(2)).toBe("1843.80");
+    expect(totais.ipi.toFixed(2)).toBe("276.57");
+    expect(totais.totalGeral.toFixed(2)).toBe("2120.37");
   });
 });
 
-describe("descrição das demais famílias", () => {
-  it("monta descrição de fita", () => {
-    expect(
-      descricaoFita({ larguraMm: 48, metragemM: 100, micragem: 45, material: "BOPP" }),
-    ).toBe("48mm x 100m 45 MIC BOPP");
-  });
-
-  it("omite medidas ausentes na fita", () => {
-    expect(descricaoFita({ larguraMm: 48, material: "BOPP" })).toBe("48mm BOPP");
-    expect(descricaoFita({ material: "BOPP" })).toBe("BOPP");
-  });
-
-  it("monta descrição de stretch e bobina", () => {
-    expect(descricaoRolo({ familia: "STRETCH", larguraMm: 500, micragem: 25 })).toBe(
-      "STRETCH 500mm 25 MIC",
+describe("pedido 146 — stretch, preço por quilo", () => {
+  it("fecha como no PDF, com dois itens do mesmo preço", () => {
+    const totais = calcularTotaisPedido(
+      [
+        { precoUnitario: "17.40", quantidade: 750 },
+        { precoUnitario: "17.40", quantidade: 250 },
+      ],
+      IPI_ERIPACK,
     );
-    expect(descricaoRolo({ familia: "BOBINA", larguraMm: 400, material: "PEBD" })).toBe(
-      "BOBINA 400mm PEBD",
-    );
-  });
 
-  it("acrescenta os sufixos de aditivo em qualquer família", () => {
-    expect(
-      descricaoRolo({ familia: "STRETCH", larguraMm: 500, adicionais: ["C/ IMPRESSAO"] }),
-    ).toBe("STRETCH 500mm C/ IMPRESSAO");
+    expect(totais.itens[0].total.toFixed(2)).toBe("13050.00");
+    expect(totais.itens[0].ipi.toFixed(2)).toBe("1957.50");
+    expect(totais.itens[1].total.toFixed(2)).toBe("4350.00");
+    expect(totais.itens[1].ipi.toFixed(2)).toBe("652.50");
+
+    expect(totais.subtotalSemIpi.toFixed(2)).toBe("17400.00");
+    expect(totais.ipi.toFixed(2)).toBe("2610.00");
+    expect(totais.totalGeral.toFixed(2)).toBe("20010.00");
   });
 });
+

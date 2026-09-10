@@ -32,6 +32,7 @@ export type ValoresProduto = {
   codigoFornecedor: string;
   descricao: string;
   material: string;
+  complemento: string;
   larguraCm: string;
   comprimentoCm: string;
   espessuraMm: string;
@@ -53,6 +54,7 @@ export const VALORES_VAZIOS: ValoresProduto = {
   codigoFornecedor: "",
   descricao: "",
   material: "",
+  complemento: "",
   larguraCm: "",
   comprimentoCm: "",
   espessuraMm: "",
@@ -126,25 +128,26 @@ export function FormularioProduto({
         espessuraMm: espessura,
         sanfona: campos.sanfona,
         material: campos.material,
+        complemento: campos.complemento,
         adicionais: sufixos,
       });
     }
 
     if (campos.familia === "FITA") {
       return descricaoFita({
+        material: campos.material,
         larguraMm: lerNumeroBr(campos.larguraMm),
         metragemM: lerNumeroBr(campos.metragemM),
-        micragem: lerNumeroBr(campos.micragem),
-        material: campos.material,
+        complemento: campos.complemento,
         adicionais: sufixos,
       });
     }
 
     return descricaoRolo({
-      familia: campos.familia === "BOBINA" ? "BOBINA" : "STRETCH",
+      material: campos.material,
       larguraMm: lerNumeroBr(campos.larguraMm),
       micragem: lerNumeroBr(campos.micragem),
-      material: campos.material,
+      complemento: campos.complemento,
       adicionais: sufixos,
     });
   }, [campos, sufixos]);
@@ -243,10 +246,29 @@ export function FormularioProduto({
 
           <Campo
             name="material"
-            rotulo="Material"
-            placeholder="PEAD"
+            rotulo={ehSaco ? "Material" : "Tipo do produto"}
+            dica={
+              ehSaco
+                ? "Sai depois das medidas, como PEAD no pedido 2253."
+                : "Abre a descrição, como “Fita adesiva” ou “FILM STRETCH”."
+            }
+            placeholder={ehSaco ? "PEAD" : "FILM STRETCH"}
             value={campos.material}
-            onChange={(e) => alterar("material")(e.target.value.toUpperCase())}
+            // No saco a indústria imprime em maiúsculo; nas outras famílias os
+            // pedidos reais trazem "Fita adesiva", com caixa mista.
+            onChange={(e) =>
+              alterar("material")(ehSaco ? e.target.value.toUpperCase() : e.target.value)
+            }
+          />
+
+          <Campo
+            name="complemento"
+            rotulo="Complemento"
+            dica="Fecha a descrição: cor, acabamento, peso da bobina."
+            placeholder={ehSaco ? "" : "BOBINA 4KG PESO LÍQUIDO"}
+            value={campos.complemento}
+            onChange={(e) => alterar("complemento")(e.target.value)}
+            className="sm:col-span-2"
           />
         </div>
       </SecaoCartao>
