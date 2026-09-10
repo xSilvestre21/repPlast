@@ -12,7 +12,20 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Código gerado pelo Prisma.
+    "src/generated/**",
   ]),
+  {
+    rules: {
+      // Argumentos prefixados com "_" são deliberadamente ignorados. Aparecem
+      // sobretudo em server actions, cuja assinatura é ditada pelo React
+      // (estado anterior, FormData) mesmo quando não usamos o parâmetro.
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

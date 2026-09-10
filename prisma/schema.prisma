@@ -1,0 +1,443 @@
+// Schema do RepPlast — SaaS para representantes comerciais de embalagens plásticas.
+//
+// Regra que atravessa o schema inteiro: TODA tabela de domínio carrega
+// `organizacaoId`. Mesmo havendo hoje um único usuário por escritório, é isso
+// que permite vender o sistema a outros representantes sem reescrever o banco.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Familia {
+  SACO
+  FITA
+  STRETCH
+  BOBINA
+}
+
+/// Onde o valor do aditivo entra: somado ao fator kg (antes da fórmula) ou ao
+/// preço final do milheiro (depois dela).
+enum TipoAditivo {
+  POR_KG
+  POR_MILHEIRO
+}
+
+enum UnidadeVenda {
+  MIL
+  KG
+  UN
+  CX
+}
+
+enum StatusPedido {
+  ABERTO
+  ENVIADO
+  CANCELADO
+}
+
+enum TipoFrete {
+  CIF
+  FOB
+}
+
+/// Unidade em que a indústria mede a meta mensal do representante.
+enum UnidadeMeta {
+  REAIS
+  KG
+}
+
+/// PROGRESSIVA: o percentual maior vale só para o excedente da faixa.
+/// RETROATIVA: ao cruzar a faixa, o percentual maior vale para o mês inteiro.
+enum ModoFaixa {
+  PROGRESSIVA
+  RETROATIVA
+}
+
+enum TipoLancamento {
+  LANCAMENTO
+  ESTORNO
+  AJUSTE
+}
+
+// ---------------------------------------------------------------------------
+// Tenant e acesso
+// ---------------------------------------------------------------------------
+
+model Organizacao {
+  id       String   @id @default(uuid()) @db.Uuid
+  nome     String
+  ativa    Boolean  @default(true)
+  criadaEm DateTime @default(now())
+
+  usuarios     Usuario[]
+  clientes     Cliente[]
+  fornecedores Fornecedor[]
+  produtos     Produto[]
+  pedidos      Pedido[]
+  apuracoes    ComissaoApuracao[]
+
+  @@map("organizacao")
+}
+
+model Usuario {
+  id            String   @id @default(uuid()) @db.Uuid
+  organizacaoId String   @db.Uuid
+  nome          String
+  email         String   @unique
+  senhaHash     String
+  criadoEm      DateTime @default(now())
+
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+
+  @@index([organizacaoId])
+  @@map("usuario")
+}
+
+// ---------------------------------------------------------------------------
+// Cadastros
+// ---------------------------------------------------------------------------
+
+model Cliente {
+  id            String @id @default(uuid()) @db.Uuid
+  organizacaoId String @db.Uuid
+
+  /// Nome curto usado nas listas e no nome do arquivo PDF, ex.: MARIOL.
+  apelido     String
+  razaoSocial String
+  cnpj        String?
+  ie          String?
+
+  endereco  String?
+  bairro    String?
+  cep       String?
+  municipio String?
+  uf        String? @db.VarChar(2)
+
+  telefone String?
+  email    String?
+  /// Destino da nota fiscal, impresso no pedido.
+  emailNfe String?
+
+  observacoes String?
+  ativo       Boolean @default(true)
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  organizacao    Organizacao            @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  pedidos        Pedido[]
+  codigosProduto ProdutoCodigoCliente[]
+
+  @@index([organizacaoId])
+  @@index([organizacaoId, apelido])
+  @@map("cliente")
+}
+
+model Fornecedor {
+  id            String @id @default(uuid()) @db.Uuid
+  organizacaoId String @db.Uuid
+
+  nome        String
+  razaoSocial String?
+  cnpj        String?
+  /// Logo da INDÚSTRIA — é ele que vai no cabeçalho do PDF, não o do escritório.
+  logoUrl     String?
+  /// Destinatários do e-mail com o pedido em anexo.
+  emailsPedido String[] @default([])
+
+  /// Percentual de IPI da indústria, ex.: 9.750.
+  ipiPercentual Decimal @default(0) @db.Decimal(6, 3)
+  /// Percentual de comissão base, usado quando nenhuma faixa se aplica.
+  comissaoPercentual Decimal @default(0) @db.Decimal(6, 3)
+
+  /// Unidade da meta mensal e o que acontece ao cruzar uma faixa.
+  unidadeMeta UnidadeMeta @default(REAIS)
+  modoFaixa   ModoFaixa   @default(PROGRESSIVA)
+
+  /// Fator kg sugerido ao cadastrar um produto novo. O valor que vale é o do produto.
+  fatorKgPadrao Decimal? @db.Decimal(12, 4)
+
+  /// Contador do número de pedido. É POR FORNECEDOR, não global.
+  proximoNumeroPedido Int @default(1)
+
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  organizacao Organizacao        @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  faixas      FaixaComissao[]
+  aditivos    Aditivo[]
+  produtos    Produto[]
+  pedidos     Pedido[]
+  apuracoes   ComissaoApuracao[]
+
+  @@index([organizacaoId])
+  @@map("fornecedor")
+}
+
+/// Faixas de comissão por volume mensal. O campo `minimo` é lido na unidade
+/// definida em Fornecedor.unidadeMeta (reais ou quilos).
+model FaixaComissao {
+  id           String  @id @default(uuid()) @db.Uuid
+  fornecedorId String  @db.Uuid
+  minimo       Decimal @db.Decimal(14, 3)
+  percentual   Decimal @db.Decimal(6, 3)
+
+  fornecedor Fornecedor @relation(fields: [fornecedorId], references: [id], onDelete: Cascade)
+
+  @@unique([fornecedorId, minimo])
+  @@index([fornecedorId])
+  @@map("faixa_comissao")
+}
+
+/// Aditivos da indústria, preenchidos pelo próprio representante.
+/// Somam VALOR ABSOLUTO — nunca percentual.
+model Aditivo {
+  id              String      @id @default(uuid()) @db.Uuid
+  fornecedorId    String      @db.Uuid
+  nome            String
+  /// Sufixo impresso na descrição, ex.: C/ DESLIZANTE.
+  sufixoDescricao String
+  tipo            TipoAditivo
+  valor           Decimal     @db.Decimal(12, 4)
+  ativo           Boolean     @default(true)
+
+  fornecedor Fornecedor       @relation(fields: [fornecedorId], references: [id], onDelete: Cascade)
+  produtos   ProdutoAditivo[]
+
+  @@index([fornecedorId])
+  @@map("aditivo")
+}
+
+/// Produto de qualquer família. As colunas específicas são anuláveis e
+/// protegidas por CHECK no banco (ver migration), porque o escopo é fechado em
+/// quatro famílias de plástico — mais simples que herança em tabelas separadas.
+model Produto {
+  id            String  @id @default(uuid()) @db.Uuid
+  organizacaoId String  @db.Uuid
+  fornecedorId  String  @db.Uuid
+  familia       Familia
+
+  /// Código do produto na indústria (COD.FORN no PDF).
+  codigoFornecedor String?
+  /// Descrição gerada a partir das medidas; é ela que sai impressa.
+  descricao        String
+  material         String?
+
+  // --- SACO: os únicos campos que alimentam a fórmula de preço ---
+  larguraCm     Decimal? @db.Decimal(10, 2)
+  comprimentoCm Decimal? @db.Decimal(10, 2)
+  espessuraMm   Decimal? @db.Decimal(10, 4)
+  fatorKg       Decimal? @db.Decimal(12, 4)
+  /// Sanfona é TEXTO: os pedidos reais trazem 13,50 / 15 / 09. Não entra em cálculo.
+  sanfona       String?
+
+  // --- FITA ---
+  unidadesPorCaixa Int?
+  precoUnidade     Decimal? @db.Decimal(14, 4)
+  precoCaixa       Decimal? @db.Decimal(14, 4)
+
+  // --- STRETCH / BOBINA ---
+  precoKg   Decimal? @db.Decimal(14, 4)
+  /// Largura em milímetros, micragem e metragem entram só na descrição impressa.
+  larguraMm Decimal? @db.Decimal(10, 2)
+  micragem  Decimal? @db.Decimal(10, 2)
+  metragemM Decimal? @db.Decimal(10, 2)
+
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  organizacao    Organizacao            @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  fornecedor     Fornecedor             @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
+  aditivos       ProdutoAditivo[]
+  codigosCliente ProdutoCodigoCliente[]
+  itensPedido    PedidoItem[]
+
+  @@index([organizacaoId])
+  @@index([fornecedorId])
+  @@index([organizacaoId, familia])
+  @@map("produto")
+}
+
+model ProdutoAditivo {
+  produtoId String @db.Uuid
+  aditivoId String @db.Uuid
+
+  produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  aditivo Aditivo @relation(fields: [aditivoId], references: [id], onDelete: Cascade)
+
+  @@id([produtoId, aditivoId])
+  @@map("produto_aditivo")
+}
+
+/// COD.CLI do PDF: o código que aquele cliente usa para aquele produto.
+/// É opcional — no pedido 2256 a coluna vem vazia.
+model ProdutoCodigoCliente {
+  produtoId String @db.Uuid
+  clienteId String @db.Uuid
+  codigo    String
+
+  produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+
+  @@id([produtoId, clienteId])
+  @@index([clienteId])
+  @@map("produto_codigo_cliente")
+}
+
+// ---------------------------------------------------------------------------
+// Pedido
+// ---------------------------------------------------------------------------
+
+model Pedido {
+  id            String @id @default(uuid()) @db.Uuid
+  organizacaoId String @db.Uuid
+  fornecedorId  String @db.Uuid
+  clienteId     String @db.Uuid
+
+  /// Sequencial POR FORNECEDOR.
+  numero Int
+  status StatusPedido @default(ABERTO)
+
+  /// Número da ordem de compra do cliente (PEDIDO DO CLIENTE no PDF).
+  pedidoDoCliente String?
+  prazoPagamento  String?
+  prazoEntrega    DateTime? @db.Date
+
+  tipoFrete      TipoFrete?
+  transportadora String?
+
+  observacoes String?
+
+  /// IPI congelado no envio — nunca relido do fornecedor depois.
+  comIpi        Boolean @default(true)
+  ipiPercentual Decimal @default(0) @db.Decimal(6, 3)
+
+  /// Percentual de comissão deste pedido. Sobrepõe o do fornecedor quando
+  /// preenchido. NÃO é impresso no PDF.
+  comissaoPercentual Decimal? @db.Decimal(6, 3)
+
+  subtotalSemIpi Decimal @default(0) @db.Decimal(14, 2)
+  valorIpi       Decimal @default(0) @db.Decimal(14, 2)
+  totalGeral     Decimal @default(0) @db.Decimal(14, 2)
+  /// Peso total em kg, usado nas metas medidas em quilo.
+  pesoTotalKg    Decimal @default(0) @db.Decimal(14, 3)
+
+  /// Nome impresso no rodapé do PDF.
+  vendedor String?
+
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+  enviadoEm    DateTime?
+  canceladoEm  DateTime?
+
+  organizacao Organizacao          @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  fornecedor  Fornecedor           @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
+  cliente     Cliente              @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  itens       PedidoItem[]
+  lancamentos ComissaoLancamento[]
+
+  @@unique([fornecedorId, numero])
+  @@index([organizacaoId])
+  @@index([organizacaoId, status])
+  @@index([clienteId])
+  @@index([organizacaoId, enviadoEm])
+  @@map("pedido")
+}
+
+/// Item do pedido. Tudo que sai impresso é CONGELADO aqui: um reajuste de fator
+/// kg no cadastro não pode alterar o valor de um pedido antigo nem a comissão
+/// já apurada em cima dele.
+model PedidoItem {
+  id        String  @id @default(uuid()) @db.Uuid
+  pedidoId  String  @db.Uuid
+  produtoId String? @db.Uuid
+
+  ordem   Int
+  familia Familia
+
+  codigoFornecedor String?
+  codigoCliente    String?
+  descricao        String
+
+  unidade    UnidadeVenda
+  quantidade Decimal      @db.Decimal(14, 3)
+
+  /// Preço unitário com precisão cheia: no pedido 2253 o milheiro é 1774.872 e
+  /// arredondar aqui erraria o total em um centavo.
+  precoUnitario Decimal @db.Decimal(16, 6)
+
+  totalSemIpi Decimal @db.Decimal(14, 2)
+  valorIpi    Decimal @db.Decimal(14, 2)
+  total       Decimal @db.Decimal(14, 2)
+  pesoKg      Decimal @default(0) @db.Decimal(14, 3)
+
+  pedido  Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  produto Produto? @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+
+  @@index([pedidoId])
+  @@index([produtoId])
+  @@map("pedido_item")
+}
+
+// ---------------------------------------------------------------------------
+// Comissão
+// ---------------------------------------------------------------------------
+
+/// Apuração mensal por fornecedor. É RECALCULÁVEL: com faixa retroativa, um
+/// pedido novo altera a comissão de pedidos anteriores do mesmo mês.
+model ComissaoApuracao {
+  id            String @id @default(uuid()) @db.Uuid
+  organizacaoId String @db.Uuid
+  fornecedorId  String @db.Uuid
+  /// Competência no formato AAAA-MM.
+  competencia   String @db.VarChar(7)
+
+  baseReais          Decimal @default(0) @db.Decimal(14, 2)
+  baseKg             Decimal @default(0) @db.Decimal(14, 3)
+  percentualAplicado Decimal @default(0) @db.Decimal(6, 3)
+  valorComissao      Decimal @default(0) @db.Decimal(14, 2)
+
+  atualizadaEm DateTime @updatedAt
+
+  organizacao Organizacao          @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  fornecedor  Fornecedor           @relation(fields: [fornecedorId], references: [id], onDelete: Cascade)
+  lancamentos ComissaoLancamento[]
+
+  @@unique([fornecedorId, competencia])
+  @@index([organizacaoId, competencia])
+  @@map("comissao_apuracao")
+}
+
+/// Lançamento de comissão. Cancelamento gera ESTORNO e faixa retroativa gera
+/// AJUSTE — o histórico nunca é sobrescrito nem apagado.
+model ComissaoLancamento {
+  id         String         @id @default(uuid()) @db.Uuid
+  apuracaoId String         @db.Uuid
+  pedidoId   String         @db.Uuid
+  tipo       TipoLancamento
+
+  base       Decimal @db.Decimal(14, 2)
+  percentual Decimal @db.Decimal(6, 3)
+  valor      Decimal @db.Decimal(14, 2)
+
+  motivo   String?
+  criadoEm DateTime @default(now())
+
+  apuracao ComissaoApuracao @relation(fields: [apuracaoId], references: [id], onDelete: Cascade)
+  pedido   Pedido           @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@index([apuracaoId])
+  @@index([pedidoId])
+  @@map("comissao_lancamento")
+}

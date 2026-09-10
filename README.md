@@ -1,36 +1,95 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RepPlast
 
-## Getting Started
+SaaS para representantes comerciais de indústrias de embalagens plásticas: cadastro de clientes,
+fornecedores e produtos, montagem de pedidos com preço calculado a partir das medidas, geração do
+PDF para a indústria e controle de comissões.
 
-First, run the development server:
+## O que é o coração deste sistema
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+**O preço não é digitado — é calculado.** A fórmula do saco plástico foi extraída por engenharia
+reversa de pedidos reais e é a peça mais crítica do código:
+
+```
+preço do milheiro = largura(cm) × comprimento(cm) × espessura(mm) × fator kg ÷ 10
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Ela vive isolada em [`src/lib/precificacao.ts`](src/lib/precificacao.ts), sem I/O e sem
+dependência de framework, e é testada contra os valores exatos de dois pedidos que a indústria
+recebeu na vida real (ver `referencia/`). Se esses testes quebrarem, o sistema passou a calcular
+diferente do mundo real — trate como incidente, não como teste chato.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Detalhe que custa dinheiro: **o total do item é calculado com o preço unitário sem arredondar.**
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+1.774,872 × 6 = 10.649,23   ← o que o pedido real traz
+1.774,87  × 6 = 10.649,22   ← erraria por um centavo
+```
 
-## Learn More
+Por isso todo valor monetário usa `Decimal`, nunca `float`.
 
-To learn more about Next.js, take a look at the following resources:
+## Rodando o projeto
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm install
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Banco de dados
 
-## Deploy on Vercel
+O projeto usa PostgreSQL com Prisma 7 e driver adapter (`@prisma/adapter-pg`).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npx create-db create --region us-east-1 --json   # banco temporário, sem cadastro
+npx prisma migrate deploy                        # aplica as migrations
+npm run db:setup                                 # prepara e verifica o papel restrito
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+O `.env` guarda **duas conexões de propósito**:
+
+| Variável | Papel | Para quê |
+| --- | --- | --- |
+| `DIRECT_DATABASE_URL` | dono do banco | migrations — precisam criar tabelas e policies |
+| `DATABASE_URL` + `APP_DB_ROLE` | papel restrito | a aplicação |
+
+Isso não é preciosismo: **no PostgreSQL, superusuário ignora Row Level Security**, inclusive com
+`FORCE ROW LEVEL SECURITY` ligado. Se a aplicação conectasse como dono do banco, todo o isolamento
+entre escritórios viraria decoração. `dbParaOrganizacao()` assume o papel de `APP_DB_ROLE` a cada
+transação justamente para que as policies valham.
+
+## Isolamento entre escritórios (multi-tenant)
+
+São **duas camadas, ambas obrigatórias**:
+
+1. O código da aplicação filtra explicitamente por `organizacaoId`.
+2. O Row Level Security barra o que escapar da camada 1.
+
+Nunca escreva uma query contando só com o RLS: se o ambiente de desenvolvimento conectar como
+superusuário, um vazamento entre escritórios passaria despercebido e só apareceria em produção.
+
+Use sempre [`dbParaOrganizacao(id)`](src/lib/db.ts) — nunca o cliente Prisma cru.
+`dbAdministrativo()` existe só para seed e criação de organização nova.
+
+## Comandos
+
+| Comando | O que faz |
+| --- | --- |
+| `npm run dev` | Sobe a aplicação |
+| `npm test` | Testes do motor de preço — puros, rápidos, sem banco |
+| `npm run test:db` | Testes de integração, inclusive o isolamento multi-tenant |
+| `npm run typecheck` | TypeScript sem emitir |
+| `npm run db:setup` | Prepara e verifica o papel restrito do banco |
+| `npx prisma studio` | Navegador visual dos dados |
+
+Os testes de isolamento **se pulam com aviso** quando o papel efetivo do banco ignora RLS — assim
+um ambiente limitado não vira falha enganosa.
+
+## Estrutura
+
+```
+src/lib/precificacao.ts   fórmula do saco, aditivos, arredondamento
+src/lib/totais.ts         totalização do pedido: subtotal, IPI, total geral
+src/lib/descricao.ts      descrição impressa gerada a partir das medidas
+src/lib/db.ts             acesso ao banco com escopo de escritório
+prisma/schema.prisma      modelo de dados
+referencia/               pedidos reais que servem de fixture e de referência de layout
+```

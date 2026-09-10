@@ -1,26 +1,46 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * Tema escuro fixo. O sistema é usado o dia inteiro, muitas vezes em galpão e
+ * na rua, e foi o tema que o usuário já validou no sistema de referência.
+ */
+@theme {
+  --color-fundo: #0f1211;
+  --color-superficie: #171b19;
+  --color-superficie-alta: #1e2422;
+  --color-borda: #2a322e;
+  --color-borda-forte: #3a453f;
+
+  --color-texto: #e6ebe8;
+  --color-texto-suave: #9aa8a1;
+  --color-texto-fraco: #6b7a73;
+
+  /* Verde = dinheiro. Usado em valores e confirmações. */
+  --color-acento: #4ade80;
+  --color-acento-escuro: #16352a;
+
+  --color-perigo: #f87171;
+  --color-perigo-escuro: #3b1f1f;
+
+  --color-aviso: #fbbf24;
+
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: dark;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-fundo);
+  color: var(--color-texto);
+}
+
+/*
+ * Valores monetários e medidas alinham melhor com dígitos de mesma largura —
+ * numa tabela de pedido isso é diferença de legibilidade, não de estética.
+ */
+.numerico {
+  font-variant-numeric: tabular-nums;
 }
