@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import type { StatusPedido } from "@/generated/prisma/enums";
-import { recalcularAposMudancaDeStatus } from "@/lib/comissao-apuracao";
 import { type DbOrganizacao, dbParaOrganizacao } from "@/lib/db";
 import { enviarEmail } from "@/lib/email";
 import { lerNumeroBr } from "@/lib/numero-br";
@@ -144,7 +143,7 @@ export async function criarPedido(
       }),
       db.fornecedor.findFirst({
         where: { id: fornecedorId, organizacaoId },
-        select: { id: true, ipiPercentual: true },
+        select: { id: true, ipiPercentual: true, comissaoPercentual: true },
       }),
     ]);
 
@@ -169,10 +168,11 @@ export async function criarPedido(
         // O IPI é congelado aqui: um reajuste no cadastro do fornecedor não
         // pode mudar o valor de um pedido já lançado.
         ipiPercentual: fornecedor.ipiPercentual,
-        // A comissão NÃO é copiada de propósito. Vazio significa "siga a regra
-        // da indústria", e é isso que permite às faixas de volume funcionarem:
-        // um percentual gravado aqui vira exceção e ignora a apuração mensal.
-        comissaoPercentual: null,
+        // A comissão também é congelada: o pedido nasce com o percentual da
+        // indústria, pode ser ajustado enquanto estiver aberto, e a partir do
+        // envio vira o número definitivo daquele pedido. É isso que mantém a
+        // comissão de um mês fechado estável quando a indústria reajusta.
+        comissaoPercentual: fornecedor.comissaoPercentual,
         // As observações do cliente já entram preenchidas — são recados que se
         // repetem em todo pedido dele.
         observacoes: cliente.observacoes,
@@ -459,12 +459,6 @@ async function mudarStatus(pedidoId: string, status: StatusPedido, exigido: Stat
     },
   });
 
-  // A competência ANTIGA também precisa ser refeita: desmarcar o envio tira o
-  // pedido do mês em que ele estava, e a apuração de lá muda.
-  await recalcularAposMudancaDeStatus(db, organizacaoId, pedido.fornecedorId, [
-    pedido.enviadoEm,
-    enviadoEm,
-  ]);
 
   revalidatePath("/pedidos");
   revalidatePath("/comissoes");
@@ -546,14 +540,13 @@ export async function enviarPedidoPorEmail(
     if (pedido.status === "ABERTO") {
       const enviadoEm = new Date();
 
-      const atualizado = await db.pedido.update({
+      // Enviar é o gatilho da comissão. Não há nada a recalcular além disto:
+      // o percentual já está congelado no pedido, e a apuração do mês é
+      // derivada dos pedidos enviados na hora de exibir.
+      await db.pedido.update({
         where: { id: pedidoId },
         data: { status: "ENVIADO", enviadoEm, canceladoEm: null },
-        select: { fornecedorId: true },
       });
-
-      // O envio é o gatilho da comissão: a apuração do mês muda agora.
-      await recalcularAposMudancaDeStatus(db, organizacaoId, atualizado.fornecedorId, [enviadoEm]);
     }
   } catch (erro) {
     return { erro: erro instanceof Error ? erro.message : "Não foi possível enviar." };

@@ -46,8 +46,6 @@ function dadosDoFormulario(formData: FormData) {
   const invalido = emails.find((e) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
   if (invalido) throw new Error(`E-mail inválido: ${invalido}`);
 
-  const unidadeMeta = formData.get("unidadeMeta") === "KG" ? "KG" : "REAIS";
-  const modoFaixa = formData.get("modoFaixa") === "RETROATIVA" ? "RETROATIVA" : "PROGRESSIVA";
   const fatorKgPadrao = lerNumeroBr(formData.get("fatorKgPadrao"));
 
   return {
@@ -57,8 +55,6 @@ function dadosDoFormulario(formData: FormData) {
     emailsPedido: emails,
     ipiPercentual: lerPercentual(formData.get("ipiPercentual"), "O IPI"),
     comissaoPercentual: lerPercentual(formData.get("comissaoPercentual"), "A comissão"),
-    unidadeMeta,
-    modoFaixa,
     fatorKgPadrao: fatorKgPadrao === null ? null : String(fatorKgPadrao),
   } as const;
 }
@@ -199,58 +195,6 @@ export async function removerLogo(fornecedorId: string, _formData: FormData): Pr
     where: { id: fornecedorId, organizacaoId },
     data: { logo: null, logoTipo: null },
   });
-
-  revalidatePath(`/fornecedores/${fornecedorId}`);
-}
-
-/* -------------------------------------------------------------------------- */
-/* Faixas de comissão                                                         */
-/* -------------------------------------------------------------------------- */
-
-export async function adicionarFaixa(
-  fornecedorId: string,
-  _estado: EstadoFormulario,
-  formData: FormData,
-): Promise<EstadoFormulario> {
-  try {
-    const { organizacaoId, db } = await contexto();
-
-    const minimo = lerNumeroBr(formData.get("minimo"));
-    if (minimo === null || minimo < 0) {
-      return { erro: "Informe o volume mínimo da faixa." };
-    }
-
-    const percentual = lerPercentual(formData.get("percentual"), "O percentual");
-
-    const pertence = await db.fornecedor.count({ where: { id: fornecedorId, organizacaoId } });
-    if (pertence === 0) return { erro: "Indústria não encontrada." };
-
-    await db.faixaComissao.create({
-      data: { fornecedorId, minimo: String(minimo), percentual },
-    });
-  } catch (erro) {
-    const mensagem = erro instanceof Error ? erro.message : "Não foi possível salvar.";
-    return {
-      erro: mensagem.includes("Unique constraint")
-        ? "Já existe uma faixa com esse volume mínimo."
-        : mensagem,
-    };
-  }
-
-  revalidatePath(`/fornecedores/${fornecedorId}`);
-  return {};
-}
-
-export async function removerFaixa(fornecedorId: string, formData: FormData): Promise<void> {
-  const { organizacaoId, db } = await contexto();
-
-  const faixaId = String(formData.get("faixaId") ?? "");
-  if (!faixaId) return;
-
-  const pertence = await db.fornecedor.count({ where: { id: fornecedorId, organizacaoId } });
-  if (pertence === 0) throw new Error("Indústria não encontrada.");
-
-  await db.faixaComissao.deleteMany({ where: { id: faixaId, fornecedorId } });
 
   revalidatePath(`/fornecedores/${fornecedorId}`);
 }

@@ -165,6 +165,60 @@ body {
   to   { transform: translate3d(1.5%, 2%, 0) scale(1.1); }
 }
 
+/**
+ * Meta batida.
+ *
+ * A comemoração acontece no BRILHO DE FUNDO, e não nos tokens da marca: mudar
+ * os acentos recoloriria botões, valores e selos, e a tela viraria outra coisa.
+ * Assim o ambiente muda — dourado, mais forte, respirando mais rápido — sem
+ * atrapalhar a leitura dos números.
+ */
+.aurora-fundo.comemorando {
+  background:
+    radial-gradient(32% 36% at 20% 14%, #f59e0b, transparent 70%),
+    radial-gradient(30% 32% at 80% 26%, #ec4899, transparent 70%),
+    radial-gradient(28% 30% at 55% 86%, #fbbf24, transparent 70%);
+  opacity: calc(var(--aurora-forca) * 1.5);
+  animation-duration: 9s;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Confete                                                                    */
+/* -------------------------------------------------------------------------- */
+
+.confete {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.confete span {
+  position: absolute;
+  top: -16px;
+  width: 8px;
+  height: 14px;
+  border-radius: 2px;
+  animation: confete-cair var(--duracao) cubic-bezier(0.4, 0.1, 0.6, 1) var(--atraso) forwards;
+}
+
+@keyframes confete-cair {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(105vh) rotate(var(--giro));
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confete { display: none; }
+  .aurora-fundo.comemorando { animation: none; }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Utilidades                                                                 */
 /* -------------------------------------------------------------------------- */

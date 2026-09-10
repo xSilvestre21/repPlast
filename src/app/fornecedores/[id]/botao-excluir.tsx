@@ -25,8 +25,8 @@ export function BotaoExcluir({
     <form
       action={acao}
       onSubmit={(evento) => {
-        // Exclusão de fornecedor derruba faixas e aditivos junto; vale confirmar.
-        if (!confirm(`Excluir "${nome}"? As faixas e os aditivos serão removidos junto.`)) {
+        // Exclusão de fornecedor derruba os aditivos junto; vale confirmar.
+        if (!confirm(`Excluir "${nome}"? Os aditivos dela serão removidos junto.`)) {
           evento.preventDefault();
         }
       }}

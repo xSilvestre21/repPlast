@@ -7,18 +7,15 @@ import { organizacaoAtual } from "@/lib/sessao";
 
 import {
   adicionarAditivo,
-  adicionarFaixa,
   atualizarFornecedor,
   excluirFornecedor,
   removerAditivo,
-  removerFaixa,
   removerLogo,
   salvarLogo,
 } from "../acoes";
 import { FormularioFornecedor } from "../formulario";
 import { SecaoAditivos } from "./aditivos";
 import { BotaoExcluir } from "./botao-excluir";
-import { SecaoFaixas } from "./faixas";
 import { SecaoLogo } from "./logo-industria";
 
 export default async function PaginaFornecedor({ params }: PageProps<"/fornecedores/[id]">) {
@@ -33,7 +30,6 @@ export default async function PaginaFornecedor({ params }: PageProps<"/fornecedo
     // cada carregamento seria desperdício. A imagem vem pela rota própria.
     omit: { logo: true },
     include: {
-      faixas: { orderBy: { minimo: "asc" } },
       aditivos: { orderBy: { nome: "asc" } },
     },
   });
@@ -44,7 +40,7 @@ export default async function PaginaFornecedor({ params }: PageProps<"/fornecedo
     <>
       <Cabecalho
         titulo={fornecedor.nome}
-        descricao="Condições comerciais, faixas de comissão e aditivos desta indústria."
+        descricao="Condições comerciais, logo e aditivos desta indústria."
         acao={
           <BotaoExcluir
             nome={fornecedor.nome}
@@ -64,8 +60,6 @@ export default async function PaginaFornecedor({ params }: PageProps<"/fornecedo
             emailsPedido: fornecedor.emailsPedido.join(", "),
             ipiPercentual: escreverNumeroBr(fornecedor.ipiPercentual.toString()),
             comissaoPercentual: escreverNumeroBr(fornecedor.comissaoPercentual.toString()),
-            unidadeMeta: fornecedor.unidadeMeta,
-            modoFaixa: fornecedor.modoFaixa,
             fatorKgPadrao: fornecedor.fatorKgPadrao
               ? escreverNumeroBr(fornecedor.fatorKgPadrao.toString(), 2)
               : "",
@@ -81,18 +75,6 @@ export default async function PaginaFornecedor({ params }: PageProps<"/fornecedo
           remover={removerLogo.bind(null, fornecedor.id)}
         />
 
-        <SecaoFaixas
-          unidadeMeta={fornecedor.unidadeMeta}
-          modoFaixa={fornecedor.modoFaixa}
-          comissaoBase={fornecedor.comissaoPercentual.toString()}
-          faixas={fornecedor.faixas.map((f) => ({
-            id: f.id,
-            minimo: f.minimo.toString(),
-            percentual: f.percentual.toString(),
-          }))}
-          adicionar={adicionarFaixa.bind(null, fornecedor.id)}
-          remover={removerFaixa.bind(null, fornecedor.id)}
-        />
 
         <SecaoAditivos
           aditivos={fornecedor.aditivos.map((a) => ({

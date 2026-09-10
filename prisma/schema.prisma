@@ -49,24 +49,6 @@ enum TipoFrete {
   FOB
 }
 
-/// Unidade em que a indústria mede a meta mensal do representante.
-enum UnidadeMeta {
-  REAIS
-  KG
-}
-
-/// PROGRESSIVA: o percentual maior vale só para o excedente da faixa.
-/// RETROATIVA: ao cruzar a faixa, o percentual maior vale para o mês inteiro.
-enum ModoFaixa {
-  PROGRESSIVA
-  RETROATIVA
-}
-
-enum TipoLancamento {
-  LANCAMENTO
-  ESTORNO
-  AJUSTE
-}
 
 // ---------------------------------------------------------------------------
 // Tenant e acesso
@@ -78,12 +60,16 @@ model Organizacao {
   ativa    Boolean  @default(true)
   criadaEm DateTime @default(now())
 
+  /// Meta pessoal de comissão do mês, em reais. É do representante, não da
+  /// indústria: serve para ele acompanhar o próprio objetivo e comemorar ao
+  /// bater. Vazio significa que ele ainda não definiu nenhuma.
+  metaComissaoMensal Decimal? @db.Decimal(14, 2)
+
   usuarios     Usuario[]
   clientes     Cliente[]
   fornecedores Fornecedor[]
   produtos     Produto[]
   pedidos      Pedido[]
-  apuracoes    ComissaoApuracao[]
 
   @@map("organizacao")
 }
@@ -160,12 +146,9 @@ model Fornecedor {
 
   /// Percentual de IPI da indústria, ex.: 9.750.
   ipiPercentual Decimal @default(0) @db.Decimal(6, 3)
-  /// Percentual de comissão base, usado quando nenhuma faixa se aplica.
+  /// Percentual de comissão desta indústria. Cada pedido nasce com ele e pode
+  /// ser ajustado enquanto estiver aberto.
   comissaoPercentual Decimal @default(0) @db.Decimal(6, 3)
-
-  /// Unidade da meta mensal e o que acontece ao cruzar uma faixa.
-  unidadeMeta UnidadeMeta @default(REAIS)
-  modoFaixa   ModoFaixa   @default(PROGRESSIVA)
 
   /// Fator kg sugerido ao cadastrar um produto novo. O valor que vale é o do produto.
   fatorKgPadrao Decimal? @db.Decimal(12, 4)
@@ -177,31 +160,15 @@ model Fornecedor {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  organizacao Organizacao        @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
-  faixas      FaixaComissao[]
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   aditivos    Aditivo[]
   produtos    Produto[]
   pedidos     Pedido[]
-  apuracoes   ComissaoApuracao[]
 
   @@index([organizacaoId])
   @@map("fornecedor")
 }
 
-/// Faixas de comissão por volume mensal. O campo `minimo` é lido na unidade
-/// definida em Fornecedor.unidadeMeta (reais ou quilos).
-model FaixaComissao {
-  id           String  @id @default(uuid()) @db.Uuid
-  fornecedorId String  @db.Uuid
-  minimo       Decimal @db.Decimal(14, 3)
-  percentual   Decimal @db.Decimal(6, 3)
-
-  fornecedor Fornecedor @relation(fields: [fornecedorId], references: [id], onDelete: Cascade)
-
-  @@unique([fornecedorId, minimo])
-  @@index([fornecedorId])
-  @@map("faixa_comissao")
-}
 
 /// Aditivos da indústria, preenchidos pelo próprio representante.
 /// Somam VALOR ABSOLUTO — nunca percentual.
@@ -354,7 +321,6 @@ model Pedido {
   fornecedor  Fornecedor           @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
   cliente     Cliente              @relation(fields: [clienteId], references: [id], onDelete: Restrict)
   itens       PedidoItem[]
-  lancamentos ComissaoLancamento[]
 
   @@unique([fornecedorId, numero])
   @@index([organizacaoId])
@@ -403,50 +369,4 @@ model PedidoItem {
 // Comissão
 // ---------------------------------------------------------------------------
 
-/// Apuração mensal por fornecedor. É RECALCULÁVEL: com faixa retroativa, um
-/// pedido novo altera a comissão de pedidos anteriores do mesmo mês.
-model ComissaoApuracao {
-  id            String @id @default(uuid()) @db.Uuid
-  organizacaoId String @db.Uuid
-  fornecedorId  String @db.Uuid
-  /// Competência no formato AAAA-MM.
-  competencia   String @db.VarChar(7)
 
-  baseReais          Decimal @default(0) @db.Decimal(14, 2)
-  baseKg             Decimal @default(0) @db.Decimal(14, 3)
-  percentualAplicado Decimal @default(0) @db.Decimal(6, 3)
-  valorComissao      Decimal @default(0) @db.Decimal(14, 2)
-
-  atualizadaEm DateTime @updatedAt
-
-  organizacao Organizacao          @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
-  fornecedor  Fornecedor           @relation(fields: [fornecedorId], references: [id], onDelete: Cascade)
-  lancamentos ComissaoLancamento[]
-
-  @@unique([fornecedorId, competencia])
-  @@index([organizacaoId, competencia])
-  @@map("comissao_apuracao")
-}
-
-/// Lançamento de comissão. Cancelamento gera ESTORNO e faixa retroativa gera
-/// AJUSTE — o histórico nunca é sobrescrito nem apagado.
-model ComissaoLancamento {
-  id         String         @id @default(uuid()) @db.Uuid
-  apuracaoId String         @db.Uuid
-  pedidoId   String         @db.Uuid
-  tipo       TipoLancamento
-
-  base       Decimal @db.Decimal(14, 2)
-  percentual Decimal @db.Decimal(6, 3)
-  valor      Decimal @db.Decimal(14, 2)
-
-  motivo   String?
-  criadoEm DateTime @default(now())
-
-  apuracao ComissaoApuracao @relation(fields: [apuracaoId], references: [id], onDelete: Cascade)
-  pedido   Pedido           @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
-
-  @@index([apuracaoId])
-  @@index([pedidoId])
-  @@map("comissao_lancamento")
-}

@@ -34,25 +34,11 @@ async function main() {
         nome: "QUALYPLAST EMBALAGENS",
         ipiPercentual: "9.75",
         comissaoPercentual: "3",
-        unidadeMeta: "REAIS",
-        modoFaixa: "PROGRESSIVA",
         fatorKgPadrao: "13.50",
         // Os pedidos reais de referência são o 2253 e o 2256.
         proximoNumeroPedido: 2257,
       },
     }));
-
-  // Faixa de exemplo — esta NÃO veio dos pedidos reais, foi inventada para dar
-  // o que testar na apuração de comissão (fase 6). Ajuste ou remova à vontade.
-  const faixaExemplo = await db.faixaComissao.findFirst({
-    where: { fornecedorId: qualyplast.id, minimo: "50000" },
-  });
-
-  if (!faixaExemplo) {
-    await db.faixaComissao.create({
-      data: { fornecedorId: qualyplast.id, minimo: "50000", percentual: "4.5" },
-    });
-  }
 
   const deslizante =
     (await db.aditivo.findFirst({

@@ -8,7 +8,7 @@ export default function PaginaNovoFornecedor() {
     <>
       <Cabecalho
         titulo="Nova indústria"
-        descricao="Depois de salvar você poderá cadastrar as faixas de comissão e os aditivos."
+        descricao="Depois de salvar você poderá subir o logo dela e cadastrar os aditivos."
       />
       <FormularioFornecedor
         acao={criarFornecedor}

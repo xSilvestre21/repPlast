@@ -1,55 +1,62 @@
 /**
- * Apuração de comissão.
- *
- * É a receita real de quem usa o sistema, então merece ser um módulo puro,
- * sem I/O, testável isoladamente.
+ * Comissão.
  *
  * Regras confirmadas com o usuário:
  *   - conta a partir do momento em que o pedido é marcado como ENVIADO;
  *   - a base é só o valor dos produtos — sem IPI e sem frete;
- *   - a meta é MENSAL e POR FORNECEDOR, medida em reais ou em quilos;
- *   - ao cruzar uma faixa, o percentual maior pode valer só para o excedente
- *     (progressiva) ou para o mês inteiro (retroativa), conforme a indústria.
+ *   - o percentual é o da indústria, ajustável no pedido enquanto ele estiver
+ *     aberto, e CONGELADO no pedido a partir daí.
+ *
+ * Houve uma versão com faixas por volume mensal, removida depois que o usuário
+ * verificou que nenhuma indústria que ele representa trabalha assim. Com a
+ * faixa fora, a comissão de um pedido não depende do que veio antes no mês —
+ * o que torna a apuração derivável dos pedidos a qualquer momento, sem tabela
+ * intermediária e sempre historicamente correta.
+ *
+ * A meta mensal que existe hoje é OUTRA coisa: é pessoal, do representante,
+ * e não altera cálculo nenhum — serve para ele acompanhar o próprio objetivo.
  */
 
 import Decimal from "decimal.js";
 
-export type ModoFaixa = "PROGRESSIVA" | "RETROATIVA";
-export type UnidadeMeta = "REAIS" | "KG";
+/** Comissão de um pedido: base × percentual, arredondada em centavos. */
+export function comissaoDoPedido(base: Decimal.Value, percentual: Decimal.Value): Decimal {
+  return new Decimal(base).times(percentual).dividedBy(100).toDecimalPlaces(2);
+}
 
-export interface Faixa {
-  /** Volume a partir do qual a faixa passa a valer, na unidade da meta. */
-  minimo: Decimal.Value;
+export interface PedidoComissionavel {
+  base: Decimal.Value;
   percentual: Decimal.Value;
 }
 
-export interface ConfigComissao {
-  /** Vale abaixo da primeira faixa — e para o mês inteiro quando não há faixas. */
-  percentualBase: Decimal.Value;
-  faixas: Faixa[];
-  modo: ModoFaixa;
-  unidadeMeta: UnidadeMeta;
-}
-
-export interface VolumeApurado {
-  /** Volume que define a faixa, na unidade da meta (reais OU quilos). */
-  volumeMeta: Decimal.Value;
-  /** Base da comissão, SEMPRE em reais, mesmo quando a meta é em quilos. */
-  baseReais: Decimal.Value;
-}
-
-export interface Apuracao {
-  /** Percentual que, aplicado à base, dá a comissão. Pode ser fracionário. */
-  percentualEfetivo: Decimal;
+export interface ResumoComissao {
+  base: Decimal;
   valor: Decimal;
-  /** Faixa em que o volume caiu, ou `null` quando está abaixo da primeira. */
-  faixaAtual: Faixa | null;
-  proximaFaixa: Faixa | null;
-  /** Quanto falta, na unidade da meta, para alcançar a próxima faixa. */
-  faltaParaProxima: Decimal | null;
+  /** Percentual médio sobre a base. Só difere do fixo quando há pedido com percentual próprio. */
+  percentualMedio: Decimal;
 }
 
-/** Competência no formato "AAAA-MM", que é como a apuração é guardada. */
+/**
+ * Soma a comissão de vários pedidos.
+ *
+ * Cada pedido rende o SEU percentual — daí somar pedido a pedido em vez de
+ * aplicar uma taxa única ao total. O percentual médio existe só para exibição.
+ */
+export function somarComissao(pedidos: PedidoComissionavel[]): ResumoComissao {
+  const base = pedidos.reduce((acc, p) => acc.plus(p.base), new Decimal(0));
+  const valor = pedidos.reduce(
+    (acc, p) => acc.plus(comissaoDoPedido(p.base, p.percentual)),
+    new Decimal(0),
+  );
+
+  return {
+    base,
+    valor,
+    percentualMedio: base.isZero() ? new Decimal(0) : valor.dividedBy(base).times(100),
+  };
+}
+
+/** Competência no formato "AAAA-MM", que é como o mês é identificado nas telas. */
 export function competenciaDe(data: Date): string {
   const ano = data.getFullYear();
   const mes = String(data.getMonth() + 1).padStart(2, "0");
@@ -66,76 +73,42 @@ export function intervaloDaCompetencia(competencia: string): { de: Date; ate: Da
   };
 }
 
-/** Faixas em ordem crescente de mínimo. A ordem importa para todo o resto. */
-function ordenar(faixas: Faixa[]): Faixa[] {
-  return [...faixas].sort((a, b) => new Decimal(a.minimo).comparedTo(b.minimo));
+/** Anda meses na competência "AAAA-MM" sem depender de fuso. */
+export function deslocarCompetencia(competencia: string, meses: number): string {
+  const [ano, mes] = competencia.split("-").map(Number);
+  const data = new Date(ano, mes - 1 + meses, 1);
+
+  return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}`;
 }
 
-/** Percentual da faixa em que o volume cai — o modo retroativo usa este. */
-export function percentualNaFaixa(config: ConfigComissao, volume: Decimal.Value): Decimal {
-  const alvo = new Decimal(volume);
-
-  const alcancada = ordenar(config.faixas)
-    .filter((faixa) => alvo.greaterThanOrEqualTo(faixa.minimo))
-    .at(-1);
-
-  return new Decimal(alcancada?.percentual ?? config.percentualBase);
+export interface ProgressoMeta {
+  meta: Decimal;
+  alcancado: Decimal;
+  /** De 0 a 100, limitado no teto para a barra não estourar. */
+  percentual: number;
+  batida: boolean;
+  /** Quanto falta; zero quando a meta já foi batida. */
+  falta: Decimal;
 }
 
-/**
- * Percentual que de fato incide sobre a base.
- *
- * No modo RETROATIVA é o percentual da faixa alcançada, aplicado a tudo.
- *
- * No modo PROGRESSIVA é a **média ponderada** das faixas atravessadas: cada
- * pedaço do volume rende o percentual da sua faixa. Usar a média permite tratar
- * meta em reais e meta em quilos com a mesma conta — quando a meta é em quilos,
- * a proporção de quilos em cada faixa vale para a mesma proporção da base.
- */
-export function percentualEfetivo(config: ConfigComissao, volume: Decimal.Value): Decimal {
-  const total = new Decimal(volume);
+/** Progresso da meta pessoal do mês. `null` quando não há meta definida. */
+export function progressoDaMeta(
+  meta: Decimal.Value | null | undefined,
+  alcancado: Decimal.Value,
+): ProgressoMeta | null {
+  if (meta === null || meta === undefined || meta === "") return null;
 
-  if (config.modo === "RETROATIVA") return percentualNaFaixa(config, total);
-  if (total.lessThanOrEqualTo(0)) return new Decimal(config.percentualBase);
+  const alvo = new Decimal(meta);
+  if (alvo.lessThanOrEqualTo(0)) return null;
 
-  const faixas = ordenar(config.faixas);
-  let restante = total;
-  let acumulado = new Decimal(0);
-  let inicioDaFaixa = new Decimal(0);
-  let percentualCorrente = new Decimal(config.percentualBase);
-
-  for (const faixa of faixas) {
-    const limite = new Decimal(faixa.minimo);
-    if (limite.lessThanOrEqualTo(inicioDaFaixa)) continue;
-    if (total.lessThanOrEqualTo(limite)) break;
-
-    const pedaco = Decimal.min(restante, limite.minus(inicioDaFaixa));
-    acumulado = acumulado.plus(pedaco.times(percentualCorrente));
-    restante = restante.minus(pedaco);
-
-    inicioDaFaixa = limite;
-    percentualCorrente = new Decimal(faixa.percentual);
-  }
-
-  acumulado = acumulado.plus(restante.times(percentualCorrente));
-
-  return acumulado.dividedBy(total);
-}
-
-/** Apuração completa: quanto rendeu e o quanto falta para a próxima faixa. */
-export function apurar(config: ConfigComissao, volumes: VolumeApurado): Apuracao {
-  const volume = new Decimal(volumes.volumeMeta);
-  const percentual = percentualEfetivo(config, volume);
-
-  const faixas = ordenar(config.faixas);
-  const faixaAtual = faixas.filter((f) => volume.greaterThanOrEqualTo(f.minimo)).at(-1) ?? null;
-  const proximaFaixa = faixas.find((f) => volume.lessThan(f.minimo)) ?? null;
+  const atual = new Decimal(alcancado);
+  const razao = atual.dividedBy(alvo).times(100);
 
   return {
-    percentualEfetivo: percentual,
-    valor: new Decimal(volumes.baseReais).times(percentual).dividedBy(100),
-    faixaAtual,
-    proximaFaixa,
-    faltaParaProxima: proximaFaixa ? new Decimal(proximaFaixa.minimo).minus(volume) : null,
+    meta: alvo,
+    alcancado: atual,
+    percentual: Math.min(100, Math.max(0, razao.toNumber())),
+    batida: atual.greaterThanOrEqualTo(alvo),
+    falta: Decimal.max(0, alvo.minus(atual)),
   };
 }

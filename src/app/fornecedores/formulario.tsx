@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 
-import { Botao, Campo, MensagemErro, SecaoCartao, Selecao } from "@/components/ui";
+import { Botao, Campo, MensagemErro, SecaoCartao } from "@/components/ui";
 
 import type { EstadoFormulario } from "./acoes";
 
@@ -13,8 +13,6 @@ export type ValoresFornecedor = {
   emailsPedido: string;
   ipiPercentual: string;
   comissaoPercentual: string;
-  unidadeMeta: string;
-  modoFaixa: string;
   fatorKgPadrao: string;
 };
 
@@ -25,8 +23,6 @@ export const VALORES_VAZIOS: ValoresFornecedor = {
   emailsPedido: "",
   ipiPercentual: "",
   comissaoPercentual: "",
-  unidadeMeta: "REAIS",
-  modoFaixa: "PROGRESSIVA",
   fatorKgPadrao: "",
 };
 
@@ -87,10 +83,10 @@ export function FormularioFornecedor({
           />
           <Campo
             name="comissaoPercentual"
-            rotulo="Comissão base"
+            rotulo="Comissão"
             inputMode="decimal"
             sufixo="%"
-            dica="Vale quando nenhuma faixa de volume se aplica."
+            dica="Cada pedido nasce com ele e pode ser ajustado enquanto estiver aberto."
             defaultValue={valores.comissaoPercentual}
             placeholder="3"
           />
@@ -102,33 +98,6 @@ export function FormularioFornecedor({
             defaultValue={valores.fatorKgPadrao}
             placeholder="13,50"
           />
-        </div>
-      </SecaoCartao>
-
-      <SecaoCartao
-        titulo="Meta mensal"
-        descricao="Como esta indústria apura o volume que define a faixa de comissão."
-      >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Selecao
-            name="unidadeMeta"
-            rotulo="Meta medida em"
-            defaultValue={valores.unidadeMeta}
-            dica="A meta zera todo dia 1º e é contada só desta indústria."
-          >
-            <option value="REAIS">Reais vendidos</option>
-            <option value="KG">Quilos vendidos</option>
-          </Selecao>
-
-          <Selecao
-            name="modoFaixa"
-            rotulo="Ao subir de faixa"
-            defaultValue={valores.modoFaixa}
-            dica="Retroativo recalcula as comissões já lançadas no mês."
-          >
-            <option value="PROGRESSIVA">Novo percentual só sobre o excedente</option>
-            <option value="RETROATIVA">Novo percentual sobre o mês inteiro</option>
-          </Selecao>
         </div>
       </SecaoCartao>
 

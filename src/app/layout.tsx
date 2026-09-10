@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 
 import { SCRIPT_TEMA } from "@/components/alternador-tema";
 import { Navegacao } from "@/components/navegacao";
@@ -33,10 +34,21 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+        {/*
+          `beforeInteractive` coloca o script no HTML inicial e o executa antes
+          da hidratação — que é o único momento em que ele serve. Um <script>
+          solto dentro do componente funcionaria no primeiro carregamento, mas
+          o React avisa (com razão) que ele nunca roda em navegação de cliente.
+        */}
+        <Script
+          id="tema-inicial"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }}
+        />
       </head>
       <body className="min-h-full flex flex-col font-sans">
-        <div className="aurora-fundo" aria-hidden="true" />
+        {/* O id permite ao painel de meta virar este brilho em comemoração. */}
+        <div id="aurora" className="aurora-fundo" aria-hidden="true" />
         <Navegacao />
         <main className="flex-1 w-full max-w-6xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
           {children}

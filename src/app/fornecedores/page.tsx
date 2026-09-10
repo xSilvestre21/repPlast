@@ -16,7 +16,7 @@ export default async function PaginaFornecedores() {
   const fornecedores = await db.fornecedor.findMany({
     where: { organizacaoId },
     orderBy: { nome: "asc" },
-    include: { _count: { select: { produtos: true, faixas: true, aditivos: true } } },
+    include: { _count: { select: { produtos: true, aditivos: true } } },
   });
 
   return (
@@ -41,7 +41,6 @@ export default async function PaginaFornecedores() {
                 <div className="font-medium truncate">{f.nome}</div>
                 <div className="text-sm text-texto-suave truncate">
                   {f._count.produtos} produto(s)
-                  {f._count.faixas > 0 && ` · ${f._count.faixas} faixa(s)`}
                   {f._count.aditivos > 0 && ` · ${f._count.aditivos} aditivo(s)`}
                 </div>
               </div>
