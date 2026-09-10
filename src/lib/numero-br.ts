@@ -52,15 +52,27 @@ export function lerNumeroBr(entrada: unknown): number | null {
   return Number.isFinite(numero) ? sinal * numero : null;
 }
 
-/** Formata para exibição em campo de formulário, com vírgula decimal. */
-export function escreverNumeroBr(valor: unknown, casas?: number): string {
+/**
+ * Formata para exibição em campo de formulário, com vírgula decimal.
+ *
+ * `minCasas` garante um mínimo; `maxCasas` NUNCA deve cortar precisão de um
+ * valor que vai ser reenviado ao servidor. Foi por isso que o padrão do máximo
+ * não é igual ao mínimo: preencher um campo de preço com "1.774,87" quando o
+ * valor guardado é 1.774,872 faria o total do item errar um centavo ao salvar
+ * — o mesmo erro que a regra de arredondamento do pedido evita.
+ */
+export function escreverNumeroBr(
+  valor: unknown,
+  minCasas = 0,
+  maxCasas = Math.max(minCasas, 4),
+): string {
   if (valor === null || valor === undefined || valor === "") return "";
 
   const numero = Number(valor);
   if (!Number.isFinite(numero)) return "";
 
   return numero.toLocaleString("pt-BR", {
-    minimumFractionDigits: casas ?? 0,
-    maximumFractionDigits: casas ?? 4,
+    minimumFractionDigits: minCasas,
+    maximumFractionDigits: Math.max(minCasas, maxCasas),
   });
 }

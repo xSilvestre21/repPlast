@@ -65,8 +65,20 @@ describe("escreverNumeroBr", () => {
   });
 
   it("arredonda quando se pede um número fixo de casas", () => {
-    expect(escreverNumeroBr(13.5, 0)).toBe("14");
-    expect(escreverNumeroBr(13.4, 0)).toBe("13");
+    expect(escreverNumeroBr(13.5, 0, 0)).toBe("14");
+    expect(escreverNumeroBr(13.4, 0, 0)).toBe("13");
+  });
+
+  it("não corta a precisão de um preço que vai voltar ao servidor", () => {
+    // O milheiro do item 1 do pedido 2253. Cortar para centavos aqui faria o
+    // total do item fechar em 10.649,22 em vez de 10.649,23.
+    expect(escreverNumeroBr(1774.872, 2, 6)).toBe("1.774,872");
+    expect(lerNumeroBr(escreverNumeroBr(1774.872, 2, 6))).toBe(1774.872);
+  });
+
+  it("mantém o mínimo de casas em valores redondos", () => {
+    expect(escreverNumeroBr(1134, 2, 6)).toBe("1.134,00");
+    expect(lerNumeroBr(escreverNumeroBr(1134, 2, 6))).toBe(1134);
   });
 
   it("faz a ida e volta sem perder o valor", () => {
