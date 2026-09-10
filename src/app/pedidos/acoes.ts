@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 
 import type { StatusPedido } from "@/generated/prisma/enums";
 import { type DbOrganizacao, dbParaOrganizacao } from "@/lib/db";
+import { enviarEmail } from "@/lib/email";
 import { lerNumeroBr } from "@/lib/numero-br";
+import { carregarPedidoParaPdf, gerarPdfPedido } from "@/lib/pdf/gerar-pedido";
 import { arredondarDinheiro } from "@/lib/precificacao";
 import {
   type ProdutoPrecificavel,
@@ -465,6 +467,75 @@ export async function cancelarPedido(pedidoId: string, _formData: FormData): Pro
 
 export async function reabrirPedido(pedidoId: string, _formData: FormData): Promise<void> {
   await mudarStatus(pedidoId, "ABERTO", ["CANCELADO"]);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Envio por e-mail                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Manda o PDF para a indústria e marca o pedido como enviado.
+ *
+ * As duas coisas andam juntas de propósito: o envio é o gatilho da comissão, e
+ * um pedido que chegou à indústria mas ficou "aberto" no sistema seria uma
+ * mentira no controle do mês.
+ *
+ * O e-mail vai primeiro. Se falhar, nada é marcado — melhor o usuário tentar de
+ * novo do que acreditar que enviou.
+ */
+export async function enviarPedidoPorEmail(
+  pedidoId: string,
+  _estado: EstadoFormulario,
+  _formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    const { organizacaoId, db } = await contexto();
+    const pedido = await carregarPedidoParaPdf(pedidoId, organizacaoId);
+
+    if (!pedido) return { erro: "Pedido não encontrado." };
+    if (pedido.status === "CANCELADO") return { erro: "Este pedido está cancelado." };
+    if (pedido.dados.itens.length === 0) return { erro: "Não dá para enviar um pedido sem itens." };
+
+    if (pedido.emailsFornecedor.length === 0) {
+      return {
+        erro: "Esta indústria não tem e-mail cadastrado. Preencha no cadastro dela.",
+      };
+    }
+
+    const arquivo = await gerarPdfPedido(pedido.dados);
+
+    const resultado = await enviarEmail({
+      para: pedido.emailsFornecedor,
+      assunto: `Pedido nº ${pedido.dados.numero} — ${pedido.dados.cliente.razaoSocial}`,
+      texto: [
+        `Segue em anexo o pedido nº ${pedido.dados.numero}.`,
+        "",
+        `Cliente: ${pedido.dados.cliente.razaoSocial}`,
+        pedido.dados.cliente.cnpj ? `CNPJ: ${pedido.dados.cliente.cnpj}` : null,
+        pedido.dados.pedidoDoCliente ? `Pedido do cliente: ${pedido.dados.pedidoDoCliente}` : null,
+        "",
+        pedido.dados.vendedor ?? "",
+      ]
+        .filter((linha) => linha !== null)
+        .join("\n"),
+      anexos: [{ nome: pedido.nomeArquivo, conteudo: arquivo }],
+    });
+
+    if (!resultado.enviado) return { erro: resultado.motivo };
+
+    if (pedido.status === "ABERTO") {
+      await db.pedido.updateMany({
+        where: { id: pedidoId, organizacaoId },
+        data: { status: "ENVIADO", enviadoEm: new Date(), canceladoEm: null },
+      });
+    }
+  } catch (erro) {
+    return { erro: erro instanceof Error ? erro.message : "Não foi possível enviar." };
+  }
+
+  revalidatePath("/pedidos");
+  revalidatePath(`/pedidos/${pedidoId}`);
+  return {};
 }
 
 /* -------------------------------------------------------------------------- */

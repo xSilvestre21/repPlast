@@ -56,6 +56,38 @@ Isso não é preciosismo: **no PostgreSQL, superusuário ignora Row Level Securi
 entre escritórios viraria decoração. `dbParaOrganizacao()` assume o papel de `APP_DB_ROLE` a cada
 transação justamente para que as policies valham.
 
+## O PDF do pedido
+
+O layout **não é uma escolha de design**: foi copiado dos pedidos reais em `referencia/`. Quem
+recebe já sabe onde procurar cada informação — mudar a ordem das colunas ou o nome dos rótulos só
+geraria dúvida do outro lado do e-mail. Ao mexer em
+[`src/lib/pdf/documento-pedido.tsx`](src/lib/pdf/documento-pedido.tsx), os quatro PDFs de
+referência são o gabarito.
+
+Dois detalhes que vieram de lá:
+
+- **O rótulo da coluna de preço muda por família**: `MILHEIRO` no saco, `PREÇO/CX` na fita,
+  `PREÇO/KG` no stretch.
+- **O nome do arquivo** segue `{número}-{cliente}[-PC-{pedido do cliente}]-{data de ENTREGA}`, e
+  não a data de emissão. Há teste para os quatro nomes reais.
+
+O PDF é gerado sob demanda, nunca guardado. Como o item congela descrição, códigos e preço ao ser
+criado, reimprimir um pedido antigo devolve exatamente o papel que a indústria recebeu na época.
+
+### Envio por e-mail
+
+Opcional. Sem configuração o sistema diz isso com todas as letras e sugere baixar o PDF — em vez
+de falhar com um erro do provedor. Para ligar, no `.env`:
+
+```
+RESEND_API_KEY="re_..."
+EMAIL_REMETENTE="pedidos@seudominio.com.br"
+```
+
+Enviar o e-mail **também marca o pedido como enviado**, porque é o mesmo fato: um pedido que
+chegou à indústria mas ficou "aberto" no sistema seria uma mentira no controle de comissão. O
+e-mail vai primeiro; se falhar, nada é marcado.
+
 ## Isolamento entre escritórios (multi-tenant)
 
 São **duas camadas, ambas obrigatórias**:

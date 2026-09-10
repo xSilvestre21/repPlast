@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SeloStatus } from "@/components/selo-status";
-import { Cartao } from "@/components/ui";
+import { BotaoLink, Cartao } from "@/components/ui";
 import { dbParaOrganizacao } from "@/lib/db";
 import { escreverNumeroBr } from "@/lib/numero-br";
 import { organizacaoAtual } from "@/lib/sessao";
@@ -14,6 +14,7 @@ import {
   cancelarPedido,
   desmarcarEnvio,
   duplicarPedido,
+  enviarPedidoPorEmail,
   excluirPedido,
   marcarEnviado,
   reabrirPedido,
@@ -21,6 +22,7 @@ import {
 } from "../acoes";
 import { AcaoPedido } from "./acoes-status";
 import { SecaoCabecalho } from "./cabecalho";
+import { BotaoEnviarEmail } from "./envio";
 import { SecaoItens } from "./itens";
 
 const DATA_HORA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
@@ -35,7 +37,7 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
     where: { id, organizacaoId },
     include: {
       cliente: true,
-      fornecedor: { select: { id: true, nome: true } },
+      fornecedor: { select: { id: true, nome: true, emailsPedido: true } },
       itens: { orderBy: { ordem: "asc" } },
     },
   });
@@ -50,6 +52,7 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
   });
 
   const editavel = pedido.status === "ABERTO";
+  const temItens = pedido.itens.length > 0;
   const texto = (v: { toString(): string } | null) => (v === null ? null : v.toString());
 
   return (
@@ -68,12 +71,30 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {pedido.status === "ABERTO" && (
+        <div className="flex flex-wrap gap-2 items-start">
+          {temItens && (
+            <>
+              <BotaoLink
+                href={`/pedidos/${pedido.id}/pdf?abrir`}
+                target="_blank"
+                variante="secundaria"
+              >
+                Ver PDF
+              </BotaoLink>
+
+              <BotaoEnviarEmail
+                destinatarios={pedido.fornecedor.emailsPedido}
+                jaEnviado={pedido.status === "ENVIADO"}
+                acao={enviarPedidoPorEmail.bind(null, pedido.id)}
+              />
+            </>
+          )}
+
+          {pedido.status === "ABERTO" && temItens && (
             <AcaoPedido
               rotulo="Marcar como enviado"
-              rotuloOcupado="Enviando…"
-              variante="primaria"
+              rotuloOcupado="Marcando…"
+              variante="secundaria"
               confirmacao="Marcar como enviado trava o pedido e passa a contar a comissão. Confirma?"
               acao={marcarEnviado.bind(null, pedido.id)}
             />
