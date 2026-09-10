@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { AlternadorTema } from "./alternador-tema";
 
 const ITENS = [
+  { href: "/", rotulo: "Painel" },
   { href: "/pedidos", rotulo: "Pedidos" },
   { href: "/comissoes", rotulo: "Comissões" },
   { href: "/clientes", rotulo: "Clientes" },
@@ -44,7 +45,12 @@ export function Navegacao() {
           <nav className="sm:absolute sm:left-1/2 sm:-translate-x-1/2 flex justify-center">
             <div className="flex gap-1 p-1 rounded-full border border-borda vidro shadow-[var(--sombra-cartao)] overflow-x-auto max-w-full">
               {ITENS.map((item) => {
-                const ativo = caminho === item.href || caminho.startsWith(`${item.href}/`);
+                // A raiz precisa de comparação exata: `startsWith("/")` casaria
+                // com todas as rotas e deixaria o Painel sempre aceso.
+                const ativo =
+                  item.href === "/"
+                    ? caminho === "/"
+                    : caminho === item.href || caminho.startsWith(`${item.href}/`);
 
                 return (
                   <Link

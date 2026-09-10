@@ -8,13 +8,12 @@ import {
   formatarMoeda,
   formatarPercentual,
 } from "@/components/ui";
+import { competenciaDe, deslocarCompetencia, intervaloDaCompetencia, progressoDaMeta } from "@/lib/comissao";
 import {
-  competenciaDe,
-  deslocarCompetencia,
-  intervaloDaCompetencia,
-  progressoDaMeta,
-  somarComissao,
-} from "@/lib/comissao";
+  pedidosDaCompetencia,
+  percentualDoPedido,
+  resumirComissao,
+} from "@/lib/comissao-consulta";
 import { dbAdministrativo, dbParaOrganizacao } from "@/lib/db";
 import { organizacaoAtual } from "@/lib/sessao";
 
@@ -33,50 +32,24 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
 
   const organizacaoId = await organizacaoAtual();
   const db = dbParaOrganizacao(organizacaoId);
-  const { de, ate } = intervaloDaCompetencia(competencia);
+  const { de } = intervaloDaCompetencia(competencia);
 
   const [organizacao, pedidos] = await Promise.all([
     dbAdministrativo().organizacao.findUnique({
       where: { id: organizacaoId },
       select: { metaComissaoMensal: true },
     }),
-    // A comissão é derivada dos pedidos: o percentual fica congelado em cada um
-    // ao ser enviado, então este cálculo é sempre historicamente correto.
-    db.pedido.findMany({
-      where: { organizacaoId, status: "ENVIADO", enviadoEm: { gte: de, lt: ate } },
-      orderBy: { enviadoEm: "asc" },
-      select: {
-        id: true,
-        numero: true,
-        status: true,
-        enviadoEm: true,
-        subtotalSemIpi: true,
-        comissaoPercentual: true,
-        cliente: { select: { apelido: true } },
-        fornecedor: { select: { id: true, nome: true, comissaoPercentual: true } },
-      },
-    }),
+    pedidosDaCompetencia(db, organizacaoId, competencia),
   ]);
 
-  /** Percentual do pedido; cai no da indústria só para dados antigos sem valor. */
-  const percentualDe = (pedido: (typeof pedidos)[number]) =>
-    (pedido.comissaoPercentual ?? pedido.fornecedor.comissaoPercentual).toString();
-
-  const total = somarComissao(
-    pedidos.map((p) => ({ base: p.subtotalSemIpi.toString(), percentual: percentualDe(p) })),
-  );
+  const total = resumirComissao(pedidos);
 
   // Agrupa por indústria, mantendo a ordem alfabética.
   const porFornecedor = [...Map.groupBy(pedidos, (p) => p.fornecedor.id).entries()]
     .map(([, doFornecedor]) => ({
       fornecedor: doFornecedor[0].fornecedor,
       pedidos: doFornecedor,
-      resumo: somarComissao(
-        doFornecedor.map((p) => ({
-          base: p.subtotalSemIpi.toString(),
-          percentual: percentualDe(p),
-        })),
-      ),
+      resumo: resumirComissao(doFornecedor),
     }))
     .sort((a, b) => a.fornecedor.nome.localeCompare(b.fornecedor.nome, "pt-BR"));
 
@@ -156,7 +129,7 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
                       <span className="numerico text-texto-suave">#{pedido.numero}</span>
                       <span className="truncate">{pedido.cliente.apelido}</span>
                       <span className="text-xs text-texto-fraco whitespace-nowrap numerico">
-                        {formatarPercentual(percentualDe(pedido))}
+                        {formatarPercentual(percentualDoPedido(pedido))}
                       </span>
                     </span>
 
