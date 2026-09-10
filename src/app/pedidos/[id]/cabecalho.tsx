@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 
-import { Botao, Campo, MensagemErro, SecaoCartao, Selecao } from "@/components/ui";
+import { AreaTexto, Botao, Campo, MensagemErro, SecaoCartao, Selecao } from "@/components/ui";
 
 import type { EstadoFormulario } from "../acoes";
 
@@ -113,12 +113,11 @@ export function SecaoCabecalho({
         titulo="Observações"
         descricao="Recados para a indústria. Vêm preenchidos com as observações do cliente."
       >
-        <textarea
+        <AreaTexto
           name="observacoes"
           rows={5}
           disabled={!editavel}
           defaultValue={valores.observacoes}
-          className="w-full rounded-md border border-borda bg-fundo px-3 py-2 text-sm text-texto placeholder:text-texto-fraco outline-none transition-colors focus:border-acento/60 focus:ring-1 focus:ring-acento/30 resize-y disabled:opacity-60"
         />
       </SecaoCartao>
 

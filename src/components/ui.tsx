@@ -15,10 +15,10 @@ export function Cabecalho({
   acao?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
+    <div className="flex flex-wrap items-start justify-between gap-3 mb-6 surgir">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">{titulo}</h1>
-        {descricao && <p className="text-sm text-texto-suave mt-1">{descricao}</p>}
+        <h1 className="text-2xl font-semibold tracking-tight texto-gradiente">{titulo}</h1>
+        {descricao && <p className="text-sm text-texto-suave mt-1.5 max-w-2xl">{descricao}</p>}
       </div>
       {acao}
     </div>
@@ -33,30 +33,67 @@ export function Cartao({
   className?: string;
 }) {
   return (
-    <div className={`rounded-lg border border-borda bg-superficie ${className}`}>{children}</div>
+    <div
+      className={`rounded-2xl border border-borda vidro shadow-[var(--sombra-cartao)] ${className}`}
+    >
+      {children}
+    </div>
   );
 }
 
-export function SecaoCartao({ titulo, descricao, children }: {
+export function SecaoCartao({
+  titulo,
+  descricao,
+  children,
+}: {
   titulo: string;
   descricao?: string;
   children: ReactNode;
 }) {
   return (
-    <Cartao className="p-4 sm:p-5">
-      <div className="mb-4">
-        <h2 className="font-medium">{titulo}</h2>
-        {descricao && <p className="text-sm text-texto-suave mt-0.5">{descricao}</p>}
+    <Cartao className="p-5 sm:p-6">
+      <div className="mb-5">
+        <h2 className="font-semibold tracking-tight">{titulo}</h2>
+        {descricao && <p className="text-sm text-texto-suave mt-1">{descricao}</p>}
       </div>
       {children}
     </Cartao>
   );
 }
 
-export function EstadoVazio({ children }: { children: ReactNode }) {
+/**
+ * Linha de lista clicável.
+ *
+ * O fio de luz que corre na borda superior no hover é o detalhe que amarra as
+ * listas à identidade — o mesmo gradiente da marca, em movimento.
+ */
+export function LinhaLista({
+  href,
+  children,
+  className = "",
+}: {
+  href: string;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <Cartao className="p-10 text-center text-sm text-texto-suave">{children}</Cartao>
+    <Link
+      href={href}
+      className={`group relative flex flex-wrap items-center gap-x-6 gap-y-2 p-4 transition-colors
+        hover:bg-superficie-alta first:rounded-t-2xl last:rounded-b-2xl ${className}`}
+    >
+      <span
+        aria-hidden="true"
+        className="absolute inset-x-0 top-0 h-px opacity-0 group-hover:opacity-100 transition-opacity
+          bg-[linear-gradient(90deg,transparent,var(--acento-2),transparent)]"
+      />
+      {children}
+    </Link>
   );
+}
+
+export function EstadoVazio({ children }: { children: ReactNode }) {
+  return <Cartao className="p-12 text-center text-sm text-texto-suave">{children}</Cartao>;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -64,9 +101,9 @@ export function EstadoVazio({ children }: { children: ReactNode }) {
 /* -------------------------------------------------------------------------- */
 
 const CLASSE_CONTROLE =
-  "w-full rounded-md border border-borda bg-fundo px-3 py-2 text-sm text-texto " +
-  "placeholder:text-texto-fraco outline-none transition-colors " +
-  "focus:border-acento/60 focus:ring-1 focus:ring-acento/30 " +
+  "w-full rounded-xl border border-borda bg-fundo-elevado px-3.5 py-2.5 text-sm text-texto " +
+  "placeholder:text-texto-fraco outline-none transition-all duration-200 " +
+  "focus:border-transparent focus:ring-2 focus:ring-[var(--acento-1)] " +
   "disabled:opacity-50 disabled:cursor-not-allowed";
 
 export function Campo({
@@ -90,19 +127,19 @@ export function Campo({
           {...props}
           aria-invalid={erro ? true : undefined}
           className={`${CLASSE_CONTROLE} ${sufixo ? "pr-12" : ""} ${
-            erro ? "border-perigo/70" : ""
+            erro ? "border-perigo ring-1 ring-[var(--perigo)]" : ""
           } ${props.type === "number" ? "numerico" : ""}`}
         />
         {sufixo && (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-texto-fraco pointer-events-none">
+          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-texto-fraco pointer-events-none">
             {sufixo}
           </span>
         )}
       </div>
       {erro ? (
-        <span className="block text-xs text-perigo mt-1">{erro}</span>
+        <span className="block text-xs text-perigo mt-1.5">{erro}</span>
       ) : (
-        dica && <span className="block text-xs text-texto-fraco mt-1">{dica}</span>
+        dica && <span className="block text-xs text-texto-fraco mt-1.5">{dica}</span>
       )}
     </label>
   );
@@ -121,9 +158,16 @@ export function Selecao({
       <select {...props} className={CLASSE_CONTROLE}>
         {children}
       </select>
-      {dica && <span className="block text-xs text-texto-fraco mt-1">{dica}</span>}
+      {dica && <span className="block text-xs text-texto-fraco mt-1.5">{dica}</span>}
     </label>
   );
+}
+
+export function AreaTexto({
+  className = "",
+  ...props
+}: ComponentProps<"textarea"> & { className?: string }) {
+  return <textarea {...props} className={`${CLASSE_CONTROLE} resize-y ${className}`} />;
 }
 
 export function MensagemErro({ children }: { children?: ReactNode }) {
@@ -132,7 +176,7 @@ export function MensagemErro({ children }: { children?: ReactNode }) {
   return (
     <p
       role="alert"
-      className="rounded-md border border-perigo/40 bg-perigo-escuro/60 px-3 py-2 text-sm text-perigo"
+      className="surgir rounded-xl border border-perigo/40 bg-perigo-fraco px-4 py-3 text-sm text-perigo"
     >
       {children}
     </p>
@@ -146,23 +190,25 @@ export function MensagemErro({ children }: { children?: ReactNode }) {
 type Variante = "primaria" | "secundaria" | "perigo";
 
 const VARIANTES: Record<Variante, string> = {
-  primaria: "bg-acento text-fundo hover:bg-acento/90 font-medium",
-  secundaria: "border border-borda-forte text-texto hover:bg-superficie-alta",
-  perigo: "border border-perigo/40 text-perigo hover:bg-perigo-escuro",
+  primaria:
+    "fundo-gradiente text-sobre-acento font-semibold shadow-[var(--brilho-acento)] " +
+    "hover:brightness-110 hover:-translate-y-px active:translate-y-0",
+  secundaria:
+    "border border-borda-forte text-texto vidro hover:bg-superficie-alta hover:-translate-y-px active:translate-y-0",
+  perigo: "border border-perigo/40 text-perigo hover:bg-perigo-fraco",
 };
 
 const CLASSE_BOTAO =
-  "inline-flex items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm " +
-  "transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap";
+  "inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm " +
+  "transition-all duration-200 whitespace-nowrap " +
+  "disabled:opacity-50 disabled:cursor-not-allowed disabled:translate-y-0 disabled:brightness-100";
 
 export function Botao({
   variante = "primaria",
   className = "",
   ...props
 }: ComponentProps<"button"> & { variante?: Variante }) {
-  return (
-    <button {...props} className={`${CLASSE_BOTAO} ${VARIANTES[variante]} ${className}`} />
-  );
+  return <button {...props} className={`${CLASSE_BOTAO} ${VARIANTES[variante]} ${className}`} />;
 }
 
 export function BotaoLink({
@@ -171,6 +217,22 @@ export function BotaoLink({
   ...props
 }: ComponentProps<typeof Link> & { variante?: Variante }) {
   return <Link {...props} className={`${CLASSE_BOTAO} ${VARIANTES[variante]} ${className}`} />;
+}
+
+/** Ação discreta dentro de uma linha de tabela ou lista. */
+export function BotaoTexto({
+  perigoso = false,
+  className = "",
+  ...props
+}: ComponentProps<"button"> & { perigoso?: boolean }) {
+  return (
+    <button
+      {...props}
+      className={`text-xs text-texto-fraco transition-colors px-1 disabled:opacity-50 ${
+        perigoso ? "hover:text-perigo" : "hover:text-acento"
+      } ${className}`}
+    />
+  );
 }
 
 /* -------------------------------------------------------------------------- */

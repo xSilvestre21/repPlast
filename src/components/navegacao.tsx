@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { AlternadorTema } from "./alternador-tema";
+
 const ITENS = [
   { href: "/pedidos", rotulo: "Pedidos" },
   { href: "/clientes", rotulo: "Clientes" },
@@ -14,34 +16,53 @@ export function Navegacao() {
   const caminho = usePathname();
 
   return (
-    <header className="border-b border-borda bg-superficie">
+    <header className="sticky top-0 z-40">
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6">
-        <div className="flex items-center gap-6 h-14">
-          <Link href="/" className="font-semibold tracking-tight shrink-0">
-            Rep<span className="text-acento">Plast</span>
-          </Link>
+        {/*
+          No desktop a navegação fica centralizada de verdade, por posicionamento
+          absoluto — assim a marca e o alternador não empurram o centro.
+          No celular vira duas linhas, porque não cabe.
+        */}
+        <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 py-3">
+          <div className="flex items-center justify-between">
+            <Link
+              href="/"
+              className="font-semibold tracking-tight shrink-0 text-base hover:opacity-80 transition-opacity"
+            >
+              Rep<span className="texto-gradiente">Plast</span>
+            </Link>
 
-          {/* Rola horizontalmente no celular em vez de quebrar a barra. */}
-          <nav className="flex items-center gap-1 overflow-x-auto -mx-1 px-1">
-            {ITENS.map((item) => {
-              const ativo = caminho === item.href || caminho.startsWith(`${item.href}/`);
+            <div className="sm:hidden">
+              <AlternadorTema />
+            </div>
+          </div>
 
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  aria-current={ativo ? "page" : undefined}
-                  className={`px-3 py-1.5 rounded-md text-sm whitespace-nowrap transition-colors ${
-                    ativo
-                      ? "bg-superficie-alta text-texto"
-                      : "text-texto-suave hover:text-texto hover:bg-superficie-alta/60"
-                  }`}
-                >
-                  {item.rotulo}
-                </Link>
-              );
-            })}
+          <nav className="sm:absolute sm:left-1/2 sm:-translate-x-1/2 flex justify-center">
+            <div className="flex gap-1 p-1 rounded-full border border-borda vidro shadow-[var(--sombra-cartao)] overflow-x-auto max-w-full">
+              {ITENS.map((item) => {
+                const ativo = caminho === item.href || caminho.startsWith(`${item.href}/`);
+
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    aria-current={ativo ? "page" : undefined}
+                    className={`px-3.5 py-1.5 rounded-full text-sm whitespace-nowrap transition-all duration-200 ${
+                      ativo
+                        ? "fundo-gradiente text-sobre-acento font-semibold"
+                        : "text-texto-suave hover:text-texto hover:bg-superficie-alta"
+                    }`}
+                  >
+                    {item.rotulo}
+                  </Link>
+                );
+              })}
+            </div>
           </nav>
+
+          <div className="hidden sm:block">
+            <AlternadorTema />
+          </div>
         </div>
       </div>
     </header>

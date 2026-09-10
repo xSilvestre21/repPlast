@@ -1,10 +1,9 @@
-import Link from "next/link";
-
 import {
   BotaoLink,
   Cabecalho,
   Cartao,
   EstadoVazio,
+  LinhaLista,
   formatarPercentual,
 } from "@/components/ui";
 import { dbParaOrganizacao } from "@/lib/db";
@@ -37,11 +36,7 @@ export default async function PaginaFornecedores() {
       ) : (
         <Cartao className="divide-y divide-borda">
           {fornecedores.map((f) => (
-            <Link
-              key={f.id}
-              href={`/fornecedores/${f.id}`}
-              className="flex flex-wrap items-center gap-x-6 gap-y-2 p-4 hover:bg-superficie-alta/60 transition-colors first:rounded-t-lg last:rounded-b-lg"
-            >
+            <LinhaLista key={f.id} href={`/fornecedores/${f.id}`}>
               <div className="min-w-0 flex-1">
                 <div className="font-medium truncate">{f.nome}</div>
                 <div className="text-sm text-texto-suave truncate">
@@ -53,17 +48,17 @@ export default async function PaginaFornecedores() {
 
               <dl className="flex gap-6 text-sm numerico">
                 <div>
-                  <dt className="text-xs text-texto-fraco">IPI</dt>
+                  <dt className="text-xs text-texto-fraco uppercase tracking-wide">IPI</dt>
                   <dd>{formatarPercentual(f.ipiPercentual.toString())}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-texto-fraco">Comissão</dt>
-                  <dd className="text-acento">
+                  <dt className="text-xs text-texto-fraco uppercase tracking-wide">Comissão</dt>
+                  <dd className="texto-gradiente font-semibold">
                     {formatarPercentual(f.comissaoPercentual.toString())}
                   </dd>
                 </div>
               </dl>
-            </Link>
+            </LinhaLista>
           ))}
         </Cartao>
       )}

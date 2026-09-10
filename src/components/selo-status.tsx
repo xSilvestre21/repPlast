@@ -4,12 +4,13 @@ const ESTILOS: Record<string, { rotulo: string; classe: string }> = {
     classe: "border-borda-forte text-texto-suave",
   },
   ENVIADO: {
+    // Enviado é o estado que dispara a comissão: merece o acento da marca.
     rotulo: "Enviado",
-    classe: "border-acento/50 bg-acento-escuro text-acento",
+    classe: "border-transparent fundo-gradiente text-sobre-acento font-medium",
   },
   CANCELADO: {
     rotulo: "Cancelado",
-    classe: "border-perigo/40 bg-perigo-escuro text-perigo",
+    classe: "border-perigo/40 bg-perigo-fraco text-perigo",
   },
 };
 

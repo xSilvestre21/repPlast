@@ -1,46 +1,217 @@
 @import "tailwindcss";
 
 /*
- * Tema escuro fixo. O sistema é usado o dia inteiro, muitas vezes em galpão e
- * na rua, e foi o tema que o usuário já validou no sistema de referência.
+ * Aurora — identidade visual do RepPlast.
+ *
+ * Dois temas, claro e escuro, com o mesmo par de acentos (violeta → ciano).
+ * A paleta vive em variáveis CSS puras para poder trocar em tempo de execução;
+ * o bloco `@theme inline` só aponta as utilidades do Tailwind para elas.
+ *
+ * Ordem das regras, e o motivo:
+ *   1. `:root`                      escuro, o visual nativo da Aurora
+ *   2. `prefers-color-scheme: light` acompanha o sistema, salvo escolha explícita
+ *   3. `[data-tema]`                 a escolha do usuário vence tudo
  */
-@theme {
-  --color-fundo: #0f1211;
-  --color-superficie: #171b19;
-  --color-superficie-alta: #1e2422;
-  --color-borda: #2a322e;
-  --color-borda-forte: #3a453f;
 
-  --color-texto: #e6ebe8;
-  --color-texto-suave: #9aa8a1;
-  --color-texto-fraco: #6b7a73;
+:root {
+  color-scheme: dark;
 
-  /* Verde = dinheiro. Usado em valores e confirmações. */
-  --color-acento: #4ade80;
-  --color-acento-escuro: #16352a;
+  --fundo: #0a0a12;
+  --fundo-elevado: #12121d;
+  --superficie: rgb(255 255 255 / 0.04);
+  --superficie-alta: rgb(255 255 255 / 0.07);
+  --borda: rgb(255 255 255 / 0.09);
+  --borda-forte: rgb(255 255 255 / 0.16);
 
-  --color-perigo: #f87171;
-  --color-perigo-escuro: #3b1f1f;
+  --texto: #ececf4;
+  --texto-suave: #a5a5bd;
+  --texto-fraco: #6e6e8a;
 
-  --color-aviso: #fbbf24;
+  --acento-1: #8b5cf6;
+  --acento-2: #22d3ee;
+  /* Texto que fica POR CIMA do gradiente. */
+  --sobre-acento: #0a0a12;
+  --acento-fraco: rgb(139 92 246 / 0.16);
+
+  --perigo: #fb7185;
+  --perigo-fraco: rgb(251 113 133 / 0.14);
+  --aviso: #fbbf24;
+
+  --sombra-cartao: 0 8px 30px rgb(0 0 0 / 0.35);
+  --brilho-acento: 0 14px 40px rgb(139 92 246 / 0.22);
+
+  /* Intensidade do brilho de fundo. O tema claro pede bem menos. */
+  --aurora-forca: 0.42;
+  --aurora-blur: 60px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-tema="escuro"]) {
+    color-scheme: light;
+
+    --fundo: #fbfbff;
+    --fundo-elevado: #ffffff;
+    --superficie: rgb(255 255 255 / 0.72);
+    --superficie-alta: rgb(255 255 255 / 0.95);
+    --borda: rgb(23 23 55 / 0.09);
+    --borda-forte: rgb(23 23 55 / 0.18);
+
+    --texto: #17172e;
+    --texto-suave: #55557a;
+    --texto-fraco: #8a8aa8;
+
+    --acento-1: #7c3aed;
+    --acento-2: #0891b2;
+    --sobre-acento: #ffffff;
+    --acento-fraco: rgb(124 58 237 / 0.1);
+
+    --perigo: #e11d48;
+    --perigo-fraco: rgb(225 29 72 / 0.08);
+    --aviso: #b45309;
+
+    --sombra-cartao: 0 6px 24px rgb(23 23 55 / 0.07);
+    --brilho-acento: 0 12px 32px rgb(124 58 237 / 0.16);
+
+    --aurora-forca: 0.2;
+    --aurora-blur: 80px;
+  }
+}
+
+:root[data-tema="claro"] {
+  color-scheme: light;
+
+  --fundo: #fbfbff;
+  --fundo-elevado: #ffffff;
+  --superficie: rgb(255 255 255 / 0.72);
+  --superficie-alta: rgb(255 255 255 / 0.95);
+  --borda: rgb(23 23 55 / 0.09);
+  --borda-forte: rgb(23 23 55 / 0.18);
+
+  --texto: #17172e;
+  --texto-suave: #55557a;
+  --texto-fraco: #8a8aa8;
+
+  --acento-1: #7c3aed;
+  --acento-2: #0891b2;
+  --sobre-acento: #ffffff;
+  --acento-fraco: rgb(124 58 237 / 0.1);
+
+  --perigo: #e11d48;
+  --perigo-fraco: rgb(225 29 72 / 0.08);
+  --aviso: #b45309;
+
+  --sombra-cartao: 0 6px 24px rgb(23 23 55 / 0.07);
+  --brilho-acento: 0 12px 32px rgb(124 58 237 / 0.16);
+
+  --aurora-forca: 0.2;
+  --aurora-blur: 80px;
+}
+
+@theme inline {
+  --color-fundo: var(--fundo);
+  --color-fundo-elevado: var(--fundo-elevado);
+  --color-superficie: var(--superficie);
+  --color-superficie-alta: var(--superficie-alta);
+  --color-borda: var(--borda);
+  --color-borda-forte: var(--borda-forte);
+
+  --color-texto: var(--texto);
+  --color-texto-suave: var(--texto-suave);
+  --color-texto-fraco: var(--texto-fraco);
+
+  --color-acento: var(--acento-1);
+  --color-acento-2: var(--acento-2);
+  --color-acento-fraco: var(--acento-fraco);
+  --color-sobre-acento: var(--sobre-acento);
+
+  --color-perigo: var(--perigo);
+  --color-perigo-fraco: var(--perigo-fraco);
+  --color-aviso: var(--aviso);
 
   --font-sans: var(--font-geist-sans), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
-html {
-  color-scheme: dark;
-}
-
 body {
-  background: var(--color-fundo);
-  color: var(--color-texto);
+  background: var(--fundo);
+  color: var(--texto);
+  /* A troca de tema não deve piscar. */
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/*
- * Valores monetários e medidas alinham melhor com dígitos de mesma largura —
- * numa tabela de pedido isso é diferença de legibilidade, não de estética.
+/* -------------------------------------------------------------------------- */
+/* O brilho que dá nome à Aurora                                              */
+/*                                                                            */
+/* Fica atrás de tudo, preso à viewport, e respira devagar. É o que separa    */
+/* este visual de mais um tema escuro qualquer.                               */
+/* -------------------------------------------------------------------------- */
+
+.aurora-fundo {
+  position: fixed;
+  inset: -25%;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--aurora-forca);
+  filter: blur(var(--aurora-blur));
+  background:
+    radial-gradient(30% 34% at 18% 12%, var(--acento-1), transparent 70%),
+    radial-gradient(28% 30% at 82% 24%, var(--acento-2), transparent 70%),
+    radial-gradient(26% 28% at 60% 88%, var(--acento-1), transparent 70%);
+  animation: aurora-respirar 18s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-respirar {
+  from { transform: translate3d(-1.5%, -1%, 0) scale(1); }
+  to   { transform: translate3d(1.5%, 2%, 0) scale(1.1); }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Utilidades                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/** Texto pintado com o gradiente da marca. */
+.texto-gradiente {
+  background: linear-gradient(100deg, var(--acento-1), var(--acento-2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.fundo-gradiente {
+  background: linear-gradient(120deg, var(--acento-1), var(--acento-2));
+}
+
+/** Vidro fosco: superfície translúcida sobre o brilho de fundo. */
+.vidro {
+  background: var(--superficie);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/**
+ * Dígitos de mesma largura. Numa tabela de pedido isso é legibilidade, não
+ * estética: os valores alinham na vertical e o erro salta aos olhos.
  */
 .numerico {
   font-variant-numeric: tabular-nums;
+}
+
+/** Entrada suave de conteúdo que aparece depois de uma ação. */
+.surgir {
+  animation: surgir 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes surgir {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora-fundo { animation: none; }
+  .surgir { animation: none; }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
 }

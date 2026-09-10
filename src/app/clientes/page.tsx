@@ -1,6 +1,4 @@
-import Link from "next/link";
-
-import { BotaoLink, Cabecalho, Cartao, EstadoVazio } from "@/components/ui";
+import { BotaoLink, Cabecalho, Cartao, EstadoVazio, LinhaLista } from "@/components/ui";
 import { dbParaOrganizacao } from "@/lib/db";
 import { organizacaoAtual } from "@/lib/sessao";
 
@@ -27,11 +25,7 @@ export default async function PaginaClientes() {
       ) : (
         <Cartao className="divide-y divide-borda">
           {clientes.map((cliente) => (
-            <Link
-              key={cliente.id}
-              href={`/clientes/${cliente.id}`}
-              className="flex flex-wrap items-center gap-x-6 gap-y-1 p-4 hover:bg-superficie-alta/60 transition-colors first:rounded-t-lg last:rounded-b-lg"
-            >
+            <LinhaLista key={cliente.id} href={`/clientes/${cliente.id}`}>
               <div className="min-w-0 flex-1">
                 <div className="font-medium truncate">{cliente.apelido}</div>
                 <div className="text-sm text-texto-suave truncate">{cliente.razaoSocial}</div>
@@ -44,7 +38,7 @@ export default async function PaginaClientes() {
                   {cliente._count.pedidos > 0 && ` · ${cliente._count.pedidos} pedido(s)`}
                 </div>
               </div>
-            </Link>
+            </LinhaLista>
           ))}
         </Cartao>
       )}

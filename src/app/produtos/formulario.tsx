@@ -439,7 +439,7 @@ export function FormularioProduto({
                     key={aditivo.id}
                     className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm cursor-pointer transition-colors ${
                       marcado
-                        ? "border-acento/60 bg-acento-escuro text-texto"
+                        ? "border-acento bg-acento-fraco text-texto"
                         : "border-borda hover:border-borda-forte text-texto-suave"
                     }`}
                   >
@@ -498,7 +498,7 @@ export function FormularioProduto({
           <Cartao className="mt-4 p-4 bg-fundo">
             <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
               <div className="text-sm text-texto-suave">Preço do milheiro</div>
-              <div className="text-2xl font-semibold text-acento numerico">
+              <div className="text-2xl font-semibold texto-gradiente numerico">
                 {formatarMoeda(calculo.precoMilheiro.toNumber())}
               </div>
             </div>

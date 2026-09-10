@@ -135,7 +135,7 @@ export function SecaoItens({
         </div>
         <div className="flex gap-8 text-base font-semibold mt-1">
           <span>TOTAL GERAL:</span>
-          <span className="w-32 text-right text-acento">{formatarMoeda(totais.totalGeral)}</span>
+          <span className="w-32 text-right texto-gradiente">{formatarMoeda(totais.totalGeral)}</span>
         </div>
       </div>
 

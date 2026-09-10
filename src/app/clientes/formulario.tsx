@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 
-import { Botao, Campo, MensagemErro, SecaoCartao } from "@/components/ui";
+import { AreaTexto, Botao, Campo, MensagemErro, SecaoCartao } from "@/components/ui";
 
 import type { EstadoFormulario } from "./acoes";
 
@@ -142,12 +142,11 @@ export function FormularioCliente({
       >
         <label className="block">
           <span className="sr-only">Observações</span>
-          <textarea
+          <AreaTexto
             name="observacoes"
             rows={4}
             defaultValue={valores.observacoes}
             placeholder="Recebimento de 2ª a 5ª das 8:00 às 12:00…"
-            className="w-full rounded-md border border-borda bg-fundo px-3 py-2 text-sm text-texto placeholder:text-texto-fraco outline-none transition-colors focus:border-acento/60 focus:ring-1 focus:ring-acento/30 resize-y"
           />
         </label>
       </SecaoCartao>

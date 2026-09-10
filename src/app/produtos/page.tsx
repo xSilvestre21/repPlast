@@ -1,6 +1,11 @@
-import Link from "next/link";
-
-import { BotaoLink, Cabecalho, Cartao, EstadoVazio, formatarMoeda } from "@/components/ui";
+import {
+  BotaoLink,
+  Cabecalho,
+  Cartao,
+  EstadoVazio,
+  LinhaLista,
+  formatarMoeda,
+} from "@/components/ui";
 import { dbParaOrganizacao } from "@/lib/db";
 import { precoMilheiroSaco } from "@/lib/precificacao";
 import { organizacaoAtual } from "@/lib/sessao";
@@ -77,11 +82,7 @@ export default async function PaginaProdutos() {
             const preco = precoDe(produto);
 
             return (
-              <Link
-                key={produto.id}
-                href={`/produtos/${produto.id}`}
-                className="flex flex-wrap items-center gap-x-6 gap-y-2 p-4 hover:bg-superficie-alta/60 transition-colors first:rounded-t-lg last:rounded-b-lg"
-              >
+              <LinhaLista key={produto.id} href={`/produtos/${produto.id}`}>
                 <div className="min-w-0 flex-1">
                   <div className="font-mono text-sm truncate">{produto.descricao}</div>
                   <div className="text-xs text-texto-suave truncate mt-0.5">
@@ -94,11 +95,13 @@ export default async function PaginaProdutos() {
 
                 {preco && (
                   <div className="text-right">
-                    <div className="numerico text-acento">{formatarMoeda(preco.valor)}</div>
+                    <div className="numerico texto-gradiente font-semibold">
+                      {formatarMoeda(preco.valor)}
+                    </div>
                     <div className="text-xs text-texto-fraco">por {preco.unidade}</div>
                   </div>
                 )}
-              </Link>
+              </LinhaLista>
             );
           })}
         </Cartao>

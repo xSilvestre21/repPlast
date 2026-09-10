@@ -1,7 +1,12 @@
-import Link from "next/link";
-
 import { SeloStatus } from "@/components/selo-status";
-import { BotaoLink, Cabecalho, Cartao, EstadoVazio, formatarMoeda } from "@/components/ui";
+import {
+  BotaoLink,
+  Cabecalho,
+  Cartao,
+  EstadoVazio,
+  LinhaLista,
+  formatarMoeda,
+} from "@/components/ui";
 import { dbParaOrganizacao } from "@/lib/db";
 import { organizacaoAtual } from "@/lib/sessao";
 
@@ -38,13 +43,11 @@ export default async function PaginaPedidos() {
       ) : (
         <Cartao className="divide-y divide-borda">
           {pedidos.map((pedido) => (
-            <Link
-              key={pedido.id}
-              href={`/pedidos/${pedido.id}`}
-              className="flex flex-wrap items-center gap-x-6 gap-y-2 p-4 hover:bg-superficie-alta/60 transition-colors first:rounded-t-lg last:rounded-b-lg"
-            >
+            <LinhaLista key={pedido.id} href={`/pedidos/${pedido.id}`}>
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                <span className="font-semibold numerico shrink-0">#{pedido.numero}</span>
+                <span className="font-semibold numerico shrink-0 texto-gradiente">
+                  #{pedido.numero}
+                </span>
 
                 <div className="min-w-0">
                   <div className="truncate">{pedido.cliente.apelido}</div>
@@ -57,15 +60,17 @@ export default async function PaginaPedidos() {
 
               <div className="flex items-center gap-4">
                 <span
-                  className={`numerico ${
-                    pedido.status === "CANCELADO" ? "text-texto-fraco line-through" : "text-acento"
+                  className={`numerico font-semibold ${
+                    pedido.status === "CANCELADO"
+                      ? "text-texto-fraco line-through"
+                      : "texto-gradiente"
                   }`}
                 >
                   {formatarMoeda(pedido.totalGeral.toString())}
                 </span>
                 <SeloStatus status={pedido.status} />
               </div>
-            </Link>
+            </LinhaLista>
           ))}
         </Cartao>
       )}

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 
+import { SCRIPT_TEMA } from "@/components/alternador-tema";
 import { Navegacao } from "@/components/navegacao";
 
 import "./globals.css";
@@ -28,8 +29,14 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="pt-BR"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      // O tema escolhido é aplicado pelo script abaixo, antes da pintura.
+      suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+      </head>
       <body className="min-h-full flex flex-col font-sans">
+        <div className="aurora-fundo" aria-hidden="true" />
         <Navegacao />
         <main className="flex-1 w-full max-w-6xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
           {children}
