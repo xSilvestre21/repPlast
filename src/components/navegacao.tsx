@@ -119,11 +119,11 @@ export function Navegacao({ nomeUsuario }: { nomeUsuario: string }) {
                       transitionTypes={[
                         indice > indiceAtual ? "nav-direita" : "nav-esquerda",
                       ]}
-                      className={`relative isolate block px-3.5 py-1.5 text-sm font-medium
-                        whitespace-nowrap transition-colors duration-150 ${
+                      className={`relative isolate block px-3.5 py-1.5 rounded-full text-sm font-medium
+                        whitespace-nowrap transition-colors duration-200 ${
                           ativo
                             ? "text-papel font-semibold"
-                            : "text-tinta-2 hover:text-tinta"
+                            : "text-tinta-2 hover:bg-folha-2 hover:text-tinta"
                         }`}
                     >
                       {/*

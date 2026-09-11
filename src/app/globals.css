@@ -745,6 +745,81 @@ body {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Esqueleto                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * O bloco que ocupa o lugar do conteúdo enquanto ele vem.
+ *
+ * O brilho que varre de um lado ao outro não é enfeite: um retângulo cinza
+ * parado lê como conteúdo quebrado, e o mesmo retângulo varrido lê como
+ * conteúdo a caminho. É a diferença entre "deu erro" e "espera um segundo".
+ */
+.esqueleto {
+  position: relative;
+  overflow: hidden;
+  background: var(--folha-2);
+  border-radius: var(--radius-suave);
+}
+
+.esqueleto::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--folha) 75%, transparent),
+    transparent
+  );
+  animation: varrer 1.4s ease-in-out infinite;
+}
+
+@keyframes varrer {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Revezamento: o esqueleto entrega o lugar ao conteúdo                       */
+/*                                                                            */
+/* A direção vertical carrega hierarquia. Conteúdo que SOBE está chegando;    */
+/* conteúdo que DESCE está saindo. Os dois juntos formam a passagem de        */
+/* bastão — o espaço reservado cede o lugar à coisa de verdade, em vez de     */
+/* sumir e deixar o conteúdo pipocar no lugar dele.                           */
+/*                                                                            */
+/* Os tempos são assimétricos de propósito: a saída é curta (150ms), e a      */
+/* entrada só COMEÇA a aparecer quando a saída terminou — senão os dois se    */
+/* sobrepõem no meio do caminho e o que se vê é uma borra. O deslocamento da  */
+/* entrada, esse sim, corre bem mais (400ms), e é ele que dá a sensação de    */
+/* que o conteúdo veio de algum lugar.                                        */
+/*                                                                            */
+/* O desfoque cobre a interpolação pixel a pixel que o navegador faz entre    */
+/* duas fotos de tamanhos diferentes — sem ele a troca mostra um fantasma do  */
+/* esqueleto esticado por cima do texto.                                      */
+/* -------------------------------------------------------------------------- */
+
+::view-transition-old(.revezar-sai) {
+  animation: 150ms ease-out both revelar-desfocado reverse,
+             150ms ease-out both deslizar-y reverse;
+}
+
+::view-transition-new(.revezar-entra) {
+  animation: 210ms ease-in 150ms both revelar-desfocado,
+             400ms ease-in both deslizar-y;
+}
+
+@keyframes revelar-desfocado {
+  from { opacity: 0; filter: blur(4px); }
+  to   { opacity: 1; filter: none; }
+}
+
+@keyframes deslizar-y {
+  from { translate: 0 14px; }
+  to   { translate: 0; }
+}
+
+/* -------------------------------------------------------------------------- */
 /* Confete                                                                    */
 /* -------------------------------------------------------------------------- */
 
@@ -788,7 +863,8 @@ body {
   .confete { display: none; }
 
   .aurora,
-  .pulso::after {
+  .pulso::after,
+  .esqueleto::after {
     animation: none;
   }
 
