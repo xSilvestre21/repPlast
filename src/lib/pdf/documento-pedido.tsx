@@ -72,12 +72,25 @@ export interface DadosPedidoPdf {
 
 const LINHA = "#cccccc";
 
+/** Margem lateral da referência. A faixa útil é 841,89 - 2 x 43 = 755,89 pt. */
+const MARGEM = 43;
+
 const estilos = StyleSheet.create({
+  /*
+   * TODA a geometria deste documento foi MEDIDA dos pedidos que a indústria
+   * emite (referência 2253, 2256 e 133), extraindo posição, corpo e fonte de
+   * cada trecho do conteúdo dos arquivos. Os números abaixo não são escolha de
+   * gosto: são o que a indústria imprime, e é o que faz o pedido chegar lá
+   * parecendo o de sempre.
+   *
+   * A página é A4 DEITADA, 841,89 x 595,28 pt, com margem de 43 dos dois
+   * lados — a faixa útil é de 755,89 pt.
+   */
   pagina: {
-    paddingTop: 34,
-    paddingBottom: 56,
-    paddingHorizontal: 34,
-    fontSize: 8,
+    paddingTop: 18,
+    paddingBottom: 40,
+    paddingHorizontal: MARGEM,
+    fontSize: 9,
     fontFamily: "Helvetica",
     color: "#111111",
   },
@@ -86,91 +99,121 @@ const estilos = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 14,
+    marginBottom: 8,
   },
   /*
-   * A caixa da logo veio MEDIDA dos pedidos reais, não escolhida no olho.
+   * `alignItems: flex-end` e não `textAlign: right`.
    *
-   * Nos PDFs que a QUALYPLAST emite (referência 2253 e 2256) a marca é
-   * desenhada a 128,9 x 70,0 pt — proporção 1,84, a mesma do arquivo de
-   * 1600x869 px que está no cadastro. Com `contain`, uma caixa de 150 x 70
-   * reproduz esse tamanho exato: a altura é quem limita, e 70 x 1,84 dá os
-   * 128,8 pt da referência.
+   * O bloco encolhe até o conteúdo mais largo — o número do pedido —, então
+   * alinhar o TEXTO à direita não move nada: a linha da data já ocupa a caixa
+   * inteira. Empurrando cada filho para o fim do bloco, as duas linhas passam
+   * a terminar na margem, que é onde a referência as termina.
+   */
+  blocoNumero: { alignItems: "flex-end" },
+  /*
+   * A logo é desenhada a 128,9 x 70,0 pt na referência — proporção 1,84, a
+   * mesma do arquivo de 1600x869 px do cadastro. Com `contain`, a caixa de
+   * 150 x 70 reproduz esse tamanho: a altura limita, e 70 x 1,84 dá 128,8.
    *
-   * A altura era 46, e é por isso que a marca saía menor que a da indústria:
-   * o teto cortava em 84,6 pt de largura, dois terços do que deveria.
-   *
-   * O limite de largura continua em 150 para uma marca muito deitada não
-   * avançar sobre o número do pedido, que divide esta linha com ela.
+   * O limite de largura existe para uma marca muito deitada não avançar sobre
+   * o número do pedido, que divide esta linha com ela.
    */
   logo: { maxWidth: 150, maxHeight: 70, objectFit: "contain" },
-  logoAusente: { fontSize: 11, fontFamily: "Helvetica-Bold" },
-  numeroPedido: { fontSize: 15, fontFamily: "Helvetica-Bold", textAlign: "right" },
-  dataPedido: { fontSize: 8, textAlign: "right", marginTop: 2 },
+  logoAusente: { fontSize: 13, fontFamily: "Helvetica-Bold" },
+  numeroPedido: { fontSize: 13, fontFamily: "Helvetica-Bold", textAlign: "right", marginTop: 1.6 },
+  dataPedido: { fontSize: 9, textAlign: "right", marginTop: 4.5 },
 
-  regua: { borderTopWidth: 1, borderTopColor: LINHA, marginBottom: 10 },
+  regua: { borderTopWidth: 0.5, borderTopColor: "#000000", marginBottom: 3.7 },
 
-  tituloSecao: { fontSize: 8, fontFamily: "Helvetica-Bold", marginBottom: 6 },
+  tituloSecao: { fontSize: 10, fontFamily: "Helvetica-Bold", marginBottom: 5.4 },
 
-  grade: { flexDirection: "row", flexWrap: "wrap", marginBottom: 4 },
-  campo: { width: "33.33%", marginBottom: 7, paddingRight: 8 },
-  campoLargo: { width: "66.66%", marginBottom: 7, paddingRight: 8 },
-  rotulo: { fontSize: 6.5, fontFamily: "Helvetica-Bold", marginBottom: 1.5 },
-  valor: { fontSize: 8 },
+  /*
+   * As linhas do bloco de cliente são EXPLÍCITAS, e não um `flexWrap`.
+   *
+   * Com refluxo automático, um campo vazio — o frete, que a referência nem
+   * tem — some e puxa o seguinte para o lugar dele: o PEDIDO DO CLIENTE subia
+   * para a terceira coluna da linha de cima. Cada linha declarada mantém o
+   * campo na linha em que a indústria o imprime, tenha ou não vizinho.
+   */
+  linhaGrade: { flexDirection: "row" },
+  /*
+   * As três colunas do bloco de cliente caem em 43, 339 e 500 na referência.
+   * Descontada a margem, isso é 296, 161 e 298,89 pt — e não três terços
+   * iguais: a razão social precisa de espaço e a UF não.
+   */
+  campo1: { width: 296, marginBottom: 5.4, paddingRight: 8 },
+  campo2: { width: 161, marginBottom: 5.4, paddingRight: 8 },
+  campo3: { width: 298.89, marginBottom: 5.4, paddingRight: 8 },
+  /** UF e IE dividem a terceira coluna: a UF ocupa 46 pt e a IE o resto. */
+  linhaUfIe: { width: 298.89, marginBottom: 5.4, flexDirection: "row" },
+  campoUf: { width: 46, paddingRight: 4 },
+  campoIe: { width: 252.89, paddingRight: 8 },
+  rotulo: { fontSize: 7.5, fontFamily: "Helvetica-Bold", marginBottom: 0.5 },
+  valor: { fontSize: 9 },
 
-  observacoes: { marginTop: 6, marginBottom: 12 },
-  linhaObservacao: { fontSize: 8, marginBottom: 1.5 },
+  observacoes: { marginTop: 7.5, marginBottom: 9.1 },
+  tituloObservacao: { fontSize: 9, fontFamily: "Helvetica-Bold", marginBottom: 3.1 },
+  linhaObservacao: { fontSize: 9, marginBottom: 0.5 },
 
   cabecalhoTabela: {
     flexDirection: "row",
-    borderTopWidth: 1,
-    borderTopColor: "#333333",
-    borderBottomWidth: 1,
-    borderBottomColor: "#333333",
-    paddingVertical: 4,
+    borderTopWidth: 0.5,
+    borderTopColor: "#000000",
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#000000",
+    paddingVertical: 3.6,
   },
-  colunaCabecalho: { fontSize: 6.5, fontFamily: "Helvetica-Bold", paddingRight: 4 },
+  colunaCabecalho: { fontSize: 8, fontFamily: "Helvetica-Bold" },
   // Como no pedido real, não há fio entre os itens: só embaixo do bloco.
-  corpoTabela: { borderBottomWidth: 0.5, borderBottomColor: LINHA },
-  linhaItem: { flexDirection: "row", paddingVertical: 4 },
-  celula: { fontSize: 8, paddingRight: 4 },
-  /** Respiro para as colunas alinhadas à direita não encostarem na seguinte. */
-  celulaNumero: { fontSize: 8, textAlign: "right", paddingRight: 4 },
+  /*
+   * Os 4 pt de folga embaixo vêm da referência: lá as linhas têm passo de 16,
+   * mas o fio que fecha o bloco não encosta na última — ele fica 4 pt abaixo
+   * do que o passo pediria. Sem isso a tabela fecha apertada demais.
+   */
+  corpoTabela: { borderBottomWidth: 0.5, borderBottomColor: LINHA, paddingBottom: 4 },
+  linhaItem: { flexDirection: "row", paddingVertical: 3.55 },
+  celula: { fontSize: 8 },
+  celulaNumero: { fontSize: 8, textAlign: "right" },
 
-  totais: { marginTop: 10, alignItems: "flex-end" },
-  linhaTotal: { flexDirection: "row", marginBottom: 2 },
-  rotuloTotal: { width: 120, textAlign: "right", paddingRight: 10, fontSize: 8 },
-  valorTotal: { width: 90, textAlign: "right", fontSize: 8 },
-  rotuloTotalGeral: {
-    width: 120,
+  /*
+   * O bloco de totais começa em 533 e termina em 798,89 — a mesma borda
+   * direita da tabela. O rótulo é alinhado à ESQUERDA nesse ponto, e não à
+   * direita: é assim na referência.
+   */
+  totais: { marginTop: 6.7 },
+  linhaTotal: { flexDirection: "row", marginLeft: 490, marginBottom: 3 },
+  rotuloTotal: { width: 150, fontSize: 9 },
+  valorTotal: { width: 115.89, textAlign: "right", fontSize: 9 },
+  rotuloTotalGeral: { width: 150, fontSize: 11, fontFamily: "Helvetica-Bold" },
+  valorTotalGeral: {
+    width: 115.89,
     textAlign: "right",
-    paddingRight: 10,
     fontSize: 11,
     fontFamily: "Helvetica-Bold",
   },
-  valorTotalGeral: { width: 90, textAlign: "right", fontSize: 11, fontFamily: "Helvetica-Bold" },
 
-  rodape: { position: "absolute", bottom: 30, left: 34, right: 34, fontSize: 8 },
+  rodape: { position: "absolute", bottom: 44.8, left: MARGEM, right: MARGEM, fontSize: 9 },
 });
 
 /**
- * Larguras das colunas, em porcentagem da faixa útil (~527pt no A4).
+ * Larguras das colunas, em PONTOS, somando os 755,89 da faixa útil.
  *
- * As colunas de dinheiro têm largura mínima calculada: "R$ 111.687,53" mede
- * cerca de 61pt em Helvetica 8, então 12% (63pt) é o piso. Abaixo disso o
- * texto não quebra — ele transborda por cima da coluna vizinha, que foi
- * exatamente o que aconteceu na primeira versão.
+ * Vieram das bordas da referência. Para as colunas alinhadas à direita a borda
+ * não está no x do texto — ela é o x mais a largura da string. Calculando essa
+ * largura em Helvetica 8 e conferindo contra o cabeçalho e contra as duas
+ * linhas de item, as bordas caem em 468,0 · 589,0 · 670,0 · 736,0 e 798,89 —
+ * a última é exatamente a margem direita, o que confirma a leitura.
  */
 const COLUNAS = {
-  codigoFornecedor: "7%",
-  codigoCliente: "10%",
-  descricao: "24%",
-  quantidade: "5%",
-  unidade: "4%",
-  preco: "12%",
-  totalSemIpi: "13%",
-  ipi: "12%",
-  total: "13%",
+  codigoFornecedor: 75,
+  codigoCliente: 70,
+  descricao: 236,
+  quantidade: 44,
+  unidade: 60,
+  preco: 61,
+  totalSemIpi: 81,
+  ipi: 66,
+  total: 62.89,
 } as const;
 
 const DATA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "UTC" });
@@ -181,19 +224,28 @@ const dinheiro = (valor: string) => MOEDA.format(Number(valor));
 const quantidade = (valor: string) =>
   Number(valor).toLocaleString("pt-BR", { maximumFractionDigits: 3 });
 
+/**
+ * Campo do bloco de cliente: rótulo pequeno em negrito, valor embaixo.
+ *
+ * A `coluna` escolhe a largura, e não há terços iguais aqui — na referência as
+ * três colunas medem 296, 161 e 298,89 pt, porque a razão social precisa de
+ * espaço e a UF não.
+ */
 function Campo({
   rotulo,
   valor,
-  largo = false,
+  coluna = 1,
 }: {
   rotulo: string;
   valor: string | null | undefined;
-  largo?: boolean;
+  coluna?: 1 | 2 | 3;
 }) {
   if (!valor) return null;
 
+  const larguras = { 1: estilos.campo1, 2: estilos.campo2, 3: estilos.campo3 } as const;
+
   return (
-    <View style={largo ? estilos.campoLargo : estilos.campo}>
+    <View style={larguras[coluna]}>
       <Text style={estilos.rotulo}>{rotulo}</Text>
       <Text style={estilos.valor}>{valor}</Text>
     </View>
@@ -217,7 +269,7 @@ export function DocumentoPedido({ pedido }: { pedido: DadosPedidoPdf }) {
       title={`Pedido ${pedido.numero} — ${cliente.razaoSocial}`}
       author={pedido.vendedor ?? undefined}
     >
-      <Page size="A4" style={estilos.pagina}>
+      <Page size="A4" orientation="landscape" style={estilos.pagina}>
         <View style={estilos.topo} fixed>
           {pedido.logo ? (
             // O Image aqui é do @react-pdf, não do HTML: não existe alt em PDF.
@@ -227,7 +279,7 @@ export function DocumentoPedido({ pedido }: { pedido: DadosPedidoPdf }) {
             <Text style={estilos.logoAusente}>{pedido.fornecedor.nome}</Text>
           )}
 
-          <View>
+          <View style={estilos.blocoNumero}>
             <Text style={estilos.numeroPedido}>PEDIDO Nº {pedido.numero}</Text>
             <Text style={estilos.dataPedido}>Data: {DATA.format(pedido.data)}</Text>
           </View>
@@ -237,37 +289,66 @@ export function DocumentoPedido({ pedido }: { pedido: DadosPedidoPdf }) {
 
         <Text style={estilos.tituloSecao}>DADOS DO CLIENTE</Text>
 
-        <View style={estilos.grade}>
-          <Campo rotulo="RAZÃO SOCIAL" valor={cliente.razaoSocial} />
-          <Campo rotulo="CNPJ" valor={cliente.cnpj} />
-          <Campo rotulo="UF / IE" valor={[cliente.uf, cliente.ie].filter(Boolean).join("   ")} />
+        <View style={estilos.linhaGrade}>
+          <Campo rotulo="RAZÃO SOCIAL" valor={cliente.razaoSocial} coluna={1} />
+          <Campo rotulo="CNPJ" valor={cliente.cnpj} coluna={2} />
+          {/*
+            UF e IE são DOIS campos na referência, em 500 e 546 — não um "UF / IE"
+            só. A UF cabe em 46 pt e a inscrição fica com o resto da coluna.
+          */}
+          <View style={estilos.linhaUfIe}>
+            <View style={estilos.campoUf}>
+              <Text style={estilos.rotulo}>UF</Text>
+              <Text style={estilos.valor}>{cliente.uf ?? ""}</Text>
+            </View>
+            <View style={estilos.campoIe}>
+              <Text style={estilos.rotulo}>IE</Text>
+              <Text style={estilos.valor}>{cliente.ie ?? ""}</Text>
+            </View>
+          </View>
 
-          <Campo rotulo="ENDEREÇO" valor={cliente.endereco} />
-          <Campo rotulo="BAIRRO" valor={cliente.bairro} />
-          <Campo rotulo="CEP" valor={cliente.cep} />
+        </View>
 
-          <Campo rotulo="MUNICÍPIO" valor={cliente.municipio} />
-          <Campo rotulo="TELEFONE" valor={cliente.telefone} />
-          <Campo rotulo="E-MAIL PARA ENVIO DA NF-e" valor={cliente.emailNfe} />
+        <View style={estilos.linhaGrade}>
+          <Campo rotulo="ENDEREÇO" valor={cliente.endereco} coluna={1} />
+          <Campo rotulo="BAIRRO" valor={cliente.bairro} coluna={2} />
+          <Campo rotulo="CEP" valor={cliente.cep} coluna={3} />
+        </View>
 
-          <Campo rotulo="PRAZO PARA PAGAMENTO" valor={pedido.prazoPagamento} />
+        <View style={estilos.linhaGrade}>
+          <Campo rotulo="MUNICÍPIO" valor={cliente.municipio} coluna={1} />
+          <Campo rotulo="TELEFONE" valor={cliente.telefone} coluna={2} />
+          <Campo rotulo="E-MAIL PARA ENVIO DA NF-e" valor={cliente.emailNfe} coluna={3} />
+        </View>
+
+        <View style={estilos.linhaGrade}>
+          <Campo rotulo="PRAZO PARA PAGAMENTO" valor={pedido.prazoPagamento} coluna={1} />
           <Campo
             rotulo="PRAZO PARA ENTREGA"
             valor={pedido.prazoEntrega ? DATA.format(pedido.prazoEntrega) : null}
+            coluna={2}
           />
-          {/* Frete e transportadora não constam dos pedidos de referência:
-              só aparecem quando preenchidos, para não poluir o de sempre. */}
-          <Campo rotulo="FRETE" valor={frete} />
+          {/* Frete e transportadora não constam dos pedidos de referência, e
+              por isso ocupam a vaga que fica livre nesta linha: aparecendo, não
+              empurram nada; ausentes, a linha fica igual à da indústria. */}
+          <Campo rotulo="FRETE" valor={frete} coluna={3} />
+        </View>
 
-          <Campo rotulo="PEDIDO DO CLIENTE" valor={pedido.pedidoDoCliente} />
+        <View style={estilos.linhaGrade}>
+          <Campo rotulo="PEDIDO DO CLIENTE" valor={pedido.pedidoDoCliente} coluna={1} />
         </View>
 
         {pedido.observacoes && (
           <View style={estilos.observacoes}>
-            <Text style={estilos.tituloSecao}>OBSERVAÇÃO</Text>
+            <Text style={estilos.tituloObservacao}>OBSERVAÇÃO</Text>
             {pedido.observacoes.split("\n").map((linha, indice) => (
               <Text key={indice} style={estilos.linhaObservacao}>
-                {linha}
+                {/*
+                  Linha vazia vira espaço DURO: string vazia não ocupa altura, e o
+                  parágrafo em branco que separa os recados do fecho colapsava,
+                  subindo meia linha tudo o que vem abaixo.
+                */}
+                {linha || " "}
               </Text>
             ))}
           </View>
@@ -282,18 +363,18 @@ export function DocumentoPedido({ pedido }: { pedido: DadosPedidoPdf }) {
           <Text
             style={[
               estilos.colunaCabecalho,
-              { width: COLUNAS.quantidade, textAlign: "right", paddingRight: 4 },
+              { width: COLUNAS.quantidade, textAlign: "right" },
             ]}
           >
             QNT
           </Text>
-          <Text style={[estilos.colunaCabecalho, { width: COLUNAS.unidade, paddingLeft: 2 }]}>
+          <Text style={[estilos.colunaCabecalho, { width: COLUNAS.unidade, paddingLeft: 6 }]}>
             UN
           </Text>
           <Text
             style={[
               estilos.colunaCabecalho,
-              { width: COLUNAS.preco, textAlign: "right", paddingRight: 4 },
+              { width: COLUNAS.preco, textAlign: "right" },
             ]}
           >
             {rotuloPreco}
@@ -301,7 +382,7 @@ export function DocumentoPedido({ pedido }: { pedido: DadosPedidoPdf }) {
           <Text
             style={[
               estilos.colunaCabecalho,
-              { width: COLUNAS.totalSemIpi, textAlign: "right", paddingRight: 4 },
+              { width: COLUNAS.totalSemIpi, textAlign: "right" },
             ]}
           >
             TOT S/IPI
@@ -309,7 +390,7 @@ export function DocumentoPedido({ pedido }: { pedido: DadosPedidoPdf }) {
           <Text
             style={[
               estilos.colunaCabecalho,
-              { width: COLUNAS.ipi, textAlign: "right", paddingRight: 4 },
+              { width: COLUNAS.ipi, textAlign: "right" },
             ]}
           >
             IPI
@@ -332,7 +413,7 @@ export function DocumentoPedido({ pedido }: { pedido: DadosPedidoPdf }) {
               <Text style={[estilos.celulaNumero, { width: COLUNAS.quantidade }]}>
                 {quantidade(item.quantidade)}
               </Text>
-              <Text style={[estilos.celula, { width: COLUNAS.unidade, paddingLeft: 2 }]}>
+              <Text style={[estilos.celula, { width: COLUNAS.unidade, paddingLeft: 6 }]}>
                 {ROTULO_UNIDADE[item.unidade]}
               </Text>
               <Text style={[estilos.celulaNumero, { width: COLUNAS.preco }]}>
@@ -345,7 +426,7 @@ export function DocumentoPedido({ pedido }: { pedido: DadosPedidoPdf }) {
                 {dinheiro(item.valorIpi)}
               </Text>
               <Text
-                style={[estilos.celulaNumero, { width: COLUNAS.total, paddingRight: 0 }]}
+                style={[estilos.celulaNumero, { width: COLUNAS.total }]}
               >
                 {dinheiro(item.total)}
               </Text>
