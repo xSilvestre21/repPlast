@@ -40,8 +40,9 @@ const PAPEL_APP = (() => {
   const papel = process.env.APP_DB_ROLE?.trim();
   if (!papel) return null;
 
-  // Identificador não aceita bind parameter em comando utilitário, então o
-  // valor é interpolado — e por isso precisa ser validado.
+  // O papel viaja como parâmetro (ver `comContexto`), então a validação não é
+  // mais o que impede injeção — é o que faz um nome errado falhar AQUI, na
+  // subida, em vez de em toda query como um erro de papel inexistente.
   if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(papel)) {
     throw new Error(`APP_DB_ROLE inválido: ${papel}`);
   }
@@ -60,7 +61,7 @@ function criarCliente() {
   return new PrismaClient({
     adapter: new PrismaPg({ connectionString }),
     // Toda query passa por uma transação (é como o contexto de tenant é
-    // aplicado — ver `comContexto`), então são 3 idas ao banco por operação.
+    // aplicado — ver `comContexto`), então são 4 idas ao banco por operação.
     // Com o banco em outra região os limites padrão do Prisma (2s para obter a
     // transação, 5s de duração) ficam curtos e estouram P2028.
     transactionOptions: {
@@ -99,20 +100,27 @@ function comContexto(opcoes: { chave: string; valor: string; trocarPapel: boolea
           args: unknown;
           query: (a: unknown) => Promise<unknown>;
         }) {
-          const preparo = [];
+          /*
+           * O preâmbulo é UMA instrução, e isso é medida de desempenho.
+           *
+           * `SET LOCAL ROLE x` e `SELECT set_config('role', x, TRUE)` fazem a
+           * mesma coisa — o papel é um GUC como outro qualquer, e volta ao
+           * original no fim da transação do mesmo jeito. A diferença é que a
+           * segunda forma cabe na MESMA instrução do contexto de tenant.
+           *
+           * Com o banco em outra região isso não é detalhe: cada instrução é
+           * uma travessia de ~125ms. Duas viravam uma, e a operação inteira
+           * caiu de cinco idas para quatro.
+           *
+           * Os dois valores viajam como parâmetro, não interpolados — então
+           * nem o papel nem o id do escritório podem carregar SQL junto.
+           */
+          const preparo =
+            opcoes.trocarPapel && PAPEL_APP
+              ? prismaBase.$executeRaw`SELECT set_config('role', ${PAPEL_APP}, TRUE), set_config(${opcoes.chave}, ${opcoes.valor}, TRUE)`
+              : prismaBase.$executeRaw`SELECT set_config(${opcoes.chave}, ${opcoes.valor}, TRUE)`;
 
-          if (opcoes.trocarPapel && PAPEL_APP) {
-            preparo.push(prismaBase.$executeRawUnsafe(`SET LOCAL ROLE ${PAPEL_APP}`));
-          }
-
-          preparo.push(
-            prismaBase.$executeRaw`SELECT set_config(${opcoes.chave}, ${opcoes.valor}, TRUE)`,
-          );
-
-          const resultados = await prismaBase.$transaction([
-            ...preparo,
-            query(args) as never,
-          ]);
+          const resultados = await prismaBase.$transaction([preparo, query(args) as never]);
 
           return resultados[resultados.length - 1];
         },
