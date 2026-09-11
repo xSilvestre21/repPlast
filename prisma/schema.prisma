@@ -295,8 +295,11 @@ model Pedido {
 
   observacoes String?
 
-  /// IPI congelado no envio — nunca relido do fornecedor depois.
-  comIpi        Boolean @default(true)
+  /// Alíquota de IPI, congelada na criação — nunca relida do fornecedor depois.
+  ///
+  /// Ela é do pedido porque a indústria cobra uma só. QUEM tem IPI é decidido
+  /// linha a linha, em `PedidoItem.comIpi`: um pedido inteiro isento é um
+  /// pedido com todos os itens desmarcados, e não um interruptor à parte.
   ipiPercentual Decimal @default(0) @db.Decimal(6, 3)
 
   /// Percentual de comissão deste pedido. Sobrepõe o do fornecedor quando

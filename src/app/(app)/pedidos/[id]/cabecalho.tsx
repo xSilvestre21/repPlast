@@ -16,7 +16,6 @@ export type ValoresCabecalho = {
   transportadora: string;
   vendedor: string;
   observacoes: string;
-  comIpi: boolean;
   ipiPercentual: string;
   comissaoPercentual: string;
 };
@@ -80,24 +79,25 @@ export function SecaoCabecalho({
         </fieldset>
       </SecaoCartao>
 
-      <SecaoCartao icone={Percent} titulo="Impostos e comissão">
-        <fieldset disabled={!editavel} className="grid gap-4 sm:grid-cols-3 items-start">
-          <label className="flex items-center gap-2 text-sm sm:pt-8">
-            <input
-              type="checkbox"
-              name="comIpi"
-              defaultChecked={valores.comIpi}
-              className="accent-acento"
-            />
-            Cobrar IPI neste pedido
-          </label>
+      {/*
+        O interruptor "Cobrar IPI neste pedido" saiu daqui.
 
+        Quem decide se uma linha tem IPI é a própria linha, na tabela de itens.
+        Um pedido inteiro isento é um pedido com todas as linhas desmarcadas —
+        e a coluna IPI de lá tem o atalho para fazer isso de uma vez. Manter o
+        interruptor seria um segundo lugar decidindo a mesma coisa, capaz de
+        zerar o IPI de uma linha marcada sem nada explicando o motivo.
+
+        A ALÍQUOTA fica: ela é do pedido porque a indústria cobra uma só.
+      */}
+      <SecaoCartao icone={Percent} titulo="Impostos e comissão">
+        <fieldset disabled={!editavel} className="grid gap-4 sm:grid-cols-2 items-start">
           <Campo
             name="ipiPercentual"
             rotulo="IPI"
             sufixo="%"
             inputMode="decimal"
-            dica="Veio da indústria e ficou congelado aqui."
+            dica="Veio da indústria e ficou congelado aqui. Quem tem IPI é decidido item a item."
             defaultValue={valores.ipiPercentual}
           />
 

@@ -58,21 +58,21 @@ function percentualParaFracao(percentual: Decimal.Value): Decimal {
 /**
  * Fecha os totais do pedido.
  *
- * O IPI tem DOIS níveis, e os dois precisam concordar para a linha ser
- * tributada: o `comIpi` do pedido é a chave-mestra, e o `comIpi` de cada item
- * é a exceção. Desligar o do pedido isenta tudo; desligar o de um item isenta
- * só ele. O PERCENTUAL continua sendo um só — o que varia por item é ter ou
- * não ter, que foi o caso relatado.
+ * Quem decide se há IPI é o ITEM, e só ele. O pedido guarda a alíquota, porque
+ * a indústria cobra uma só — mas um pedido inteiro isento é simplesmente um
+ * pedido com todas as linhas desmarcadas, e não um interruptor à parte.
  *
- * @param ipiPercentual Percentual do fornecedor, ex.: 9.75. Passe 0 — ou
- *   `comIpi: false` — nos pedidos sem IPI, que o usuário confirmou existirem.
+ * Existia um `comIpi` de pedido aqui, e ele saiu: dois lugares decidindo a
+ * mesma coisa permitiam o estado em que a linha está marcada e o IPI dela sai
+ * zero, sem nada na tela explicando o motivo.
+ *
+ * @param ipiPercentual Alíquota da indústria, ex.: 9.75.
  */
 export function calcularTotaisPedido(
   itens: ItemCalculavel[],
   ipiPercentual: Decimal.Value = 0,
-  comIpi = true,
 ): TotaisPedido {
-  const fracaoIpi = comIpi ? percentualParaFracao(ipiPercentual) : new Decimal(0);
+  const fracaoIpi = percentualParaFracao(ipiPercentual);
 
   const totaisItens: TotaisItem[] = itens.map((item) => {
     const totalBruto = totalItemBruto(item);

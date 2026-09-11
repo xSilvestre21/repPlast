@@ -80,7 +80,11 @@ export async function carregarPedidoParaPdf(
       observacoes: pedido.observacoes,
       vendedor: pedido.vendedor,
 
-      comIpi: pedido.comIpi,
+      // Derivado das LINHAS: a faixa de IPI só sai no PDF se alguma delas for
+      // tributada. Antes isto era um campo do pedido; com a isenção por item,
+      // perguntar às linhas é a única resposta que não pode divergir do que a
+      // coluna IPI mostra logo acima.
+      comIpi: pedido.itens.some((item) => item.comIpi),
       ipiPercentual: pedido.ipiPercentual.toString(),
       subtotalSemIpi: pedido.subtotalSemIpi.toString(),
       valorIpi: pedido.valorIpi.toString(),

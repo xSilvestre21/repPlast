@@ -89,10 +89,11 @@ describe("pedido 2256 — fechamento completo", () => {
 
 describe("pedidos sem IPI", () => {
   it("zera o IPI e mantém o total igual ao subtotal", () => {
+    // Um pedido sem IPI é um pedido com todas as linhas isentas: o interruptor
+    // do pedido saiu, e quem decide é cada item.
     const totais = calcularTotaisPedido(
-      [{ precoUnitario: precoMilheiroSaco(ITEM_2253_B), quantidade: 10 }],
+      [{ precoUnitario: precoMilheiroSaco(ITEM_2253_B), quantidade: 10, comIpi: false }],
       IPI_QUALYPLAST,
-      false,
     );
 
     expect(totais.ipi.toFixed(2)).toBe("0.00");
@@ -136,11 +137,12 @@ describe("IPI por item — um item isento no meio de um pedido tributado", () =>
     expect(semMarca.ipi.toFixed(2)).toBe(comMarca.ipi.toFixed(2));
   });
 
-  it("pedido sem IPI isenta tudo, mesmo o item marcado como tributado", () => {
-    const totais = calcularTotaisPedido(DUAS_LINHAS, IPI_QUALYPLAST, false);
+  it("todas as linhas isentas zeram o IPI do pedido", () => {
+    const totais = calcularTotaisPedido(
+      DUAS_LINHAS.map((l) => ({ ...l, comIpi: false })),
+      IPI_QUALYPLAST,
+    );
 
-    // A chave-mestra do pedido vence a marca do item: desligada, não há
-    // imposto nenhum a cobrar, e uma linha "com IPI" não ressuscita o dele.
     expect(totais.ipi.toFixed(2)).toBe("0.00");
     expect(totais.totalGeral.toFixed(2)).toBe("22680.00");
   });

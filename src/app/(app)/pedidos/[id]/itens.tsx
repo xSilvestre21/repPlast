@@ -55,7 +55,6 @@ export type Totais = {
   valorIpi: string;
   totalGeral: string;
   ipiPercentual: string;
-  comIpi: boolean;
 };
 
 export function SecaoItens({
@@ -66,6 +65,7 @@ export function SecaoItens({
   adicionar,
   atualizar,
   remover,
+  definirIpiDeTodos,
 }: {
   itens: ItemPedido[];
   produtos: ProdutoOpcao[];
@@ -74,6 +74,7 @@ export function SecaoItens({
   adicionar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   atualizar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   remover: (formData: FormData) => void | Promise<void>;
+  definirIpiDeTodos: (formData: FormData) => void | Promise<void>;
 }) {
   const [estadoAdicao, enviarAdicao, adicionando] = useActionState(adicionar, {});
 
@@ -104,7 +105,31 @@ export function SecaoItens({
                 <th className="py-2 pr-3 font-normal">UN</th>
                 <th className="py-2 pr-3 font-normal text-right">{rotuloPreco}</th>
                 <th className="py-2 pr-3 font-normal text-right">TOT S/IPI</th>
-                <th className="py-2 pr-3 font-normal text-right">IPI</th>
+                <th className="py-2 pr-3 font-normal text-right whitespace-nowrap">
+                  IPI
+                  {/*
+                    O atalho fica no CABEÇALHO da coluna que ele governa, e só
+                    aparece com item na tabela. É o que substitui o antigo
+                    interruptor do pedido: isentar doze linhas continua sendo
+                    um clique, mas agora a decisão mora onde ela se lê.
+                  */}
+                  {editavel && itens.length > 0 && (
+                    <form action={definirIpiDeTodos} className="inline">
+                      <input
+                        type="hidden"
+                        name="ligado"
+                        value={itens.every((i) => i.comIpi) ? "0" : "1"}
+                      />
+                      <button
+                        type="submit"
+                        className="ml-2 text-[0.6875rem] font-medium text-tinta-3
+                          hover:text-carimbo transition-colors underline underline-offset-2"
+                      >
+                        {itens.every((i) => i.comIpi) ? "nenhum" : "todos"}
+                      </button>
+                    </form>
+                  )}
+                </th>
                 <th className="py-2 pr-3 font-normal text-right">TOTAL</th>
                 {editavel && <th className="py-2" />}
               </tr>
@@ -116,7 +141,6 @@ export function SecaoItens({
                   key={item.id}
                   item={item}
                   editavel={editavel}
-                  pedidoComIpi={totais.comIpi}
                   atualizar={atualizar}
                   remover={remover}
                 />
@@ -133,9 +157,13 @@ export function SecaoItens({
         </div>
         <div className="flex gap-8">
           <span className="text-tinta-2">
-            {totais.comIpi
-              ? `IPI (${Number(totais.ipiPercentual).toLocaleString("pt-BR")}%):`
-              : "Sem IPI:"}
+            {/*
+              O rótulo lê o ESTADO DAS LINHAS, e não um campo do pedido:
+              "Sem IPI" agora significa que nenhuma linha é tributada.
+            */}
+            {itens.length > 0 && itens.every((i) => !i.comIpi)
+              ? "Sem IPI:"
+              : `IPI (${Number(totais.ipiPercentual).toLocaleString("pt-BR")}%):`}
           </span>
           <span className="w-32 text-right">{formatarMoeda(totais.valorIpi)}</span>
         </div>
@@ -148,12 +176,7 @@ export function SecaoItens({
       {editavel && (
         <div className="mt-5 pt-5 border-t border-filete">
           <MensagemErro>{estadoAdicao.erro}</MensagemErro>
-          <FormularioAdicao
-            produtos={produtos}
-            pedidoComIpi={totais.comIpi}
-            enviar={enviarAdicao}
-            enviando={adicionando}
-          />
+          <FormularioAdicao produtos={produtos} enviar={enviarAdicao} enviando={adicionando} />
         </div>
       )}
     </SecaoCartao>
@@ -163,14 +186,11 @@ export function SecaoItens({
 function LinhaItem({
   item,
   editavel,
-  pedidoComIpi,
   atualizar,
   remover,
 }: {
   item: ItemPedido;
   editavel: boolean;
-  /** Do PEDIDO. Com ele desligado não há o que isentar, e a caixa some. */
-  pedidoComIpi: boolean;
   atualizar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   remover: (formData: FormData) => void | Promise<void>;
 }) {
@@ -195,7 +215,7 @@ function LinhaItem({
                 indistinguível de formulário sem caixa, e desmarcar nunca
                 salvaria. Só existe quando a caixa existe.
               */}
-              {pedidoComIpi && <input type="hidden" name="comIpiItemDefinido" value="1" />}
+              <input type="hidden" name="comIpiItemDefinido" value="1" />
               <input
                 name="quantidade"
                 inputMode="decimal"
@@ -239,7 +259,7 @@ function LinhaItem({
         celular sem dizer nada a mais.
       */}
       <td className={`${celula} text-right numerico text-tinta-2`}>
-        {editavel && pedidoComIpi ? (
+        {editavel ? (
           <label
             className="flex items-center justify-end gap-2 cursor-pointer"
             title={item.comIpi ? "Tributado. Desmarque para isentar." : "Isento de IPI."}
@@ -305,13 +325,10 @@ function LinhaItem({
 
 function FormularioAdicao({
   produtos,
-  pedidoComIpi,
   enviar,
   enviando,
 }: {
   produtos: ProdutoOpcao[];
-  /** Do PEDIDO: sem ele a caixa de isenção não aparece. */
-  pedidoComIpi: boolean;
   enviar: (formData: FormData) => void;
   enviando: boolean;
 }) {
@@ -436,8 +453,7 @@ function FormularioAdicao({
           linha. Um checkbox solto, sem rótulo e sem fundo, flutuava fora da
           régua dos vizinhos.
         */}
-        {pedidoComIpi && (
-          <label className="block">
+        <label className="block">
             <span className="rotulo block mb-1.5">IPI</span>
             <span className="flex items-center gap-2 px-3.5 py-2.5 rounded-suave bg-folha-2 border border-transparent">
               <input type="hidden" name="comIpiItemDefinido" value="1" />
@@ -449,8 +465,7 @@ function FormularioAdicao({
               />
               <span className="text-sm text-tinta-2 whitespace-nowrap">Cobrar</span>
             </span>
-          </label>
-        )}
+        </label>
 
         {/*
           O botão não tem rótulo, mas precisa da altura de um para descer até a

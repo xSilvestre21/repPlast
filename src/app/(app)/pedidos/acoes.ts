@@ -40,7 +40,7 @@ function lerTexto(valor: FormDataEntryValue | null): string | null {
 async function exigirAberto(db: DbOrganizacao, pedidoId: string, organizacaoId: string) {
   const pedido = await db.pedido.findFirst({
     where: { id: pedidoId, organizacaoId },
-    select: { id: true, status: true, fornecedorId: true, clienteId: true, comIpi: true },
+    select: { id: true, status: true, fornecedorId: true, clienteId: true },
   });
 
   if (!pedido) throw new Error("Pedido não encontrado.");
@@ -70,7 +70,7 @@ async function exigirAberto(db: DbOrganizacao, pedidoId: string, organizacaoId: 
 async function recalcularTotais(db: DbOrganizacao, pedidoId: string) {
   const pedido = await db.pedido.findUnique({
     where: { id: pedidoId },
-    select: { comIpi: true, ipiPercentual: true },
+    select: { ipiPercentual: true },
   });
 
   if (!pedido) return;
@@ -88,7 +88,6 @@ async function recalcularTotais(db: DbOrganizacao, pedidoId: string) {
       comIpi: i.comIpi,
     })),
     pedido.ipiPercentual.toString(),
-    pedido.comIpi,
   );
 
   // Grava os totais por item para que o PDF não precise recalcular nada.
@@ -227,7 +226,6 @@ export async function atualizarCabecalho(
         transportadora: lerTexto(formData.get("transportadora")),
         observacoes: lerTexto(formData.get("observacoes")),
         vendedor: lerTexto(formData.get("vendedor")),
-        comIpi: formData.get("comIpi") === "on",
         ipiPercentual: ipi === null ? undefined : String(ipi),
         comissaoPercentual: comissao === null ? null : String(comissao),
       },
@@ -313,19 +311,24 @@ export async function adicionarItem(
     const precificavel = paraPrecificavel(produto);
 
     /*
-     * O item nasce herdando o IPI do pedido.
+     * Sem o formulário opinar, o item novo acompanha as linhas que já estão lá.
      *
-     * O checkbox só aparece quando o pedido cobra IPI — num pedido isento não
-     * há o que isentar, e a caixa ali sugeriria que marcar mudaria algo.
+     * Num pedido inteiramente isento — que agora é o jeito de dizer "pedido sem
+     * IPI" — a linha nova nascer tributada obrigaria a desmarcar toda vez. Com
+     * o pedido vazio ou misto, o padrão é tributado, que é o caso comum.
      *
      * Quem decide se o formulário opinou é `comIpiItemDefinido`, um campo
      * escondido, e NÃO a presença do checkbox: caixa desmarcada simplesmente
      * não é enviada, então "ausente" seria indistinguível de "desmarcada" — e
      * desmarcar nunca funcionaria.
      */
+    const tributados = await db.pedidoItem.count({ where: { pedidoId, comIpi: true } });
+    const existentes = await db.pedidoItem.count({ where: { pedidoId } });
+    const heranca = existentes === 0 || tributados > 0;
+
     const comIpiItem = formData.has("comIpiItemDefinido")
       ? formData.get("comIpiItem") === "on"
-      : pedido.comIpi;
+      : heranca;
 
     const precoInformado = lerNumeroBr(formData.get("precoUnitario"));
     const precoCalculado = precoUnitario(precificavel, unidade);
@@ -434,6 +437,28 @@ export async function atualizarItem(
 
   revalidatePath(`/pedidos/${pedidoId}`);
   return {};
+}
+
+/**
+ * Liga ou desliga o IPI de TODAS as linhas de uma vez.
+ *
+ * Existe porque um pedido inteiramente isento deixou de ter interruptor
+ * próprio: ele agora é um pedido com todas as linhas desmarcadas. Sem este
+ * atalho, isentar um pedido de doze itens seriam doze cliques.
+ */
+export async function definirIpiDeTodosOsItens(
+  pedidoId: string,
+  formData: FormData,
+): Promise<void> {
+  const { organizacaoId, db } = await contexto();
+  await exigirAberto(db, pedidoId, organizacaoId);
+
+  const ligado = formData.get("ligado") === "1";
+
+  await db.pedidoItem.updateMany({ where: { pedidoId }, data: { comIpi: ligado } });
+  await recalcularTotais(db, pedidoId);
+
+  revalidatePath(`/pedidos/${pedidoId}`);
 }
 
 export async function removerItem(pedidoId: string, formData: FormData): Promise<void> {
@@ -618,7 +643,6 @@ export async function duplicarPedido(pedidoId: string, _formData: FormData): Pro
       transportadora: origem.transportadora,
       observacoes: origem.observacoes,
       vendedor: origem.vendedor,
-      comIpi: origem.comIpi,
       ipiPercentual: origem.ipiPercentual,
       comissaoPercentual: origem.comissaoPercentual,
       // Não copiamos: número da ordem de compra do cliente e prazo de entrega,

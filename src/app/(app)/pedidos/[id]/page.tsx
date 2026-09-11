@@ -11,6 +11,7 @@ import { organizacaoAtual } from "@/lib/sessao";
 import {
   adicionarItem,
   atualizarCabecalho,
+  definirIpiDeTodosOsItens,
   atualizarItem,
   cancelarPedido,
   desmarcarEnvio,
@@ -220,11 +221,11 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
             valorIpi: pedido.valorIpi.toString(),
             totalGeral: pedido.totalGeral.toString(),
             ipiPercentual: pedido.ipiPercentual.toString(),
-            comIpi: pedido.comIpi,
           }}
           adicionar={adicionarItem.bind(null, pedido.id)}
           atualizar={atualizarItem.bind(null, pedido.id)}
           remover={removerItem.bind(null, pedido.id)}
+          definirIpiDeTodos={definirIpiDeTodosOsItens.bind(null, pedido.id)}
         />
 
         <SecaoCabecalho
@@ -240,7 +241,6 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
             transportadora: pedido.transportadora ?? "",
             vendedor: pedido.vendedor ?? "",
             observacoes: pedido.observacoes ?? "",
-            comIpi: pedido.comIpi,
             ipiPercentual: escreverNumeroBr(pedido.ipiPercentual.toString()),
             comissaoPercentual: pedido.comissaoPercentual
               ? escreverNumeroBr(pedido.comissaoPercentual.toString())
