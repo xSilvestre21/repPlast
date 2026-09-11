@@ -40,7 +40,7 @@ function lerTexto(valor: FormDataEntryValue | null): string | null {
 async function exigirAberto(db: DbOrganizacao, pedidoId: string, organizacaoId: string) {
   const pedido = await db.pedido.findFirst({
     where: { id: pedidoId, organizacaoId },
-    select: { id: true, status: true, fornecedorId: true, clienteId: true },
+    select: { id: true, status: true, fornecedorId: true, clienteId: true, comIpi: true },
   });
 
   if (!pedido) throw new Error("Pedido não encontrado.");
@@ -78,13 +78,14 @@ async function recalcularTotais(db: DbOrganizacao, pedidoId: string) {
   const itens = await db.pedidoItem.findMany({
     where: { pedidoId },
     orderBy: { ordem: "asc" },
-    select: { id: true, quantidade: true, precoUnitario: true, pesoKg: true },
+    select: { id: true, quantidade: true, precoUnitario: true, pesoKg: true, comIpi: true },
   });
 
   const totais = calcularTotaisPedido(
     itens.map((i) => ({
       precoUnitario: i.precoUnitario.toString(),
       quantidade: i.quantidade.toString(),
+      comIpi: i.comIpi,
     })),
     pedido.ipiPercentual.toString(),
     pedido.comIpi,
@@ -306,6 +307,21 @@ export async function adicionarItem(
     const unidade = String(formData.get("unidade") ?? "") as UnidadeVenda;
     const precificavel = paraPrecificavel(produto);
 
+    /*
+     * O item nasce herdando o IPI do pedido.
+     *
+     * O checkbox só aparece quando o pedido cobra IPI — num pedido isento não
+     * há o que isentar, e a caixa ali sugeriria que marcar mudaria algo.
+     *
+     * Quem decide se o formulário opinou é `comIpiItemDefinido`, um campo
+     * escondido, e NÃO a presença do checkbox: caixa desmarcada simplesmente
+     * não é enviada, então "ausente" seria indistinguível de "desmarcada" — e
+     * desmarcar nunca funcionaria.
+     */
+    const comIpiItem = formData.has("comIpiItemDefinido")
+      ? formData.get("comIpiItem") === "on"
+      : pedido.comIpi;
+
     const precoInformado = lerNumeroBr(formData.get("precoUnitario"));
     const precoCalculado = precoUnitario(precificavel, unidade);
 
@@ -345,6 +361,7 @@ export async function adicionarItem(
         codigoCliente: codigoCliente?.codigo ?? null,
         unidade,
         quantidade: String(quantidade),
+        comIpi: comIpiItem,
         precoUnitario: preco,
         pesoKg: pesoDoItem(precificavel, unidade, quantidade).toDecimalPlaces(3).toString(),
         totalSemIpi: "0",
@@ -395,6 +412,12 @@ export async function atualizarItem(
       data: {
         quantidade: String(quantidade),
         precoUnitario: String(preco),
+        // Mesma leitura da adição: sem o campo marcador, o formulário não
+        // opinou sobre IPI e o valor do item fica como está. É o que mantém a
+        // isenção quando a linha é salva por uma tela que não mostra a caixa.
+        ...(formData.has("comIpiItemDefinido")
+          ? { comIpi: formData.get("comIpiItem") === "on" }
+          : {}),
         ...(peso ? { pesoKg: peso.toDecimalPlaces(3).toString() } : {}),
       },
     });
@@ -605,6 +628,10 @@ export async function duplicarPedido(pedidoId: string, _formData: FormData): Pro
           codigoCliente: item.codigoCliente,
           unidade: item.unidade,
           quantidade: item.quantidade,
+          // A isenção é do ITEM, então acompanha a cópia. Sem esta linha o
+          // pedido duplicado voltaria a tributar a linha que era isenta, e o
+          // erro só apareceria no total.
+          comIpi: item.comIpi,
           precoUnitario: item.precoUnitario,
           pesoKg: item.pesoKg,
           totalSemIpi: item.totalSemIpi,

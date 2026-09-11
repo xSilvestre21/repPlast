@@ -348,6 +348,12 @@ model PedidoItem {
   unidade    UnidadeVenda
   quantidade Decimal      @db.Decimal(14, 3)
 
+  /// Se ESTE item é tributado. Nasce herdando `Pedido.comIpi` e pode ser
+  /// desmarcado sozinho: acontece de uma linha do mesmo pedido ser isenta
+  /// enquanto as outras não. O percentual continua sendo um só, o do pedido —
+  /// o que varia por item é ter ou não ter.
+  comIpi Boolean @default(true)
+
   /// Preço unitário com precisão cheia: no pedido 2253 o milheiro é 1774.872 e
   /// arredondar aqui erraria o total em um centavo.
   precoUnitario Decimal @db.Decimal(16, 6)

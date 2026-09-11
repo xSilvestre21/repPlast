@@ -43,6 +43,8 @@ export type ItemPedido = {
   unidade: UnidadeVenda;
   quantidade: string;
   precoUnitario: string;
+  /** Se ESTA linha é tributada. Só significa algo quando o pedido cobra IPI. */
+  comIpi: boolean;
   totalSemIpi: string;
   valorIpi: string;
   total: string;
@@ -114,6 +116,7 @@ export function SecaoItens({
                   key={item.id}
                   item={item}
                   editavel={editavel}
+                  pedidoComIpi={totais.comIpi}
                   atualizar={atualizar}
                   remover={remover}
                 />
@@ -145,7 +148,12 @@ export function SecaoItens({
       {editavel && (
         <div className="mt-5 pt-5 border-t border-filete">
           <MensagemErro>{estadoAdicao.erro}</MensagemErro>
-          <FormularioAdicao produtos={produtos} enviar={enviarAdicao} enviando={adicionando} />
+          <FormularioAdicao
+            produtos={produtos}
+            pedidoComIpi={totais.comIpi}
+            enviar={enviarAdicao}
+            enviando={adicionando}
+          />
         </div>
       )}
     </SecaoCartao>
@@ -155,11 +163,14 @@ export function SecaoItens({
 function LinhaItem({
   item,
   editavel,
+  pedidoComIpi,
   atualizar,
   remover,
 }: {
   item: ItemPedido;
   editavel: boolean;
+  /** Do PEDIDO. Com ele desligado não há o que isentar, e a caixa some. */
+  pedidoComIpi: boolean;
   atualizar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   remover: (formData: FormData) => void | Promise<void>;
 }) {
@@ -178,12 +189,19 @@ function LinhaItem({
           <td className={celula}>
             <form action={enviar} id={`item-${item.id}`}>
               <input type="hidden" name="itemId" value={item.id} />
+              {/*
+                Diz ao servidor que ESTE formulário tem opinião sobre IPI.
+                Sem ele, caixa desmarcada — que o navegador não envia — seria
+                indistinguível de formulário sem caixa, e desmarcar nunca
+                salvaria. Só existe quando a caixa existe.
+              */}
+              {pedidoComIpi && <input type="hidden" name="comIpiItemDefinido" value="1" />}
               <input
                 name="quantidade"
                 inputMode="decimal"
                 defaultValue={escreverNumeroBr(item.quantidade, 0)}
                 aria-label="Quantidade"
-                className="w-20 rounded border border-filete bg-fundo px-2 py-1 text-right numerico outline-none focus:border-acento/60"
+                className="w-20 rounded border border-filete bg-folha-2 px-2 py-1 text-right numerico outline-none focus:border-carimbo"
               />
             </form>
           </td>
@@ -197,7 +215,7 @@ function LinhaItem({
               // faria o total errar centavos ao salvar a linha.
               defaultValue={escreverNumeroBr(item.precoUnitario, 2, 6)}
               aria-label="Preço unitário"
-              className="w-28 rounded border border-filete bg-fundo px-2 py-1 text-right numerico outline-none focus:border-acento/60"
+              className="w-28 rounded border border-filete bg-folha-2 px-2 py-1 text-right numerico outline-none focus:border-carimbo"
             />
           </td>
         </>
@@ -212,8 +230,35 @@ function LinhaItem({
       )}
 
       <td className={`${celula} text-right numerico`}>{formatarMoeda(item.totalSemIpi)}</td>
+      {/*
+        A caixa fica NA COLUNA DO IPI, e não numa coluna nova.
+
+        É onde o olho já procura o valor, e marcar/desmarcar muda justamente o
+        número ao lado — a causa e o efeito ficam no mesmo lugar. Uma coluna
+        extra só para a caixa empurraria a tabela para a rolagem horizontal no
+        celular sem dizer nada a mais.
+      */}
       <td className={`${celula} text-right numerico text-tinta-2`}>
-        {formatarMoeda(item.valorIpi)}
+        {editavel && pedidoComIpi ? (
+          <label
+            className="flex items-center justify-end gap-2 cursor-pointer"
+            title={item.comIpi ? "Tributado. Desmarque para isentar." : "Isento de IPI."}
+          >
+            <input
+              form={`item-${item.id}`}
+              type="checkbox"
+              name="comIpiItem"
+              defaultChecked={item.comIpi}
+              aria-label={`Cobrar IPI de ${item.descricao}`}
+              className="accent-carimbo"
+            />
+            <span className={item.comIpi ? "" : "text-tinta-3"}>
+              {formatarMoeda(item.valorIpi)}
+            </span>
+          </label>
+        ) : (
+          formatarMoeda(item.valorIpi)
+        )}
       </td>
       <td className={`${celula} text-right numerico`}>{formatarMoeda(item.total)}</td>
 
@@ -245,10 +290,13 @@ function LinhaItem({
 
 function FormularioAdicao({
   produtos,
+  pedidoComIpi,
   enviar,
   enviando,
 }: {
   produtos: ProdutoOpcao[];
+  /** Do PEDIDO: sem ele a caixa de isenção não aparece. */
+  pedidoComIpi: boolean;
   enviar: (formData: FormData) => void;
   enviando: boolean;
 }) {
@@ -296,7 +344,7 @@ function FormularioAdicao({
       }}
       className="space-y-3"
     >
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[2fr_auto_auto_auto_auto]">
+      <div className="grid gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-start lg:gap-3">
         <Selecao
           name="produtoId"
           rotulo="Produto"
@@ -354,6 +402,24 @@ function FormularioAdicao({
           dica={precoCalculado ? "Calculado — dá para ajustar." : undefined}
           className="lg:w-36"
         />
+
+        {/*
+          A caixa nasce MARCADA, que é o caso comum: num pedido com IPI quase
+          toda linha tem IPI. Quem precisa isentar desmarca antes de adicionar,
+          e ainda pode corrigir depois direto na tabela.
+        */}
+        {pedidoComIpi && (
+          <label className="flex items-end gap-2 text-sm pb-2 whitespace-nowrap">
+            <input type="hidden" name="comIpiItemDefinido" value="1" />
+            <input
+              type="checkbox"
+              name="comIpiItem"
+              defaultChecked
+              className="accent-carimbo mb-0.5"
+            />
+            <span className="text-tinta-2">Com IPI</span>
+          </label>
+        )}
 
         <div className="flex items-end">
           <Botao type="submit" variante="secundaria" disabled={enviando || !produtoId}>

@@ -100,6 +100,52 @@ describe("pedidos sem IPI", () => {
   });
 });
 
+describe("IPI por item — um item isento no meio de um pedido tributado", () => {
+  /** Duas linhas iguais: só a segunda é isenta, então o IPI é o de uma só. */
+  const DUAS_LINHAS = [
+    { precoUnitario: precoMilheiroSaco(ITEM_2253_B), quantidade: 10, comIpi: true },
+    { precoUnitario: precoMilheiroSaco(ITEM_2253_B), quantidade: 10, comIpi: false },
+  ];
+
+  it("cobra IPI só da linha tributada", () => {
+    const totais = calcularTotaisPedido(DUAS_LINHAS, IPI_QUALYPLAST);
+
+    expect(totais.itens[0].ipi.toFixed(2)).toBe("1105.65");
+    expect(totais.itens[1].ipi.toFixed(2)).toBe("0.00");
+    // O IPI do pedido é o da primeira linha, e mais nada.
+    expect(totais.ipi.toFixed(2)).toBe("1105.65");
+  });
+
+  it("o subtotal ignora a isenção — ela só muda o imposto", () => {
+    const totais = calcularTotaisPedido(DUAS_LINHAS, IPI_QUALYPLAST);
+
+    expect(totais.subtotalSemIpi.toFixed(2)).toBe("22680.00");
+    expect(totais.totalGeral.toFixed(2)).toBe("23785.65");
+  });
+
+  it("item sem a marca é tributado, que é o padrão de quem não opina", () => {
+    const semMarca = calcularTotaisPedido(
+      [{ precoUnitario: precoMilheiroSaco(ITEM_2253_B), quantidade: 10 }],
+      IPI_QUALYPLAST,
+    );
+    const comMarca = calcularTotaisPedido(
+      [{ precoUnitario: precoMilheiroSaco(ITEM_2253_B), quantidade: 10, comIpi: true }],
+      IPI_QUALYPLAST,
+    );
+
+    expect(semMarca.ipi.toFixed(2)).toBe(comMarca.ipi.toFixed(2));
+  });
+
+  it("pedido sem IPI isenta tudo, mesmo o item marcado como tributado", () => {
+    const totais = calcularTotaisPedido(DUAS_LINHAS, IPI_QUALYPLAST, false);
+
+    // A chave-mestra do pedido vence a marca do item: desligada, não há
+    // imposto nenhum a cobrar, e uma linha "com IPI" não ressuscita o dele.
+    expect(totais.ipi.toFixed(2)).toBe("0.00");
+    expect(totais.totalGeral.toFixed(2)).toBe("22680.00");
+  });
+});
+
 describe("aditivos", () => {
   const deslizantePorKg: Aditivo = {
     nome: "Deslizante",

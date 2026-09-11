@@ -13,6 +13,13 @@ export interface ItemCalculavel {
   /** Preço unitário SEM arredondar — milheiro, quilo, unidade ou caixa. */
   precoUnitario: Decimal.Value;
   quantidade: Decimal.Value;
+  /**
+   * Se ESTE item é tributado. Ausente significa que sim.
+   *
+   * O padrão é `true` porque a isenção é a exceção: num pedido com IPI, todas
+   * as linhas costumam ter IPI, e é uma ou outra que não tem.
+   */
+  comIpi?: boolean;
 }
 
 export interface TotaisItem {
@@ -51,6 +58,12 @@ function percentualParaFracao(percentual: Decimal.Value): Decimal {
 /**
  * Fecha os totais do pedido.
  *
+ * O IPI tem DOIS níveis, e os dois precisam concordar para a linha ser
+ * tributada: o `comIpi` do pedido é a chave-mestra, e o `comIpi` de cada item
+ * é a exceção. Desligar o do pedido isenta tudo; desligar o de um item isenta
+ * só ele. O PERCENTUAL continua sendo um só — o que varia por item é ter ou
+ * não ter, que foi o caso relatado.
+ *
  * @param ipiPercentual Percentual do fornecedor, ex.: 9.75. Passe 0 — ou
  *   `comIpi: false` — nos pedidos sem IPI, que o usuário confirmou existirem.
  */
@@ -63,7 +76,10 @@ export function calcularTotaisPedido(
 
   const totaisItens: TotaisItem[] = itens.map((item) => {
     const totalBruto = totalItemBruto(item);
-    const ipi = arredondarDinheiro(totalBruto.times(fracaoIpi));
+    // `?? true` e não `!== false`: o campo é opcional, e quem não o informa
+    // está dizendo "o de sempre", que é com IPI.
+    const tributado = item.comIpi ?? true;
+    const ipi = arredondarDinheiro(totalBruto.times(tributado ? fracaoIpi : 0));
     const total = arredondarDinheiro(totalBruto);
 
     return { totalBruto, total, ipi, totalComIpi: arredondarDinheiro(total.plus(ipi)) };

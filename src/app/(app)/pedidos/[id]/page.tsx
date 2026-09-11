@@ -191,6 +191,7 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
             quantidade: item.quantidade.toString(),
             precoUnitario: item.precoUnitario.toString(),
             totalSemIpi: item.totalSemIpi.toString(),
+            comIpi: item.comIpi,
             valorIpi: item.valorIpi.toString(),
             total: item.total.toString(),
           }))}
