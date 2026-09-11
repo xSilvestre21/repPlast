@@ -152,8 +152,13 @@ export async function criarPedido(
 
     // Numeração sequencial POR FORNECEDOR. O `increment` do Prisma vira um
     // UPDATE ... RETURNING atômico, então dois pedidos simultâneos nunca pegam
-    // o mesmo número. Se a criação abaixo falhasse, o número seria queimado —
-    // uma lacuna na sequência é preferível a um número repetido.
+    // o mesmo número.
+    //
+    // Se a criação abaixo falhar, o número é queimado — e continua assim de
+    // propósito: uma lacuna é preferível a um número repetido, que chegaria à
+    // indústria identificando dois pedidos diferentes. O caso que importava,
+    // o do pedido lançado por engano, se resolve ao apagar: `excluirPedido`
+    // devolve o número ao contador quando era o último emitido.
     const contador = await db.fornecedor.update({
       where: { id: fornecedorId },
       data: { proximoNumeroPedido: { increment: 1 } },
@@ -660,7 +665,7 @@ export async function excluirPedido(pedidoId: string, _formData: FormData): Prom
 
   const pedido = await db.pedido.findFirst({
     where: { id: pedidoId, organizacaoId },
-    select: { enviadoEm: true },
+    select: { enviadoEm: true, numero: true, fornecedorId: true },
   });
 
   if (!pedido) throw new Error("Pedido não encontrado.");
@@ -670,6 +675,36 @@ export async function excluirPedido(pedidoId: string, _formData: FormData): Prom
   }
 
   await db.pedido.deleteMany({ where: { id: pedidoId, organizacaoId } });
+
+  /*
+   * O número volta para o contador quando era o ÚLTIMO emitido.
+   *
+   * A indústria confere a numeração dela, e um pedido lançado por engano não
+   * pode queimar um número. Como só se apaga pedido nunca enviado (a guarda
+   * acima), o número devolvido jamais chegou a sair daqui.
+   *
+   * A condição `proximoNumeroPedido: numero + 1` é o que torna isto seguro sem
+   * transação: ela só acerta se o contador ainda estiver exatamente uma casa à
+   * frente deste pedido. Se alguém criou outro pedido nesse meio-tempo, o
+   * contador já andou, a condição não casa e nada é decrementado — porque
+   * decrementar ali entregaria um número repetido ao próximo pedido.
+   *
+   * Apagar um pedido do MEIO não fecha o buraco de propósito: reaproveitar um
+   * número vago faria o pedido de hoje sair com número menor que o de ontem, e
+   * a numeração deixaria de dizer o que veio antes.
+   *
+   * A ordem também é deliberada: apaga primeiro, devolve depois. Ao contrário,
+   * uma falha no apagar deixaria o contador atrás de um pedido que continua
+   * existindo — e o próximo colidiria com ele.
+   */
+  await db.fornecedor.updateMany({
+    where: {
+      id: pedido.fornecedorId,
+      organizacaoId,
+      proximoNumeroPedido: pedido.numero + 1,
+    },
+    data: { proximoNumeroPedido: { decrement: 1 } },
+  });
 
   revalidatePath("/pedidos");
   redirect("/pedidos");
