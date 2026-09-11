@@ -88,7 +88,22 @@ const estilos = StyleSheet.create({
     alignItems: "flex-start",
     marginBottom: 14,
   },
-  logo: { maxWidth: 150, maxHeight: 46, objectFit: "contain" },
+  /*
+   * A caixa da logo veio MEDIDA dos pedidos reais, não escolhida no olho.
+   *
+   * Nos PDFs que a QUALYPLAST emite (referência 2253 e 2256) a marca é
+   * desenhada a 128,9 x 70,0 pt — proporção 1,84, a mesma do arquivo de
+   * 1600x869 px que está no cadastro. Com `contain`, uma caixa de 150 x 70
+   * reproduz esse tamanho exato: a altura é quem limita, e 70 x 1,84 dá os
+   * 128,8 pt da referência.
+   *
+   * A altura era 46, e é por isso que a marca saía menor que a da indústria:
+   * o teto cortava em 84,6 pt de largura, dois terços do que deveria.
+   *
+   * O limite de largura continua em 150 para uma marca muito deitada não
+   * avançar sobre o número do pedido, que divide esta linha com ela.
+   */
+  logo: { maxWidth: 150, maxHeight: 70, objectFit: "contain" },
   logoAusente: { fontSize: 11, fontFamily: "Helvetica-Bold" },
   numeroPedido: { fontSize: 15, fontFamily: "Helvetica-Bold", textAlign: "right" },
   dataPedido: { fontSize: 8, textAlign: "right", marginTop: 2 },
