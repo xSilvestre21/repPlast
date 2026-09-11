@@ -249,8 +249,23 @@ function LinhaItem({
               type="checkbox"
               name="comIpiItem"
               defaultChecked={item.comIpi}
+              disabled={salvando}
+              /*
+               * Marcar JÁ aplica — sem passar pelo "salvar".
+               *
+               * Uma caixa de marcação promete efeito imediato, e o número que
+               * ela muda está a dois centímetros dali. Exigir um segundo
+               * clique num botão ao lado fazia a marca parecer quebrada: o
+               * usuário marcava, o IPI continuava zero, e não havia nada na
+               * tela dizendo que faltava confirmar.
+               *
+               * `requestSubmit` e não `submit`: o primeiro dispara o envio
+               * pelo React, com validação; o segundo passaria por cima da
+               * ação do formulário e recarregaria a página.
+               */
+              onChange={(evento) => evento.currentTarget.form?.requestSubmit()}
               aria-label={`Cobrar IPI de ${item.descricao}`}
-              className="accent-carimbo"
+              className="accent-carimbo disabled:opacity-50"
             />
             <span className={item.comIpi ? "" : "text-tinta-3"}>
               {formatarMoeda(item.valorIpi)}
@@ -344,7 +359,15 @@ function FormularioAdicao({
       }}
       className="space-y-3"
     >
-      <div className="grid gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-start lg:gap-3">
+      {/*
+        Colunas nomeadas e `items-start`.
+
+        Todo campo desta linha é rótulo em cima e caixa embaixo, de alturas
+        diferentes — o preço às vezes ganha uma dica por baixo. Alinhar pelo
+        TOPO é o que mantém as caixas na mesma linha; alinhar pelo centro ou
+        pela base faria cada uma subir conforme o que tem embaixo dela.
+      */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(12rem,2fr)_7rem_8rem_9.5rem_auto_auto] lg:items-start">
         <Selecao
           name="produtoId"
           rotulo="Produto"
@@ -407,22 +430,43 @@ function FormularioAdicao({
           A caixa nasce MARCADA, que é o caso comum: num pedido com IPI quase
           toda linha tem IPI. Quem precisa isentar desmarca antes de adicionar,
           e ainda pode corrigir depois direto na tabela.
+
+          Ela é montada como os outros campos — rótulo em cima, caixa
+          preenchida embaixo, mesmo padding — porque é isso que a põe na mesma
+          linha. Um checkbox solto, sem rótulo e sem fundo, flutuava fora da
+          régua dos vizinhos.
         */}
         {pedidoComIpi && (
-          <label className="flex items-end gap-2 text-sm pb-2 whitespace-nowrap">
-            <input type="hidden" name="comIpiItemDefinido" value="1" />
-            <input
-              type="checkbox"
-              name="comIpiItem"
-              defaultChecked
-              className="accent-carimbo mb-0.5"
-            />
-            <span className="text-tinta-2">Com IPI</span>
+          <label className="block">
+            <span className="rotulo block mb-1.5">IPI</span>
+            <span className="flex items-center gap-2 px-3.5 py-2.5 rounded-suave bg-folha-2 border border-transparent">
+              <input type="hidden" name="comIpiItemDefinido" value="1" />
+              <input
+                type="checkbox"
+                name="comIpiItem"
+                defaultChecked
+                className="accent-carimbo"
+              />
+              <span className="text-sm text-tinta-2 whitespace-nowrap">Cobrar</span>
+            </span>
           </label>
         )}
 
-        <div className="flex items-end">
-          <Botao type="submit" variante="secundaria" disabled={enviando || !produtoId}>
+        {/*
+          O botão não tem rótulo, mas precisa da altura de um para descer até a
+          régua das caixas. O espaçador invisível faz isso sem número mágico:
+          ele é uma cópia do rótulo dos vizinhos, só que sem tinta.
+        */}
+        <div className="block">
+          <span className="rotulo block mb-1.5 invisible select-none" aria-hidden="true">
+            &nbsp;
+          </span>
+          <Botao
+            type="submit"
+            variante="secundaria"
+            className="w-full lg:w-auto"
+            disabled={enviando || !produtoId}
+          >
             {enviando ? "Adicionando…" : "Adicionar"}
           </Botao>
         </div>
