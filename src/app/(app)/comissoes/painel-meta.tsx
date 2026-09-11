@@ -8,8 +8,8 @@ import {
   BotaoTexto,
   Campo,
   Cartao,
-  Emblema,
   MensagemErro,
+  Placa,
   formatarMoeda,
 } from "@/components/ui";
 
@@ -19,13 +19,17 @@ import type { EstadoFormulario } from "./acoes";
 const PECAS = 60;
 
 /**
- * Papel picado nas tintas da casa.
+ * Papel picado nas cores da casa.
  *
- * Confete arco-íris seria a única coisa da tela que não sai da mesma gráfica.
- * Aqui caem lascas de carimbo, de tinta e da segunda cor — o mesmo papel do
- * resto do sistema, cortado.
+ * Confete arco-íris seria a única coisa da tela desenhada por outra pessoa.
+ * Aqui caem lascas das cores que o sistema já usa — o azul, o verde, o
+ * amarelo do destaque e as duas cores de placa.
+ *
+ * Nenhuma delas é quase preta, de propósito: no tema escuro uma lasca preta
+ * cai invisível, e o efeito perderia um sexto das peças sem ninguém entender
+ * por quê.
  */
-const CORES = ["#c8341e", "#1f6f4a", "#16130f", "#e8c07a", "#c8341e", "#f2eee6"];
+const CORES = ["#2f6fed", "#0f9d70", "#fcf08f", "#d9652f", "#6d54d6", "#8d8d9c"];
 
 export function PainelMeta({
   competencia,
@@ -55,10 +59,10 @@ export function PainelMeta({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <Emblema icone={Wallet} className="size-4" />
+              <Placa icone={Wallet} tom="menta" pequena />
               <span className="rotulo">Comissão do mês</span>
             </div>
-            <div className="text-3xl sm:text-5xl font-extrabold tracking-tighter cifra numerico mt-2 leading-none">
+            <div className="text-3xl sm:text-5xl cifra numerico mt-2 leading-none">
               {formatarMoeda(alcancado)}
             </div>
           </div>
@@ -106,11 +110,11 @@ export function PainelMeta({
               <span className="numerico text-tinta-2">{Math.round(progresso)}%</span>
             </div>
 
-            <div className="h-2.5 rounded-full bg-folha-2 overflow-hidden border border-filete">
+            <div className="h-2.5 rounded-full bg-folha-2 overflow-hidden">
               <div
                 style={{ "--alvo": `${progresso}%` } as CSSProperties}
                 className={`barra-preenche h-full rounded-full ${
-                  batida ? "bg-verde" : "bg-tinta text-papel"
+                  batida ? "bg-verde" : "bg-tinta"
                 }`}
               />
             </div>
@@ -157,8 +161,8 @@ export function PainelMeta({
  * a cada carregamento de página vira incômodo.
  *
  * O estado permanente de "meta batida" é dito pela própria apuração — o rótulo
- * e a barra ficam verdes o mês inteiro. Não há mudança de ambiente: papel não
- * brilha, e inventar um brilho aqui seria trair o resto do sistema.
+ * e a barra ficam verdes o mês inteiro. O confete é só o instante; quem conta
+ * o fato depois é a cor da barra.
  */
 function Comemoracao({ competencia }: { competencia: string }) {
   const confete = useRef<HTMLDivElement>(null);
@@ -203,9 +207,9 @@ function Comemoracao({ competencia }: { competencia: string }) {
             {
               left: `${(indice * 97) % 100}%`,
               background: CORES[indice % CORES.length],
-"--duracao": `${2.4 + ((indice * 13) % 18) / 10}s`,
-"--atraso": `${((indice * 29) % 20) / 10}s`,
-"--giro": `${((indice * 71) % 4) * 180 + 360}deg`,
+              "--duracao": `${2.4 + ((indice * 13) % 18) / 10}s`,
+              "--atraso": `${((indice * 29) % 20) / 10}s`,
+              "--giro": `${((indice * 71) % 4) * 180 + 360}deg`,
             } as React.CSSProperties
           }
         />

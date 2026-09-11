@@ -27,8 +27,8 @@ function MenuUsuario({ nome }: { nome: string }) {
     <div className="flex items-center gap-1">
       <span
         title={nome}
-        className="grid place-items-center size-8 shrink-0 border border-filete-forte
-          text-[0.6875rem] font-semibold tracking-wide text-tinta-2"
+        className="grid place-items-center size-8 shrink-0 rounded-full bg-folha-2
+          border border-filete text-[0.6875rem] font-bold tracking-wide text-tinta-2"
       >
         {iniciais || "?"}
       </span>
@@ -37,8 +37,8 @@ function MenuUsuario({ nome }: { nome: string }) {
         <button
           type="submit"
           title="Sair"
-          className="grid place-items-center size-8 text-tinta-3 cursor-pointer
-            transition-colors hover:text-carimbo"
+          className="grid place-items-center size-8 rounded-full text-tinta-3 cursor-pointer
+            transition-colors hover:bg-folha-2 hover:text-carimbo"
         >
           <LogOut size={15} strokeWidth={1.5} aria-hidden="true" />
           <span className="sr-only">Sair</span>
@@ -92,7 +92,7 @@ export function Navegacao({ nomeUsuario }: { nomeUsuario: string }) {
         <div className="flex flex-wrap items-center gap-x-4 py-2 sm:h-14 sm:flex-nowrap sm:py-0">
           <Link
             href="/"
-            className="order-1 shrink-0 font-serif text-lg font-medium tracking-tight
+            className="order-1 shrink-0 text-lg font-extrabold tracking-[-0.03em]
               transition-colors hover:text-carimbo"
           >
             RepPlast
@@ -119,15 +119,15 @@ export function Navegacao({ nomeUsuario }: { nomeUsuario: string }) {
                       transitionTypes={[
                         indice > indiceAtual ? "nav-direita" : "nav-esquerda",
                       ]}
-                      className={`relative isolate block px-3 py-1.5 text-sm whitespace-nowrap
-                        transition-colors duration-150 ${
+                      className={`relative isolate block px-3.5 py-1.5 text-sm font-medium
+                        whitespace-nowrap transition-colors duration-150 ${
                           ativo
-                            ? "text-papel font-medium"
+                            ? "text-papel font-semibold"
                             : "text-tinta-2 hover:text-tinta"
                         }`}
                     >
                       {/*
-                        O marca-texto existe UMA vez na árvore, sempre dentro
+                        A pílula preta existe UMA vez na árvore, sempre dentro
                         do item ativo. Ao trocar de aba ele desmonta aqui e
                         monta ali — e como carrega um nome de view transition,
                         o navegador anima a viagem em vez de apagar e acender.

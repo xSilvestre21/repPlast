@@ -1,23 +1,31 @@
 @import "tailwindcss";
 
 /*
- * Papel & Tinta — identidade visual do RepPlast.
+ * Luz & Superfície — identidade visual do RepPlast.
  *
- * O QUE ESTE SISTEMA PRODUZ É UM DOCUMENTO IMPRESSO. O pedido em PDF é o que a
- * indústria recebe, guarda e confere. Então a tela se parece com a versão boa
- * do papel que ela gera: fundo de papel quente, tinta quase preta, filete no
- * lugar de cartão, número em serifada, e UMA segunda tinta — o vermelhão de
- * carimbo.
+ * O sistema é um SaaS e é isso que a tela diz. Fundo claro quase branco, um
+ * campo de luz difuso atrás do topo, e cartões que flutuam sobre ele com
+ * sombra suave e canto generoso.
  *
  * As regras que não se quebram:
- *   · Sem gradiente. Sem vidro fosco. Sem sombra colorida.
- *   · O preto é a tinta principal — é ele que preenche o botão primário.
- *   · O vermelho é o CARIMBO: marca a aba ativa, o pedido enviado e o que é
- *     destrutivo. Ele nunca decora; sempre significa alguma coisa.
- *   · O verde é a segunda tinta, e existe só para a meta batida.
+ *   · A ação principal é uma PÍLULA PRETA. Preto é o que decide.
+ *   · O azul é o interativo: link, foco, aba ativa. Ele nunca decora.
+ *   · O amarelo é MARCA-TEXTO: destaca uma coisa por tela, nunca duas.
+ *   · O verde é resultado alcançado. O vermelho é erro e perda.
+ *   · Ícone mora numa placa de cor lavada — nunca solto sobre o fundo.
+ *   · Todo bloco que entra na tela entra com movimento.
+ *
+ * Os NOMES dos tokens vêm da identidade anterior (papel, folha, filete,
+ * tinta, carimbo). Ficaram de propósito: são a VAGA que cada cor ocupa, e
+ * trocá-los significaria reescrever dezoito telas para não mudar um pixel.
+ * Leia-os assim:
+ *
+ *   papel   → o fundo da página          filete  → a borda de cabelo
+ *   folha   → a superfície do cartão     tinta   → a escala de texto
+ *   folha-2 → o preenchimento interno    carimbo → o azul interativo
  *
  * Ordem das regras, e o motivo:
- *   1. `:root`                       claro, que é o estado natural do papel
+ *   1. `:root`                       claro, que é o estado padrão
  *   2. `prefers-color-scheme: dark`  acompanha o sistema, salvo escolha
  *   3. `[data-tema]`                 a escolha do usuário vence as duas
  */
@@ -25,38 +33,71 @@
 :root {
   color-scheme: light;
 
-  /* Papel: a mesa. Folha: o que está em cima dela. */
-  --papel: #faf8f3;
-  --folha: #fffdf9;
-  --folha-2: #f2eee6;
+  /* Página quase branca, com um grau de cinza frio: é dele que o branco puro
+     do cartão se destaca. Dois brancos iguais não teriam relevo nenhum. */
+  --papel: #fbfbfc;
+  --folha: #ffffff;
+  --folha-2: #f4f4f7;
 
-  /* Filete, não borda: a espessura de um traço de caneta fina. */
-  --filete: rgb(22 19 15 / 0.13);
-  --filete-forte: rgb(22 19 15 / 0.3);
+  --filete: rgb(17 17 24 / 0.07);
+  --filete-forte: rgb(17 17 24 / 0.15);
 
-  --tinta: #16130f;
-  --tinta-2: #57514a;
-  --tinta-3: #756c62;
+  --tinta: #111117;
+  --tinta-2: #5a5a68;
+  --tinta-3: #8d8d9c;
 
-  /* A segunda cor da impressão. */
-  --carimbo: #c8341e;
-  --carimbo-fraco: rgb(200 52 30 / 0.09);
+  /* O interativo. */
+  --carimbo: #2f6fed;
+  --carimbo-fraco: rgb(47 111 237 / 0.09);
 
-  /* A terceira, reservada à meta batida. */
-  --verde: #1f6f4a;
-  --verde-fraco: rgb(31 111 74 / 0.1);
+  /* O resultado alcançado. */
+  --verde: #0f9d70;
+  --verde-fraco: rgb(15 157 112 / 0.11);
 
-  --perigo: #9a2010;
-  --perigo-fraco: rgb(154 32 16 / 0.08);
+  --perigo: #e0484d;
+  --perigo-fraco: rgb(224 72 77 / 0.09);
+
+  /* O marca-texto. Uma coisa por tela. */
+  --destaque: #fcf08f;
+  --destaque-fraco: rgb(252 240 143 / 0.45);
 
   /*
-   * Sombra quase inexistente, e cinza-quente em vez de preta.
-   * Papel sobre papel não flutua: ele encosta.
+   * Placas de ícone.
+   *
+   * Cada uma é um par: o fundo lavado e o traço saturado por cima. São o
+   * único lugar do sistema onde a cor aparece sem carregar significado de
+   * estado — ali ela serve para o olho separar um item do seguinte numa fila.
    */
-  --sombra: 0 1px 2px rgb(22 19 15 / 0.05);
-  --sombra-alta: 0 2px 8px rgb(22 19 15 / 0.09);
+  --placa-sol: #fff2d0;
+  --placa-sol-traco: #b97f0c;
+  --placa-mar: #e2edff;
+  --placa-mar-traco: #2f6fed;
+  --placa-menta: #dcf6ec;
+  --placa-menta-traco: #0b8a61;
+  --placa-pessego: #ffe7db;
+  --placa-pessego-traco: #d9652f;
+  --placa-lilas: #ece7ff;
+  --placa-lilas-traco: #6d54d6;
 
-  --grao-forca: 0.035;
+  /*
+   * Sombra difusa e neutra, em três alturas.
+   *
+   * A sombra é o que substitui o filete como separador: o cartão não é
+   * desenhado por uma borda, ele é LEVANTADO do fundo.
+   */
+  --sombra-sm: 0 1px 2px rgb(17 17 24 / 0.04), 0 1px 3px rgb(17 17 24 / 0.05);
+  --sombra: 0 2px 6px -1px rgb(17 17 24 / 0.05), 0 8px 20px -6px rgb(17 17 24 / 0.08);
+  --sombra-alta: 0 8px 18px -8px rgb(17 17 24 / 0.1), 0 28px 56px -16px rgb(17 17 24 / 0.16);
+
+  /* O campo de luz do topo. */
+  --aurora-1: #fdeaa8;
+  --aurora-2: #cfe4ff;
+  --aurora-3: #d5f6e4;
+  --aurora-4: #ffdcc6;
+  --aurora-forca: 0.62;
+
+  /* Uma lavada quase invisível no alto do cartão principal. */
+  --realce-suave: rgb(47 111 237 / 0.05);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -64,64 +105,105 @@
     color-scheme: dark;
 
     /*
-     * Escuro é tinta invertida, e a tinta é QUENTE — marrom-preto, não
-     * azul-preto. O azul-preto é o padrão de todo painel escuro que existe, e
-     * é justamente o que este projeto está fugindo.
+     * No escuro a luz não some: ela baixa muito. O campo continua ali, a 22%,
+     * porque é ele que impede o topo da tela de ser um retângulo preto chapado.
      */
-    --papel: #14110e;
-    --folha: #1d1915;
-    --folha-2: #262119;
+    --papel: #0b0b0f;
+    --folha: #15151b;
+    --folha-2: #1d1d25;
 
-    --filete: rgb(242 237 228 / 0.13);
-    --filete-forte: rgb(242 237 228 / 0.3);
+    --filete: rgb(255 255 255 / 0.08);
+    --filete-forte: rgb(255 255 255 / 0.18);
 
-    --tinta: #f2ede4;
-    --tinta-2: #b0a79b;
-    --tinta-3: #948b7f;
+    --tinta: #f4f4f7;
+    --tinta-2: #a3a3b4;
+    --tinta-3: #78788a;
 
-    --carimbo: #e8563c;
-    --carimbo-fraco: rgb(232 86 60 / 0.14);
+    --carimbo: #6b9dff;
+    --carimbo-fraco: rgb(107 157 255 / 0.14);
 
-    --verde: #4fb286;
-    --verde-fraco: rgb(79 178 134 / 0.14);
+    --verde: #32c48f;
+    --verde-fraco: rgb(50 196 143 / 0.14);
 
-    --perigo: #f26b50;
-    --perigo-fraco: rgb(242 107 80 / 0.12);
+    --perigo: #ff6b6f;
+    --perigo-fraco: rgb(255 107 111 / 0.13);
 
-    --sombra: 0 1px 2px rgb(0 0 0 / 0.4);
-    --sombra-alta: 0 2px 10px rgb(0 0 0 / 0.5);
+    --destaque: #f2dd6e;
+    --destaque-fraco: rgb(242 221 110 / 0.2);
 
-    --grao-forca: 0.05;
+    --placa-sol: rgb(199 138 16 / 0.17);
+    --placa-sol-traco: #e9b949;
+    --placa-mar: rgb(47 111 237 / 0.18);
+    --placa-mar-traco: #7aa8ff;
+    --placa-menta: rgb(15 157 112 / 0.18);
+    --placa-menta-traco: #45d3a0;
+    --placa-pessego: rgb(226 112 58 / 0.18);
+    --placa-pessego-traco: #f79367;
+    --placa-lilas: rgb(109 84 214 / 0.2);
+    --placa-lilas-traco: #a690ff;
+
+    --sombra-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --sombra: 0 2px 6px -1px rgb(0 0 0 / 0.45), 0 8px 20px -6px rgb(0 0 0 / 0.5);
+    --sombra-alta: 0 8px 18px -8px rgb(0 0 0 / 0.5), 0 28px 56px -16px rgb(0 0 0 / 0.6);
+
+    --aurora-1: #6a5a1e;
+    --aurora-2: #1e3a6b;
+    --aurora-3: #17503c;
+    --aurora-4: #6b3a22;
+    --aurora-forca: 0.22;
+
+    --realce-suave: rgb(107 157 255 / 0.06);
   }
 }
 
 :root[data-tema="escuro"] {
   color-scheme: dark;
 
-  --papel: #14110e;
-  --folha: #1d1915;
-  --folha-2: #262119;
+  --papel: #0b0b0f;
+  --folha: #15151b;
+  --folha-2: #1d1d25;
 
-  --filete: rgb(242 237 228 / 0.13);
-  --filete-forte: rgb(242 237 228 / 0.3);
+  --filete: rgb(255 255 255 / 0.08);
+  --filete-forte: rgb(255 255 255 / 0.18);
 
-  --tinta: #f2ede4;
-  --tinta-2: #b0a79b;
-  --tinta-3: #948b7f;
+  --tinta: #f4f4f7;
+  --tinta-2: #a3a3b4;
+  --tinta-3: #78788a;
 
-  --carimbo: #e8563c;
-  --carimbo-fraco: rgb(232 86 60 / 0.14);
+  --carimbo: #6b9dff;
+  --carimbo-fraco: rgb(107 157 255 / 0.14);
 
-  --verde: #4fb286;
-  --verde-fraco: rgb(79 178 134 / 0.14);
+  --verde: #32c48f;
+  --verde-fraco: rgb(50 196 143 / 0.14);
 
-  --perigo: #f26b50;
-  --perigo-fraco: rgb(242 107 80 / 0.12);
+  --perigo: #ff6b6f;
+  --perigo-fraco: rgb(255 107 111 / 0.13);
 
-  --sombra: 0 1px 2px rgb(0 0 0 / 0.4);
-  --sombra-alta: 0 2px 10px rgb(0 0 0 / 0.5);
+  --destaque: #f2dd6e;
+  --destaque-fraco: rgb(242 221 110 / 0.2);
 
-  --grao-forca: 0.05;
+  --placa-sol: rgb(199 138 16 / 0.17);
+  --placa-sol-traco: #e9b949;
+  --placa-mar: rgb(47 111 237 / 0.18);
+  --placa-mar-traco: #7aa8ff;
+  --placa-menta: rgb(15 157 112 / 0.18);
+  --placa-menta-traco: #45d3a0;
+  --placa-pessego: rgb(226 112 58 / 0.18);
+  --placa-pessego-traco: #f79367;
+  --placa-lilas: rgb(109 84 214 / 0.2);
+  --placa-lilas-traco: #a690ff;
+
+  --sombra-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --sombra: 0 2px 6px -1px rgb(0 0 0 / 0.45), 0 8px 20px -6px rgb(0 0 0 / 0.5);
+  --sombra-alta: 0 8px 18px -8px rgb(0 0 0 / 0.5), 0 28px 56px -16px rgb(0 0 0 / 0.6);
+
+  --aurora-1: #6a5a1e;
+  --aurora-2: #1e3a6b;
+  --aurora-3: #17503c;
+  --aurora-4: #6b3a22;
+  --aurora-forca: 0.22;
+
+  --realce-suave: rgb(107 157 255 / 0.06);
 }
 
 @theme inline {
@@ -141,79 +223,122 @@
   --color-verde-fraco: var(--verde-fraco);
   --color-perigo: var(--perigo);
   --color-perigo-fraco: var(--perigo-fraco);
+  --color-destaque: var(--destaque);
+  --color-destaque-fraco: var(--destaque-fraco);
 
+  /*
+   * Uma família só, em três vagas.
+   *
+   * `--font-serif` aponta para a mesma geométrica DE PROPÓSITO: dezoito telas
+   * escrevem `font-serif` nos títulos e nos números, e é esse apelido que as
+   * traz todas para a tipografia nova sem uma edição em cada arquivo.
+   */
   --font-sans: var(--fonte-sans), system-ui, sans-serif;
-  --font-serif: var(--fonte-serif), Georgia, serif;
+  --font-serif: var(--fonte-sans), system-ui, sans-serif;
   --font-mono: var(--fonte-mono), ui-monospace, monospace;
 
-  /* Cantos de papel cortado, não de botão de aplicativo. */
-  --radius-folha: 3px;
+  /* Canto generoso: é ele que diz "aplicativo" antes de qualquer outra coisa. */
+  --radius-folha: 16px;
+  --radius-grande: 24px;
+  --radius-suave: 10px;
 }
 
 body {
   background: var(--papel);
   color: var(--tinta);
-  transition: background-color 0.25s ease, color 0.25s ease;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /**
- * Foco visível no carimbo.
+ * Foco visível no azul interativo.
  *
- * Fica por fora do elemento, então nunca é engolido por um canto arredondado —
- * e num sistema de filetes finos o anel precisa ser a coisa mais grossa da
- * tela para ser encontrado.
+ * Fica por FORA do elemento, então nunca é engolido pelo canto arredondado —
+ * e o anel precisa ser a coisa mais grossa da tela para ser encontrado.
  */
 :focus-visible {
   outline: 2px solid var(--carimbo);
   outline-offset: 2px;
-  border-radius: 2px;
+  border-radius: 6px;
 }
 
 /* -------------------------------------------------------------------------- */
-/* Papel                                                                      */
+/* Luz                                                                        */
 /* -------------------------------------------------------------------------- */
 
 /**
- * O grão do papel.
+ * O campo de luz do topo.
  *
- * Um fundo chapado de 100% de opacidade é tela, não papel. O ruído fino é a
- * única textura do sistema, e é o que impede a superfície de parecer plástico.
+ * Quatro manchas de cor lavada, borradas até perderem a borda, cobrindo o
+ * primeiro terço da tela. É a única cor grande do sistema e ela não significa
+ * nada: serve para o branco do cartão ter de onde se levantar.
+ *
+ * A máscara apaga o campo antes do fim. Sem ela, a divisa entre a luz e o
+ * fundo apareceria como uma faixa horizontal no meio da página.
  */
-.grao {
+.aurora {
   position: fixed;
-  inset: 0;
+  inset: 0 0 auto 0;
+  height: min(520px, 62vh);
   z-index: -1;
   pointer-events: none;
-  opacity: var(--grao-forca);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='r'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23r)'/%3E%3C/svg%3E");
+  opacity: var(--aurora-forca);
+  background-image:
+    radial-gradient(42rem 26rem at 8% 0%, var(--aurora-1), transparent 68%),
+    radial-gradient(38rem 24rem at 82% 4%, var(--aurora-2), transparent 68%),
+    radial-gradient(34rem 22rem at 46% 26%, var(--aurora-3), transparent 70%),
+    radial-gradient(26rem 18rem at 97% 12%, var(--aurora-4), transparent 70%);
+  filter: blur(32px);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 26%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 26%, transparent 100%);
+  animation: derivar 28s ease-in-out infinite alternate;
+  will-change: transform;
 }
 
+/** A luz respira. Vinte e oito segundos por ciclo: percebe-se, não se olha. */
+@keyframes derivar {
+  from { transform: translate3d(-2%, -1%, 0) scale(1); }
+  to   { transform: translate3d(3%, 2%, 0) scale(1.1); }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Superfícies                                                                */
+/* -------------------------------------------------------------------------- */
+
 /**
- * Folha: uma superfície apoiada no papel.
+ * Folha: o cartão.
  *
- * Filete de 1px e canto de 3px — o suficiente para separar, longe demais do
- * cartão arredondado com sombra difusa que todo painel usa.
+ * Não é desenhado por uma borda — é levantado do fundo pela sombra. O filete
+ * de cabelo por cima existe só para o cartão não sumir no escuro, onde sombra
+ * sobre preto não separa nada.
  */
 .folha {
   background: var(--folha);
   border: 1px solid var(--filete);
   border-radius: var(--radius-folha);
-}
-
-/** Folha com a lombada marcada: um traço de carimbo na borda esquerda. */
-.folha-marcada {
-  border-left: 2px solid var(--carimbo);
+  box-shadow: var(--sombra);
 }
 
 /**
- * Barra do topo: papel opaco, não vidro.
+ * A folha principal da tela: canto maior, sombra mais alta e uma lavada de luz
+ * vinda do alto. É o cartão em que o olho pousa primeiro.
+ */
+.folha-marcada {
+  border-radius: var(--radius-grande);
+  box-shadow: var(--sombra-alta);
+  background-image: linear-gradient(158deg, var(--realce-suave), transparent 48%);
+}
+
+/**
+ * Barra do topo: vidro.
  *
- * Translúcido deixaria o conteúdo rolar por trás do nome do produto. Aqui ela
- * é uma faixa sólida, separada por um filete — como o cabeçalho de um
- * formulário impresso.
+ * O conteúdo rola por baixo e aparece desfocado através dela. É o que dá
+ * profundidade à página inteira com um único elemento — e a razão de o fundo
+ * ser translúcido e não sólido.
  */
 .barra-topo {
-  background: var(--papel);
+  background: color-mix(in srgb, var(--papel) 72%, transparent);
+  backdrop-filter: blur(14px) saturate(1.6);
+  -webkit-backdrop-filter: blur(14px) saturate(1.6);
   border-bottom: 1px solid var(--filete);
 }
 
@@ -221,7 +346,7 @@ body {
  * Rolagem sem barra à mostra.
  *
  * A fila de abas rola no celular, e a barra do navegador desenhada por baixo
- * dela vira um segundo filete cinza que não significa nada. O conteúdo continua
+ * dela vira um segundo traço cinza que não significa nada. O conteúdo continua
  * rolando por toque, roda e teclado — só a barra some.
  */
 .rolagem-limpa {
@@ -232,16 +357,16 @@ body {
   display: none;
 }
 
-/** Filete horizontal, usado para separar seções sem desenhar caixa. */
+/** Divisa horizontal, para separar seções sem desenhar caixa. */
 .regra {
   border: 0;
   border-top: 1px solid var(--filete);
 }
 
-/** Filete grosso, para fechar um bloco de totais. */
+/** Divisa grossa, para fechar um bloco de totais. */
 .regra-forte {
   border: 0;
-  border-top: 2px solid var(--tinta);
+  border-top: 2px solid var(--filete-forte);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -249,17 +374,16 @@ body {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Números em serifada.
+ * Números grandes.
  *
- * Este é o gesto central da identidade: o valor que a pessoa abriu o sistema
- * para ver é impresso, não renderizado. A serifada dá peso a um número do
- * mesmo jeito que dá a um título de jornal.
+ * Peso alto, entrelinha colada e tracking negativo — é assim que a geométrica
+ * dá presença a um valor. `tabular-nums` mantém os dígitos da mesma largura, o
+ * que impede o número de tremer enquanto a contagem sobe.
  */
 .cifra {
-  font-family: var(--font-serif);
-  font-weight: 600;
+  font-weight: 700;
   font-variant-numeric: tabular-nums lining-nums;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.035em;
 }
 
 /**
@@ -270,82 +394,150 @@ body {
   font-variant-numeric: tabular-nums lining-nums;
 }
 
-/** Rótulo de campo: caixa alta espaçada, como legenda de formulário. */
+/**
+ * Rótulo de campo.
+ *
+ * Caixa normal e peso médio. A caixa alta espaçada que este rótulo tinha era
+ * vocabulário de formulário impresso; aqui ele é só um texto menor e mais
+ * claro que o dado que anuncia.
+ */
 .rotulo {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  letter-spacing: -0.005em;
   color: var(--tinta-3);
 }
 
-/**
- * Título de seção com filete que corre até o fim da linha.
- *
- * Vem da diagramação de jornal: o traço prende o título à coluna e diz onde a
- * seção começa, sem precisar de caixa em volta.
- */
+/** Título de seção. O filete que corria até o fim da linha saiu com o papel. */
 .titulo-regra {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.625rem;
 }
 
-.titulo-regra::after {
-  content: "";
-  flex: 1;
-  border-top: 1px solid var(--filete);
+/**
+ * Marca-texto.
+ *
+ * Uma por tela. `box-decoration-break` mantém o amarelo inteiro quando o
+ * trecho destacado quebra em duas linhas, em vez de cortar o canto no meio.
+ */
+.marcador {
+  background: var(--destaque);
+  color: #1a1608;
+  border-radius: 5px;
+  padding: 0.02em 0.26em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
 /* -------------------------------------------------------------------------- */
-/* Marcas                                                                     */
+/* Peças                                                                      */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Carimbo: o selo do pedido enviado.
+ * Placa de ícone.
  *
- * Levemente inclinado e com a borda mais grossa que tudo o mais na tela,
- * porque é isso que um carimbo é — tinta aplicada por cima do documento
- * depois de ele estar pronto.
+ * O ícone nunca fica solto sobre o fundo: mora num quadrado de canto
+ * arredondado, com a cor lavada atrás e a saturada no traço.
+ */
+.placa {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-suave);
+  background: var(--folha-2);
+  color: var(--tinta-2);
+}
+
+.placa-sol     { background: var(--placa-sol);     color: var(--placa-sol-traco); }
+.placa-mar     { background: var(--placa-mar);     color: var(--placa-mar-traco); }
+.placa-menta   { background: var(--placa-menta);   color: var(--placa-menta-traco); }
+.placa-pessego { background: var(--placa-pessego); color: var(--placa-pessego-traco); }
+.placa-lilas   { background: var(--placa-lilas);   color: var(--placa-lilas-traco); }
+
+.placa-sm { width: 1.75rem; height: 1.75rem; border-radius: 8px; }
+
+/** Pílula de seção: o rótulo que anuncia um bloco sem gritar. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--filete);
+  border-radius: 999px;
+  background: var(--folha);
+  box-shadow: var(--sombra-sm);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--tinta-2);
+  white-space: nowrap;
+}
+
+/**
+ * Selo de status.
+ *
+ * Pílula de cor lavada. O carimbo torto saiu junto com o papel; o que ficou do
+ * princípio antigo é o que importa: a palavra está escrita por extenso, então
+ * quem não distingue as cores continua lendo o estado.
  */
 .carimbo {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
-  padding: 0.125rem 0.5rem;
-  border: 1.5px solid var(--carimbo);
-  border-radius: 2px;
-  color: var(--carimbo);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  transform: rotate(-1.5deg);
+  padding: 0.1875rem 0.625rem;
+  border-radius: 999px;
+  background: var(--verde-fraco);
+  color: var(--verde);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
 }
 
 .carimbo-verde {
-  border-color: var(--verde);
+  background: var(--verde-fraco);
   color: var(--verde);
 }
 
 .carimbo-apagado {
-  border-color: var(--filete-forte);
+  background: var(--folha-2);
   color: var(--tinta-3);
-  transform: none;
+}
+
+/** Ponto que pulsa: usado onde há algo acontecendo agora. */
+.pulso {
+  position: relative;
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--verde);
+}
+
+.pulso::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: inherit;
+  animation: pulsar 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulsar {
+  0%   { transform: scale(1);   opacity: 0.7; }
+  70%  { transform: scale(2.6); opacity: 0; }
+  100% { transform: scale(2.6); opacity: 0; }
 }
 
 /* -------------------------------------------------------------------------- */
 /* Interação                                                                  */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Realce de linha.
- *
- * Sem elevação e sem escala: a linha não sobe, ela apenas escurece o papel,
- * do jeito que uma régua de leitura marca a linha que você está olhando.
- */
+/** Realce de linha: a linha escurece, e a seta que a acompanha entra. */
 .realcavel {
-  transition: background-color 0.15s ease;
+  transition: background-color 0.18s ease;
 }
 
 .realcavel:hover {
@@ -353,17 +545,34 @@ body {
 }
 
 /**
- * Marca-texto do item ativo na navegação.
+ * Cartão que reage ao ponteiro.
  *
- * É um retângulo sólido de carimbo atrás do rótulo. Recebe nome de view
- * transition, então ao trocar de aba o navegador o anima DESLIZANDO de um item
- * para o outro em vez de apagar aqui e acender lá.
+ * Sobe três pixels e a sombra abre junto — sem o segundo, o cartão parece
+ * deslizar em vez de levantar, porque a sombra é a única coisa que informa
+ * altura numa tela plana.
+ */
+.elevavel {
+  transition:
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.elevavel:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--sombra-alta);
+}
+
+/**
+ * Marcador do item ativo na navegação: uma pílula preta sólida.
+ *
+ * Recebe nome de view transition, então ao trocar de aba o navegador a anima
+ * DESLIZANDO de um item para o outro em vez de apagar aqui e acender lá.
  */
 .marca-nav {
   position: absolute;
   inset: 0;
-  border-radius: 2px;
-  background: var(--carimbo);
+  border-radius: 999px;
+  background: var(--tinta);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -371,37 +580,56 @@ body {
 /* -------------------------------------------------------------------------- */
 
 .surgir {
-  animation: surgir 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: surgir 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes surgir {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: none; }
 }
 
 /**
  * Entrada em cascata, sem JavaScript.
  *
- * Bem mais curta que num visual com efeito: aqui o movimento serve para dar
- * ordem de leitura, não para impressionar. Passa dos oito itens e o atraso
- * para de crescer.
+ * O atraso entre um item e o próximo é o que transforma seis blocos aparecendo
+ * ao mesmo tempo numa ordem de leitura. Passa dos oito itens e o atraso para de
+ * crescer, senão o último bloco de uma lista longa chegaria tarde demais.
  */
 .palco > * {
-  animation: surgir 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: surgir 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.palco > *:nth-child(1) { animation-delay: 0.01s; }
-.palco > *:nth-child(2) { animation-delay: 0.05s; }
-.palco > *:nth-child(3) { animation-delay: 0.09s; }
-.palco > *:nth-child(4) { animation-delay: 0.13s; }
-.palco > *:nth-child(5) { animation-delay: 0.17s; }
-.palco > *:nth-child(6) { animation-delay: 0.21s; }
-.palco > *:nth-child(7) { animation-delay: 0.25s; }
-.palco > *:nth-child(n + 8) { animation-delay: 0.28s; }
+.palco > *:nth-child(1) { animation-delay: 0.02s; }
+.palco > *:nth-child(2) { animation-delay: 0.09s; }
+.palco > *:nth-child(3) { animation-delay: 0.16s; }
+.palco > *:nth-child(4) { animation-delay: 0.23s; }
+.palco > *:nth-child(5) { animation-delay: 0.3s; }
+.palco > *:nth-child(6) { animation-delay: 0.37s; }
+.palco > *:nth-child(7) { animation-delay: 0.44s; }
+.palco > *:nth-child(n + 8) { animation-delay: 0.5s; }
+
+/**
+ * Revelação ao rolar, sem JavaScript e sem observador.
+ *
+ * `animation-timeline: view()` prende o progresso da animação à posição do
+ * elemento na janela: o bloco se monta enquanto sobe, e se desmonta se a
+ * pessoa voltar. Onde o navegador não conhece a propriedade, o `@supports`
+ * inteiro é ignorado e o bloco já nasce visível — que é o comportamento certo
+ * para uma degradação: some o efeito, nunca o conteúdo.
+ */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .revelar {
+      animation: surgir linear both;
+      animation-timeline: view();
+      animation-range: entry 4% cover 20%;
+    }
+  }
+}
 
 /** `--alvo` é a largura final, escrita no `style` do elemento. */
 .barra-preenche {
-  animation: preencher 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+  animation: preencher 1.1s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
 }
 
 @keyframes preencher {
@@ -453,9 +681,9 @@ body {
 }
 
 /**
- * O marca-texto desliza; ele não pisca.
+ * A pílula desliza; ela não pisca.
  *
- * As fotos do estado antigo e do novo são idênticas — um retângulo vermelho —,
+ * As fotos do estado antigo e do novo são idênticas — uma pílula preta —,
  * então deixá-las esmaecer uma sobre a outra só produziria uma borra no meio do
  * caminho. A antiga some, a nova fica **opaca do primeiro quadro ao último**, e
  * o grupo carrega essa foto de um item ao outro.
@@ -482,7 +710,7 @@ body {
 /**
  * O resto da página não faz nada.
  *
- * `root` é a foto de tudo o que não recebeu nome — fundo, grão, margens. O
+ * `root` é a foto de tudo o que não recebeu nome — fundo, luz, margens. O
  * navegador cruza essa foto por padrão, e esse cruzamento se somava ao deslize
  * do conteúdo: o efeito lido era um esmaecimento geral, e não uma página
  * entrando pelo lado. Desligado, sobra só o movimento que significa algo.
@@ -518,8 +746,6 @@ body {
 
 /* -------------------------------------------------------------------------- */
 /* Confete                                                                    */
-/*                                                                            */
-/* Papel picado, nas cores das tintas do sistema — não em arco-íris.          */
 /* -------------------------------------------------------------------------- */
 
 .confete {
@@ -533,8 +759,9 @@ body {
 .confete span {
   position: absolute;
   top: -16px;
-  width: 7px;
-  height: 11px;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
   animation: confete-cair var(--duracao) cubic-bezier(0.4, 0.1, 0.6, 1) var(--atraso) forwards;
 }
 
@@ -560,10 +787,20 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .confete { display: none; }
 
+  .aurora,
+  .pulso::after {
+    animation: none;
+  }
+
   .surgir,
-  .palco > * {
+  .palco > *,
+  .revelar {
     animation: none;
     opacity: 1;
+    transform: none;
+  }
+
+  .elevavel:hover {
     transform: none;
   }
 

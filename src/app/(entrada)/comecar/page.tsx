@@ -10,38 +10,29 @@ import { FormularioCadastro } from "../formulario";
 export default async function PaginaComecar() {
   if (await sessaoAtual()) redirect("/");
 
+  /*
+   * As três frases que ficavam aqui subiram para o layout.
+   *
+   * Elas valem igual para quem chega e para quem volta, e escritas num lugar
+   * só não têm como divergir entre esta tela e a de login. O que sobra aqui é
+   * o que é específico do cadastro: o custo de entrar.
+   */
   return (
-    <Cartao className="px-6 py-7 sm:px-8">
-      <h1 className="font-serif text-2xl leading-none">Criar meu escritório</h1>
-      <p className="text-sm text-tinta-2 mt-2 mb-6">
+    <Cartao marcada className="px-6 py-8 sm:px-8 sm:py-9">
+      <h1 className="text-2xl font-bold tracking-[-0.025em] leading-none">
+        Criar meu escritório
+      </h1>
+      <p className="text-sm text-tinta-2 mt-2.5 mb-7 leading-relaxed">
         Leva menos de um minuto. Nenhum cartão, nenhuma configuração.
       </p>
 
-      {/*
-        Três frases antes do formulário.
-
-        Pedir nome, e-mail e senha sem dizer para quê é o jeito mais rápido de
-        perder alguém que chegou por indicação e ainda não viu o produto.
-      */}
-      <ul className="mb-7 border-y border-filete divide-y divide-filete">
-        {[
-          "O preço sai das medidas, não da sua calculadora.",
-          "O PDF vai para a indústria no formato que ela já conhece.",
-          "Seus dados ficam isolados dos de qualquer outro escritório.",
-        ].map((texto) => (
-          <li key={texto} className="py-2.5 text-sm text-tinta-2 leading-snug">
-            {texto}
-          </li>
-        ))}
-      </ul>
-
       <FormularioCadastro acao={cadastrar} />
 
-      <p className="text-sm text-tinta-2 mt-6 text-center">
+      <p className="text-sm text-tinta-2 mt-7 text-center">
         Já tem conta?{" "}
         <Link
           href="/entrar"
-          className="text-carimbo underline underline-offset-4 decoration-carimbo/40 hover:decoration-carimbo"
+          className="text-carimbo font-medium underline underline-offset-4 decoration-carimbo/35 hover:decoration-carimbo"
         >
           Entrar
         </Link>

@@ -1,15 +1,15 @@
 /**
- * O status do pedido, dito como um documento diria.
+ * O status do pedido, dito em pílula.
  *
- * ENVIADO é um CARIMBO: contorno grosso, caixa alta, levemente torto — tinta
- * aplicada por cima do papel depois de ele estar pronto. É o único lugar da
- * tela, junto da aba ativa, onde o vermelho aparece por bem.
+ * ENVIADO é VERDE: é o único dos três que representa trabalho concluído, e o
+ * verde é a cor que este sistema reserva para o que foi alcançado.
  *
- * CANCELADO não ganha cor nenhuma: um documento cancelado é riscado, não
- * pintado. ABERTO é contorno apagado, porque ainda não aconteceu nada.
+ * CANCELADO é riscado e sem cor — um pedido cancelado não é um alerta, é um
+ * registro que deixou de valer. ABERTO é neutro, porque ainda não aconteceu
+ * nada que mereça cor.
  *
- * Cor sozinha não bastaria: quem não distingue vermelho de cinza continua
- * lendo a palavra, que está escrita por extenso em todos os três.
+ * Cor sozinha não bastaria: quem não distingue verde de cinza continua lendo a
+ * palavra, que está escrita por extenso nos três.
  */
 const ESTILOS: Record<string, { rotulo: string; classe: string }> = {
   ABERTO: {
@@ -18,7 +18,7 @@ const ESTILOS: Record<string, { rotulo: string; classe: string }> = {
   },
   ENVIADO: {
     rotulo: "Enviado",
-    classe: "carimbo",
+    classe: "carimbo carimbo-verde",
   },
   CANCELADO: {
     rotulo: "Cancelado",
