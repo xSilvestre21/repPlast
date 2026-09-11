@@ -38,10 +38,45 @@ npm run dev
 
 O projeto usa PostgreSQL com Prisma 7 e driver adapter (`@prisma/adapter-pg`).
 
+**Use um banco LOCAL para desenvolver.** Isso não é preferência, é medida: toda operação atravessa
+uma transação de tenant (ver [`src/lib/db.ts`](src/lib/db.ts)), então uma consulta custa quatro
+idas ao banco. Com o banco numa região distante — us-east-1 daqui do Brasil são 125ms por ida — a
+consulta mais simples leva meio segundo, e a navegação inteira fica pastosa. O mesmo código contra
+um Postgres local responde em frações de milissegundo.
+
+Medido, varrendo cinco telas:
+
+| | banco em us-east-1 | Postgres local |
+| --- | --- | --- |
+| uma consulta | ~500ms | <1ms |
+| Painel | ~1500ms | ~130ms |
+| cinco telas | 6856ms | 508ms |
+
 ```bash
-npx create-db create --region us-east-1 --json   # banco temporário, sem cadastro
-npx prisma migrate deploy                        # aplica as migrations
-npm run db:setup                                 # prepara e verifica o papel restrito
+winget install PostgreSQL.PostgreSQL.17     # Windows; no Linux/macOS use o gerenciador da casa
+createdb -h localhost -U postgres repplast
+```
+
+Depois aponte o `.env` para ele e prepare o esquema:
+
+```
+DIRECT_DATABASE_URL="postgresql://postgres:SENHA@localhost:5432/repplast?sslmode=disable"
+DATABASE_URL="postgresql://postgres:SENHA@localhost:5432/repplast?sslmode=disable"
+APP_DB_ROLE=repplast_app
+```
+
+```bash
+npx prisma migrate deploy   # aplica as migrations
+npm run db:setup            # cria e verifica o papel restrito
+npm run db:seed             # dados de exemplo (dev@repplast.local / repplast123)
+```
+
+Para um banco gerenciado e descartável — demonstração, CI, ou uma máquina sem Postgres — dá para
+provisionar um na hora, **sem cadastro**. Ele se apaga sozinho em ~24h se não for reivindicado pela
+URL de claim que o comando imprime:
+
+```bash
+npx create-db create --region us-east-1 --json
 ```
 
 O `.env` guarda **duas conexões de propósito**:
