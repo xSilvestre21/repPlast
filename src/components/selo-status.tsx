@@ -10,24 +10,21 @@
  *
  * Cor sozinha não bastaria: quem não distingue verde de cinza continua lendo a
  * palavra, que está escrita por extenso nos três.
+ *
+ * O desenho da pílula vem de `Selo`, e não daqui. Este arquivo decide só o que
+ * é do pedido: quais estados existem, como se chamam e qual deles é o alcançado.
  */
-const ESTILOS: Record<string, { rotulo: string; classe: string }> = {
-  ABERTO: {
-    rotulo: "Aberto",
-    classe: "carimbo carimbo-apagado",
-  },
-  ENVIADO: {
-    rotulo: "Enviado",
-    classe: "carimbo carimbo-verde",
-  },
-  CANCELADO: {
-    rotulo: "Cancelado",
-    classe: "carimbo carimbo-apagado line-through decoration-1",
-  },
+
+import { Selo, type TomSelo } from "@/components/ui";
+
+const ESTADOS: Record<string, { rotulo: string; tom: TomSelo }> = {
+  ABERTO: { rotulo: "Aberto", tom: "neutro" },
+  ENVIADO: { rotulo: "Enviado", tom: "verde" },
+  CANCELADO: { rotulo: "Cancelado", tom: "cancelado" },
 };
 
 export function SeloStatus({ status }: { status: string }) {
-  const estilo = ESTILOS[status] ?? ESTILOS.ABERTO;
+  const estado = ESTADOS[status] ?? ESTADOS.ABERTO;
 
-  return <span className={estilo.classe}>{estilo.rotulo}</span>;
+  return <Selo tom={estado.tom}>{estado.rotulo}</Selo>;
 }

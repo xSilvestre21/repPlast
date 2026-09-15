@@ -98,6 +98,16 @@
 
   /* Uma lavada quase invisível no alto do cartão principal. */
   --realce-suave: rgb(47 111 237 / 0.05);
+
+  /*
+   * A seta do <select>.
+   *
+   * A nativa é desenhada pelo sistema operacional e é a única peça da tela que
+   * não obedece ao tema: no escuro ela aparece preta sobre o campo escuro.
+   * Como vai em `background-image`, a cor tem de estar assada no SVG — daí uma
+   * versão por tema em vez de `currentColor`.
+   */
+  --seta-selecao: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%238d8d9c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E");
 }
 
 @media (prefers-color-scheme: dark) {
@@ -153,6 +163,8 @@
     --aurora-forca: 0.22;
 
     --realce-suave: rgb(107 157 255 / 0.06);
+
+    --seta-selecao: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%2378788a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E");
   }
 }
 
@@ -204,6 +216,8 @@
   --aurora-forca: 0.22;
 
   --realce-suave: rgb(107 157 255 / 0.06);
+
+  --seta-selecao: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' fill='none' stroke='%2378788a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5'/%3E%3C/svg%3E");
 }
 
 @theme inline {
@@ -237,10 +251,83 @@
   --font-serif: var(--fonte-sans), system-ui, sans-serif;
   --font-mono: var(--fonte-mono), ui-monospace, monospace;
 
-  /* Canto generoso: é ele que diz "aplicativo" antes de qualquer outra coisa. */
+  /*
+   * Canto generoso: é ele que diz "aplicativo" antes de qualquer outra coisa.
+   *
+   * Os quatro descem de fora para dentro, e é deliberado: um canto aninhado
+   * precisa ser MENOR que o da caixa que o contém, senão os dois arcos brigam
+   * e a peça de dentro parece maior do que é. Cartão 16, painel 10, campo de
+   * célula 7.
+   */
   --radius-folha: 16px;
   --radius-grande: 24px;
   --radius-suave: 10px;
+  --radius-miudo: 7px;
+
+  /*
+   * As três sombras, agora como utilitário.
+   *
+   * Elas existem desde que a sombra passou a separar no lugar do filete, mas
+   * nunca chegaram ao Tailwind: a única forma de usá-las era `shadow-[var(--sombra)]`
+   * escrito à mão, e por isso metade das telas não usava nenhuma.
+   *
+   * Os nomes não são `sm/md/lg` de propósito — esses três já existem no
+   * Tailwind, e redefini-los mudaria silenciosamente qualquer classe herdada.
+   */
+  --shadow-suave: var(--sombra-sm);
+  --shadow-folha: var(--sombra);
+  --shadow-alta: var(--sombra-alta);
+
+  /*
+   * A escala tipográfica.
+   *
+   * Dez degraus nomeados pelo PAPEL que cumprem, não pelo tamanho — `text-cifra`
+   * diz o que aquilo é, `text-[2rem]` diz só quanto mede. Antes disto havia
+   * treze tamanhos arbitrários em rem convivendo com `text-xs`/`text-sm` crus, e
+   * o mesmo "número grande do bloco" aparecia em oito tamanhos diferentes.
+   *
+   * Os três maiores são `clamp()`: um token só substitui a cadeia
+   * `text-[2rem] sm:text-[2.5rem]`, e a transição passa a ser contínua em vez
+   * de saltar no breakpoint. Cada degrau carrega a própria entrelinha e o
+   * próprio tracking, que é o que tira `leading-[1.05] tracking-[-0.03em]` de
+   * todo título.
+   */
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1.4;
+  --text-mini: 0.75rem;
+  --text-mini--line-height: 1.4;
+  --text-rotulo: 0.8125rem;
+  --text-rotulo--line-height: 1.45;
+  --text-rotulo--letter-spacing: -0.005em;
+  --text-corpo: 0.875rem;
+  --text-corpo--line-height: 1.55;
+  --text-realce: 0.9375rem;
+  --text-realce--line-height: 1.6;
+  --text-realce--letter-spacing: -0.01em;
+  --text-medio: 1.125rem;
+  --text-medio--line-height: 1.35;
+  --text-medio--letter-spacing: -0.015em;
+  --text-forte: 1.5rem;
+  --text-forte--line-height: 1.2;
+  --text-forte--letter-spacing: -0.025em;
+  --text-cifra: clamp(1.75rem, 1.55rem + 0.8vw, 2rem);
+  --text-cifra--line-height: 1;
+  --text-cifra--letter-spacing: -0.03em;
+  --text-titulo: clamp(2rem, 1.6rem + 1.7vw, 2.5rem);
+  --text-titulo--line-height: 1.05;
+  --text-titulo--letter-spacing: -0.03em;
+  --text-heroi: clamp(2.75rem, 1.65rem + 4.4vw, 4.5rem);
+  --text-heroi--line-height: 1;
+  --text-heroi--letter-spacing: -0.04em;
+
+  /*
+   * A manchete da porta de entrada, que é a única página de VENDA do sistema.
+   * Fica fora da escala do aplicativo de propósito: ali o título é o argumento,
+   * e não o nome da tela em que a pessoa já está.
+   */
+  --text-vitrine: clamp(2.25rem, 1.35rem + 3.6vw, 3.5rem);
+  --text-vitrine--line-height: 1.14;
+  --text-vitrine--letter-spacing: -0.04em;
 }
 
 body {
@@ -402,7 +489,7 @@ body {
  * claro que o dado que anuncia.
  */
 .rotulo {
-  font-size: 0.8125rem;
+  font-size: var(--text-rotulo);
   font-weight: 500;
   letter-spacing: -0.005em;
   color: var(--tinta-3);
@@ -469,7 +556,7 @@ body {
   border-radius: 999px;
   background: var(--folha);
   box-shadow: var(--sombra-sm);
-  font-size: 0.75rem;
+  font-size: var(--text-mini);
   font-weight: 500;
   color: var(--tinta-2);
   white-space: nowrap;
@@ -490,7 +577,7 @@ body {
   border-radius: 999px;
   background: var(--verde-fraco);
   color: var(--verde);
-  font-size: 0.75rem;
+  font-size: var(--text-mini);
   font-weight: 600;
   letter-spacing: -0.005em;
   white-space: nowrap;

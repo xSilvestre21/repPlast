@@ -4,25 +4,24 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import type { StatusPedido } from "@/generated/prisma/enums";
-import { type DbOrganizacao, dbParaOrganizacao } from "@/lib/db";
+import { type DbOrganizacao } from "@/lib/db";
 import { enviarEmail } from "@/lib/email";
 import { lerNumeroBr } from "@/lib/numero-br";
 import { carregarPedidoParaPdf, gerarPdfPedido } from "@/lib/pdf/gerar-pedido";
 import { arredondarDinheiro } from "@/lib/precificacao";
 import {
-  type ProdutoPrecificavel,
+  paraPrecificavel,
   type UnidadeVenda,
   pesoDoItem,
   precoUnitario,
 } from "@/lib/produto-preco";
-import { organizacaoAtual } from "@/lib/sessao";
+import { escopoAtual } from "@/lib/sessao";
 import { calcularTotaisPedido } from "@/lib/totais";
 
 export type EstadoFormulario = { erro?: string };
 
 async function contexto() {
-  const organizacaoId = await organizacaoAtual();
-  return { organizacaoId, db: dbParaOrganizacao(organizacaoId) };
+  return escopoAtual();
 }
 
 function lerTexto(valor: FormDataEntryValue | null): string | null {
@@ -139,7 +138,12 @@ export async function criarPedido(
     const [cliente, fornecedor] = await Promise.all([
       db.cliente.findFirst({
         where: { id: clienteId, organizacaoId },
-        select: { id: true, observacoes: true },
+        select: {
+          id: true,
+          observacoes: true,
+          representanteId: true,
+          representante: { select: { comissaoPercentualPadrao: true } },
+        },
       }),
       db.fornecedor.findFirst({
         where: { id: fornecedorId, organizacaoId },
@@ -181,6 +185,14 @@ export async function criarPedido(
         // As observações do cliente já entram preenchidas — são recados que se
         // repetem em todo pedido dele.
         observacoes: cliente.observacoes,
+        // O pedido credita o dono da CARTEIRA, não quem digitou: a
+        // administradora lança pedido para o cliente do preposto o tempo todo,
+        // e a comissão continua sendo dele. Congelado aqui — reatribuir a
+        // carteira depois não reescreve o que já foi vendido.
+        representanteId: cliente.representanteId,
+        // A fatia dele também é congelada. Cliente sem dono é do escritório, e
+        // aí não há fatia nenhuma: a comissão inteira fica na casa.
+        comissaoPercentualPreposto: cliente.representante?.comissaoPercentualPadrao ?? null,
       },
       select: { id: true },
     });
@@ -244,40 +256,6 @@ export async function atualizarCabecalho(
 /* -------------------------------------------------------------------------- */
 /* Itens                                                                      */
 /* -------------------------------------------------------------------------- */
-
-/** Converte o produto do banco no formato que o motor de preço entende. */
-function paraPrecificavel(produto: {
-  familia: string;
-  larguraCm: unknown;
-  comprimentoCm: unknown;
-  espessuraMm: unknown;
-  fatorKg: unknown;
-  precoUnidade: unknown;
-  precoCaixa: unknown;
-  precoKg: unknown;
-  unidadesPorCaixa: number | null;
-  aditivos: { aditivo: { nome: string; sufixoDescricao: string; tipo: string; valor: unknown } }[];
-}): ProdutoPrecificavel {
-  const texto = (v: unknown) => (v === null || v === undefined ? null : String(v));
-
-  return {
-    familia: produto.familia as ProdutoPrecificavel["familia"],
-    larguraCm: texto(produto.larguraCm),
-    comprimentoCm: texto(produto.comprimentoCm),
-    espessuraMm: texto(produto.espessuraMm),
-    fatorKg: texto(produto.fatorKg),
-    precoUnidade: texto(produto.precoUnidade),
-    precoCaixa: texto(produto.precoCaixa),
-    precoKg: texto(produto.precoKg),
-    unidadesPorCaixa: produto.unidadesPorCaixa,
-    aditivos: produto.aditivos.map(({ aditivo }) => ({
-      nome: aditivo.nome,
-      sufixoDescricao: aditivo.sufixoDescricao,
-      tipo: aditivo.tipo as "POR_KG" | "POR_MILHEIRO",
-      valor: String(aditivo.valor),
-    })),
-  };
-}
 
 export async function adicionarItem(
   pedidoId: string,
@@ -556,8 +534,8 @@ export async function enviarPedidoPorEmail(
   _formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
-    const { organizacaoId, db } = await contexto();
-    const pedido = await carregarPedidoParaPdf(pedidoId, organizacaoId);
+    const { organizacaoId, usuarioId, papel, db } = await contexto();
+    const pedido = await carregarPedidoParaPdf(pedidoId, organizacaoId, { usuarioId, papel });
 
     if (!pedido) return { erro: "Pedido não encontrado." };
     if (pedido.status === "CANCELADO") return { erro: "Este pedido está cancelado." };

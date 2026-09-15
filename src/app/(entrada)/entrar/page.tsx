@@ -15,14 +15,14 @@ export default async function PaginaEntrar() {
     // `marcada` dá a esta folha o canto maior e a sombra alta: numa tela em que
     // ela é o único cartão, é o que a levanta do fundo em vez de encostá-la.
     <Cartao marcada className="px-6 py-8 sm:px-8 sm:py-9">
-      <h1 className="text-2xl font-bold tracking-[-0.025em] leading-none">Entrar</h1>
-      <p className="text-sm text-tinta-2 mt-2.5 mb-7 leading-relaxed">
+      <h1 className="text-forte font-bold tracking-[-0.025em] leading-none">Entrar</h1>
+      <p className="text-corpo text-tinta-2 mt-2.5 mb-7 leading-relaxed">
         Seus pedidos, produtos e comissões do jeito que você deixou.
       </p>
 
       <FormularioEntrada acao={entrar} rotulo="Entrar" />
 
-      <p className="text-sm text-tinta-2 mt-7 text-center">
+      <p className="text-corpo text-tinta-2 mt-7 text-center">
         Ainda não tem conta?{" "}
         <Link
           href="/comecar"

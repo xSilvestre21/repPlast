@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Building2, FileText } from "lucide-react";
+import { Building2, FileText, ScrollText } from "lucide-react";
 
 import { SeloStatus } from "@/components/selo-status";
-import { BotaoLink, Cartao, Emblema } from "@/components/ui";
-import { dbParaOrganizacao } from "@/lib/db";
+import { BotaoLink, Cabecalho, Cartao, Emblema } from "@/components/ui";
 import { escreverNumeroBr } from "@/lib/numero-br";
-import { organizacaoAtual } from "@/lib/sessao";
+import { escopoAtual } from "@/lib/sessao";
 
 import {
   adicionarItem,
@@ -25,7 +24,7 @@ import {
 import { AcaoPedido } from "./acoes-status";
 import { SecaoCabecalho } from "./cabecalho";
 import { BotaoEnviarEmail } from "./envio";
-import { SecaoItens } from "./itens";
+import { SecaoItens } from "@/components/itens-documento";
 import { Pagina } from "@/components/pagina";
 
 const DATA_HORA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
@@ -33,8 +32,7 @@ const DATA_HORA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeSty
 export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]">) {
   const { id } = await params;
 
-  const organizacaoId = await organizacaoAtual();
-  const db = dbParaOrganizacao(organizacaoId);
+  const { organizacaoId, db } = await escopoAtual();
 
   const pedido = await db.pedido.findFirst({
     where: { id, organizacaoId },
@@ -60,21 +58,16 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
 
   return (
     <Pagina>
-      <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
-        <div>
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="font-serif text-3xl sm:text-[2.375rem] font-medium tracking-tight leading-none">
-              Pedido <span className="numerico">{pedido.numero}</span>
-            </h1>
-            <SeloStatus status={pedido.status} />
-          </div>
-          <p className="text-sm text-tinta-2 mt-1">
-            {pedido.fornecedor.nome} · criado em {DATA_HORA.format(pedido.criadoEm)}
-            {pedido.enviadoEm && ` · enviado em ${DATA_HORA.format(pedido.enviadoEm)}`}
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2 items-start">
+      <Cabecalho
+        icone={ScrollText}
+        titulo={`Pedido ${pedido.numero}`}
+        selo={<SeloStatus status={pedido.status} />}
+        descricao={
+          `${pedido.fornecedor.nome} · criado em ${DATA_HORA.format(pedido.criadoEm)}` +
+          (pedido.enviadoEm ? ` · enviado em ${DATA_HORA.format(pedido.enviadoEm)}` : "")
+        }
+        acao={
+          <div className="flex flex-wrap gap-2 items-start">
           {temItens && (
             <>
               <BotaoLink
@@ -149,21 +142,22 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
               acao={excluirPedido.bind(null, pedido.id)}
             />
           )}
-        </div>
-      </div>
+          </div>
+        }
+      />
 
       <div className="space-y-5 palco">
-        <Cartao className="p-4 sm:p-5">
+        <Cartao className="p-5 sm:p-6">
           <div className="flex items-start gap-3 mb-3">
             <Emblema icone={Building2} tom="fraco" className="size-4" />
             <Link href={`/clientes/${pedido.cliente.id}`} className="group min-w-0 block">
               <div className="font-semibold truncate transition-colors group-hover:text-carimbo">
                 {pedido.cliente.apelido}
               </div>
-              <div className="text-sm text-tinta-2 truncate">{pedido.cliente.razaoSocial}</div>
+              <div className="text-corpo text-tinta-2 truncate">{pedido.cliente.razaoSocial}</div>
             </Link>
           </div>
-          <dl className="grid gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3 mt-3 text-sm">
+          <dl className="grid gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3 mt-3 text-corpo">
             <Info rotulo="CNPJ" valor={pedido.cliente.cnpj} />
             <Info rotulo="IE" valor={pedido.cliente.ie} />
             <Info
@@ -205,9 +199,12 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
             comprimentoCm: texto(p.comprimentoCm),
             espessuraMm: texto(p.espessuraMm),
             fatorKg: texto(p.fatorKg),
+            densidade: texto(p.densidade),
             precoUnidade: texto(p.precoUnidade),
             precoCaixa: texto(p.precoCaixa),
             precoKg: texto(p.precoKg),
+            unidadeAvulsa: p.unidadeAvulsa,
+            precoAvulso: texto(p.precoAvulso),
             unidadesPorCaixa: p.unidadesPorCaixa,
             aditivos: p.aditivos.map(({ aditivo }) => ({
               nome: aditivo.nome,

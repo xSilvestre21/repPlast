@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { Cabecalho } from "@/components/ui";
-import { dbParaOrganizacao } from "@/lib/db";
-import { organizacaoAtual } from "@/lib/sessao";
+import { escopoAtual } from "@/lib/sessao";
 
 import {
   atualizarCliente,
@@ -11,7 +10,7 @@ import {
   salvarCodigoProduto,
 } from "../acoes";
 import { FormularioCliente } from "../formulario";
-import { BotaoExcluirCliente } from "./botao-excluir";
+import { BotaoExcluir } from "@/components/botao-excluir";
 import { SecaoCodigos } from "./codigos";
 import { Building2 } from "lucide-react";
 import { Pagina } from "@/components/pagina";
@@ -19,8 +18,7 @@ import { Pagina } from "@/components/pagina";
 export default async function PaginaCliente({ params }: PageProps<"/clientes/[id]">) {
   const { id } = await params;
 
-  const organizacaoId = await organizacaoAtual();
-  const db = dbParaOrganizacao(organizacaoId);
+  const { organizacaoId, db } = await escopoAtual();
 
   const [cliente, produtos] = await Promise.all([
     db.cliente.findFirst({
@@ -48,14 +46,15 @@ export default async function PaginaCliente({ params }: PageProps<"/clientes/[id
         titulo={cliente.apelido}
         descricao={cliente.razaoSocial}
         acao={
-          <BotaoExcluirCliente
-            apelido={cliente.apelido}
+          <BotaoExcluir
+            rotulo="Excluir cliente"
+            nome={cliente.apelido}
             acao={excluirCliente.bind(null, cliente.id)}
           />
         }
       />
 
-      <div className="space-y-5">
+      <div className="space-y-5 palco">
         <FormularioCliente
           acao={atualizarCliente.bind(null, cliente.id)}
           rotuloEnvio="Salvar alterações"

@@ -73,6 +73,25 @@ async function main() {
       },
     }));
 
+  // --- Tabela de material -------------------------------------------------
+  // 13,50 é o fator praticado nos pedidos 2253 e 2256: é o preço do quilo do
+  // PEAD nesta indústria. `update: {}` para que rodar o seed de novo não
+  // desfaça um reajuste que o usuário tenha lançado pela tela.
+  //
+  // Densidade 0,1: é o divisor 10 que era constante no motor de preço, e que
+  // agora é propriedade do material. Com ela o pedido 2253 fecha em 1.774,872,
+  // igual ao PDF que a indústria emitiu.
+  await db.material.upsert({
+    where: { fornecedorId_nome: { fornecedorId: qualyplast.id, nome: "PEAD" } },
+    create: {
+      fornecedorId: qualyplast.id,
+      nome: "PEAD",
+      precoKg: "13.50",
+      densidade: "0.1",
+    },
+    update: {},
+  });
+
   // --- Clientes ----------------------------------------------------------
   const mariol =
     (await db.cliente.findFirst({ where: { organizacaoId, apelido: "MARIOL" } })) ??

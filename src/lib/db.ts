@@ -89,7 +89,21 @@ if (process.env.NODE_ENV !== "production") {
  * é justamente por isso que a query precisa viajar no mesmo `$transaction`.
  * Fora dela o contexto se perderia antes de a policy ser avaliada.
  */
-function comContexto(opcoes: { chave: string; valor: string; trocarPapel: boolean }) {
+/**
+ * Quem está pedindo. É o que o RLS usa para separar preposto de preposto dentro
+ * do mesmo escritório (ver migration `planos_papeis_e_representante`).
+ */
+export interface Ator {
+  usuarioId: string;
+  papel: "ADMIN" | "REPRESENTANTE";
+}
+
+function comContexto(opcoes: {
+  chave: string;
+  valor: string;
+  trocarPapel: boolean;
+  ator?: Ator;
+}) {
   return {
     query: {
       $allModels: {
@@ -115,9 +129,12 @@ function comContexto(opcoes: { chave: string; valor: string; trocarPapel: boolea
            * Os dois valores viajam como parâmetro, não interpolados — então
            * nem o papel nem o id do escritório podem carregar SQL junto.
            */
+          const usuarioId = opcoes.ator?.usuarioId ?? "";
+          const papel = opcoes.ator?.papel ?? "";
+
           const preparo =
             opcoes.trocarPapel && PAPEL_APP
-              ? prismaBase.$executeRaw`SELECT set_config('role', ${PAPEL_APP}, TRUE), set_config(${opcoes.chave}, ${opcoes.valor}, TRUE)`
+              ? prismaBase.$executeRaw`SELECT set_config('role', ${PAPEL_APP}, TRUE), set_config(${opcoes.chave}, ${opcoes.valor}, TRUE), set_config('app.usuario_id', ${usuarioId}, TRUE), set_config('app.papel', ${papel}, TRUE)`
               : prismaBase.$executeRaw`SELECT set_config(${opcoes.chave}, ${opcoes.valor}, TRUE)`;
 
           const resultados = await prismaBase.$transaction([preparo, query(args) as never]);
@@ -130,11 +147,22 @@ function comContexto(opcoes: { chave: string; valor: string; trocarPapel: boolea
 }
 
 /**
- * Cliente amarrado a um escritório. É este que a aplicação deve usar.
+ * Cliente amarrado a um escritório E a quem está pedindo. É este que a
+ * aplicação deve usar.
+ *
+ * O `ator` é obrigatório de propósito. Ele poderia ter um padrão — "se não
+ * disserem quem é, trate como administrador" —, e aí um ponto do código que
+ * esquecesse de passá-lo mostraria a carteira inteira ao preposto, sem erro
+ * nenhum. Exigindo o parâmetro, esse esquecimento vira erro de compilação.
  */
-export function dbParaOrganizacao(organizacaoId: string) {
+export function dbParaOrganizacao(organizacaoId: string, ator: Ator) {
   return prismaBase.$extends(
-    comContexto({ chave: "app.organizacao_id", valor: organizacaoId, trocarPapel: true }),
+    comContexto({
+      chave: "app.organizacao_id",
+      valor: organizacaoId,
+      trocarPapel: true,
+      ator,
+    }),
   );
 }
 

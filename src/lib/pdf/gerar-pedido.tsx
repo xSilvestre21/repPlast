@@ -8,7 +8,7 @@
 
 import { renderToBuffer } from "@react-pdf/renderer";
 
-import { dbParaOrganizacao } from "../db";
+import { type Ator, dbParaOrganizacao } from "../db";
 import type { Familia, UnidadeVenda } from "../produto-preco";
 import { DocumentoPedido, type DadosPedidoPdf } from "./documento-pedido";
 import { nomeArquivoPedido } from "./nome-arquivo";
@@ -20,12 +20,18 @@ export type PedidoParaPdf = {
   status: string;
 };
 
-/** Busca o pedido com escopo de escritório e monta os dados do PDF. */
+/**
+ * Busca o pedido no escopo de quem pediu e monta os dados do PDF.
+ *
+ * O ator viaja junto porque o PDF é servido por rota de arquivo, fora do
+ * layout: sem ele, um preposto baixaria o pedido de outro pela URL.
+ */
 export async function carregarPedidoParaPdf(
   pedidoId: string,
   organizacaoId: string,
+  ator: Ator,
 ): Promise<PedidoParaPdf | null> {
-  const db = dbParaOrganizacao(organizacaoId);
+  const db = dbParaOrganizacao(organizacaoId, ator);
 
   const pedido = await db.pedido.findFirst({
     where: { id: pedidoId, organizacaoId },

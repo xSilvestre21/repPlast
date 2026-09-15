@@ -3,6 +3,7 @@
 import { BadgeCheck, MapPin, MessageSquareText, Phone } from "lucide-react";
 import { useActionState } from "react";
 
+import { CampoCep, CampoDocumento, CampoTelefone } from "@/components/campo-mascarado";
 import { AreaTexto, Botao, Campo, MensagemErro, SecaoCartao } from "@/components/ui";
 
 import type { EstadoFormulario } from "./acoes";
@@ -44,12 +45,10 @@ export function FormularioCliente({
             placeholder="MARIOL EMBALAGENS LTDA"
             defaultValue={valores.razaoSocial}
           />
-          <Campo
+          <CampoDocumento
             name="cnpj"
-            rotulo="CNPJ"
-            inputMode="numeric"
-            dica="Pode digitar só os números."
-            placeholder="09.507.378/0001-50"
+            rotulo="CNPJ / CPF"
+            dica="Digite só os números — a pontuação entra sozinha."
             defaultValue={valores.cnpj}
           />
           <Campo
@@ -69,13 +68,7 @@ export function FormularioCliente({
             className="sm:col-span-2 lg:col-span-3"
             defaultValue={valores.endereco}
           />
-          <Campo
-            name="cep"
-            rotulo="CEP"
-            inputMode="numeric"
-            defaultValue={valores.cep}
-            placeholder="14781-160"
-          />
+          <CampoCep name="cep" rotulo="CEP" defaultValue={valores.cep} />
           <Campo
             name="bairro"
             rotulo="Bairro"
@@ -95,7 +88,7 @@ export function FormularioCliente({
 
       <SecaoCartao icone={Phone} titulo="Contato">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Campo name="telefone" rotulo="Telefone" defaultValue={valores.telefone} />
+          <CampoTelefone name="telefone" rotulo="Telefone" defaultValue={valores.telefone} />
           <Campo name="email" rotulo="E-mail" type="email" defaultValue={valores.email} />
           <Campo
             name="emailNfe"

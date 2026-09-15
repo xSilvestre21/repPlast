@@ -1,14 +1,17 @@
 import { BotaoLink, Cabecalho, EstadoVazio } from "@/components/ui";
 
 import { criarProduto } from "../acoes";
-import { carregarFornecedores } from "../dados";
+import { carregarClientes, carregarFornecedores } from "../dados";
 import { FormularioProduto } from "../formulario";
 import { VALORES_VAZIOS } from "../valores";
 import { Factory, PackagePlus } from "lucide-react";
 import { Pagina } from "@/components/pagina";
 
 export default async function PaginaNovoProduto() {
-  const fornecedores = await carregarFornecedores();
+  const [fornecedores, clientes] = await Promise.all([
+    carregarFornecedores(),
+    carregarClientes(),
+  ]);
 
   if (fornecedores.length === 0) {
     return (
@@ -40,6 +43,7 @@ export default async function PaginaNovoProduto() {
       />
       <FormularioProduto
         fornecedores={fornecedores}
+        clientes={clientes}
         valores={{
           ...VALORES_VAZIOS,
           // Com uma única indústria não faz sentido obrigar a escolha.

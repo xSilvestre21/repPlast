@@ -2,9 +2,21 @@
 
 import { useActionState, useMemo, useState } from "react";
 
-import { ListOrdered } from "lucide-react";
+import { ListOrdered, Package } from "lucide-react";
 
-import { Botao, Campo, MensagemErro, SecaoCartao, Selecao, formatarMoeda } from "@/components/ui";
+import {
+  Botao,
+  BotaoTexto,
+  CLASSE_CONTROLE_CELULA,
+  Campo,
+  Celula,
+  EstadoVazio,
+  MensagemErro,
+  SecaoCartao,
+  Selecao,
+  Tabela,
+  formatarMoeda,
+} from "@/components/ui";
 import { escreverNumeroBr, lerNumeroBr } from "@/lib/numero-br";
 import type { Aditivo } from "@/lib/precificacao";
 import {
@@ -16,8 +28,20 @@ import {
   unidadesComPreco,
 } from "@/lib/produto-preco";
 
-import type { EstadoFormulario } from "../acoes";
+/**
+ * O retorno de qualquer ação de item. Declarado aqui, e não importado de um
+ * módulo de ações, porque este componente serve DOIS documentos — pedido e
+ * orçamento — e amarrá-lo às ações de um deles seria escolher um dono.
+ */
+export type EstadoFormulario = { erro?: string };
 
+/**
+ * A tabela de itens, compartilhada pelo pedido e pelo orçamento.
+ *
+ * São o mesmo documento em momentos diferentes da conversa: as mesmas colunas,
+ * o mesmo IPI por linha, o mesmo congelamento. O que muda é quem recebe e o
+ * que acontece depois — e isso mora nas ações, que chegam por parâmetro.
+ */
 export type ProdutoOpcao = {
   id: string;
   descricao: string;
@@ -27,9 +51,12 @@ export type ProdutoOpcao = {
   comprimentoCm: string | null;
   espessuraMm: string | null;
   fatorKg: string | null;
+  densidade: string | null;
   precoUnidade: string | null;
   precoCaixa: string | null;
   precoKg: string | null;
+  unidadeAvulsa: UnidadeVenda | null;
+  precoAvulso: string | null;
   unidadesPorCaixa: number | null;
   aditivos: Aditivo[];
 };
@@ -92,20 +119,26 @@ export function SecaoItens({
       }
     >
       {itens.length === 0 ? (
-        <p className="text-sm text-tinta-3 mb-4">Nenhum item ainda.</p>
+        <div className="mb-4">
+          <EstadoVazio discreto icone={Package}>
+            Nenhum item ainda. Escolha um produto abaixo para começar.
+          </EstadoVazio>
+        </div>
       ) : (
-        <div className="overflow-x-auto -mx-1 px-1 mb-4">
-          <table className="w-full text-sm border-collapse min-w-160">
-            <thead>
-              <tr className="text-xs text-tinta-3 text-left border-b border-filete">
-                <th className="py-2 pr-3 font-normal">COD.FORN</th>
-                <th className="py-2 pr-3 font-normal">COD.CLI</th>
-                <th className="py-2 pr-3 font-normal">DESCRIÇÃO</th>
-                <th className="py-2 pr-3 font-normal text-right">QNT</th>
-                <th className="py-2 pr-3 font-normal">UN</th>
-                <th className="py-2 pr-3 font-normal text-right">{rotuloPreco}</th>
-                <th className="py-2 pr-3 font-normal text-right">TOT S/IPI</th>
-                <th className="py-2 pr-3 font-normal text-right whitespace-nowrap">
+        <Tabela
+          className="mb-4"
+          colunas={[
+            { rotulo: "COD.FORN" },
+            { rotulo: "COD.CLI" },
+            { rotulo: "DESCRIÇÃO" },
+            { rotulo: "QNT", alinhamento: "numero" },
+            { rotulo: "UN" },
+            { rotulo: rotuloPreco, alinhamento: "numero" },
+            { rotulo: "TOT S/IPI", alinhamento: "numero" },
+            {
+              alinhamento: "numero",
+              rotulo: (
+                <span className="whitespace-nowrap">
                   IPI
                   {/*
                     O atalho fica no CABEÇALHO da coluna que ele governa, e só
@@ -120,37 +153,31 @@ export function SecaoItens({
                         name="ligado"
                         value={itens.every((i) => i.comIpi) ? "0" : "1"}
                       />
-                      <button
-                        type="submit"
-                        className="ml-2 text-[0.6875rem] font-medium text-tinta-3
-                          hover:text-carimbo transition-colors underline underline-offset-2"
-                      >
+                      <BotaoTexto type="submit" className="ml-2">
                         {itens.every((i) => i.comIpi) ? "nenhum" : "todos"}
-                      </button>
+                      </BotaoTexto>
                     </form>
                   )}
-                </th>
-                <th className="py-2 pr-3 font-normal text-right">TOTAL</th>
-                {editavel && <th className="py-2" />}
-              </tr>
-            </thead>
-
-            <tbody className="divide-y divide-filete">
-              {itens.map((item) => (
-                <LinhaItem
-                  key={item.id}
-                  item={item}
-                  editavel={editavel}
-                  atualizar={atualizar}
-                  remover={remover}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+                </span>
+              ),
+            },
+            { rotulo: "TOTAL", alinhamento: "numero" },
+            ...(editavel ? [{ rotulo: "", alinhamento: "acao" as const }] : []),
+          ]}
+        >
+          {itens.map((item) => (
+            <LinhaItem
+              key={item.id}
+              item={item}
+              editavel={editavel}
+              atualizar={atualizar}
+              remover={remover}
+            />
+          ))}
+        </Tabela>
       )}
 
-      <div className="flex flex-col items-end gap-1 text-sm numerico border-t border-filete pt-4">
+      <div className="flex flex-col items-end gap-1 text-corpo numerico border-t border-filete pt-4">
         <div className="flex gap-8">
           <span className="text-tinta-2">Subtotal s/ IPI:</span>
           <span className="w-32 text-right">{formatarMoeda(totais.subtotalSemIpi)}</span>
@@ -167,7 +194,7 @@ export function SecaoItens({
           </span>
           <span className="w-32 text-right">{formatarMoeda(totais.valorIpi)}</span>
         </div>
-        <div className="flex gap-8 text-base font-semibold mt-1">
+        <div className="flex gap-8 text-medio font-semibold mt-1">
           <span>TOTAL GERAL:</span>
           <span className="w-32 text-right cifra">{formatarMoeda(totais.totalGeral)}</span>
         </div>
@@ -196,17 +223,15 @@ function LinhaItem({
 }) {
   const [, enviar, salvando] = useActionState(atualizar, {});
 
-  const celula = "py-2 pr-3 align-middle";
-
   return (
     <tr>
-      <td className={`${celula} numerico text-tinta-2`}>{item.codigoFornecedor ?? "—"}</td>
-      <td className={`${celula} numerico text-tinta-2`}>{item.codigoCliente ?? ""}</td>
-      <td className={`${celula} font-mono text-xs`}>{item.descricao}</td>
+      <Celula className="numerico text-tinta-2">{item.codigoFornecedor ?? "—"}</Celula>
+      <Celula className="numerico text-tinta-2">{item.codigoCliente ?? ""}</Celula>
+      <Celula className="font-mono text-mini">{item.descricao}</Celula>
 
       {editavel ? (
         <>
-          <td className={celula}>
+          <Celula alinhamento="numero">
             <form action={enviar} id={`item-${item.id}`}>
               <input type="hidden" name="itemId" value={item.id} />
               {/*
@@ -221,12 +246,12 @@ function LinhaItem({
                 inputMode="decimal"
                 defaultValue={escreverNumeroBr(item.quantidade, 0)}
                 aria-label="Quantidade"
-                className="w-20 rounded border border-filete bg-folha-2 px-2 py-1 text-right numerico outline-none focus:border-carimbo"
+                className={`${CLASSE_CONTROLE_CELULA} w-20 text-right numerico`}
               />
             </form>
-          </td>
-          <td className={`${celula} text-tinta-2`}>{ROTULO_UNIDADE[item.unidade]}</td>
-          <td className={celula}>
+          </Celula>
+          <Celula className="text-tinta-2">{ROTULO_UNIDADE[item.unidade]}</Celula>
+          <Celula alinhamento="numero">
             <input
               form={`item-${item.id}`}
               name="precoUnitario"
@@ -235,21 +260,19 @@ function LinhaItem({
               // faria o total errar centavos ao salvar a linha.
               defaultValue={escreverNumeroBr(item.precoUnitario, 2, 6)}
               aria-label="Preço unitário"
-              className="w-28 rounded border border-filete bg-folha-2 px-2 py-1 text-right numerico outline-none focus:border-carimbo"
+              className={`${CLASSE_CONTROLE_CELULA} w-28 text-right numerico`}
             />
-          </td>
+          </Celula>
         </>
       ) : (
         <>
-          <td className={`${celula} text-right numerico`}>
-            {escreverNumeroBr(item.quantidade, 0)}
-          </td>
-          <td className={`${celula} text-tinta-2`}>{ROTULO_UNIDADE[item.unidade]}</td>
-          <td className={`${celula} text-right numerico`}>{formatarMoeda(item.precoUnitario)}</td>
+          <Celula alinhamento="numero">{escreverNumeroBr(item.quantidade, 0)}</Celula>
+          <Celula className="text-tinta-2">{ROTULO_UNIDADE[item.unidade]}</Celula>
+          <Celula alinhamento="numero">{formatarMoeda(item.precoUnitario)}</Celula>
         </>
       )}
 
-      <td className={`${celula} text-right numerico`}>{formatarMoeda(item.totalSemIpi)}</td>
+      <Celula alinhamento="numero">{formatarMoeda(item.totalSemIpi)}</Celula>
       {/*
         A caixa fica NA COLUNA DO IPI, e não numa coluna nova.
 
@@ -258,7 +281,7 @@ function LinhaItem({
         extra só para a caixa empurraria a tabela para a rolagem horizontal no
         celular sem dizer nada a mais.
       */}
-      <td className={`${celula} text-right numerico text-tinta-2`}>
+      <Celula alinhamento="numero" className="text-tinta-2">
         {editavel ? (
           <label
             className="flex items-center justify-end gap-2 cursor-pointer"
@@ -294,30 +317,21 @@ function LinhaItem({
         ) : (
           formatarMoeda(item.valorIpi)
         )}
-      </td>
-      <td className={`${celula} text-right numerico`}>{formatarMoeda(item.total)}</td>
+      </Celula>
+      <Celula alinhamento="numero">{formatarMoeda(item.total)}</Celula>
 
       {editavel && (
-        <td className={`${celula} whitespace-nowrap`}>
-          <button
-            type="submit"
-            form={`item-${item.id}`}
-            disabled={salvando}
-            className="text-xs text-tinta-3 hover:text-carimbo transition-colors px-1 disabled:opacity-50"
-          >
+        <Celula alinhamento="acao" className="whitespace-nowrap">
+          <BotaoTexto type="submit" form={`item-${item.id}`} disabled={salvando}>
             {salvando ? "…" : "salvar"}
-          </button>
-          <form action={remover} className="inline">
+          </BotaoTexto>
+          <form action={remover} className="inline ml-2">
             <input type="hidden" name="itemId" value={item.id} />
-            <button
-              type="submit"
-              aria-label={`Remover ${item.descricao}`}
-              className="text-xs text-tinta-3 hover:text-perigo transition-colors px-1"
-            >
+            <BotaoTexto type="submit" perigoso aria-label={`Remover ${item.descricao}`}>
               remover
-            </button>
+            </BotaoTexto>
           </form>
-        </td>
+        </Celula>
       )}
     </tr>
   );
@@ -463,7 +477,7 @@ function FormularioAdicao({
                 defaultChecked
                 className="accent-carimbo"
               />
-              <span className="text-sm text-tinta-2 whitespace-nowrap">Cobrar</span>
+              <span className="text-corpo text-tinta-2 whitespace-nowrap">Cobrar</span>
             </span>
         </label>
 
@@ -488,7 +502,7 @@ function FormularioAdicao({
       </div>
 
       {totalPrevisto !== null && (
-        <p className="text-xs text-tinta-3 numerico">
+        <p className="text-mini text-tinta-3 numerico">
           Este item entra por {formatarMoeda(totalPrevisto)} antes do IPI.
         </p>
       )}

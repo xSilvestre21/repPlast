@@ -1,9 +1,10 @@
 "use client";
 
 import { PartyPopper, Pencil, Target, Wallet } from "lucide-react";
-import { useActionState, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 
 import {
+  Barra,
   Botao,
   BotaoTexto,
   Campo,
@@ -28,8 +29,18 @@ const PECAS = 60;
  * Nenhuma delas é quase preta, de propósito: no tema escuro uma lasca preta
  * cai invisível, e o efeito perderia um sexto das peças sem ninguém entender
  * por quê.
+ *
+ * São os tokens, não os hex deles: escritas literalmente, as seis lascas
+ * ficariam nas cores do tema claro caindo sobre o fundo do escuro.
  */
-const CORES = ["#2f6fed", "#0f9d70", "#fcf08f", "#d9652f", "#6d54d6", "#8d8d9c"];
+const CORES = [
+  "var(--carimbo)",
+  "var(--verde)",
+  "var(--destaque)",
+  "var(--placa-pessego-traco)",
+  "var(--placa-lilas-traco)",
+  "var(--tinta-3)",
+];
 
 export function PainelMeta({
   competencia,
@@ -55,14 +66,14 @@ export function PainelMeta({
     <>
       {batida && <Comemoracao competencia={competencia} />}
 
-      <Cartao marcada className="p-5 sm:p-7 mb-5">
+      <Cartao marcada className="p-6 sm:p-8 mb-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
               <Placa icone={Wallet} tom="menta" pequena />
               <span className="rotulo">Comissão do mês</span>
             </div>
-            <div className="text-3xl sm:text-5xl cifra numerico mt-2 leading-none">
+            <div className="text-cifra cifra numerico mt-2">
               {formatarMoeda(alcancado)}
             </div>
           </div>
@@ -73,7 +84,7 @@ export function PainelMeta({
                 <Target size={12} aria-hidden="true" />
                 Sua meta
               </span>
-              <div className="numerico font-semibold text-lg">{formatarMoeda(meta)}</div>
+              <div className="numerico font-semibold text-medio">{formatarMoeda(meta)}</div>
               <BotaoTexto
                 type="button"
                 onClick={() => setEditando(true)}
@@ -88,7 +99,7 @@ export function PainelMeta({
 
         {!editando && progresso !== null && (
           <div className="mt-5">
-            <div className="flex justify-between text-sm mb-2">
+            <div className="flex justify-between text-corpo mb-2">
               {batida ? (
                 <span className="flex items-center gap-2 font-medium">
                   <PartyPopper size={15} className="text-verde shrink-0" aria-hidden="true" />
@@ -110,19 +121,12 @@ export function PainelMeta({
               <span className="numerico text-tinta-2">{Math.round(progresso)}%</span>
             </div>
 
-            <div className="h-2.5 rounded-full bg-folha-2 overflow-hidden">
-              <div
-                style={{ "--alvo": `${progresso}%` } as CSSProperties}
-                className={`barra-preenche h-full rounded-full ${
-                  batida ? "bg-verde" : "bg-tinta"
-                }`}
-              />
-            </div>
+            <Barra progresso={progresso} tom={batida ? "verde" : "tinta"} />
           </div>
         )}
 
         {editando && (
-          <form action={enviar} className="mt-5 space-y-3">
+          <form action={enviar} className="mt-5 space-y-4">
             <MensagemErro>{estado.erro}</MensagemErro>
 
             <div className="flex flex-wrap items-end gap-3">

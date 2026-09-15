@@ -1,25 +1,38 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Factory, PiggyBank, Send } from "lucide-react";
+import { ChevronLeft, ChevronRight, Factory, PiggyBank, Send, Users } from "lucide-react";
 
-import { SeloStatus } from "@/components/selo-status";
 import {
   Cabecalho,
   Cartao,
+  CorpoLinha,
   Emblema,
   EstadoVazio,
+  FimDaLinha,
+  GradeTotais,
+  LinhaDado,
+  Painel,
+  Placa,
+  Total,
+  ValorLinha,
   formatarMoeda,
   formatarPercentual,
 } from "@/components/ui";
 import { competenciaDe, deslocarCompetencia, intervaloDaCompetencia, progressoDaMeta } from "@/lib/comissao";
 import {
+  acertoDoPedido,
   pedidosDaCompetencia,
   percentualDoPedido,
+  prepostoDoPedido,
   resumirComissao,
+  type PedidoDaComissao,
 } from "@/lib/comissao-consulta";
-import { dbAdministrativo, dbParaOrganizacao } from "@/lib/db";
-import { organizacaoAtual } from "@/lib/sessao";
+import { ratearComissao } from "@/lib/comissao";
+import { escreverNumeroBr } from "@/lib/numero-br";
+import { dbAdministrativo } from "@/lib/db";
+import { escopoAtual } from "@/lib/sessao";
 
-import { definirMeta } from "./acoes";
+import { definirMeta, salvarAcerto } from "./acoes";
+import { LinhaComissao, type LinhaPedido } from "./acerto";
 import { PainelMeta } from "./painel-meta";
 import { Pagina } from "@/components/pagina";
 
@@ -33,8 +46,7 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
       ? parametros.mes
       : competenciaDe(new Date());
 
-  const organizacaoId = await organizacaoAtual();
-  const db = dbParaOrganizacao(organizacaoId);
+  const { organizacaoId, db, ehAdmin, usuarioId } = await escopoAtual();
   const { de } = intervaloDaCompetencia(competencia);
 
   const [organizacao, pedidos] = await Promise.all([
@@ -42,10 +54,31 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
       where: { id: organizacaoId },
       select: { metaComissaoMensal: true },
     }),
-    pedidosDaCompetencia(db, organizacaoId, competencia),
+    pedidosDaCompetencia(db, organizacaoId, competencia, ehAdmin ? null : usuarioId),
   ]);
 
   const total = resumirComissao(pedidos);
+
+  /*
+   * As mesmas quatro caixas para os dois papéis, com números diferentes: o
+   * administrador vê o que a indústria paga ao escritório, o preposto vê o que
+   * cabe a ele. Não é a mesma tela com um filtro — são duas leituras do mês, e
+   * mostrar ao preposto o total do escritório seria mostrar dinheiro que não é
+   * dele.
+   */
+  const vista = ehAdmin
+    ? {
+        previsto: total.valor,
+        recebido: total.recebido,
+        aAcertar: total.aAcertar,
+        diferenca: total.diferenca,
+      }
+    : {
+        previsto: total.previstoDoPreposto,
+        recebido: total.recebidoDoPreposto,
+        aAcertar: total.aAcertarDoPreposto,
+        diferenca: total.diferencaDoPreposto,
+      };
 
   // Agrupa por indústria, mantendo a ordem alfabética.
   const porFornecedor = [...Map.groupBy(pedidos, (p) => p.fornecedor.id).entries()]
@@ -56,8 +89,24 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
     }))
     .sort((a, b) => a.fornecedor.nome.localeCompare(b.fornecedor.nome, "pt-BR"));
 
+  // Agrupa por preposto. Pedido da casa (sem preposto) fica de fora: ele já
+  // aparece no "fica com o escritório".
+  const porPreposto = [
+    ...Map.groupBy(
+      pedidos.filter((p) => prepostoDoPedido(p)),
+      (p) => prepostoDoPedido(p)!.id,
+    ).entries(),
+  ]
+    .map(([, doPreposto]) => ({
+      nome: prepostoDoPedido(doPreposto[0])!.nome,
+      pedidos: doPreposto.length,
+      resumo: resumirComissao(doPreposto),
+    }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+
   const meta = organizacao?.metaComissaoMensal ?? null;
-  const progresso = progressoDaMeta(meta?.toString() ?? null, total.valor);
+  // A meta acompanha o RECEBIDO: é o que de fato entrou, não o que deve entrar.
+  const progresso = progressoDaMeta(meta?.toString() ?? null, vista.recebido);
 
   return (
     <Pagina>
@@ -69,14 +118,14 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
 
       {/*
         O mês é a legenda da página inteira, não um controle dentro dela: fica
-        centralizado em serifada, com as setas discretas de cada lado — como o
-        cabeçalho de uma folha de apuração.
+        centralizado, com as setas discretas de cada lado — como o cabeçalho de
+        uma folha de apuração.
       */}
-      <div className="flex items-center justify-center gap-5 mb-7">
+      <div className="flex items-center justify-center gap-4 mb-7">
         <SetaMes competencia={deslocarCompetencia(competencia, -1)} rotulo="Mês anterior">
           <ChevronLeft size={16} strokeWidth={1.5} aria-hidden="true" />
         </SetaMes>
-        <span className="font-serif text-xl min-w-52 text-center">{nomeDoMes(de)}</span>
+        <span className="text-medio font-semibold min-w-52 text-center">{nomeDoMes(de)}</span>
         <SetaMes competencia={deslocarCompetencia(competencia, 1)} rotulo="Próximo mês">
           <ChevronRight size={16} strokeWidth={1.5} aria-hidden="true" />
         </SetaMes>
@@ -85,12 +134,92 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
       <PainelMeta
         competencia={competencia}
         meta={meta?.toString() ?? null}
-        alcancado={total.valor.toNumber()}
+        alcancado={vista.recebido.toNumber()}
         progresso={progresso?.percentual ?? null}
         batida={progresso?.batida ?? false}
         falta={progresso?.falta.toNumber() ?? null}
         definirMeta={definirMeta}
       />
+
+      {/*
+        Previsto e recebido lado a lado, com a diferença entre eles.
+        Um número só esconderia justamente o que a tela existe para mostrar:
+        quanto do mês ainda está em aberto, e quanto o acerto ficou abaixo do
+        combinado.
+      */}
+      {porFornecedor.length > 0 && (
+        <div className="mb-5">
+          <GradeTotais>
+            <Total rotulo="Previsto" valor={formatarMoeda(vista.previsto.toString())} />
+            <Total rotulo="Recebido" valor={formatarMoeda(vista.recebido.toString())} />
+            <Total
+              rotulo="A acertar"
+              valor={formatarMoeda(vista.aAcertar.toString())}
+              detalhe={`${porFornecedor.reduce((n, f) => n + f.pedidos.length, 0) - total.acertados} pedido(s)`}
+            />
+            <Total
+              rotulo="Diferença"
+              valor={formatarMoeda(vista.diferenca.toString())}
+              tom={
+                vista.diferenca.isZero()
+                  ? undefined
+                  : vista.diferenca.isNegative()
+                    ? "perigo"
+                    : "verde"
+              }
+              detalhe={total.acertados > 0 ? `em ${total.acertados} acertado(s)` : "nada acertado"}
+            />
+          </GradeTotais>
+        </div>
+      )}
+
+      {/*
+        O que sai para cada preposto no mês — é por esta lista que o
+        administrador paga. Só aparece quando há preposto: num escritório de uma
+        pessoa só, seria um cartão dizendo que ela deve a si mesma.
+      */}
+      {ehAdmin && porPreposto.length > 0 && (
+        <Cartao className="p-5 sm:p-6 mb-5">
+          <div className="titulo-regra mb-5">
+            <Placa icone={Users} tom="lilas" pequena />
+            <h2 className="text-realce font-semibold">Por preposto</h2>
+          </div>
+
+          <Painel>
+            {porPreposto.map(({ nome, pedidos: quantos, resumo }) => (
+              <LinhaDado key={nome}>
+                <CorpoLinha titulo={nome} detalhe={`${quantos} pedido(s)`} />
+
+                <FimDaLinha>
+                  <ValorLinha
+                    className="w-32"
+                    valor={formatarMoeda(resumo.previstoDoPreposto.toString())}
+                    nota="a pagar"
+                  />
+                  <ValorLinha
+                    className="w-32"
+                    valor={formatarMoeda(resumo.recebidoDoPreposto.toString())}
+                    nota="já acertado"
+                  />
+                </FimDaLinha>
+              </LinhaDado>
+            ))}
+
+            {/* O resto é do escritório, e cai na MESMA coluna de "a pagar": é
+                com esse número que os de cima se comparam. */}
+            <LinhaDado className="bg-folha">
+              <span className="text-corpo font-medium flex-1">Fica com o escritório</span>
+              <FimDaLinha>
+                <ValorLinha
+                  className="w-32"
+                  valor={formatarMoeda(total.previstoDoEscritorio.toString())}
+                />
+                <div className="w-32" aria-hidden="true" />
+              </FimDaLinha>
+            </LinhaDado>
+          </Painel>
+        </Cartao>
+      )}
 
       {porFornecedor.length === 0 ? (
         <EstadoVazio icone={Send}>
@@ -111,7 +240,7 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
                     >
                       {fornecedor.nome}
                     </Link>
-                    <div className="text-sm text-tinta-2 mt-0.5 numerico">
+                    <div className="text-corpo text-tinta-2 mt-0.5 numerico">
                       {formatarMoeda(resumo.base.toString())} vendidos ·{" "}
                       {doFornecedor.length} pedido(s)
                     </div>
@@ -119,40 +248,37 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
                 </div>
 
                 <div className="text-right">
-                  <div className="text-2xl font-extrabold cifra numerico tracking-tight">
-                    {formatarMoeda(resumo.valor.toString())}
+                  <div className="cifra text-forte numerico">
+                    {formatarMoeda(
+                      (ehAdmin ? resumo.valor : resumo.previstoDoPreposto).toString(),
+                    )}
                   </div>
-                  <div className="text-xs text-tinta-3 numerico">
-                    {formatarPercentual(resumo.percentualMedio.toString())} sobre a base
+                  <div className="text-mini text-tinta-3 numerico mt-1">
+                    {ehAdmin
+                      ? `${formatarPercentual(resumo.percentualMedio.toString())} sobre a base`
+                      : "sua fatia"}
                   </div>
+                  {resumo.acertados > 0 && (
+                    <div
+                      className={`text-mini numerico mt-0.5 ${
+                        resumo.diferenca.isNegative() ? "text-perigo" : "text-verde"
+                      }`}
+                    >
+                      recebido {formatarMoeda(resumo.recebido.toString())}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              <div className="rounded-[3px] border border-filete bg-folha divide-y divide-filete">
+              <Painel>
                 {doFornecedor.map((pedido) => (
-                  <Link
+                  <LinhaComissao
                     key={pedido.id}
-                    href={`/pedidos/${pedido.id}`}
-                    className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3.5 py-2.5 text-sm hover:bg-folha-2 transition-colors first:rounded-t-xl last:rounded-b-xl"
-                  >
-                    <span className="flex items-center gap-3 min-w-0">
-                      <span className="numerico text-tinta-2">#{pedido.numero}</span>
-                      <span className="truncate">{pedido.cliente.apelido}</span>
-                      <span className="text-xs text-tinta-3 whitespace-nowrap numerico">
-                        {formatarPercentual(percentualDoPedido(pedido))}
-                      </span>
-                    </span>
-
-                    <span className="flex items-center gap-4 numerico">
-                      <span className="text-xs text-tinta-3">
-                        {pedido.enviadoEm ? DATA.format(pedido.enviadoEm) : ""}
-                      </span>
-                      <span>{formatarMoeda(pedido.subtotalSemIpi.toString())}</span>
-                      <SeloStatus status={pedido.status} />
-                    </span>
-                  </Link>
+                    pedido={paraLinha(pedido, ehAdmin)}
+                    salvar={salvarAcerto.bind(null, pedido.id)}
+                  />
                 ))}
-              </div>
+              </Painel>
             </Cartao>
           ))}
         </div>
@@ -192,3 +318,61 @@ function nomeDoMes(data: Date): string {
   const nome = MES_LONGO.format(data);
   return nome.charAt(0).toUpperCase() + nome.slice(1);
 }
+
+
+/** "AAAA-MM-DD" em UTC — é o que o input `date` espera, e a coluna não tem hora. */
+function iso(data: Date | null): string | null {
+  return data ? data.toISOString().slice(0, 10) : null;
+}
+
+/**
+ * Achata o pedido no que a linha precisa, já formatado — e já pela visão de
+ * quem está olhando.
+ *
+ * O corte acontece AQUI, montando as props, e não dentro do componente: o que
+ * não é colocado neste objeto não entra no payload que o navegador do preposto
+ * recebe. Esconder com `if` na tela deixaria o número viajando.
+ */
+function paraLinha(pedido: PedidoDaComissao, ehAdmin: boolean): LinhaPedido {
+  const percentual = percentualDoPedido(pedido);
+  const percentualPreposto = pedido.comissaoPercentualPreposto?.toString() ?? null;
+  const acerto = acertoDoPedido(pedido);
+
+  const previsto = ratearComissao(pedido.subtotalSemIpi.toString(), percentual, percentualPreposto);
+  const recebido = acerto ? ratearComissao(acerto.base, acerto.percentual, percentualPreposto) : null;
+
+  const preposto = prepostoDoPedido(pedido);
+
+  const fatias = (r: ReturnType<typeof ratearComissao> | null) =>
+    r && ehAdmin && preposto
+      ? { preposto: r.doPreposto.toNumber(), escritorio: r.doEscritorio.toNumber() }
+      : null;
+
+  return {
+    id: pedido.id,
+    numero: pedido.numero,
+    status: pedido.status,
+    apelidoCliente: pedido.cliente.apelido,
+    enviadoEm: pedido.enviadoEm ? DATA.format(pedido.enviadoEm) : null,
+    prazoEntrega: iso(pedido.prazoEntrega),
+    entregueEm: iso(pedido.entregueEm),
+    base: pedido.subtotalSemIpi.toString(),
+    // O percentual da indústria é conta do escritório com a indústria.
+    percentual: ehAdmin ? percentual : "",
+    previsto: (ehAdmin ? previsto.total : previsto.doPreposto).toNumber(),
+    valorRecebido: pedido.valorRecebido
+      ? escreverNumeroBr(pedido.valorRecebido.toString(), 2)
+      : "",
+    percentualRecebido: pedido.comissaoPercentualRecebido
+      ? escreverNumeroBr(pedido.comissaoPercentualRecebido.toString())
+      : "",
+    recebido: recebido ? (ehAdmin ? recebido.total : recebido.doPreposto).toNumber() : null,
+    preposto: ehAdmin ? (preposto?.nome ?? null) : null,
+    rateio: fatias(previsto),
+    rateioRecebido: fatias(recebido),
+    // Quem recebe da indústria é o escritório; é ele que lança o acerto.
+    podeAcertar: ehAdmin,
+  };
+}
+
+

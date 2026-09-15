@@ -4,15 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import type { Familia } from "@/generated/prisma/enums";
-import { dbParaOrganizacao } from "@/lib/db";
 import { lerNumeroBr } from "@/lib/numero-br";
-import { organizacaoAtual } from "@/lib/sessao";
+import { escopoAtual } from "@/lib/sessao";
 
 export type EstadoFormulario = { erro?: string };
 
 async function contexto() {
-  const organizacaoId = await organizacaoAtual();
-  return { organizacaoId, db: dbParaOrganizacao(organizacaoId) };
+  return escopoAtual();
 }
 
 function lerTexto(valor: FormDataEntryValue | null): string | null {
@@ -39,7 +37,8 @@ function lerMedidaObrigatoria(valor: FormDataEntryValue | null, rotulo: string):
   return medida;
 }
 
-const FAMILIAS: Familia[] = ["SACO", "FITA", "STRETCH", "BOBINA"];
+const FAMILIAS: Familia[] = ["SACO", "FITA", "STRETCH", "BOBINA", "AVULSO"];
+const UNIDADES = ["MIL", "KG", "UN", "CX"] as const;
 
 /**
  * Monta o produto a partir do formulário.
@@ -62,10 +61,19 @@ function dadosDoFormulario(formData: FormData) {
   const comum = {
     familia,
     fornecedorId,
+    /*
+     * De quem é este produto.
+     *
+     * Opcional porque o escritório também cadastra item de catálogo sem dono,
+     * mas o caminho normal é ter um: o mesmo saco cotado para dois clientes é
+     * dois produtos, com preço próprio cada um.
+     */
+    clienteId: lerTexto(formData.get("clienteId")),
     descricao,
     codigoFornecedor: lerTexto(formData.get("codigoFornecedor")),
     material: lerTexto(formData.get("material")),
     complemento: lerTexto(formData.get("complemento")),
+    unidadeRotulo: lerTexto(formData.get("unidadeRotulo")),
   };
 
   if (familia === "SACO") {
@@ -75,6 +83,9 @@ function dadosDoFormulario(formData: FormData) {
       comprimentoCm: lerMedidaObrigatoria(formData.get("comprimentoCm"), "O comprimento"),
       espessuraMm: lerMedidaObrigatoria(formData.get("espessuraMm"), "A espessura"),
       fatorKg: lerMedidaObrigatoria(formData.get("fatorKg"), "O fator kg"),
+      // Opcional: vazia, o motor usa DENSIDADE_PADRAO — que é o divisor 10 de
+      // antes, e o que mantém produto antigo valendo o mesmo.
+      densidade: lerMedida(formData.get("densidade"), "A densidade"),
       sanfona: lerTexto(formData.get("sanfona")),
       // Campos das outras famílias ficam nulos.
       larguraMm: null,
@@ -84,6 +95,8 @@ function dadosDoFormulario(formData: FormData) {
       precoUnidade: null,
       precoCaixa: null,
       precoKg: null,
+      unidadeAvulsa: null,
+      precoAvulso: null,
     };
   }
 
@@ -109,7 +122,35 @@ function dadosDoFormulario(formData: FormData) {
       comprimentoCm: null,
       espessuraMm: null,
       fatorKg: null,
+      densidade: null,
       sanfona: null,
+      precoKg: null,
+      unidadeAvulsa: null,
+      precoAvulso: null,
+    };
+  }
+
+  if (familia === "AVULSO") {
+    const bruta = String(formData.get("unidadeAvulsa") ?? "");
+    const unidadeAvulsa = UNIDADES.find((u) => u === bruta);
+    if (!unidadeAvulsa) throw new Error("Escolha a unidade de venda.");
+
+    return {
+      ...comum,
+      unidadeAvulsa,
+      precoAvulso: lerMedidaObrigatoria(formData.get("precoAvulso"), "O preço"),
+      larguraMm: lerMedida(formData.get("larguraMm"), "A largura"),
+      larguraCm: null,
+      comprimentoCm: null,
+      espessuraMm: null,
+      fatorKg: null,
+      densidade: null,
+      sanfona: null,
+      metragemM: null,
+      micragem: null,
+      unidadesPorCaixa: null,
+      precoUnidade: null,
+      precoCaixa: null,
       precoKg: null,
     };
   }
@@ -124,11 +165,14 @@ function dadosDoFormulario(formData: FormData) {
     comprimentoCm: null,
     espessuraMm: null,
     fatorKg: null,
+    densidade: null,
     sanfona: null,
     metragemM: null,
     unidadesPorCaixa: null,
     precoUnidade: null,
     precoCaixa: null,
+    unidadeAvulsa: null,
+    precoAvulso: null,
   };
 }
 
@@ -142,9 +186,20 @@ async function validarVinculos(
   organizacaoId: string,
   fornecedorId: string,
   aditivos: string[],
+  clienteId: string | null,
 ) {
   const fornecedor = await db.fornecedor.count({ where: { id: fornecedorId, organizacaoId } });
   if (fornecedor === 0) throw new Error("Indústria não encontrada.");
+
+  /*
+   * O cliente é conferido pelo mesmo caminho da indústria, e não só pelo RLS.
+   * A policy recusaria a gravação de qualquer jeito, mas com um erro de banco;
+   * aqui a pessoa lê uma frase que explica o que houve.
+   */
+  if (clienteId) {
+    const cliente = await db.cliente.count({ where: { id: clienteId, organizacaoId } });
+    if (cliente === 0) throw new Error("Cliente não encontrado.");
+  }
 
   if (aditivos.length > 0) {
     const validos = await db.aditivo.count({
@@ -168,7 +223,7 @@ export async function criarProduto(
     const dados = dadosDoFormulario(formData);
     const aditivos = lerAditivos(formData);
 
-    await validarVinculos(db, organizacaoId, dados.fornecedorId, aditivos);
+    await validarVinculos(db, organizacaoId, dados.fornecedorId, aditivos, dados.clienteId);
 
     const produto = await db.produto.create({
       data: {
@@ -197,7 +252,7 @@ export async function atualizarProduto(
     const dados = dadosDoFormulario(formData);
     const aditivos = lerAditivos(formData);
 
-    await validarVinculos(db, organizacaoId, dados.fornecedorId, aditivos);
+    await validarVinculos(db, organizacaoId, dados.fornecedorId, aditivos, dados.clienteId);
 
     const { count } = await db.produto.updateMany({
       where: { id, organizacaoId },

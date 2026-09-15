@@ -19,16 +19,16 @@ export default async function PaginaComecar() {
    */
   return (
     <Cartao marcada className="px-6 py-8 sm:px-8 sm:py-9">
-      <h1 className="text-2xl font-bold tracking-[-0.025em] leading-none">
+      <h1 className="text-forte font-bold tracking-[-0.025em] leading-none">
         Criar meu escritório
       </h1>
-      <p className="text-sm text-tinta-2 mt-2.5 mb-7 leading-relaxed">
+      <p className="text-corpo text-tinta-2 mt-2.5 mb-7 leading-relaxed">
         Leva menos de um minuto. Nenhum cartão, nenhuma configuração.
       </p>
 
       <FormularioCadastro acao={cadastrar} />
 
-      <p className="text-sm text-tinta-2 mt-7 text-center">
+      <p className="text-corpo text-tinta-2 mt-7 text-center">
         Já tem conta?{" "}
         <Link
           href="/entrar"

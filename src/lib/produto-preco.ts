@@ -12,7 +12,7 @@ import Decimal from "decimal.js";
 
 import { type Aditivo, pesoMilheiroKg, precoMilheiroSaco } from "./precificacao";
 
-export type Familia = "SACO" | "FITA" | "STRETCH" | "BOBINA";
+export type Familia = "SACO" | "FITA" | "STRETCH" | "BOBINA" | "AVULSO";
 export type UnidadeVenda = "MIL" | "KG" | "UN" | "CX";
 
 export interface ProdutoPrecificavel {
@@ -23,6 +23,8 @@ export interface ProdutoPrecificavel {
   comprimentoCm?: Decimal.Value | null;
   espessuraMm?: Decimal.Value | null;
   fatorKg?: Decimal.Value | null;
+  /** Densidade congelada no produto. Vazia cai em `DENSIDADE_PADRAO`. */
+  densidade?: Decimal.Value | null;
 
   // Fita
   precoUnidade?: Decimal.Value | null;
@@ -31,6 +33,10 @@ export interface ProdutoPrecificavel {
 
   // Stretch e bobina
   precoKg?: Decimal.Value | null;
+
+  // Avulso: um preço só, na unidade em que o item é vendido
+  unidadeAvulsa?: UnidadeVenda | null;
+  precoAvulso?: Decimal.Value | null;
 
   aditivos?: Aditivo[];
 }
@@ -41,6 +47,7 @@ export const ROTULO_COLUNA_PRECO: Record<Familia, string> = {
   FITA: "PREÇO/CX",
   STRETCH: "PREÇO/KG",
   BOBINA: "PREÇO/KG",
+  AVULSO: "PREÇO UNIT.",
 };
 
 export const ROTULO_UNIDADE: Record<UnidadeVenda, string> = {
@@ -63,6 +70,13 @@ export function unidadesDaFamilia(familia: Familia): UnidadeVenda[] {
       return ["MIL"];
     case "FITA":
       return ["CX", "UN"];
+    case "AVULSO":
+      /*
+       * O avulso não tem unidade fixa: ela é escolhida no cadastro do produto.
+       * Devolvemos as candidatas e deixamos `precoUnitario` decidir — só a
+       * unidade escolhida tem preço, então `unidadesComPreco` filtra sozinho.
+       */
+      return ["UN", "KG", "CX", "MIL"];
     default:
       return ["KG"];
   }
@@ -99,6 +113,7 @@ export function precoUnitario(
       comprimentoCm,
       espessuraMm,
       fatorKg,
+      densidade: produto.densidade,
       aditivos: produto.aditivos,
     });
   }
@@ -119,6 +134,12 @@ export function precoUnitario(
     return null;
   }
 
+  if (produto.familia === "AVULSO") {
+    // Preço digitado, e só vale na unidade em que o item é vendido.
+    if (produto.precoAvulso == null || produto.unidadeAvulsa !== unidade) return null;
+    return new Decimal(produto.precoAvulso);
+  }
+
   // STRETCH e BOBINA
   if (unidade !== "KG") return null;
   return produto.precoKg == null ? null : new Decimal(produto.precoKg);
@@ -127,10 +148,10 @@ export function precoUnitario(
 /**
  * Peso do item, em quilos — usado nas metas de comissão medidas em kg.
  *
- * ⚠️ Para o saco depende de `pesoMilheiroKg`, que é uma HIPÓTESE ainda não
- * confirmada pelo usuário (ver `precificacao.ts`). Para fita não há peso
- * cadastrado, então devolve zero: uma indústria de fitas com meta em quilos
- * ficaria sem base, e isso precisa ser resolvido antes da fase 6.
+ * Para o saco é `pesoMilheiroKg` — medidas × densidade, a mesma conta que forma
+ * o preço. Para fita não há peso cadastrado, então devolve zero: uma indústria
+ * de fitas com meta em quilos ficaria sem base, e isso precisa ser resolvido
+ * antes da fase 6.
  */
 export function pesoDoItem(
   produto: ProdutoPrecificavel,
@@ -143,8 +164,59 @@ export function pesoDoItem(
     const { larguraCm, comprimentoCm, espessuraMm } = produto;
     if (larguraCm == null || comprimentoCm == null || espessuraMm == null) return new Decimal(0);
 
-    return pesoMilheiroKg({ larguraCm, comprimentoCm, espessuraMm }).times(quantidade);
+    return pesoMilheiroKg(
+      { larguraCm, comprimentoCm, espessuraMm },
+      produto.densidade,
+    ).times(quantidade);
   }
 
   return new Decimal(0);
+}
+
+/**
+ * Converte o produto do banco no formato que o motor de preço entende.
+ *
+ * Vive aqui, e não na ação do pedido, porque o orçamento precisa exatamente do
+ * mesmo — e duas cópias divergiriam na primeira família nova. Foi o que quase
+ * aconteceu com o AVULSO.
+ *
+ * Os `unknown` são os `Decimal` do Prisma: só o `toString()` deles interessa.
+ */
+export function paraPrecificavel(produto: {
+  familia: string;
+  larguraCm: unknown;
+  comprimentoCm: unknown;
+  espessuraMm: unknown;
+  fatorKg: unknown;
+  densidade: unknown;
+  precoUnidade: unknown;
+  precoCaixa: unknown;
+  precoKg: unknown;
+  unidadeAvulsa: unknown;
+  precoAvulso: unknown;
+  unidadesPorCaixa: number | null;
+  aditivos: { aditivo: { nome: string; sufixoDescricao: string; tipo: string; valor: unknown } }[];
+}): ProdutoPrecificavel {
+  const texto = (v: unknown) => (v === null || v === undefined ? null : String(v));
+
+  return {
+    familia: produto.familia as Familia,
+    larguraCm: texto(produto.larguraCm),
+    comprimentoCm: texto(produto.comprimentoCm),
+    espessuraMm: texto(produto.espessuraMm),
+    fatorKg: texto(produto.fatorKg),
+    densidade: texto(produto.densidade),
+    precoUnidade: texto(produto.precoUnidade),
+    precoCaixa: texto(produto.precoCaixa),
+    precoKg: texto(produto.precoKg),
+    unidadeAvulsa: (texto(produto.unidadeAvulsa) as UnidadeVenda | null) ?? null,
+    precoAvulso: texto(produto.precoAvulso),
+    unidadesPorCaixa: produto.unidadesPorCaixa,
+    aditivos: produto.aditivos.map(({ aditivo }) => ({
+      nome: aditivo.nome,
+      sufixoDescricao: aditivo.sufixoDescricao,
+      tipo: aditivo.tipo as Aditivo["tipo"],
+      valor: String(aditivo.valor),
+    })),
+  };
 }

@@ -3,48 +3,18 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { dbParaOrganizacao } from "@/lib/db";
-import { organizacaoAtual } from "@/lib/sessao";
+import { normalizarCep, normalizarDocumento, normalizarTelefone } from "@/lib/mascara";
+import { escopoAtual } from "@/lib/sessao";
 
 export type EstadoFormulario = { erro?: string };
 
 async function contexto() {
-  const organizacaoId = await organizacaoAtual();
-  return { organizacaoId, db: dbParaOrganizacao(organizacaoId) };
+  return escopoAtual();
 }
 
 function lerTexto(valor: FormDataEntryValue | null): string | null {
   const texto = typeof valor === "string" ? valor.trim() : "";
   return texto === "" ? null : texto;
-}
-
-/** Mantém só os dígitos — CNPJ e CEP são digitados com pontuação variada. */
-function somenteDigitos(valor: string | null): string | null {
-  if (valor === null) return null;
-  const digitos = valor.replace(/\D/g, "");
-  return digitos === "" ? null : digitos;
-}
-
-function formatarCnpj(valor: string | null): string | null {
-  const digitos = somenteDigitos(valor);
-  if (digitos === null) return null;
-
-  if (digitos.length !== 14) {
-    throw new Error("O CNPJ precisa ter 14 dígitos.");
-  }
-
-  return digitos.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
-}
-
-function formatarCep(valor: string | null): string | null {
-  const digitos = somenteDigitos(valor);
-  if (digitos === null) return null;
-
-  if (digitos.length !== 8) {
-    throw new Error("O CEP precisa ter 8 dígitos.");
-  }
-
-  return digitos.replace(/^(\d{5})(\d{3})$/, "$1-$2");
 }
 
 function validarEmail(valor: string | null, rotulo: string): string | null {
@@ -66,17 +36,26 @@ function dadosDoFormulario(formData: FormData) {
   const uf = lerTexto(formData.get("uf"));
   if (uf && uf.length !== 2) throw new Error("A UF precisa ter duas letras.");
 
+  /*
+   * Documento, CEP e telefone são normalizados aqui, e não só pela máscara do
+   * campo: o formulário continua enviando por POST comum quando o JavaScript
+   * não roda, e nesse caminho o texto chega como a pessoa escreveu.
+   */
+  const cnpj = lerTexto(formData.get("cnpj"));
+  const cep = lerTexto(formData.get("cep"));
+  const telefone = lerTexto(formData.get("telefone"));
+
   return {
     apelido,
     razaoSocial,
-    cnpj: formatarCnpj(lerTexto(formData.get("cnpj"))),
+    cnpj: cnpj === null ? null : normalizarDocumento(cnpj),
     ie: lerTexto(formData.get("ie")),
     endereco: lerTexto(formData.get("endereco")),
     bairro: lerTexto(formData.get("bairro")),
-    cep: formatarCep(lerTexto(formData.get("cep"))),
+    cep: cep === null ? null : normalizarCep(cep),
     municipio: lerTexto(formData.get("municipio")),
     uf: uf ? uf.toUpperCase() : null,
-    telefone: lerTexto(formData.get("telefone")),
+    telefone: telefone === null ? null : normalizarTelefone(telefone),
     email: validarEmail(lerTexto(formData.get("email")), "O e-mail"),
     emailNfe: validarEmail(lerTexto(formData.get("emailNfe")), "O e-mail para NF-e"),
     observacoes: lerTexto(formData.get("observacoes")),
@@ -90,9 +69,19 @@ export async function criarCliente(
   let destino: string;
 
   try {
-    const { organizacaoId, db } = await contexto();
+    const { organizacaoId, usuarioId, ehAdmin, db } = await contexto();
+
+    /*
+     * Preposto só cadastra na própria carteira; administrador cadastra para o
+     * escritório. Não é escolha de tela: o RLS recusaria de todo jeito um
+     * cliente carimbado com o nome de outro preposto.
+     */
     const cliente = await db.cliente.create({
-      data: { organizacaoId, ...dadosDoFormulario(formData) },
+      data: {
+        organizacaoId,
+        representanteId: ehAdmin ? null : usuarioId,
+        ...dadosDoFormulario(formData),
+      },
     });
 
     destino = `/clientes/${cliente.id}`;

@@ -14,6 +14,13 @@ export type ValoresFornecedor = {
   razaoSocial: string;
   cnpj: string;
   emailsPedido: string;
+  endereco: string;
+  bairro: string;
+  cep: string;
+  municipio: string;
+  uf: string;
+  telefone: string;
+  email: string;
   ipiPercentual: string;
   comissaoPercentual: string;
   fatorKgPadrao: string;
@@ -24,6 +31,13 @@ export const VALORES_VAZIOS: ValoresFornecedor = {
   razaoSocial: "",
   cnpj: "",
   emailsPedido: "",
+  endereco: "",
+  bairro: "",
+  cep: "",
+  municipio: "",
+  uf: "",
+  telefone: "",
+  email: "",
   ipiPercentual: "",
   comissaoPercentual: "",
   fatorKgPadrao: "",

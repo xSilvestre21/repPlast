@@ -5,19 +5,20 @@ import {
   BotaoLink,
   Cabecalho,
   Cartao,
+  CorpoLinha,
   EstadoVazio,
+  FimDaLinha,
   LinhaLista,
+  ValorLinha,
   formatarMoeda,
 } from "@/components/ui";
-import { dbParaOrganizacao } from "@/lib/db";
-import { organizacaoAtual } from "@/lib/sessao";
+import { escopoAtual } from "@/lib/sessao";
 import { Pagina } from "@/components/pagina";
 
 const DATA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" });
 
 export default async function PaginaPedidos() {
-  const organizacaoId = await organizacaoAtual();
-  const db = dbParaOrganizacao(organizacaoId);
+  const { organizacaoId, db } = await escopoAtual();
 
   const pedidos = await db.pedido.findMany({
     where: { organizacaoId },
@@ -53,31 +54,28 @@ export default async function PaginaPedidos() {
           {pedidos.map((pedido) => (
             <LinhaLista key={pedido.id} href={`/pedidos/${pedido.id}`}>
               <div className="flex items-center gap-3 min-w-0 basis-full sm:basis-0 sm:flex-1">
-                <span className="font-semibold numerico shrink-0 cifra">
+                {/* Largura fixa: o nº 99 e o nº 2262 têm de começar a empurrar
+                    o nome do cliente a partir do mesmo ponto. */}
+                <span className="cifra numerico shrink-0 w-16 text-tinta-2">
                   #{pedido.numero}
                 </span>
 
-                <div className="min-w-0">
-                  <div className="truncate">{pedido.cliente.apelido}</div>
-                  <div className="text-xs text-tinta-2 truncate">
-                    {pedido.fornecedor.nome} · {pedido._count.itens} item(ns) ·{" "}
-                    {DATA.format(pedido.criadoEm)}
-                  </div>
-                </div>
+                <CorpoLinha
+                  titulo={pedido.cliente.apelido}
+                  detalhe={`${pedido.fornecedor.nome} · ${pedido._count.itens} item(ns) · ${DATA.format(pedido.criadoEm)}`}
+                />
               </div>
 
-              <div className="flex items-center gap-4">
-                <span
-                  className={`numerico font-semibold ${
-                    pedido.status === "CANCELADO"
-                      ? "text-tinta-3 line-through"
-                      : "cifra"
-                  }`}
-                >
-                  {formatarMoeda(pedido.totalGeral.toString())}
-                </span>
-                <SeloStatus status={pedido.status} />
-              </div>
+              <FimDaLinha>
+                <ValorLinha
+                  className="w-32"
+                  riscado={pedido.status === "CANCELADO"}
+                  valor={formatarMoeda(pedido.totalGeral.toString())}
+                />
+                <div className="w-24 flex justify-end">
+                  <SeloStatus status={pedido.status} />
+                </div>
+              </FimDaLinha>
             </LinhaLista>
           ))}
         </Cartao>

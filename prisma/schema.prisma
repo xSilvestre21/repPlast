@@ -22,6 +22,8 @@ enum Familia {
   FITA
   STRETCH
   BOBINA
+  /// O que não é nenhuma das quatro: preço digitado, sem fórmula.
+  AVULSO
 }
 
 /// Onde o valor do aditivo entra: somado ao fator kg (antes da fórmula) ou ao
@@ -29,6 +31,10 @@ enum Familia {
 enum TipoAditivo {
   POR_KG
   POR_MILHEIRO
+  /// Cobrado por metro linear. Existe para a tabela da indústria caber inteira
+  /// no cadastro; NENHUM cálculo o aplica ainda, porque ele depende da metragem
+  /// do produto e só as famílias sem fórmula a têm. Ver `precificacao.ts`.
+  POR_METRO_LINEAR
 }
 
 enum UnidadeVenda {
@@ -44,9 +50,39 @@ enum StatusPedido {
   CANCELADO
 }
 
+/// Em que pé está a proposta.
+///
+/// O sistema antigo tinha um `status` no orçamento que NENHUMA linha de código
+/// lia nem escrevia. Aqui ele vale: é por ele que se sabe o que ainda está na
+/// mão do cliente, e é ACEITO que o pedido nascido dele carimba.
+enum StatusOrcamento {
+  ABERTO
+  ACEITO
+  RECUSADO
+  EXPIRADO
+}
+
 enum TipoFrete {
   CIF
   FOB
+}
+
+/// Plano de assinatura do escritório.
+///
+/// PADRAO é o representante que trabalha sozinho — é o que o sistema sempre foi.
+/// PLUS destrava pôr prepostos para vender e ratear a comissão com eles.
+enum Plano {
+  PADRAO
+  PLUS
+}
+
+/// Papel do usuário DENTRO do escritório.
+///
+/// ADMIN é o dono da operação: enxerga tudo e administra cadastros e prepostos.
+/// REPRESENTANTE é o preposto: vende, e só vê o que é dele.
+enum Papel {
+  ADMIN
+  REPRESENTANTE
 }
 
 
@@ -60,6 +96,19 @@ model Organizacao {
   ativa    Boolean  @default(true)
   criadaEm DateTime @default(now())
 
+  /// Assinatura do escritório. Nasce PADRAO: escritório novo é de uma pessoa só,
+  /// e nada no sistema muda até alguém precisar de preposto.
+  plano Plano @default(PADRAO)
+
+  /// Contador do número do orçamento. É POR ESCRITÓRIO, e não por indústria
+  /// como o do pedido: o orçamento é documento do representante para o cliente,
+  /// e a indústria nem fica sabendo dele.
+  proximoNumeroOrcamento Int @default(1)
+
+  /// Condições que se repetem em toda proposta — ICMS, frete, validade. Entram
+  /// preenchidas no orçamento novo e podem ser editadas ali.
+  observacoesPadrao String?
+
   /// Meta pessoal de comissão do mês, em reais. É do representante, não da
   /// indústria: serve para ele acompanhar o próprio objetivo e comemorar ao
   /// bater. Vazio significa que ele ainda não definiu nenhuma.
@@ -70,6 +119,7 @@ model Organizacao {
   fornecedores Fornecedor[]
   produtos     Produto[]
   pedidos      Pedido[]
+  orcamentos   Orcamento[]
 
   @@map("organizacao")
 }
@@ -82,10 +132,45 @@ model Usuario {
   senhaHash     String
   criadoEm      DateTime @default(now())
 
-  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  /// ADMIN por padrão porque toda conta que existe hoje é a do dono do
+  /// escritório. Preposto só nasce REPRESENTANTE, e só pela tela do admin.
+  papel Papel @default(ADMIN)
+
+  ativo Boolean @default(true)
+
+  /// Fatia da comissão que este preposto recebe, em percentual DELA — não da
+  /// venda. 50 quer dizer "metade do que a indústria pagar ao escritório".
+  ///
+  /// É o padrão do contrato dele: cada pedido congela o valor vigente na
+  /// criação, para que renegociar amanhã não reescreva o que já foi vendido.
+  comissaoPercentualPadrao Decimal? @db.Decimal(6, 3)
+
+  organizacao Organizacao          @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  clientes     Cliente[]
+  pedidos      Pedido[]
+  orcamentos   Orcamento[]
+  fornecedores FornecedorPreposto[]
 
   @@index([organizacaoId])
   @@map("usuario")
+}
+
+/// Quais indústrias cada preposto atende.
+///
+/// A ausência é permissiva de propósito: indústria SEM nenhuma linha aqui é
+/// visível a todos do escritório. O contrário — exigir cadastro para cada
+/// preposto ver cada indústria — transformaria o primeiro dia de todo preposto
+/// numa lista de cliques, e um esquecimento viraria "sumiu a indústria".
+model FornecedorPreposto {
+  fornecedorId String @db.Uuid
+  usuarioId    String @db.Uuid
+
+  fornecedor Fornecedor @relation(fields: [fornecedorId], references: [id], onDelete: Cascade)
+  usuario    Usuario    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([fornecedorId, usuarioId])
+  @@index([usuarioId])
+  @@map("fornecedor_preposto")
 }
 
 // ---------------------------------------------------------------------------
@@ -116,15 +201,23 @@ model Cliente {
   observacoes String?
   ativo       Boolean @default(true)
 
+  /// Preposto dono da carteira. NULO significa "é do escritório" — e é o que
+  /// vale em todo escritório do plano PADRAO, onde não há preposto nenhum.
+  representanteId String? @db.Uuid
+
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
   organizacao    Organizacao            @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  representante  Usuario?               @relation(fields: [representanteId], references: [id], onDelete: SetNull)
   pedidos        Pedido[]
+  orcamentos     Orcamento[]
+  produtos       Produto[]
   codigosProduto ProdutoCodigoCliente[]
 
   @@index([organizacaoId])
   @@index([organizacaoId, apelido])
+  @@index([representanteId])
   @@map("cliente")
 }
 
@@ -135,6 +228,19 @@ model Fornecedor {
   nome        String
   razaoSocial String?
   cnpj        String?
+
+  endereco  String?
+  bairro    String?
+  cep       String?
+  municipio String?
+  uf        String? @db.VarChar(2)
+
+  telefone String?
+  /// Contato geral da indústria — o vendedor interno, o telefone do escritório.
+  /// NÃO se confunde com `emailsPedido`: aquele é para onde o PDF é disparado,
+  /// este é com quem se fala.
+  email    String?
+
   /// Logo da INDÚSTRIA — é ele que vai no cabeçalho do PDF, não o do escritório.
   /// Guardado no próprio banco: são arquivos pequenos, e assim o sistema não
   /// depende de storage externo para funcionar.
@@ -160,13 +266,97 @@ model Fornecedor {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  organizacao Organizacao          @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   aditivos    Aditivo[]
+  materiais   Material[]
   produtos    Produto[]
   pedidos     Pedido[]
+  orcamentos  Orcamento[]
+  prepostos   FornecedorPreposto[]
 
   @@index([organizacaoId])
   @@map("fornecedor")
+}
+
+/// Tabela de preços do material, por indústria.
+///
+/// É POR FORNECEDOR pelo mesmo motivo que o aditivo e o IPI são: o preço é da
+/// indústria. O PEAD da QUALYPLAST não custa o que custa o da ERIPACK, e uma
+/// lista única do escritório não teria onde guardar essa diferença.
+///
+/// O preço e a densidade aqui são SUGESTÃO, não fonte viva: ao cadastrar um
+/// saco, os dois são copiados para o produto e dali em diante quem vale é o
+/// que está gravado nele. É a mesma regra do `fatorKgPadrao` da indústria, e existe para
+/// que um reajuste de tabela não mude sozinho o preço de produto já cadastrado.
+model Material {
+  id           String @id @default(uuid()) @db.Uuid
+  fornecedorId String @db.Uuid
+
+  /// Como sai impresso na descrição do saco, ex.: "PEAD", "PEBD".
+  nome String
+
+  /// Preço corrente do quilo, ex.: 14,00.
+  precoKg Decimal @db.Decimal(12, 4)
+
+  /// Piso do preço do quilo, ex.: 12,00.
+  ///
+  /// Abaixo dele a venda ainda acontece — por isso o cadastro de produto AVISA
+  /// em vez de bloquear. O que se perde ali é comissão: o percentual é o mesmo,
+  /// mas incide sobre um total menor.
+  ///
+  /// Anulável: nem toda tabela de indústria tem piso.
+  precoMinimoKg Decimal? @db.Decimal(12, 4)
+
+  faixas MaterialFaixa[]
+
+  /// Densidade do material, ex.: 0,1 para o PEAD.
+  ///
+  /// Entra na fórmula do saco: peso do milheiro = L × C × E × densidade, e o
+  /// preço é esse peso vezes o fator kg. Era o divisor 10 fixo no motor — que
+  /// é a densidade do PEAD e só dele.
+  ///
+  /// Anulável porque nem toda tabela de indústria a informa; nesse caso o
+  /// produto cai em `DENSIDADE_PADRAO` (0,1), o valor de antes.
+  densidade Decimal? @db.Decimal(10, 4)
+
+  ativo Boolean @default(true)
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  fornecedor Fornecedor @relation(fields: [fornecedorId], references: [id], onDelete: Cascade)
+
+  /// Dois "PEAD" na mesma indústria seriam duas tabelas de preço para a mesma
+  /// coisa, e nada diria qual é a válida.
+  @@unique([fornecedorId, nome])
+  @@index([fornecedorId])
+  @@map("material")
+}
+
+/// Preço por faixa de peso do pedido.
+///
+/// Algumas indústrias cobram mais barato quanto maior a compra — a SELPACK tem
+/// quatro faixas por material. A tabela é OPCIONAL: material sem faixa nenhuma
+/// usa `Material.precoKg`, e é assim que a maioria funciona.
+///
+/// As faixas são REFERÊNCIA, não cálculo automático. O preço do produto
+/// continua congelado nele (ver `Material`), então a faixa serve para quem
+/// cadastra escolher o número certo — e não para o sistema trocar o preço de um
+/// pedido pelas costas de quem o lançou.
+model MaterialFaixa {
+  id         String @id @default(uuid()) @db.Uuid
+  materialId String @db.Uuid
+
+  /// Limites do peso do pedido, em kg. Nulo dos dois lados = sem piso / sem teto.
+  pesoDeKg  Decimal? @db.Decimal(12, 3)
+  pesoAteKg Decimal? @db.Decimal(12, 3)
+
+  precoKg Decimal @db.Decimal(12, 4)
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@index([materialId])
+  @@map("material_faixa")
 }
 
 
@@ -198,6 +388,17 @@ model Produto {
   fornecedorId  String  @db.Uuid
   familia       Familia
 
+  /// De qual CLIENTE é este produto.
+  ///
+  /// O mesmo saco cotado para dois clientes é dois produtos, com preço próprio
+  /// cada um — e é isso que distingue as linhas que, sem o dono, pareceriam
+  /// repetidas: `90x160x0,055 SF 12 PEAD` existe quatro vezes no acervo, a
+  /// R$ 20, R$ 21 e R$ 24, uma por cliente.
+  ///
+  /// Anulável porque o escritório também cadastra item de catálogo, sem dono —
+  /// mas o caminho normal é ter um.
+  clienteId String? @db.Uuid
+
   /// Código do produto na indústria (COD.FORN no PDF).
   codigoFornecedor String?
   /// Descrição gerada a partir das medidas; é ela que sai impressa.
@@ -208,12 +409,23 @@ model Produto {
   /// Texto livre acrescentado ao fim da descrição: cor, acabamento, peso da
   /// bobina. Vem dos pedidos reais — "transparente", "BOBINA 4KG PESO LÍQUIDO".
   complemento      String?
+  /// Como a quantidade deste produto se lê na tela e no pedido: "MIL", "kg",
+  /// "Caixas". É do PRODUTO, não da família — o acervo traz 441 de 444 com
+  /// rótulo próprio, e dois sacos podem ser vendidos em unidades diferentes.
+  unidadeRotulo    String?
 
   // --- SACO: os únicos campos que alimentam a fórmula de preço ---
   larguraCm     Decimal? @db.Decimal(10, 2)
   comprimentoCm Decimal? @db.Decimal(10, 2)
   espessuraMm   Decimal? @db.Decimal(10, 4)
   fatorKg       Decimal? @db.Decimal(12, 4)
+  /// Densidade do material, CONGELADA no produto como o fator kg.
+  ///
+  /// Nasce copiada do material escolhido e não é relida da tabela depois: um
+  /// reajuste de cadastro não pode mudar sozinho o preço de produto já
+  /// cadastrado. Vazia vale `DENSIDADE_PADRAO` (0,1) — que é o divisor 10 que
+  /// era fixo no motor, e é o que mantém produto antigo no mesmo centavo.
+  densidade     Decimal? @db.Decimal(10, 4)
   /// Sanfona é TEXTO: os pedidos reais trazem 13,50 / 15 / 09. Não entra em cálculo.
   sanfona       String?
 
@@ -221,6 +433,11 @@ model Produto {
   unidadesPorCaixa Int?
   precoUnidade     Decimal? @db.Decimal(14, 4)
   precoCaixa       Decimal? @db.Decimal(14, 4)
+
+  // --- AVULSO: preço digitado, na unidade em que o item é vendido ---
+  /// Em que unidade este avulso é vendido. É ela que aparece no pedido.
+  unidadeAvulsa UnidadeVenda?
+  precoAvulso   Decimal?      @db.Decimal(14, 4)
 
   // --- STRETCH / BOBINA ---
   precoKg   Decimal? @db.Decimal(14, 4)
@@ -235,13 +452,17 @@ model Produto {
 
   organizacao    Organizacao            @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   fornecedor     Fornecedor             @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
+  cliente        Cliente?               @relation(fields: [clienteId], references: [id], onDelete: SetNull)
   aditivos       ProdutoAditivo[]
   codigosCliente ProdutoCodigoCliente[]
   itensPedido    PedidoItem[]
+  itensOrcamento OrcamentoItem[]
 
   @@index([organizacaoId])
   @@index([fornecedorId])
+  @@index([clienteId])
   @@index([organizacaoId, familia])
+  @@index([organizacaoId, descricao])
   @@map("produto")
 }
 
@@ -306,6 +527,24 @@ model Pedido {
   /// preenchido. NÃO é impresso no PDF.
   comissaoPercentual Decimal? @db.Decimal(6, 3)
 
+  // --- Acerto da comissão -----------------------------------------------
+  //
+  // Preenchido à mão quando a indústria paga, e NUNCA calculado sozinho. A
+  // diferença entre o previsto e o recebido é negociação: a indústria tanto
+  // pode pagar uma base menor quanto pagar a cheia com percentual menor, e não
+  // há regra que o sistema possa adivinhar. Enquanto estes campos estiverem
+  // vazios, o pedido conta apenas como previsto.
+
+  /// Base que de fato entrou, quando difere do subtotal do pedido.
+  valorRecebido Decimal? @db.Decimal(14, 2)
+
+  /// Percentual acordado NO ACERTO. Nasce igual ao do pedido e pode ser mudado.
+  comissaoPercentualRecebido Decimal? @db.Decimal(6, 3)
+
+  /// Data em que a entrega aconteceu de verdade. Existe para comparar com
+  /// `prazoEntrega` e mostrar se atrasou, adiantou ou saiu no dia.
+  entregueEm DateTime? @db.Date
+
   subtotalSemIpi Decimal @default(0) @db.Decimal(14, 2)
   valorIpi       Decimal @default(0) @db.Decimal(14, 2)
   totalGeral     Decimal @default(0) @db.Decimal(14, 2)
@@ -315,21 +554,51 @@ model Pedido {
   /// Nome impresso no rodapé do PDF.
   vendedor String?
 
+  /// De qual proposta este pedido nasceu, quando nasceu de uma.
+  ///
+  /// O sistema antigo tinha dois caminhos de conversão e NENHUM deles deixava
+  /// ligação entre os documentos — depois de convertido, ninguém sabia de onde
+  /// o pedido tinha vindo.
+  orcamentoId String? @db.Uuid
+
+  /// Fatia do preposto NESTE pedido, em percentual da comissão — não da venda.
+  ///
+  /// Copiada de `Usuario.comissaoPercentualPadrao` na criação e congelada aqui
+  /// pelo mesmo motivo que o percentual da indústria é: renegociar o acordo com
+  /// um preposto amanhã não pode reescrever o que ele já ganhou.
+  comissaoPercentualPreposto Decimal? @db.Decimal(6, 3)
+
+  /// Preposto a quem este pedido credita comissão.
+  ///
+  /// É o dono do CLIENTE no momento da criação, e não quem digitou: a
+  /// administradora lança pedido para a carteira do preposto o tempo todo, e a
+  /// comissão continua sendo dele. Congelado aqui pelo mesmo motivo que o
+  /// percentual é — reatribuir a carteira depois não reescreve o que já foi
+  /// vendido.
+  representanteId String? @db.Uuid
+
   criadoEm     DateTime  @default(now())
   atualizadoEm DateTime  @updatedAt
   enviadoEm    DateTime?
   canceladoEm  DateTime?
 
-  organizacao Organizacao          @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
-  fornecedor  Fornecedor           @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
-  cliente     Cliente              @relation(fields: [clienteId], references: [id], onDelete: Restrict)
-  itens       PedidoItem[]
+  organizacao   Organizacao  @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  fornecedor    Fornecedor   @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
+  cliente       Cliente      @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  representante Usuario?     @relation(fields: [representanteId], references: [id], onDelete: SetNull)
+  orcamento     Orcamento?   @relation(fields: [orcamentoId], references: [id], onDelete: SetNull)
+  itens         PedidoItem[]
 
   @@unique([fornecedorId, numero])
   @@index([organizacaoId])
   @@index([organizacaoId, status])
   @@index([clienteId])
   @@index([organizacaoId, enviadoEm])
+  // A competência da comissão é a data de ENTREGA — é por esta coluna que a
+  // apuração do mês filtra, e sem o índice ela varre a tabela inteira.
+  @@index([organizacaoId, prazoEntrega])
+  @@index([representanteId])
+  @@index([orcamentoId])
   @@map("pedido")
 }
 
@@ -379,3 +648,110 @@ model PedidoItem {
 // ---------------------------------------------------------------------------
 
 
+
+// ---------------------------------------------------------------------------
+// Orçamento
+// ---------------------------------------------------------------------------
+
+/// A proposta que vai ao cliente antes de existir pedido.
+///
+/// Espelha o `Pedido` de propósito — item congelado, IPI por linha, os mesmos
+/// totais — porque é o mesmo documento em outro momento da conversa. As
+/// diferenças são as que o momento pede: tem `attn` e validade, não tem frete
+/// nem transportadora, e o número é do ESCRITÓRIO, não da indústria.
+model Orcamento {
+  id            String @id @default(uuid()) @db.Uuid
+  organizacaoId String @db.Uuid
+  fornecedorId  String @db.Uuid
+
+  /// NULO quando a proposta é para quem ainda não é cliente.
+  ///
+  /// Cotar antes de cadastrar é o começo da conversa, não uma falha de
+  /// preenchimento: no backup do sistema antigo, 99 das 166 propostas nasceram
+  /// assim. O cadastro vem depois, se o negócio acontecer — e aí o orçamento é
+  /// ligado ao cliente e pode virar pedido.
+  clienteId String? @db.Uuid
+
+  /// O destinatário enquanto ele não é cliente. Nome e cidade é tudo o que se
+  /// sabe de quem ainda está pedindo preço.
+  clienteAvulsoNome      String?
+  clienteAvulsoMunicipio String?
+
+  /// Sequencial por escritório. O sistema antigo não numerava orçamento, e o
+  /// documento só podia ser citado por "o do dia tal" — um número o torna
+  /// citável ao telefone.
+  numero Int
+  status StatusOrcamento @default(ABERTO)
+
+  /// "Aos cuidados de": a pessoa no cliente a quem a proposta é dirigida.
+  /// Sai impressa logo abaixo do nome da empresa.
+  attn String?
+
+  /// Até quando o preço vale. Não expira sozinho: quem muda o status é o
+  /// representante, porque ele é quem sabe se renegociou.
+  validoAte DateTime? @db.Date
+
+  prazoPagamento String?
+  observacoes    String?
+  vendedor       String?
+
+  /// Congelado na criação, como no pedido.
+  ipiPercentual Decimal @default(0) @db.Decimal(6, 3)
+
+  subtotalSemIpi Decimal @default(0) @db.Decimal(14, 2)
+  valorIpi       Decimal @default(0) @db.Decimal(14, 2)
+  totalGeral     Decimal @default(0) @db.Decimal(14, 2)
+
+  /// Mesmo corte do pedido: segue o dono da carteira do cliente.
+  representanteId String? @db.Uuid
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  organizacao   Organizacao     @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  fornecedor    Fornecedor      @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
+  cliente       Cliente?        @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  representante Usuario?        @relation(fields: [representanteId], references: [id], onDelete: SetNull)
+  itens         OrcamentoItem[]
+  pedidos       Pedido[]
+
+  @@unique([organizacaoId, numero])
+  @@index([organizacaoId])
+  @@index([organizacaoId, status])
+  @@index([clienteId])
+  @@index([representanteId])
+  @@map("orcamento")
+}
+
+/// Item da proposta. Congela o que sai impresso, igual ao item de pedido.
+model OrcamentoItem {
+  id          String  @id @default(uuid()) @db.Uuid
+  orcamentoId String  @db.Uuid
+  produtoId   String? @db.Uuid
+
+  ordem   Int
+  familia Familia
+
+  codigoFornecedor String?
+  codigoCliente    String?
+  descricao        String
+
+  unidade    UnidadeVenda
+  quantidade Decimal      @db.Decimal(14, 3)
+
+  comIpi Boolean @default(true)
+
+  precoUnitario Decimal @db.Decimal(16, 6)
+
+  totalSemIpi Decimal @db.Decimal(14, 2)
+  valorIpi    Decimal @db.Decimal(14, 2)
+  total       Decimal @db.Decimal(14, 2)
+  pesoKg      Decimal @default(0) @db.Decimal(14, 3)
+
+  orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  produto   Produto?  @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+
+  @@index([orcamentoId])
+  @@index([produtoId])
+  @@map("orcamento_item")
+}

@@ -58,7 +58,15 @@ export function descricaoSaco(saco: DescricaoSaco): string {
 
   return juntar([
     medidas,
-    sanfona ? `SF ${sanfona}` : null,
+    /*
+     * Sem sanfona, a descrição diz "S/SF" — não fica calada.
+     *
+     * É informação para quem produz: o saco sem sanfona é outro produto, e o
+     * silêncio seria lido como "esqueceram de preencher". O sistema anterior
+     * imprimia sempre um dos dois, e 116 dos 121 sacos sem sanfona do acervo
+     * trazem o "S/SF" escrito.
+     */
+    sanfona ? `SF ${sanfona}` : "S/SF",
     saco.material,
     saco.complemento,
     ...(saco.adicionais ?? []),

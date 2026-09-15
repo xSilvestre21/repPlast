@@ -60,7 +60,7 @@ export default function LayoutEntrada({ children }: LayoutProps<"/">) {
         <section className="palco min-w-0">
           <Link
             href="/"
-            className="inline-block text-xl font-extrabold tracking-[-0.03em]
+            className="inline-block text-forte font-extrabold tracking-[-0.03em]
               transition-colors hover:text-carimbo"
           >
             RepPlast
@@ -74,14 +74,13 @@ export default function LayoutEntrada({ children }: LayoutProps<"/">) {
             deixa de fazer.
           */}
           <h1
-            className="mt-5 text-[2.25rem] sm:text-[3rem] lg:text-[3.5rem]
-              font-extrabold tracking-[-0.04em] leading-[1.14]"
+            className="mt-5 text-vitrine font-extrabold text-balance"
           >
             Do pedido ao PDF,{" "}
             <span className="marcador">sem recalcular nada.</span>
           </h1>
 
-          <p className="mt-5 text-base sm:text-lg text-tinta-2 leading-relaxed max-w-lg">
+          <p className="mt-5 text-realce text-tinta-2 leading-relaxed max-w-lg">
             Pedidos, produtos e comissões para representante de embalagens
             plásticas — num lugar só.
           </p>
@@ -96,9 +95,9 @@ export default function LayoutEntrada({ children }: LayoutProps<"/">) {
           */}
           <ul className="hidden lg:flex flex-col gap-4 mt-10">
             {ARGUMENTOS.map(({ icone, tom, texto }) => (
-              <li key={texto} className="flex items-center gap-3.5">
+              <li key={texto} className="flex items-center gap-3">
                 <Placa icone={icone} tom={tom} />
-                <span className="text-[0.9375rem] text-tinta-2 leading-snug">{texto}</span>
+                <span className="text-realce text-tinta-2 leading-snug">{texto}</span>
               </li>
             ))}
           </ul>

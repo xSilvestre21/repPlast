@@ -21,7 +21,10 @@ export async function GET(
   if (!sessao) return new Response("Não autenticado", { status: 401 });
 
   const organizacaoId = sessao.organizacaoId;
-  const db = dbParaOrganizacao(organizacaoId);
+  const db = dbParaOrganizacao(organizacaoId, {
+    usuarioId: sessao.usuarioId,
+    papel: sessao.papel,
+  });
 
   const fornecedor = await db.fornecedor.findFirst({
     where: { id, organizacaoId },

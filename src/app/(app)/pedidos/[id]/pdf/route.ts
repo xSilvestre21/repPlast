@@ -21,7 +21,10 @@ export async function GET(
   const sessao = await sessaoAtual();
   if (!sessao) return new Response("Não autenticado", { status: 401 });
 
-  const pedido = await carregarPedidoParaPdf(id, sessao.organizacaoId);
+  const pedido = await carregarPedidoParaPdf(id, sessao.organizacaoId, {
+    usuarioId: sessao.usuarioId,
+    papel: sessao.papel,
+  });
 
   if (!pedido) return new Response("Pedido não encontrado", { status: 404 });
 

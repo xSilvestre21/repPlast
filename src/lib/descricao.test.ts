@@ -62,10 +62,26 @@ describe("saco plástico — pedidos 2253 e 2256", () => {
     expect(descricao).toContain("SF 09");
   });
 
-  it("omite a sanfona quando o saco não tem", () => {
+  it("saco sem sanfona sai com S/SF, não em silêncio", () => {
+    // Quem produz precisa saber que é sem sanfona — a ausência do texto seria
+    // lida como campo esquecido. É o que o sistema anterior imprimia.
     expect(
       descricaoSaco({ larguraCm: 40, comprimentoCm: 60, espessuraMm: 0.1, material: "PEBD" }),
-    ).toBe("40x60x0,10 PEBD");
+    ).toBe("40x60x0,10 S/SF PEBD");
+  });
+
+  it("a sanfona sai como foi digitada, com o zero à esquerda", () => {
+    // No acervo o mesmo valor aparece como "09" e como "9": é texto digitado,
+    // não número formatado, e regravá-lo como número perderia o zero.
+    expect(
+      descricaoSaco({
+        larguraCm: 77,
+        comprimentoCm: 110,
+        espessuraMm: 0.05,
+        sanfona: "09",
+        material: "PEAD",
+      }),
+    ).toBe("77x110x0,05 SF 09 PEAD");
   });
 });
 

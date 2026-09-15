@@ -16,7 +16,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { cache } from "react";
 import { cookies } from "next/headers";
 
-import { dbAdministrativo } from "./db";
+import { type Ator, dbAdministrativo, dbParaOrganizacao } from "./db";
 
 const COOKIE = "repplast_sessao";
 const DURACAO_DIAS = 30;
@@ -26,6 +26,9 @@ export interface Sessao {
   organizacaoId: string;
   nome: string;
   email: string;
+  papel: "ADMIN" | "REPRESENTANTE";
+  /// Plano do escritório. Decide se as telas de preposto existem.
+  plano: "PADRAO" | "PLUS";
 }
 
 function segredo(): string {
@@ -95,17 +98,23 @@ export const sessaoAtual = cache(async (): Promise<Sessao | null> => {
       nome: true,
       email: true,
       organizacaoId: true,
-      organizacao: { select: { ativa: true } },
+      papel: true,
+      ativo: true,
+      organizacao: { select: { ativa: true, plano: true } },
     },
   });
 
-  if (!usuario || !usuario.organizacao.ativa) return null;
+  // Desativar um preposto tem efeito na requisição seguinte, e não quando o
+  // cookie dele vencer — é o mesmo motivo de a organização ser relida aqui.
+  if (!usuario || !usuario.ativo || !usuario.organizacao.ativa) return null;
 
   return {
     usuarioId: usuario.id,
     organizacaoId: usuario.organizacaoId,
     nome: usuario.nome,
     email: usuario.email,
+    papel: usuario.papel,
+    plano: usuario.organizacao.plano,
   };
 });
 
@@ -121,6 +130,48 @@ export async function organizacaoAtual(): Promise<string> {
 
   if (!sessao) throw new Error("Sem sessão. Faça login para continuar.");
   return sessao.organizacaoId;
+}
+
+/**
+ * O banco já no escopo de quem está pedindo — escritório E usuário.
+ *
+ * É o atalho que a aplicação inteira deve usar. Existe para que ninguém precise
+ * lembrar de juntar as duas coisas na mão: montar o cliente sem o ator é um
+ * erro de compilação (ver `dbParaOrganizacao`), e montá-lo com o ator errado só
+ * seria possível indo buscar outra sessão de propósito.
+ */
+export async function escopoAtual(): Promise<{
+  organizacaoId: string;
+  usuarioId: string;
+  papel: Ator["papel"];
+  ehAdmin: boolean;
+  plano: Sessao["plano"];
+  db: ReturnType<typeof dbParaOrganizacao>;
+}> {
+  const sessao = await sessaoAtual();
+  if (!sessao) throw new Error("Sem sessão. Faça login para continuar.");
+
+  return {
+    organizacaoId: sessao.organizacaoId,
+    usuarioId: sessao.usuarioId,
+    papel: sessao.papel,
+    ehAdmin: sessao.papel === "ADMIN",
+    plano: sessao.plano,
+    db: dbParaOrganizacao(sessao.organizacaoId, {
+      usuarioId: sessao.usuarioId,
+      papel: sessao.papel,
+    }),
+  };
+}
+
+/** Exige papel de administrador. Lança quando não é — as ações a usam de porteiro. */
+export async function exigirAdmin(): Promise<void> {
+  const sessao = await sessaoAtual();
+
+  if (!sessao) throw new Error("Sem sessão. Faça login para continuar.");
+  if (sessao.papel !== "ADMIN") {
+    throw new Error("Esta ação é do administrador do escritório.");
+  }
 }
 
 export async function criarSessao(usuarioId: string): Promise<void> {

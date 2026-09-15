@@ -9,14 +9,23 @@ import type { EstadoFormulario } from "../acoes";
 
 export type Opcao = { id: string; rotulo: string; detalhe?: string };
 
+/**
+ * A pergunta "para quem e de quem", compartilhada pelo pedido e pelo orçamento.
+ *
+ * É a mesma pergunta nos dois documentos, com as mesmas consequências — um
+ * documento por indústria —, então ela mora num componente só. O que muda é
+ * apenas o rótulo do botão.
+ */
 export function FormularioNovoPedido({
   clientes,
   fornecedores,
   acao,
+  rotuloEnvio = "Criar pedido",
 }: {
   clientes: Opcao[];
   fornecedores: Opcao[];
   acao: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
+  rotuloEnvio?: string;
 }) {
   const [estado, enviar, enviando] = useActionState(acao, {});
 
@@ -27,7 +36,7 @@ export function FormularioNovoPedido({
       <SecaoCartao
         icone={Handshake}
         titulo="Para quem e de quem"
-        descricao="Um pedido vai para uma única indústria — é ela que fatura e é dela a comissão. Se o cliente quer produtos de duas, são dois pedidos."
+        descricao="Vai para uma única indústria — é ela que fatura e é dela a comissão. Se o cliente quer produtos de duas, são dois documentos."
       >
         <div className="grid gap-4 sm:grid-cols-2">
           <Selecao
@@ -65,7 +74,7 @@ export function FormularioNovoPedido({
 
       <div className="flex justify-end">
         <Botao type="submit" carregando={enviando}>
-          {enviando ? "Criando…" : "Criar pedido"}
+          {enviando ? "Criando…" : rotuloEnvio}
         </Botao>
       </div>
     </form>

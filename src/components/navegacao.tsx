@@ -8,6 +8,7 @@ import { ViewTransition } from "react";
 import { sair } from "@/app/(entrada)/acoes";
 
 import { AlternadorTema } from "./alternador-tema";
+import { Avatar } from "./ui";
 
 /**
  * Quem está logado, e a saída.
@@ -16,21 +17,12 @@ import { AlternadorTema } from "./alternador-tema";
  * mantém este componente sem acesso a dados.
  */
 function MenuUsuario({ nome }: { nome: string }) {
-  const iniciais = nome
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((parte) => parte[0]?.toUpperCase())
-    .join("");
-
   return (
     <div className="flex items-center gap-1">
-      <span
-        title={nome}
-        className="grid place-items-center size-8 shrink-0 rounded-full bg-folha-2
-          border border-filete text-[0.6875rem] font-bold tracking-wide text-tinta-2"
-      >
-        {iniciais || "?"}
+      {/* O `title` vai no invólucro: o `Avatar` é `aria-hidden`, e sem ele o
+          disco de iniciais não diria a quem pertence. */}
+      <span title={nome} className="flex">
+        <Avatar nome={nome} pequeno />
       </span>
 
       <form action={sair}>
@@ -57,12 +49,22 @@ function MenuUsuario({ nome }: { nome: string }) {
  */
 const ITENS = [
   { href: "/", rotulo: "Painel" },
+  { href: "/orcamentos", rotulo: "Orçamentos" },
   { href: "/pedidos", rotulo: "Pedidos" },
   { href: "/comissoes", rotulo: "Comissões" },
   { href: "/clientes", rotulo: "Clientes" },
   { href: "/produtos", rotulo: "Produtos" },
   { href: "/fornecedores", rotulo: "Fornecedores" },
 ];
+
+/**
+ * Entra no fim da fila, e só para o administrador de um escritório Plus.
+ *
+ * No fim porque a ordem é a direção do deslize: a aba de administrar a equipe é
+ * a última coisa que se abre num dia de trabalho, e é de lá que o olho espera
+ * voltar para a esquerda.
+ */
+const ITEM_PREPOSTOS = { href: "/prepostos", rotulo: "Prepostos" };
 
 function estaAtivo(href: string, caminho: string) {
   // A raiz precisa de comparação exata: `startsWith("/")` casaria com todas as
@@ -71,9 +73,16 @@ function estaAtivo(href: string, caminho: string) {
   return caminho === href || caminho.startsWith(`${href}/`);
 }
 
-export function Navegacao({ nomeUsuario }: { nomeUsuario: string }) {
+export function Navegacao({
+  nomeUsuario,
+  mostrarPrepostos = false,
+}: {
+  nomeUsuario: string;
+  mostrarPrepostos?: boolean;
+}) {
   const caminho = usePathname();
-  const indiceAtual = ITENS.findIndex((item) => estaAtivo(item.href, caminho));
+  const itens = mostrarPrepostos ? [...ITENS, ITEM_PREPOSTOS] : ITENS;
+  const indiceAtual = itens.findIndex((item) => estaAtivo(item.href, caminho));
 
   return (
     // `view-transition-name` prende a barra: durante o deslize ela é o ponto
@@ -92,7 +101,7 @@ export function Navegacao({ nomeUsuario }: { nomeUsuario: string }) {
         <div className="flex flex-wrap items-center gap-x-4 py-2 sm:h-14 sm:flex-nowrap sm:py-0">
           <Link
             href="/"
-            className="order-1 shrink-0 text-lg font-extrabold tracking-[-0.03em]
+            className="order-1 shrink-0 text-medio font-extrabold tracking-[-0.03em]
               transition-colors hover:text-carimbo"
           >
             RepPlast
@@ -107,7 +116,7 @@ export function Navegacao({ nomeUsuario }: { nomeUsuario: string }) {
           <nav className="order-3 w-full overflow-x-auto rolagem-limpa pt-1 pb-0.5
             sm:order-2 sm:w-auto sm:flex-1 sm:min-w-0 sm:pt-0 sm:pb-0">
             <ul className="flex items-center justify-start sm:justify-center gap-0.5">
-              {ITENS.map((item, indice) => {
+              {itens.map((item, indice) => {
                 const ativo = indice === indiceAtual;
 
                 return (
@@ -119,7 +128,7 @@ export function Navegacao({ nomeUsuario }: { nomeUsuario: string }) {
                       transitionTypes={[
                         indice > indiceAtual ? "nav-direita" : "nav-esquerda",
                       ]}
-                      className={`relative isolate block px-3.5 py-1.5 rounded-full text-sm font-medium
+                      className={`relative isolate block px-3.5 py-1.5 rounded-full text-corpo font-medium
                         whitespace-nowrap transition-colors duration-200 ${
                           ativo
                             ? "text-papel font-semibold"

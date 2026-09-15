@@ -1,6 +1,5 @@
 import { BotaoLink, Cabecalho, EstadoVazio } from "@/components/ui";
-import { dbParaOrganizacao } from "@/lib/db";
-import { organizacaoAtual } from "@/lib/sessao";
+import { escopoAtual } from "@/lib/sessao";
 
 import { criarPedido } from "../acoes";
 import { FormularioNovoPedido } from "./formulario";
@@ -8,8 +7,7 @@ import { FilePlus2, UserRoundPlus } from "lucide-react";
 import { Pagina } from "@/components/pagina";
 
 export default async function PaginaNovoPedido() {
-  const organizacaoId = await organizacaoAtual();
-  const db = dbParaOrganizacao(organizacaoId);
+  const { organizacaoId, db } = await escopoAtual();
 
   const [clientes, fornecedores] = await Promise.all([
     db.cliente.findMany({

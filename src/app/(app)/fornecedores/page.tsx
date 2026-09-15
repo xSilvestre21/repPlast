@@ -4,18 +4,19 @@ import {
   BotaoLink,
   Cabecalho,
   Cartao,
+  CorpoLinha,
   Emblema,
   EstadoVazio,
+  FimDaLinha,
   LinhaLista,
+  ValorLinha,
   formatarPercentual,
 } from "@/components/ui";
-import { dbParaOrganizacao } from "@/lib/db";
-import { organizacaoAtual } from "@/lib/sessao";
+import { escopoAtual } from "@/lib/sessao";
 import { Pagina } from "@/components/pagina";
 
 export default async function PaginaFornecedores() {
-  const organizacaoId = await organizacaoAtual();
-  const db = dbParaOrganizacao(organizacaoId);
+  const { organizacaoId, db } = await escopoAtual();
 
   const fornecedores = await db.fornecedor.findMany({
     where: { organizacaoId },
@@ -48,26 +49,37 @@ export default async function PaginaFornecedores() {
             <LinhaLista key={f.id} href={`/fornecedores/${f.id}`}>
               <Emblema icone={Factory} tom="fraco" className="size-4" />
 
-              <div className="min-w-0 flex-1">
-                <div className="font-medium truncate">{f.nome}</div>
-                <div className="text-sm text-tinta-2 truncate">
-                  {f._count.produtos} produto(s)
-                  {f._count.aditivos > 0 && ` · ${f._count.aditivos} aditivo(s)`}
-                </div>
-              </div>
+              <CorpoLinha
+                titulo={f.nome}
+                detalhe={
+                  <>
+                    <span className="numerico">{f._count.produtos}</span> produto(s)
+                    {f._count.aditivos > 0 && (
+                      <>
+                        {" · "}
+                        <span className="numerico">{f._count.aditivos}</span> aditivo(s)
+                      </>
+                    )}
+                  </>
+                }
+              />
 
-              <dl className="flex gap-6 text-sm numerico">
-                <div>
-                  <dt className="text-xs text-tinta-3 uppercase tracking-wide">IPI</dt>
-                  <dd>{formatarPercentual(f.ipiPercentual.toString())}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-tinta-3 uppercase tracking-wide">Comissão</dt>
-                  <dd className="cifra font-semibold">
-                    {formatarPercentual(f.comissaoPercentual.toString())}
-                  </dd>
-                </div>
-              </dl>
+              {/* Dois percentuais lado a lado, cada um na sua largura fixa: é o
+                  que faz a coluna de comissão cair no mesmo x em toda a lista,
+                  em vez de escorregar conforme o IPI ao lado tiver uma casa
+                  decimal a mais. */}
+              <FimDaLinha>
+                <ValorLinha
+                  className="w-20"
+                  valor={formatarPercentual(f.ipiPercentual.toString())}
+                  nota="IPI"
+                />
+                <ValorLinha
+                  className="w-24"
+                  valor={formatarPercentual(f.comissaoPercentual.toString())}
+                  nota="Comissão"
+                />
+              </FimDaLinha>
             </LinhaLista>
           ))}
         </Cartao>

@@ -11,14 +11,17 @@
 
 export type ValoresProduto = {
   fornecedorId: string;
+  clienteId: string;
   familia: string;
   codigoFornecedor: string;
   descricao: string;
   material: string;
   complemento: string;
+  unidadeRotulo: string;
   larguraCm: string;
   comprimentoCm: string;
   espessuraMm: string;
+  densidade: string;
   sanfona: string;
   fatorKg: string;
   larguraMm: string;
@@ -28,19 +31,24 @@ export type ValoresProduto = {
   precoUnidade: string;
   precoCaixa: string;
   precoKg: string;
+  unidadeAvulsa: string;
+  precoAvulso: string;
   aditivos: string[];
 };
 
 export const VALORES_VAZIOS: ValoresProduto = {
   fornecedorId: "",
+  clienteId: "",
   familia: "SACO",
   codigoFornecedor: "",
   descricao: "",
   material: "",
   complemento: "",
+  unidadeRotulo: "",
   larguraCm: "",
   comprimentoCm: "",
   espessuraMm: "",
+  densidade: "",
   sanfona: "",
   fatorKg: "",
   larguraMm: "",
@@ -50,5 +58,7 @@ export const VALORES_VAZIOS: ValoresProduto = {
   precoUnidade: "",
   precoCaixa: "",
   precoKg: "",
+  unidadeAvulsa: "UN",
+  precoAvulso: "",
   aditivos: [],
 };
