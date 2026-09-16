@@ -666,13 +666,24 @@ body {
 /* Movimento                                                                  */
 /* -------------------------------------------------------------------------- */
 
+/*
+ * Só opacidade, de propósito: nenhum deslocamento vertical.
+ *
+ * `.surgir`/`.palco` disparam ao MONTAR — o elemento real, escondido atrás da
+ * foto que a View Transition anima por cima. Enquanto a foto desliza na
+ * horizontal (220-460ms), o elemento de verdade já está correndo por baixo os
+ * próprios 500-550ms; quando a foto some e ele aparece, ainda está no meio do
+ * caminho e continua se movendo sozinho. Com translateY isso lia como "desliza
+ * e ainda por cima sobe um pouco depois" — com só opacidade, o resto que
+ * sobra por baixo do deslize é imperceptível.
+ */
 .surgir {
   animation: surgir 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes surgir {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: none; }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 /**
@@ -705,12 +716,10 @@ body {
  * para uma degradação: some o efeito, nunca o conteúdo.
  */
 @supports (animation-timeline: view()) {
-  @media (prefers-reduced-motion: no-preference) {
-    .revelar {
-      animation: surgir linear both;
-      animation-timeline: view();
-      animation-range: entry 4% cover 20%;
-    }
+  .revelar {
+    animation: surgir linear both;
+    animation-timeline: view();
+    animation-range: entry 4% cover 20%;
   }
 }
 
@@ -733,28 +742,82 @@ body {
 /* animação, e o movimento não diria nada.                                    */
 /* -------------------------------------------------------------------------- */
 
-::view-transition-old(.nav-direita) {
+/*
+ * Três variantes por direção — perto, média, longe —, na mesma proporção
+ * entre si (~0.65× / 1× / ~1.35×) que a duração da pílula logo abaixo. Perto
+ * e longe são o meio (`media`, os números de sempre) escalado: mesma forma de
+ * animação, só mais rápida ou mais lenta.
+ */
+::view-transition-old(.nav-direita-perto) {
+  --deslocamento: -20px;
+  animation: 85ms ease-in both esmaecer reverse,
+             220ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar reverse;
+}
+
+::view-transition-new(.nav-direita-perto) {
+  --deslocamento: 20px;
+  animation: 125ms ease-out 85ms both esmaecer,
+             220ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar;
+}
+
+::view-transition-old(.nav-direita-media) {
   --deslocamento: -32px;
   animation: 130ms ease-in both esmaecer reverse,
              340ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar reverse;
 }
 
-::view-transition-new(.nav-direita) {
+::view-transition-new(.nav-direita-media) {
   --deslocamento: 32px;
   animation: 190ms ease-out 130ms both esmaecer,
              340ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar;
 }
 
-::view-transition-old(.nav-esquerda) {
+::view-transition-old(.nav-direita-longe) {
+  --deslocamento: -44px;
+  animation: 175ms ease-in both esmaecer reverse,
+             460ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar reverse;
+}
+
+::view-transition-new(.nav-direita-longe) {
+  --deslocamento: 44px;
+  animation: 255ms ease-out 175ms both esmaecer,
+             460ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar;
+}
+
+::view-transition-old(.nav-esquerda-perto) {
+  --deslocamento: 20px;
+  animation: 85ms ease-in both esmaecer reverse,
+             220ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar reverse;
+}
+
+::view-transition-new(.nav-esquerda-perto) {
+  --deslocamento: -20px;
+  animation: 125ms ease-out 85ms both esmaecer,
+             220ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar;
+}
+
+::view-transition-old(.nav-esquerda-media) {
   --deslocamento: 32px;
   animation: 130ms ease-in both esmaecer reverse,
              340ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar reverse;
 }
 
-::view-transition-new(.nav-esquerda) {
+::view-transition-new(.nav-esquerda-media) {
   --deslocamento: -32px;
   animation: 190ms ease-out 130ms both esmaecer,
              340ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar;
+}
+
+::view-transition-old(.nav-esquerda-longe) {
+  --deslocamento: 44px;
+  animation: 175ms ease-in both esmaecer reverse,
+             460ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar reverse;
+}
+
+::view-transition-new(.nav-esquerda-longe) {
+  --deslocamento: -44px;
+  animation: 255ms ease-out 175ms both esmaecer,
+             460ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar;
 }
 
 @keyframes esmaecer {
@@ -768,7 +831,7 @@ body {
 }
 
 /**
- * A pílula desliza; ela não pisca.
+ * A pílula desliza; ela não pisca. E ela não redimensiona em voo.
  *
  * As fotos do estado antigo e do novo são idênticas — uma pílula preta —,
  * então deixá-las esmaecer uma sobre a outra só produziria uma borra no meio do
@@ -777,11 +840,44 @@ body {
  *
  * Zerar as duas seria o erro fácil aqui: o grupo é só a moldura, quem tem
  * pixels são as fotos, e o marcador sumiria durante a viagem inteira.
+ *
+ * `width`/`height` travados em `--largura-pilula`/`--altura-pilula` (medidas
+ * no clique, em `navegacao.tsx`) substituem a animação automática de tamanho
+ * que o navegador geraria sozinho. Sem isso, ir de uma aba larga para uma
+ * estreita anima `width` (uma propriedade de LAYOUT) ao mesmo tempo que
+ * `transform` desliza (uma propriedade de COMPOSITOR) — e são threads
+ * diferentes. Quando o layout atrasa um quadro em relação ao compositor
+ * (mais chance quanto maior o encolhimento), a pílula pisca fora de posição
+ * por um instante: foi isso que lia como "desce e sobe indo pro lado". Com o
+ * tamanho travado no valor final desde o primeiro quadro, só `transform`
+ * anima — pura viagem lateral, sem segunda propriedade para dessincronizar.
  */
 ::view-transition-group(marca-nav) {
   animation-duration: 340ms;
   animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1;
+  /* Sem !important a animação automática do navegador vence: animação
+     sempre supera declaração normal, só perde para outra com !important. */
+  width: var(--largura-pilula) !important;
+  height: var(--altura-pilula) !important;
+}
+
+/*
+ * A viagem da pílula muda de duração conforme o alcance que o link carregou
+ * (ver `nav-${alcance}` em navegacao.tsx) — perto anda rápido, longe leva
+ * mais tempo pra varrer as abas do meio em vez de pular por cima delas.
+ * `media` não precisa de regra própria: usa a duração base acima.
+ *
+ * `:active-view-transition-type()` é suporte recente (Chromium 125+); sem
+ * ele a regra simplesmente não casa e a pílula fica na duração base — mesma
+ * degradação graciosa que o resto do arquivo já assume para View Transitions.
+ */
+:root:active-view-transition-type(nav-perto)::view-transition-group(marca-nav) {
+  animation-duration: 220ms;
+}
+
+:root:active-view-transition-type(nav-longe)::view-transition-group(marca-nav) {
+  animation-duration: 460ms;
 }
 
 ::view-transition-old(marca-nav) {
@@ -868,45 +964,6 @@ body {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Revezamento: o esqueleto entrega o lugar ao conteúdo                       */
-/*                                                                            */
-/* A direção vertical carrega hierarquia. Conteúdo que SOBE está chegando;    */
-/* conteúdo que DESCE está saindo. Os dois juntos formam a passagem de        */
-/* bastão — o espaço reservado cede o lugar à coisa de verdade, em vez de     */
-/* sumir e deixar o conteúdo pipocar no lugar dele.                           */
-/*                                                                            */
-/* Os tempos são assimétricos de propósito: a saída é curta (150ms), e a      */
-/* entrada só COMEÇA a aparecer quando a saída terminou — senão os dois se    */
-/* sobrepõem no meio do caminho e o que se vê é uma borra. O deslocamento da  */
-/* entrada, esse sim, corre bem mais (400ms), e é ele que dá a sensação de    */
-/* que o conteúdo veio de algum lugar.                                        */
-/*                                                                            */
-/* O desfoque cobre a interpolação pixel a pixel que o navegador faz entre    */
-/* duas fotos de tamanhos diferentes — sem ele a troca mostra um fantasma do  */
-/* esqueleto esticado por cima do texto.                                      */
-/* -------------------------------------------------------------------------- */
-
-::view-transition-old(.revezar-sai) {
-  animation: 150ms ease-out both revelar-desfocado reverse,
-             150ms ease-out both deslizar-y reverse;
-}
-
-::view-transition-new(.revezar-entra) {
-  animation: 210ms ease-in 150ms both revelar-desfocado,
-             400ms ease-in both deslizar-y;
-}
-
-@keyframes revelar-desfocado {
-  from { opacity: 0; filter: blur(4px); }
-  to   { opacity: 1; filter: none; }
-}
-
-@keyframes deslizar-y {
-  from { translate: 0 14px; }
-  to   { translate: 0; }
-}
-
-/* -------------------------------------------------------------------------- */
 /* Balão                                                                      */
 /* -------------------------------------------------------------------------- */
 
@@ -922,10 +979,10 @@ body {
  *
  * `z-index: 50` fica acima da barra do topo (40) e abaixo do confete (60).
  *
- * Nada de transição de entrada: o bloco de `prefers-reduced-motion` zera
- * `transition-duration` em tudo, então um balão que dependesse de fade para
- * aparecer simplesmente apareceria seco para quem pediu menos movimento. Ele
- * nasce legível.
+ * Nada de transição de entrada: o bloco de animações desligadas (ver
+ * `[data-animacoes="desativadas"]`) zera `transition-duration` em tudo, então
+ * um balão que dependesse de fade para aparecer simplesmente apareceria seco
+ * para quem desligou animação. Ele nasce legível.
  */
 .balao {
   position: absolute;
@@ -1004,51 +1061,56 @@ body {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Movimento reduzido                                                         */
+/* Animações desligadas por preferência de conta                             */
 /*                                                                            */
-/* Quem pediu menos movimento recebe o ESTADO FINAL, não o inicial — desligar  */
-/* a animação sem isso deixaria a barra de progresso em zero e os itens em     */
-/* cascata invisíveis.                                                        */
+/* Não é o SO quem decide — é `usuario.reduzirAnimacoes`, aplicado como       */
+/* atributo em <html> por `src/app/layout.tsx`. Quem desligou recebe o        */
+/* ESTADO FINAL, não o inicial, senão a barra de progresso ficaria em zero e  */
+/* os itens em cascata, invisíveis.                                          */
+/*                                                                            */
+/* As três regras de `::view-transition-*` são compostas SEM espaço entre     */
+/* `:root[data-animacoes="desativadas"]` e o pseudo-elemento — esses pseudo-  */
+/* elementos vivem numa árvore paralela presa a `:root`, não são descendentes */
+/* reais do DOM, e um combinador com espaço não casa (silenciosamente, sem    */
+/* erro). Descoberto testando ao vivo com `getAnimations()` na sessão que     */
+/* implementou a pílula da navegação. As demais regras são elementos reais    */
+/* do DOM e usam combinador descendente normal, com espaço.                   */
 /* -------------------------------------------------------------------------- */
 
-@media (prefers-reduced-motion: reduce) {
-  .confete { display: none; }
+:root[data-animacoes="desativadas"] .confete { display: none; }
 
-  .aurora,
-  .pulso::after,
-  .esqueleto::after {
-    animation: none;
-  }
+:root[data-animacoes="desativadas"] .aurora,
+:root[data-animacoes="desativadas"] .pulso::after,
+:root[data-animacoes="desativadas"] .esqueleto::after {
+  animation: none;
+}
 
-  .surgir,
-  .palco > *,
-  .revelar {
-    animation: none;
-    opacity: 1;
-    transform: none;
-  }
+:root[data-animacoes="desativadas"] .surgir,
+:root[data-animacoes="desativadas"] .palco > *,
+:root[data-animacoes="desativadas"] .revelar {
+  animation: none;
+  opacity: 1;
+  transform: none;
+}
 
-  .elevavel:hover {
-    transform: none;
-  }
+:root[data-animacoes="desativadas"] .elevavel:hover {
+  transform: none;
+}
 
-  .barra-preenche {
-    animation: none;
-    width: var(--alvo);
-  }
+:root[data-animacoes="desativadas"] .barra-preenche {
+  animation: none;
+  width: var(--alvo);
+}
 
-  /* O deslize lateral é o efeito com maior risco para quem tem sensibilidade
-     a movimento: some inteiro, e a troca de aba volta a ser instantânea. */
-  ::view-transition-old(*),
-  ::view-transition-new(*),
-  ::view-transition-group(*) {
-    animation-duration: 0s !important;
-    animation-delay: 0s !important;
-  }
+:root[data-animacoes="desativadas"]::view-transition-old(*),
+:root[data-animacoes="desativadas"]::view-transition-new(*),
+:root[data-animacoes="desativadas"]::view-transition-group(*) {
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+}
 
-  *,
-  *::before,
-  *::after {
-    transition-duration: 0.01ms !important;
-  }
+:root[data-animacoes="desativadas"] *,
+:root[data-animacoes="desativadas"] *::before,
+:root[data-animacoes="desativadas"] *::after {
+  transition-duration: 0.01ms !important;
 }

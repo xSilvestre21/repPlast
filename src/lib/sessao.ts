@@ -29,6 +29,10 @@ export interface Sessao {
   papel: "ADMIN" | "REPRESENTANTE";
   /// Plano do escritório. Decide se as telas de preposto existem.
   plano: "PADRAO" | "PLUS";
+  /// Nome do escritório, para exibir no lugar do nome do produto na barra.
+  organizacaoNome: string;
+  /// Preferência de conta que substitui `prefers-reduced-motion` do sistema.
+  reduzirAnimacoes: boolean;
 }
 
 function segredo(): string {
@@ -100,7 +104,8 @@ export const sessaoAtual = cache(async (): Promise<Sessao | null> => {
       organizacaoId: true,
       papel: true,
       ativo: true,
-      organizacao: { select: { ativa: true, plano: true } },
+      reduzirAnimacoes: true,
+      organizacao: { select: { nome: true, ativa: true, plano: true } },
     },
   });
 
@@ -115,6 +120,8 @@ export const sessaoAtual = cache(async (): Promise<Sessao | null> => {
     email: usuario.email,
     papel: usuario.papel,
     plano: usuario.organizacao.plano,
+    organizacaoNome: usuario.organizacao.nome,
+    reduzirAnimacoes: usuario.reduzirAnimacoes,
   };
 });
 

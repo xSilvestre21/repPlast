@@ -16,14 +16,13 @@ import { DIRECOES } from "@/components/pagina";
  * forma que não é a delas — o que é pior do que uma forma neutra, porque
  * promete um layout e entrega outro.
  *
- * A saída é `revezar-sai` e a entrada acompanha a direção da aba, do mesmo
- * jeito que uma página de verdade. Para o olho, o esqueleto É a página: ele
- * entra pelo lado com ela e só depois cede o lugar, descendo, para o conteúdo
- * que sobe.
+ * Entrada e saída acompanham a direção da aba, com o mesmo tipo — nunca um
+ * movimento vertical à parte. Para o olho, o esqueleto É a página: ele entra
+ * pelo lado com ela e sai pelo lado quando cede o lugar ao conteúdo real.
  */
 export default function Carregando() {
   return (
-    <ViewTransition enter={DIRECOES} exit="revezar-sai" default="none">
+    <ViewTransition enter={DIRECOES} exit={DIRECOES} default="none">
       {/*
         `aria-busy` e o texto escondido são o que o leitor de tela recebe. O
         brilho que varre os blocos não existe para ele, e uma tela que fica em

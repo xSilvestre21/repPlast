@@ -34,7 +34,9 @@ export function ValorAnimado({
     const elemento = alvo.current;
     if (!elemento) return;
 
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // A fonte da verdade é a preferência de conta, não a do sistema
+    // operacional — ver `data-animacoes` em `src/app/layout.tsx`.
+    if (document.documentElement.dataset.animacoes === "desativadas") return;
     // Contar de zero até zero é uma animação que não comunica nada.
     if (!Number.isFinite(valor) || valor === 0) return;
 

@@ -20,6 +20,7 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
     <>
       <Navegacao
         nomeUsuario={sessao.nome}
+        nomeOrganizacao={sessao.organizacaoNome}
         mostrarPrepostos={sessao.papel === "ADMIN" && sessao.plano === "PLUS"}
       />
       <main className="flex-1 w-full max-w-6xl mx-auto px-4 py-6 sm:px-6 sm:py-8">

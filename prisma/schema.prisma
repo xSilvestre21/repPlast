@@ -138,6 +138,10 @@ model Usuario {
 
   ativo Boolean @default(true)
 
+  /// Preferência de conta, não do sistema operacional: o produto ignora
+  /// deliberadamente `prefers-reduced-motion` do navegador e usa só isto.
+  reduzirAnimacoes Boolean @default(false)
+
   /// Fatia da comissão que este preposto recebe, em percentual DELA — não da
   /// venda. 50 quer dizer "metade do que a indústria pagar ao escritório".
   ///

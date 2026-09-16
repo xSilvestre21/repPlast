@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { IBM_Plex_Mono, Plus_Jakarta_Sans } from "next/font/google";
 
 import { SCRIPT_TEMA } from "@/components/alternador-tema";
+import { sessaoAtual } from "@/lib/sessao";
 
 import "./globals.css";
 
@@ -51,14 +52,23 @@ export const dynamic = "force-dynamic";
  * Layout raiz: só o essencial que vale para TODA página, logada ou não.
  *
  * A navegação e o guarda de sessão vivem em `(app)/layout.tsx`, porque as
- * telas de login e cadastro não têm nem uma nem outro.
+ * telas de login e cadastro não têm nem uma nem outro. `sessaoAtual()` é
+ * chamada aqui só para ler a preferência de animação — é `cache()` do React,
+ * então não duplica a consulta ao banco dentro da mesma requisição; quem
+ * exige sessão de verdade (redirecionar sem uma) continua sendo o layout de
+ * `(app)`.
  */
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const sessao = await sessaoAtual();
+
   return (
     <html
       lang="pt-BR"
       className={`${sans.variable} ${mono.variable} h-full antialiased`}
       // O tema escolhido é aplicado pelo script abaixo, antes da pintura.
+      // Animação é preferência de conta: já vem pronta do servidor, sem
+      // script nem flash — ausente (sem sessão) significa animações ligadas.
+      data-animacoes={sessao?.reduzirAnimacoes ? "desativadas" : undefined}
       suppressHydrationWarning
     >
       <head>

@@ -8,23 +8,13 @@ import type { ReactNode } from "react";
  * são troca de aba — voltar pelo botão do navegador, `router.refresh()`.
  */
 export const DIRECOES = {
-  "nav-direita": "nav-direita",
-  "nav-esquerda": "nav-esquerda",
+  "nav-direita-perto": "nav-direita-perto",
+  "nav-direita-media": "nav-direita-media",
+  "nav-direita-longe": "nav-direita-longe",
+  "nav-esquerda-perto": "nav-esquerda-perto",
+  "nav-esquerda-media": "nav-esquerda-media",
+  "nav-esquerda-longe": "nav-esquerda-longe",
   default: "none",
-} as const;
-
-/**
- * Na ENTRADA o padrão não é "nada": é subir.
- *
- * Trocar de aba tem tipo, e o tipo manda — o conteúdo entra pelo lado. Mas
- * existe uma segunda entrada, sem tipo nenhum: a hora em que o conteúdo real
- * substitui o esqueleto que `loading.tsx` mostrou. Essa é a única transição do
- * sistema em que o bloco velho e o novo ocupam o MESMO lugar, e é ela que
- * ganha o movimento vertical.
- */
-const ENTRADA = {
-  ...DIRECOES,
-  default: "revezar-entra",
 } as const;
 
 /**
@@ -33,10 +23,16 @@ const ENTRADA = {
  * Precisa ficar em cada `page.tsx`, e não no layout: layout persiste entre
  * navegações, então entrada e saída nunca disparariam lá. É o preço de ter a
  * barra do topo parada enquanto o conteúdo troca.
+ *
+ * Entrada usa o mesmo `DIRECOES` da saída — de propósito. O conteúdo real
+ * substituindo o esqueleto de `loading.tsx` já não carrega tipo nenhum (é uma
+ * revelação do Suspense, não uma navegação), então cai no `default: "none"` e
+ * só troca sem animar. O deslize horizontal fica reservado para quando a aba
+ * muda de verdade; nenhuma transição deste sistema ganha movimento vertical.
  */
 export function Pagina({ children }: { children: ReactNode }) {
   return (
-    <ViewTransition enter={ENTRADA} exit={DIRECOES} default="none">
+    <ViewTransition enter={DIRECOES} exit={DIRECOES} default="none">
       <div>{children}</div>
     </ViewTransition>
   );
