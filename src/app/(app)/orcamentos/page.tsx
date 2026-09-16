@@ -1,5 +1,6 @@
 import { FileText, Plus, ScrollText } from "lucide-react";
 
+import type { StatusOrcamento } from "@/generated/prisma/enums";
 import { Pagina } from "@/components/pagina";
 import {
   BotaoLink,
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui";
 import { escopoAtual } from "@/lib/sessao";
 
+import { FiltrosOrcamentos, type FiltroStatusOrcamento } from "./filtros";
 import { SeloOrcamento, destinatario } from "./selo";
 
 const DATA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "UTC" });
@@ -27,15 +29,48 @@ const DATA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "U
  */
 const POR_PAGINA = 15;
 
+const STATUS_VALIDOS: FiltroStatusOrcamento[] = ["aberto", "recusado", "aceito"];
+
+/** "Em aberto" cobre Vencido também — quem entra nesses dois ainda não teve
+ *  resposta do cliente, é o mesmo balde de "precisa de acompanhamento". */
+const STATUS_DO_FILTRO: Record<"aberto" | "recusado" | "aceito", StatusOrcamento[]> = {
+  aberto: ["ABERTO", "EXPIRADO"],
+  recusado: ["RECUSADO"],
+  aceito: ["ACEITO"],
+};
+
 export default async function PaginaOrcamentos({ searchParams }: PageProps<"/orcamentos">) {
   const { organizacaoId, db } = await escopoAtual();
   const parametros = await searchParams;
   const pagina = Math.max(1, Number(parametros.pagina) || 1);
 
+  const busca = typeof parametros.busca === "string" ? parametros.busca.trim() : "";
+  const statusParam = typeof parametros.status === "string" ? parametros.status : "";
+  const status: FiltroStatusOrcamento = STATUS_VALIDOS.includes(
+    statusParam as FiltroStatusOrcamento,
+  )
+    ? (statusParam as FiltroStatusOrcamento)
+    : "todos";
+
+  const onde = {
+    organizacaoId,
+    ...(status !== "todos" ? { status: { in: STATUS_DO_FILTRO[status] } } : {}),
+    ...(busca
+      ? {
+          OR: [
+            { cliente: { apelido: { contains: busca, mode: "insensitive" as const } } },
+            { cliente: { razaoSocial: { contains: busca, mode: "insensitive" as const } } },
+            { fornecedor: { nome: { contains: busca, mode: "insensitive" as const } } },
+            { clienteAvulsoNome: { contains: busca, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
+
   const [total, orcamentos] = await Promise.all([
-    db.orcamento.count({ where: { organizacaoId } }),
+    db.orcamento.count({ where: onde }),
     db.orcamento.findMany({
-      where: { organizacaoId },
+      where: onde,
       orderBy: [{ criadoEm: "desc" }, { numero: "desc" }],
       take: POR_PAGINA,
       skip: (pagina - 1) * POR_PAGINA,
@@ -48,8 +83,19 @@ export default async function PaginaOrcamentos({ searchParams }: PageProps<"/orc
   ]);
 
   const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
-  const enderecoDaPagina = (destino: number) =>
-    destino > 1 ? `/orcamentos?pagina=${destino}` : "/orcamentos";
+
+  /** Mantém busca e status ao trocar de página. */
+  const enderecoDaPagina = (destino: number) => {
+    const query = new URLSearchParams();
+    if (busca) query.set("busca", busca);
+    if (status !== "todos") query.set("status", status);
+    if (destino > 1) query.set("pagina", String(destino));
+
+    const consulta = query.toString();
+    return consulta ? `/orcamentos?${consulta}` : "/orcamentos";
+  };
+
+  const algumFiltro = Boolean(busca) || status !== "todos";
 
   return (
     <Pagina>
@@ -64,11 +110,25 @@ export default async function PaginaOrcamentos({ searchParams }: PageProps<"/orc
         }
       />
 
-      {total === 0 ? (
+      <FiltrosOrcamentos filtros={{ busca, status }} />
+
+      {total === 0 && !algumFiltro ? (
         <EstadoVazio icone={FileText}>
           Nenhuma proposta lançada.
           <br />
           Comece escolhendo o cliente e a indústria.
+        </EstadoVazio>
+      ) : total === 0 ? (
+        <EstadoVazio
+          icone={FileText}
+          titulo="Nada encontrado"
+          acao={
+            <BotaoLink href="/orcamentos" variante="secundaria" tamanho="compacto">
+              Limpar filtro
+            </BotaoLink>
+          }
+        >
+          Nenhum orçamento corresponde ao que você procurou.
         </EstadoVazio>
       ) : (
         <>

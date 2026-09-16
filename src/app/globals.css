@@ -706,6 +706,39 @@ body {
 .palco > *:nth-child(7) { animation-delay: 0.44s; }
 .palco > *:nth-child(n + 8) { animation-delay: 0.5s; }
 
+/*
+ * Sem tocar em nada acima, monta ZERADA qualquer linha nova que aparecer
+ * durante uma transição que NÃO é troca de aba.
+ *
+ * Buscar e filtrar (em Orçamentos, por exemplo) rodam dentro de uma
+ * transição — de propósito, para a lista atual não sumir atrás do esqueleto
+ * de carregamento (ver `filtros.tsx`). Mas cada letra digitada troca QUAIS
+ * orçamentos batem com o filtro, e os que passam a aparecer são linhas
+ * NOVAS pro React (`key` diferente) — cada uma monta do zero e replay a
+ * entrada inteira (0,5-0,55s de fade), como se a lista tivesse recarregado.
+ * É exatamente essa repetição, a cada tecla, que lia como "pisca".
+ *
+ * A duração zerada aqui não tem o problema de reiniciar uma animação já em
+ * andamento (o motivo de eu ter recuado dessa ideia para o cabeçalho numa
+ * tentativa anterior): são elementos que NUNCA existiram antes, então não
+ * há "meio do caminho" para dessincronizar — só nascem já no estado final.
+ * As regras seguintes reativam a entrada de verdade só quando o tipo é uma
+ * troca de aba real (`nav-perto`/`nav-media`/`nav-longe`), onde flag também
+ * é conteúdo novo de verdade chegando, e o fade faz sentido.
+ */
+:root:active-view-transition .surgir,
+:root:active-view-transition .palco > * {
+  animation-duration: 0s;
+}
+
+:root:active-view-transition-type(nav-perto, nav-media, nav-longe) .surgir {
+  animation-duration: 0.5s;
+}
+
+:root:active-view-transition-type(nav-perto, nav-media, nav-longe) .palco > * {
+  animation-duration: 0.55s;
+}
+
 /**
  * Revelação ao rolar, sem JavaScript e sem observador.
  *
@@ -851,9 +884,22 @@ body {
  * por um instante: foi isso que lia como "desce e sobe indo pro lado". Com o
  * tamanho travado no valor final desde o primeiro quadro, só `transform`
  * anima — pura viagem lateral, sem segunda propriedade para dessincronizar.
+ *
+ * A duração BASE é 0s de propósito — zero, não um número pequeno. Buscar e
+ * filtrar (em Orçamentos, por exemplo) também disparam uma transição (o
+ * `router.replace` ali roda dentro de `useTransition`, e é isso que mantém a
+ * lista atual visível em vez de piscar o esqueleto), mas a aba continua a
+ * mesma: `indiceAtual` não muda, o link da pílula nem chega a desmontar. Sem
+ * um tipo `nav-*` — só a troca de aba de verdade carrega um —, o navegador
+ * ainda assim tentaria reconciliar o retângulo da pílula, e como
+ * `--largura-pilula`/`--altura-pilula` só são medidas no CLIQUE de uma aba
+ * (podem estar desatualizadas ou nem terem sido definidas ainda), o resultado
+ * era a pílula piscando de tamanho errado a cada tecla. Com base em 0s, essa
+ * reconciliação indesejada acontece num quadro só — imperceptível — e as
+ * regras abaixo reativam a duração de verdade só quando o tipo é um `nav-*`.
  */
 ::view-transition-group(marca-nav) {
-  animation-duration: 340ms;
+  animation-duration: 0s;
   animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1;
   /* Sem !important a animação automática do navegador vence: animação
@@ -866,12 +912,17 @@ body {
  * A viagem da pílula muda de duração conforme o alcance que o link carregou
  * (ver `nav-${alcance}` em navegacao.tsx) — perto anda rápido, longe leva
  * mais tempo pra varrer as abas do meio em vez de pular por cima delas.
- * `media` não precisa de regra própria: usa a duração base acima.
+ * As três precisam de regra própria agora: a duração BASE é 0s (comentário
+ * acima), então nenhuma delas mais "cai" nela por omissão.
  *
  * `:active-view-transition-type()` é suporte recente (Chromium 125+); sem
- * ele a regra simplesmente não casa e a pílula fica na duração base — mesma
- * degradação graciosa que o resto do arquivo já assume para View Transitions.
+ * ele a regra simplesmente não casa e a pílula fica na duração base (0s) —
+ * sem tipo reconhecido, ela some/aparece na hora, o que é a mesma degradação
+ * graciosa que o resto do arquivo já assume para View Transitions.
  */
+:root:active-view-transition-type(nav-media)::view-transition-group(marca-nav) {
+  animation-duration: 340ms;
+}
 :root:active-view-transition-type(nav-perto)::view-transition-group(marca-nav) {
   animation-duration: 220ms;
 }
