@@ -907,6 +907,71 @@ body {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Balão                                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A primeira superfície flutuante do sistema.
+ *
+ * Até aqui o projeto não tinha nenhuma: informação contextual saía por `title`
+ * do navegador, por `<details>` ou por expansão dentro da própria linha — e
+ * isso foi decisão, não falta ("o acerto abre DENTRO da linha em vez de numa
+ * janela sobreposta"). O balão entra só onde aquilo não serve: num gráfico, o
+ * valor de um ponto precisa aparecer JUNTO do ponto, e empurrar o desenho para
+ * baixo a cada movimento do mouse seria pior do que não ter.
+ *
+ * `z-index: 50` fica acima da barra do topo (40) e abaixo do confete (60).
+ *
+ * Nada de transição de entrada: o bloco de `prefers-reduced-motion` zera
+ * `transition-duration` em tudo, então um balão que dependesse de fade para
+ * aparecer simplesmente apareceria seco para quem pediu menos movimento. Ele
+ * nasce legível.
+ */
+.balao {
+  position: absolute;
+  z-index: 50;
+  pointer-events: none;
+  background: var(--folha);
+  border: 1px solid var(--filete);
+  border-radius: var(--radius-suave);
+  box-shadow: var(--sombra-alta);
+  padding: 0.5rem 0.625rem;
+  white-space: nowrap;
+}
+
+/**
+ * O risco vertical que liga o ponteiro ao eixo.
+ *
+ * Fica em HTML, e não dentro do SVG, porque o SVG do gráfico usa
+ * `preserveAspectRatio="none"`: lá dentro o espaço está esticado de forma não
+ * uniforme, e uma linha de 1px sairia com espessura diferente em cada eixo.
+ */
+.risco-cursor {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--filete-forte);
+  pointer-events: none;
+}
+
+/**
+ * O ponto marcado sob o cursor.
+ *
+ * Pela mesma razão do risco, é uma `div` redonda em HTML e não um `<circle>`:
+ * dentro daquele SVG um círculo sai elipse.
+ */
+.marca-cursor {
+  position: absolute;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  border: 2px solid var(--folha);
+  translate: -50% -50%;
+  pointer-events: none;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Confete                                                                    */
 /* -------------------------------------------------------------------------- */
 

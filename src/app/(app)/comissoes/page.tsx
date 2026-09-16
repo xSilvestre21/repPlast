@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Factory, PiggyBank, Send, Users } from "lucide-react";
+import { Factory, PiggyBank, Send, Users } from "lucide-react";
 
 import {
   Cabecalho,
@@ -17,7 +17,7 @@ import {
   formatarMoeda,
   formatarPercentual,
 } from "@/components/ui";
-import { competenciaDe, deslocarCompetencia, intervaloDaCompetencia, progressoDaMeta } from "@/lib/comissao";
+import { competenciaDe, progressoDaMeta } from "@/lib/comissao";
 import {
   acertoDoPedido,
   pedidosDaCompetencia,
@@ -35,8 +35,8 @@ import { definirMeta, salvarAcerto } from "./acoes";
 import { LinhaComissao, type LinhaPedido } from "./acerto";
 import { PainelMeta } from "./painel-meta";
 import { Pagina } from "@/components/pagina";
+import { NavegadorMes } from "@/components/navegador-mes";
 
-const MES_LONGO = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" });
 const DATA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" });
 
 export default async function PaginaComissoes({ searchParams }: PageProps<"/comissoes">) {
@@ -47,7 +47,6 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
       : competenciaDe(new Date());
 
   const { organizacaoId, db, ehAdmin, usuarioId } = await escopoAtual();
-  const { de } = intervaloDaCompetencia(competencia);
 
   const [organizacao, pedidos] = await Promise.all([
     dbAdministrativo().organizacao.findUnique({
@@ -121,15 +120,11 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
         centralizado, com as setas discretas de cada lado — como o cabeçalho de
         uma folha de apuração.
       */}
-      <div className="flex items-center justify-center gap-4 mb-7">
-        <SetaMes competencia={deslocarCompetencia(competencia, -1)} rotulo="Mês anterior">
-          <ChevronLeft size={16} strokeWidth={1.5} aria-hidden="true" />
-        </SetaMes>
-        <span className="text-medio font-semibold min-w-52 text-center">{nomeDoMes(de)}</span>
-        <SetaMes competencia={deslocarCompetencia(competencia, 1)} rotulo="Próximo mês">
-          <ChevronRight size={16} strokeWidth={1.5} aria-hidden="true" />
-        </SetaMes>
-      </div>
+      <NavegadorMes
+        competencia={competencia}
+        href={(mes) => `/comissoes?mes=${mes}`}
+        className="mb-7"
+      />
 
       <PainelMeta
         competencia={competencia}
@@ -287,37 +282,7 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
   );
 }
 
-function SetaMes({
-  competencia,
-  rotulo,
-  children,
-}: {
-  competencia: string;
-  rotulo: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Link
-      href={`/comissoes?mes=${competencia}`}
-      aria-label={rotulo}
-      className="grid place-items-center size-8 text-tinta-3
-        transition-colors duration-150 hover:text-carimbo"
-    >
-      {children}
-    </Link>
-  );
-}
 
-/**
- * "setembro de 2026" com apenas a inicial maiúscula.
- *
- * O `capitalize` do CSS não serve: ele capitaliza toda palavra e produziria
- * "Setembro De 2026".
- */
-function nomeDoMes(data: Date): string {
-  const nome = MES_LONGO.format(data);
-  return nome.charAt(0).toUpperCase() + nome.slice(1);
-}
 
 
 /** "AAAA-MM-DD" em UTC — é o que o input `date` espera, e a coluna não tem hora. */

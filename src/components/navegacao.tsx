@@ -52,6 +52,7 @@ const ITENS = [
   { href: "/orcamentos", rotulo: "Orçamentos" },
   { href: "/pedidos", rotulo: "Pedidos" },
   { href: "/comissoes", rotulo: "Comissões" },
+  { href: "/graficos", rotulo: "Gráficos" },
   { href: "/clientes", rotulo: "Clientes" },
   { href: "/produtos", rotulo: "Produtos" },
   { href: "/fornecedores", rotulo: "Fornecedores" },

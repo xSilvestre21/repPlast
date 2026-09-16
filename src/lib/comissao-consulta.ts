@@ -27,7 +27,7 @@ export interface PedidoDaComissao {
   representante: { id: string; nome: string; papel: string } | null;
   valorRecebido: { toString(): string } | null;
   comissaoPercentualRecebido: { toString(): string } | null;
-  cliente: { apelido: string };
+  cliente: { id: string; apelido: string };
   fornecedor: { id: string; nome: string; comissaoPercentual: { toString(): string } };
 }
 
@@ -84,6 +84,31 @@ export function resumirComissao(pedidos: PedidoDaComissao[]): ResumoComissao {
 }
 
 /**
+ * O que uma consulta de comissão precisa trazer.
+ *
+ * Fica numa constante porque são duas consultas — o mês e a janela de meses — e
+ * um campo que entrasse só numa delas produziria um gráfico discordando da
+ * tela pelo motivo mais difícil de achar: o dado certo, lido pela metade.
+ */
+const CAMPOS_DA_COMISSAO = {
+  id: true,
+  numero: true,
+  status: true,
+  criadoEm: true,
+  enviadoEm: true,
+  prazoEntrega: true,
+  entregueEm: true,
+  subtotalSemIpi: true,
+  comissaoPercentual: true,
+  comissaoPercentualPreposto: true,
+  representante: { select: { id: true, nome: true, papel: true } },
+  valorRecebido: true,
+  comissaoPercentualRecebido: true,
+  cliente: { select: { id: true, apelido: true } },
+  fornecedor: { select: { id: true, nome: true, comissaoPercentual: true } },
+} as const;
+
+/**
  * Pedidos enviados na competência, com o necessário para calcular a comissão.
  *
  * `apenasDoPreposto` restringe à carteira de um preposto. O RLS já esconderia
@@ -118,22 +143,43 @@ export async function pedidosDaCompetencia(
       ...(apenasDoPreposto ? { representanteId: apenasDoPreposto } : {}),
     },
     orderBy: [{ prazoEntrega: "asc" }, { numero: "asc" }],
-    select: {
-      id: true,
-      numero: true,
-      status: true,
-      criadoEm: true,
-      enviadoEm: true,
-      prazoEntrega: true,
-      entregueEm: true,
-      subtotalSemIpi: true,
-      comissaoPercentual: true,
-      comissaoPercentualPreposto: true,
-      representante: { select: { id: true, nome: true, papel: true } },
-      valorRecebido: true,
-      comissaoPercentualRecebido: true,
-      cliente: { select: { apelido: true } },
-      fornecedor: { select: { id: true, nome: true, comissaoPercentual: true } },
+    select: CAMPOS_DA_COMISSAO,
+  });
+}
+
+/**
+ * Pedidos enviados numa JANELA de competências, da primeira à última.
+ *
+ * Uma consulta só, e não uma por mês. Doze idas ao banco para desenhar um
+ * gráfico de doze pontos custariam doze transações — e cada `db` do projeto
+ * abre transação própria para injetar o contexto do RLS. O agrupamento por mês
+ * acontece depois, em memória, com `competenciaDoPedido` — a MESMA função que
+ * a consulta de um mês usa, que é o que garante os dois baterem.
+ */
+export async function pedidosDoIntervalo(
+  db: DbOrganizacao,
+  organizacaoId: string,
+  deCompetencia: string,
+  ateCompetencia: string,
+  apenasDoPreposto?: string | null,
+) {
+  const { de } = intervaloDaCompetenciaUtc(deCompetencia);
+  const { ate } = intervaloDaCompetenciaUtc(ateCompetencia);
+
+  return db.pedido.findMany({
+    where: {
+      organizacaoId,
+      status: "ENVIADO",
+      // Mesmo `OR` da consulta de um mês, e pela mesma razão: não existe
+      // COALESCE num `where`, e sem a segunda condição o pedido sem prazo
+      // marcado sumiria da série inteira.
+      OR: [
+        { prazoEntrega: { gte: de, lt: ate } },
+        { prazoEntrega: null, criadoEm: { gte: de, lt: ate } },
+      ],
+      ...(apenasDoPreposto ? { representanteId: apenasDoPreposto } : {}),
     },
+    orderBy: [{ prazoEntrega: "asc" }, { numero: "asc" }],
+    select: CAMPOS_DA_COMISSAO,
   });
 }

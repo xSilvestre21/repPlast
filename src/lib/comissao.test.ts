@@ -431,7 +431,7 @@ describe("o dono do escritório não é preposto de si mesmo", () => {
     comissaoPercentualPreposto: null,
     valorRecebido: null,
     comissaoPercentualRecebido: null,
-    cliente: { apelido: "X" },
+    cliente: { id: "cli-x", apelido: "X" },
     fornecedor: { id: "f1", nome: "F", comissaoPercentual: "5" },
   };
 
