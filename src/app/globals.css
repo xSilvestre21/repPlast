@@ -593,6 +593,7 @@ body {
   color: var(--tinta-3);
 }
 
+
 /** Ponto que pulsa: usado onde há algo acontecendo agora. */
 .pulso {
   position: relative;
@@ -706,25 +707,45 @@ body {
 .palco > *:nth-child(7) { animation-delay: 0.44s; }
 .palco > *:nth-child(n + 8) { animation-delay: 0.5s; }
 
+/**
+ * A mesma entrada, curta, para a lista que MUDA.
+ *
+ * Filtrar não é abrir a tela. A cascata de cima pode se dar ao luxo de um
+ * segundo inteiro porque acontece uma vez, quando a página nasce; esta roda
+ * toda vez que um resultado chega, e é o TEMPO — não o fade — que decide se
+ * ela lê como "a lista assentou" ou como "a tela recarregou". Em 0,2s, com as
+ * linhas quase coladas uma na outra, some a segunda leitura e sobra o
+ * movimento que impede a troca seca.
+ *
+ * Vale também para as fatias que entram na rolagem: chegam se montando, em vez
+ * de aparecerem prontas de um quadro para o outro.
+ */
+.palco-curto > * {
+  animation: surgir 0.2s ease-out both;
+}
+
+.palco-curto > *:nth-child(1) { animation-delay: 0s; }
+.palco-curto > *:nth-child(2) { animation-delay: 0.02s; }
+.palco-curto > *:nth-child(3) { animation-delay: 0.04s; }
+.palco-curto > *:nth-child(4) { animation-delay: 0.06s; }
+.palco-curto > *:nth-child(5) { animation-delay: 0.08s; }
+.palco-curto > *:nth-child(n + 6) { animation-delay: 0.1s; }
+
 /*
- * Sem tocar em nada acima, monta ZERADA qualquer linha nova que aparecer
- * durante uma transição que NÃO é troca de aba.
+ * Monta ZERADA qualquer linha nova que aparecer DURANTE uma transição que não
+ * é troca de aba — depois de uma mutação que chama `router.refresh()`, por
+ * exemplo, onde a lista inteira volta do servidor sem ser página nova.
  *
- * Buscar e filtrar (em Orçamentos, por exemplo) rodam dentro de uma
- * transição — de propósito, para a lista atual não sumir atrás do esqueleto
- * de carregamento (ver `filtros.tsx`). Mas cada letra digitada troca QUAIS
- * orçamentos batem com o filtro, e os que passam a aparecer são linhas
- * NOVAS pro React (`key` diferente) — cada uma monta do zero e replay a
- * entrada inteira (0,5-0,55s de fade), como se a lista tivesse recarregado.
- * É exatamente essa repetição, a cada tecla, que lia como "pisca".
+ * Não é isto que protege a busca de Orçamentos: lá a lista filtra em memória,
+ * sem navegação nenhuma para uma view transition acontecer em cima. O `palco`
+ * sai da lista assim que a pessoa mexe no filtro, dentro de `orcamentos/lista.tsx`.
  *
- * A duração zerada aqui não tem o problema de reiniciar uma animação já em
- * andamento (o motivo de eu ter recuado dessa ideia para o cabeçalho numa
- * tentativa anterior): são elementos que NUNCA existiram antes, então não
- * há "meio do caminho" para dessincronizar — só nascem já no estado final.
- * As regras seguintes reativam a entrada de verdade só quando o tipo é uma
- * troca de aba real (`nav-perto`/`nav-media`/`nav-longe`), onde flag também
- * é conteúdo novo de verdade chegando, e o fade faz sentido.
+ * A duração zerada não tem o problema de reiniciar uma animação já em
+ * andamento: são elementos que NUNCA existiram antes, então não há "meio do
+ * caminho" para dessincronizar — só nascem já no estado final. As regras
+ * seguintes reativam a entrada de verdade só quando o tipo é uma troca de aba
+ * real (`nav-perto`/`nav-media`/`nav-longe`), onde é conteúdo novo de verdade
+ * chegando e o fade faz sentido.
  */
 :root:active-view-transition .surgir,
 :root:active-view-transition .palco > * {
@@ -1138,6 +1159,7 @@ body {
 
 :root[data-animacoes="desativadas"] .surgir,
 :root[data-animacoes="desativadas"] .palco > *,
+:root[data-animacoes="desativadas"] .palco-curto > *,
 :root[data-animacoes="desativadas"] .revelar {
   animation: none;
   opacity: 1;
