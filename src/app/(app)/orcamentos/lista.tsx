@@ -24,7 +24,7 @@
  * copiar o link ou dar F5 traz a mesma tela, sem custar uma navegação por tecla.
  */
 
-import { FileText, Loader2, ScrollText, Search, X } from "lucide-react";
+import { FileText, Loader2, ScrollText, Search, ThumbsDown, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
@@ -274,6 +274,19 @@ export function ListaOrcamentos({
                             virou pedido
                           </span>
                         </>
+                      )}
+                      {/* O motivo em linha própria: é frase, não mais um campo
+                          da fila de dados separados por ponto. */}
+                      {orcamento.motivoRecusa && (
+                        <span className="flex items-start gap-1 text-perigo mt-0.5">
+                          <ThumbsDown
+                            size={11}
+                            strokeWidth={2}
+                            aria-hidden="true"
+                            className="shrink-0 mt-[3px]"
+                          />
+                          {orcamento.motivoRecusa}
+                        </span>
                       )}
                     </>
                   }

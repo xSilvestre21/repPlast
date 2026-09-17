@@ -593,6 +593,25 @@ body {
   color: var(--tinta-3);
 }
 
+/*
+ * Os tons do selo moram AQUI, e não em utilitária do Tailwind na marcação.
+ *
+ * `.carimbo` já pinta de verde por padrão, e CSS sem camada vence utilitária
+ * (que o Tailwind põe em `@layer utilities`) por mais específica que pareça.
+ * `bg-perigo-fraco text-perigo` na classe do componente perdia em silêncio: a
+ * pílula ficava verde dizendo "Recusado". Enquanto a base do `.carimbo` tiver
+ * cor, todo tom novo precisa nascer como classe irmã, ao lado destas.
+ */
+.carimbo-perigo {
+  background: var(--perigo-fraco);
+  color: var(--perigo);
+}
+
+.carimbo-azul {
+  background: var(--carimbo-fraco);
+  color: var(--carimbo);
+}
+
 
 /** Ponto que pulsa: usado onde há algo acontecendo agora. */
 .pulso {

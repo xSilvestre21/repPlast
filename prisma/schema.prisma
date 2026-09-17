@@ -687,6 +687,16 @@ model Orcamento {
   numero Int
   status StatusOrcamento @default(ABERTO)
 
+  /// Por que o cliente recusou — preço alto, comprou do concorrente, adiou.
+  ///
+  /// É a única pergunta que a proposta perdida ainda responde, e o sistema
+  /// antigo não a fazia: ali a proposta recusada virava um registro mudo, e o
+  /// padrão das perdas do ano só existia na cabeça de quem negociou.
+  ///
+  /// Sobrevive a reabrir a proposta de propósito: se ela cair de novo, o que
+  /// foi escrito da primeira vez é o ponto de partida, não ruído a apagar.
+  motivoRecusa String?
+
   /// "Aos cuidados de": a pessoa no cliente a quem a proposta é dirigida.
   /// Sai impressa logo abaixo do nome da empresa.
   attn String?

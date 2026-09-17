@@ -23,6 +23,7 @@ import {
   converterEmPedido,
   definirIpiDeTodosOsItens,
   definirStatus,
+  salvarMotivoRecusa,
   removerItem,
 } from "../acoes";
 import { CadastrarCliente, DesfechoProposta, FichaProposta } from "./ficha";
@@ -221,11 +222,13 @@ export default async function PaginaOrcamento({ params }: PageProps<"/orcamentos
               temItens={orcamento.itens.length > 0}
               temCliente={orcamento.cliente !== null}
               jaVirouPedido={orcamento.pedidos.length > 0}
+              motivoRecusa={orcamento.motivoRecusa ?? ""}
               aceitar={definirStatus.bind(null, orcamento.id, "ACEITO")}
               recusar={definirStatus.bind(null, orcamento.id, "RECUSADO")}
               vencer={definirStatus.bind(null, orcamento.id, "EXPIRADO")}
               reabrir={definirStatus.bind(null, orcamento.id, "ABERTO")}
               virarPedido={converterEmPedido.bind(null, orcamento.id)}
+              salvarMotivo={salvarMotivoRecusa.bind(null, orcamento.id)}
             />
           </div>
         </Cartao>

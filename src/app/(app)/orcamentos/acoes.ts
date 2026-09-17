@@ -242,7 +242,7 @@ export async function atualizarOrcamento(
 export async function definirStatus(
   orcamentoId: string,
   status: StatusOrcamento,
-  _formData: FormData,
+  formData: FormData,
 ): Promise<void> {
   const { organizacaoId, db } = await contexto();
 
@@ -256,9 +256,52 @@ export async function definirStatus(
     throw new Error("Não dá para aceitar uma proposta sem itens.");
   }
 
+  /*
+   * O motivo viaja junto com a recusa porque é ali que ele se sabe. Vem vazio
+   * quando quem recusou não quis escrever — e um campo em branco não apaga o
+   * que já estava guardado: quem reabre e recusa de novo tem o texto anterior
+   * como ponto de partida.
+   */
+  const escrito = motivoDoFormulario(formData);
+  const motivoRecusa =
+    status === "RECUSADO" && escrito !== null ? { motivoRecusa: escrito } : {};
+
   await db.orcamento.updateMany({
     where: { id: orcamentoId, organizacaoId },
-    data: { status },
+    data: { status, ...motivoRecusa },
+  });
+
+  revalidatePath("/orcamentos");
+  revalidatePath(`/orcamentos/${orcamentoId}`);
+}
+
+/**
+ * O limite do motivo.
+ *
+ * Generoso para caber uma frase inteira ("pediram 12% e a indústria só deu 5,
+ * fecharam com a Selpack"), curto o bastante para não virar depósito de texto
+ * num campo que a lista mostra inteiro.
+ */
+const LIMITE_DO_MOTIVO = 280;
+
+/** `null` quando o campo nem veio no formulário — que é diferente de veio vazio. */
+function motivoDoFormulario(formData: FormData): string | null {
+  const bruto = formData.get("motivoRecusa");
+  if (typeof bruto !== "string") return null;
+
+  return bruto.trim().slice(0, LIMITE_DO_MOTIVO);
+}
+
+/** Escrever o motivo depois, ou corrigir o que foi escrito na hora. */
+export async function salvarMotivoRecusa(
+  orcamentoId: string,
+  formData: FormData,
+): Promise<void> {
+  const { organizacaoId, db } = await contexto();
+
+  await db.orcamento.updateMany({
+    where: { id: orcamentoId, organizacaoId, status: "RECUSADO" },
+    data: { motivoRecusa: motivoDoFormulario(formData) ?? "" },
   });
 
   revalidatePath("/orcamentos");

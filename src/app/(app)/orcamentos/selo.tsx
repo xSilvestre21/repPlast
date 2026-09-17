@@ -1,10 +1,15 @@
 /**
  * O desfecho da proposta, dito em pílula.
  *
- * Segue a mesma gramática do selo do pedido: ACEITO é verde porque é o único
- * dos quatro que representa trabalho concluído; RECUSADO vem riscado, como um
- * registro que deixou de valer; ABERTO e EXPIRADO ficam neutros, porque
- * esperar e vencer não são alerta — são estados por onde toda proposta passa.
+ * ACEITO é verde porque é o único dos quatro que representa trabalho
+ * concluído. ABERTO e EXPIRADO ficam neutros: esperar e vencer não são alerta,
+ * são estados por onde toda proposta passa.
+ *
+ * RECUSADO é VERMELHO, e aqui a proposta se afasta do selo do pedido — lá
+ * cancelado segue cinza e riscado. A diferença é que o pedido cancelado é um
+ * registro que deixou de valer, enquanto a proposta recusada é dinheiro que o
+ * escritório perdeu: ela é para ser vista de longe na lista, ao lado do motivo
+ * da perda. Foi decisão explícita de quem usa o sistema.
  *
  * A palavra está escrita por extenso nos quatro: quem não distingue as cores
  * continua lendo o estado.
@@ -19,7 +24,7 @@ import { Selo, type TomSelo } from "@/components/ui";
 const ESTADOS: Record<string, { rotulo: string; tom: TomSelo }> = {
   ABERTO: { rotulo: "Aberto", tom: "neutro" },
   ACEITO: { rotulo: "Aceito", tom: "verde" },
-  RECUSADO: { rotulo: "Recusado", tom: "cancelado" },
+  RECUSADO: { rotulo: "Recusado", tom: "perigo" },
   EXPIRADO: { rotulo: "Vencido", tom: "neutro" },
 };
 

@@ -974,8 +974,10 @@ export function Selo({
   const TONS: Record<TomSelo, string> = {
     neutro: "carimbo carimbo-apagado",
     verde: "carimbo carimbo-verde",
-    carimbo: "carimbo bg-carimbo-fraco text-carimbo",
-    perigo: "carimbo bg-perigo-fraco text-perigo",
+    // Tom novo entra como classe irmã de `.carimbo`, nunca como utilitária de
+    // cor: a base já pinta de verde e vence a utilitária. Ver `globals.css`.
+    carimbo: "carimbo carimbo-azul",
+    perigo: "carimbo carimbo-perigo",
     cancelado: "carimbo carimbo-apagado line-through decoration-1",
   };
 

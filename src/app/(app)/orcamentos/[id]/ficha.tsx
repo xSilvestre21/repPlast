@@ -9,7 +9,7 @@
  */
 
 import { Check, FileSignature, ScrollText, ThumbsDown, Timer, UserRoundPlus } from "lucide-react";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import {
   AreaTexto,
@@ -113,6 +113,15 @@ export function FichaProposta({
 }
 
 /**
+ * Mesmo teto que `salvarMotivoRecusa` aplica no servidor (`../acoes.ts`).
+ *
+ * Vive repetido porque arquivo `"use server"` só exporta função assíncrona —
+ * uma constante não atravessa de lá para cá. Quem manda é o servidor; este
+ * número existe para o campo avisar antes, e não para valer sozinho.
+ */
+const LIMITE_DO_MOTIVO = 280;
+
+/**
  * O desfecho.
  *
  * Aceitar, recusar e vencer são as três saídas, e nenhuma acontece sozinha —
@@ -124,48 +133,100 @@ export function DesfechoProposta({
   temItens,
   temCliente,
   jaVirouPedido,
+  motivoRecusa,
   aceitar,
   recusar,
   vencer,
   reabrir,
   virarPedido,
+  salvarMotivo,
 }: {
   status: string;
   temItens: boolean;
   temCliente: boolean;
   jaVirouPedido: boolean;
+  motivoRecusa: string;
   aceitar: (formData: FormData) => void | Promise<void>;
   recusar: (formData: FormData) => void | Promise<void>;
   vencer: (formData: FormData) => void | Promise<void>;
   reabrir: (formData: FormData) => void | Promise<void>;
   virarPedido: (formData: FormData) => void | Promise<void>;
+  salvarMotivo: (formData: FormData) => void | Promise<void>;
 }) {
   const aberto = status === "ABERTO";
+
+  /*
+   * Recusar é de dois tempos: o clique abre o campo do motivo, e é o segundo
+   * botão que fecha a proposta. O motivo se sabe JUSTO nesse instante — quem
+   * acabou de ouvir do cliente é quem consegue escrever "fecharam com a
+   * concorrência", e perguntar depois é perguntar quando já esqueceu.
+   */
+  const [recusando, setRecusando] = useState(false);
 
   return (
     <div className="flex flex-wrap items-center gap-3">
       {aberto ? (
-        <>
-          <form action={aceitar}>
-            <Botao type="submit" icone={Check} disabled={!temItens}>
-              Cliente aceitou
-            </Botao>
+        recusando ? (
+          <form action={recusar} className="w-full max-w-xl space-y-3">
+            <Campo
+              name="motivoRecusa"
+              rotulo="Por que o cliente recusou?"
+              placeholder="Preço acima do concorrente, adiou a compra…"
+              maxLength={LIMITE_DO_MOTIVO}
+              autoFocus
+              dica="Opcional. Fica visível na lista — é o que explica a proposta perdida meses depois."
+            />
+            <div className="flex flex-wrap items-center gap-3">
+              <Botao type="submit" variante="secundaria" icone={ThumbsDown}>
+                Marcar como recusada
+              </Botao>
+              <BotaoTexto type="button" onClick={() => setRecusando(false)}>
+                voltar
+              </BotaoTexto>
+            </div>
           </form>
-          <form action={recusar}>
-            <Botao type="submit" variante="secundaria" icone={ThumbsDown}>
+        ) : (
+          <>
+            <form action={aceitar}>
+              <Botao type="submit" icone={Check} disabled={!temItens}>
+                Cliente aceitou
+              </Botao>
+            </form>
+            <Botao
+              type="button"
+              variante="secundaria"
+              icone={ThumbsDown}
+              onClick={() => setRecusando(true)}
+            >
               Recusou
             </Botao>
-          </form>
-          <form action={vencer}>
-            <BotaoTexto type="submit">
-              <Timer size={12} className="inline mr-1" aria-hidden="true" />
-              marcar como vencida
-            </BotaoTexto>
-          </form>
-        </>
+            <form action={vencer}>
+              <BotaoTexto type="submit">
+                <Timer size={12} className="inline mr-1" aria-hidden="true" />
+                marcar como vencida
+              </BotaoTexto>
+            </form>
+          </>
+        )
       ) : (
         <form action={reabrir}>
           <BotaoTexto type="submit">reabrir a proposta</BotaoTexto>
+        </form>
+      )}
+
+      {status === "RECUSADO" && (
+        <form action={salvarMotivo} className="w-full max-w-xl space-y-3">
+          <Campo
+            name="motivoRecusa"
+            rotulo="Por que o cliente recusou?"
+            defaultValue={motivoRecusa}
+            placeholder="Preço acima do concorrente, adiou a compra…"
+            maxLength={LIMITE_DO_MOTIVO}
+            dica="Fica visível na lista de orçamentos."
+          />
+          <Botao type="submit" variante="secundaria" tamanho="compacto">
+            Salvar motivo
+          </Botao>
         </form>
       )}
 

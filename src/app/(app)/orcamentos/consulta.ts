@@ -50,6 +50,8 @@ export type OrcamentoDaLista = {
   virouPedido: boolean;
   data: string;
   valor: string;
+  /** Vazio quando a proposta não foi recusada, ou quando ninguém escreveu. */
+  motivoRecusa: string;
 };
 
 export type FatiaDeOrcamentos = {
@@ -115,6 +117,8 @@ export async function buscarOrcamentos(
       virouPedido: orcamento._count.pedidos > 0,
       data: DATA.format(orcamento.criadoEm),
       valor: formatarMoeda(orcamento.totalGeral.toString()),
+      motivoRecusa:
+        orcamento.status === "RECUSADO" ? (orcamento.motivoRecusa ?? "") : "",
     };
   });
 
