@@ -101,12 +101,48 @@ const CAMPOS_DA_COMISSAO = {
   subtotalSemIpi: true,
   comissaoPercentual: true,
   comissaoPercentualPreposto: true,
-  representante: { select: { id: true, nome: true, papel: true } },
+  representanteId: true,
   valorRecebido: true,
   comissaoPercentualRecebido: true,
   cliente: { select: { id: true, apelido: true } },
   fornecedor: { select: { id: true, nome: true, comissaoPercentual: true } },
 } as const;
+
+/**
+ * Resolve o preposto de cada pedido numa consulta à parte.
+ *
+ * O caminho natural seria `representante: { select: ... }` junto dos demais
+ * campos, e era assim que estava. Acontece que o motor do Prisma 7.10 quebra o
+ * plano de uma relação OPCIONAL em execuções encadeadas e dispara duas consultas
+ * na mesma conexão sem esperar a primeira terminar — o `pg` avisa que vai parar
+ * de tolerar isso na versão 9. As relações obrigatórias (`cliente`,
+ * `fornecedor`) não sofrem disso; só a que aceita nulo.
+ *
+ * O RLS continua valendo aqui: a policy de `usuario` deixa o preposto ver só a
+ * própria linha, exatamente como faria através da junção.
+ */
+async function comRepresentante<T extends { representanteId: string | null }>(
+  db: DbOrganizacao,
+  pedidos: T[],
+) {
+  const ids = [
+    ...new Set(pedidos.map((p) => p.representanteId).filter((id) => id !== null)),
+  ];
+
+  const representantes = ids.length
+    ? await db.usuario.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, nome: true, papel: true },
+      })
+    : [];
+
+  const porId = new Map(representantes.map((r) => [r.id, r]));
+
+  return pedidos.map(({ representanteId, ...pedido }) => ({
+    ...pedido,
+    representante: representanteId ? (porId.get(representanteId) ?? null) : null,
+  }));
+}
 
 /**
  * Pedidos enviados na competência, com o necessário para calcular a comissão.
@@ -124,7 +160,7 @@ export async function pedidosDaCompetencia(
 ) {
   const { de, ate } = intervaloDaCompetenciaUtc(competencia);
 
-  return db.pedido.findMany({
+  const pedidos = await db.pedido.findMany({
     where: {
       organizacaoId,
       status: "ENVIADO",
@@ -145,6 +181,8 @@ export async function pedidosDaCompetencia(
     orderBy: [{ prazoEntrega: "asc" }, { numero: "asc" }],
     select: CAMPOS_DA_COMISSAO,
   });
+
+  return comRepresentante(db, pedidos);
 }
 
 /**
@@ -166,7 +204,7 @@ export async function pedidosDoIntervalo(
   const { de } = intervaloDaCompetenciaUtc(deCompetencia);
   const { ate } = intervaloDaCompetenciaUtc(ateCompetencia);
 
-  return db.pedido.findMany({
+  const pedidos = await db.pedido.findMany({
     where: {
       organizacaoId,
       status: "ENVIADO",
@@ -182,4 +220,6 @@ export async function pedidosDoIntervalo(
     orderBy: [{ prazoEntrega: "asc" }, { numero: "asc" }],
     select: CAMPOS_DA_COMISSAO,
   });
+
+  return comRepresentante(db, pedidos);
 }
