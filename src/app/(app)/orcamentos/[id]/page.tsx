@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Building2, Factory, FileDown, ScrollText } from "lucide-react";
+import { Building2, Factory, FileDown, Pencil, ScrollText } from "lucide-react";
 
 import { SecaoItens } from "@/components/itens-documento";
 import { Pagina } from "@/components/pagina";
@@ -29,6 +29,7 @@ import {
 import { CadastrarCliente, DesfechoProposta, FichaProposta } from "./ficha";
 
 const DATA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "UTC" });
+const DATA_HORA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
 
 /** Decimal do Prisma para o texto que o componente espera. */
 const texto = (v: { toString(): string } | null) => (v === null ? null : v.toString());
@@ -36,8 +37,12 @@ const texto = (v: { toString(): string } | null) => (v === null ? null : v.toStr
 /** "AAAA-MM-DD" em UTC — a coluna é `date`, sem hora. */
 const iso = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : "");
 
-export default async function PaginaOrcamento({ params }: PageProps<"/orcamentos/[id]">) {
+export default async function PaginaOrcamento({
+  params,
+  searchParams,
+}: PageProps<"/orcamentos/[id]">) {
   const { id } = await params;
+  const parametros = await searchParams;
   const { organizacaoId, db } = await escopoAtual();
 
   const orcamento = await db.orcamento.findFirst({
@@ -47,25 +52,56 @@ export default async function PaginaOrcamento({ params }: PageProps<"/orcamentos
       fornecedor: { select: { id: true, nome: true } },
       itens: { orderBy: { ordem: "asc" } },
       pedidos: { select: { id: true, numero: true }, orderBy: { numero: "asc" } },
+      edicoes: {
+        orderBy: { editadoEm: "desc" },
+        select: { id: true, editadoEm: true, usuario: { select: { nome: true } } },
+      },
     },
   });
 
   if (!orcamento) notFound();
 
-  // Só produtos da MESMA indústria entram: a proposta é de uma só, e o IPI
-  // congelado aqui é o dela.
+  /*
+   * O que dá para lançar aqui: produto DESTE cliente E DESTA indústria.
+   *
+   * As duas condições valem juntas — produto que o cliente compra, mas de outra
+   * indústria, não entra, porque a proposta é de uma indústria só e o IPI
+   * congelado é o dela.
+   *
+   * Sem cliente cadastrado não há vínculo a consultar, e aí a lista é a da
+   * indústria inteira: a proposta avulsa existe justamente para cotar antes de
+   * abrir ficha, e exigir o vínculo ali fecharia esse caminho.
+   */
   const produtos = await db.produto.findMany({
-    where: { organizacaoId, fornecedorId: orcamento.fornecedorId, ativo: true },
+    where: {
+      organizacaoId,
+      fornecedorId: orcamento.fornecedorId,
+      ativo: true,
+      ...(orcamento.clienteId
+        ? { codigosCliente: { some: { clienteId: orcamento.clienteId } } }
+        : {}),
+    },
     orderBy: { descricao: "asc" },
     include: { aditivos: { include: { aditivo: true } } },
   });
 
-  const editavel = orcamento.status === "ABERTO";
+  /*
+   * A proposta abre para LEITURA, e é assim de propósito: depois de gravada ela
+   * é o que o cliente recebeu, e uma tela que já chega editável convida a mexer
+   * sem querer no documento que está valendo.
+   *
+   * Duas exceções, e as duas são o mesmo caso — ninguém deu a proposta por
+   * pronta ainda: a que acabou de nascer (`emElaboracao`), e aquela em que se
+   * clicou em editar de propósito (`?editar=1`).
+   */
+  const aberto = orcamento.status === "ABERTO";
+  const editavel = aberto && (orcamento.emElaboracao || parametros.editar === "1");
   const para = destinatario(orcamento);
 
   return (
     <Pagina>
       <Cabecalho
+        voltar={{ href: "/orcamentos", rotulo: "Orçamentos" }}
         titulo={`Orçamento #${orcamento.numero}`}
         descricao={`${para.nome} · ${orcamento.fornecedor.nome}`}
         acao={
@@ -78,6 +114,11 @@ export default async function PaginaOrcamento({ params }: PageProps<"/orcamentos
             >
               PDF
             </BotaoLink>
+            {aberto && !editavel && (
+              <BotaoLink href={`/orcamentos/${orcamento.id}?editar=1`} icone={Pencil}>
+                Editar
+              </BotaoLink>
+            )}
           </div>
         }
       />
@@ -147,6 +188,27 @@ export default async function PaginaOrcamento({ params }: PageProps<"/orcamentos
 
         <SecaoItens
           editavel={editavel}
+          motivoTravado={
+            aberto
+              ? "Em leitura. Para lançar ou mexer em item, use Editar no alto da página."
+              : "Proposta fechada: os itens são os que o cliente recebeu."
+          }
+          semProdutos={
+            orcamento.cliente && (
+              <p className="text-corpo text-tinta-2 leading-relaxed">
+                {orcamento.cliente.apelido} ainda não tem nenhum produto da{" "}
+                {orcamento.fornecedor.nome} cadastrado. Registre o código que ele usa para
+                cada produto na{" "}
+                <Link
+                  href={`/clientes/${orcamento.cliente.id}`}
+                  className="text-carimbo hover:underline font-medium"
+                >
+                  ficha do cliente
+                </Link>{" "}
+                e eles aparecem aqui.
+              </p>
+            )
+          }
           itens={orcamento.itens.map((item) => ({
             id: item.id,
             familia: item.familia,
@@ -198,6 +260,7 @@ export default async function PaginaOrcamento({ params }: PageProps<"/orcamentos
 
         <FichaProposta
           editavel={editavel}
+          fechada={!aberto}
           valores={{
             attn: orcamento.attn ?? "",
             validoAte: iso(orcamento.validoAte),
@@ -205,6 +268,11 @@ export default async function PaginaOrcamento({ params }: PageProps<"/orcamentos
             vendedor: orcamento.vendedor ?? "",
             observacoes: orcamento.observacoes ?? "",
           }}
+          edicoes={orcamento.edicoes.map((edicao) => ({
+            id: edicao.id,
+            quem: edicao.usuario?.nome ?? "usuário removido",
+            quando: DATA_HORA.format(edicao.editadoEm),
+          }))}
           salvar={atualizarOrcamento.bind(null, orcamento.id)}
         />
 

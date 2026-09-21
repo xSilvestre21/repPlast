@@ -18,6 +18,7 @@ import {
 } from "@react-pdf/renderer";
 
 import { ROTULO_COLUNA_PRECO, ROTULO_UNIDADE, type Familia, type UnidadeVenda } from "../produto-preco";
+import "./hifenizacao";
 
 export interface ItemPdf {
   codigoFornecedor: string | null;

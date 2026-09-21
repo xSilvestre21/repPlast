@@ -31,13 +31,21 @@ export type ValoresProposta = {
   observacoes: string;
 };
 
+/** Já formatada no servidor: o fuso de quem lê não muda quando foi editado. */
+export type EdicaoRegistrada = { id: string; quem: string; quando: string };
+
 export function FichaProposta({
   valores,
   editavel,
+  fechada,
+  edicoes,
   salvar,
 }: {
   valores: ValoresProposta;
   editavel: boolean;
+  /** Aceita, recusada ou vencida — não volta a ser editável por um botão. */
+  fechada: boolean;
+  edicoes: EdicaoRegistrada[];
   salvar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
 }) {
   const [estado, enviar, salvando] = useActionState(salvar, {});
@@ -50,7 +58,9 @@ export function FichaProposta({
       descricao={
         editavel
           ? "Sai tudo impresso no PDF que o cliente recebe."
-          : "Proposta fechada: o que o cliente recebeu não muda mais."
+          : fechada
+            ? "Proposta fechada: o que o cliente recebeu não muda mais."
+            : "Em leitura. Para mexer em qualquer coisa, use Editar no alto da página."
       }
     >
       <form action={enviar} className="space-y-4">
@@ -103,11 +113,24 @@ export function FichaProposta({
         {editavel && (
           <div className="flex justify-end">
             <Botao type="submit" variante="secundaria" carregando={salvando}>
-              {salvando ? "Salvando…" : "Salvar a proposta"}
+              {salvando ? "Salvando…" : "Salvar e voltar"}
             </Botao>
           </div>
         )}
       </form>
+
+      {edicoes.length > 0 && (
+        <div className="mt-5 pt-4 border-t border-filete">
+          <h3 className="rotulo text-tinta-3 mb-2">Editada depois de pronta</h3>
+          <ul className="space-y-1">
+            {edicoes.map((edicao) => (
+              <li key={edicao.id} className="text-mini text-tinta-2">
+                {edicao.quem} · <span className="numerico">{edicao.quando}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </SecaoCartao>
   );
 }

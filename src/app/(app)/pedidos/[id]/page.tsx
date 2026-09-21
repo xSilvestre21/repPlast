@@ -45,9 +45,19 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
 
   if (!pedido) notFound();
 
-  // Só produtos desta indústria: um pedido pertence a uma só.
+  /*
+   * O que dá para lançar aqui: produto DESTE cliente E DESTA indústria.
+   *
+   * As duas condições valem juntas — produto que o cliente compra, mas de outra
+   * indústria, não entra, porque o pedido é dirigido a uma indústria só.
+   */
   const produtos = await db.produto.findMany({
-    where: { organizacaoId, fornecedorId: pedido.fornecedorId, ativo: true },
+    where: {
+      organizacaoId,
+      fornecedorId: pedido.fornecedorId,
+      ativo: true,
+      codigosCliente: { some: { clienteId: pedido.clienteId } },
+    },
     orderBy: { descricao: "asc" },
     include: { aditivos: { include: { aditivo: true } } },
   });
@@ -59,6 +69,7 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
   return (
     <Pagina>
       <Cabecalho
+        voltar={{ href: "/pedidos", rotulo: "Pedidos" }}
         icone={ScrollText}
         titulo={`Pedido ${pedido.numero}`}
         selo={<SeloStatus status={pedido.status} />}
@@ -176,6 +187,20 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
 
         <SecaoItens
           editavel={editavel}
+          semProdutos={
+            <p className="text-corpo text-tinta-2 leading-relaxed">
+              {pedido.cliente.apelido} ainda não tem nenhum produto da{" "}
+              {pedido.fornecedor.nome} cadastrado. Registre o código que ele usa para cada
+              produto na{" "}
+              <Link
+                href={`/clientes/${pedido.cliente.id}`}
+                className="text-carimbo hover:underline font-medium"
+              >
+                ficha do cliente
+              </Link>{" "}
+              e eles aparecem aqui.
+            </p>
+          }
           itens={pedido.itens.map((item) => ({
             id: item.id,
             familia: item.familia,

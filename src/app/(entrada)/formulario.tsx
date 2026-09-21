@@ -54,7 +54,14 @@ export function FormularioCadastro({ acao }: { acao: Acao }) {
         required
         autoFocus
       />
-      <Campo name="nome" rotulo="Seu nome" autoComplete="name" required />
+      <Campo
+        name="nome"
+        rotulo="Seu nome"
+        dica="Nome e sobrenome — é assim que você assina o rodapé das propostas."
+        placeholder="Valquiria Silvestre"
+        autoComplete="name"
+        required
+      />
       <Campo name="email" rotulo="E-mail" type="email" autoComplete="email" required />
       <Campo
         name="senha"

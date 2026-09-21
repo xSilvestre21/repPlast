@@ -105,10 +105,6 @@ model Organizacao {
   /// e a indústria nem fica sabendo dele.
   proximoNumeroOrcamento Int @default(1)
 
-  /// Condições que se repetem em toda proposta — ICMS, frete, validade. Entram
-  /// preenchidas no orçamento novo e podem ser editadas ali.
-  observacoesPadrao String?
-
   /// Meta pessoal de comissão do mês, em reais. É do representante, não da
   /// indústria: serve para ele acompanhar o próprio objetivo e comemorar ao
   /// bater. Vazio significa que ele ainda não definiu nenhuma.
@@ -149,10 +145,16 @@ model Usuario {
   /// criação, para que renegociar amanhã não reescreva o que já foi vendido.
   comissaoPercentualPadrao Decimal? @db.Decimal(6, 3)
 
+  /// Condições que se repetem em toda proposta — ICMS, frete, validade. Entram
+  /// preenchidas no orçamento novo e podem ser editadas ali. É de cada usuário,
+  /// não do escritório: representantes diferentes costumam usar texto diferente.
+  observacoesPadrao String?
+
   organizacao Organizacao          @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   clientes     Cliente[]
   pedidos      Pedido[]
   orcamentos   Orcamento[]
+  edicoes      OrcamentoEdicao[]
   fornecedores FornecedorPreposto[]
 
   @@index([organizacaoId])
@@ -483,10 +485,16 @@ model ProdutoAditivo {
 
 /// COD.CLI do PDF: o código que aquele cliente usa para aquele produto.
 /// É opcional — no pedido 2256 a coluna vem vazia.
+/// Quais produtos são DESTE cliente — e, quando ele tiver, o código que usa.
+///
+/// A linha é o vínculo; o código é enfeite dela. Nem todo cliente numera o que
+/// compra, e exigir o número para registrar o vínculo deixava de fora justo
+/// quem não numera: o produto existia para a indústria, existia para o cliente,
+/// e mesmo assim não aparecia na hora de lançar o pedido.
 model ProdutoCodigoCliente {
-  produtoId String @db.Uuid
-  clienteId String @db.Uuid
-  codigo    String
+  produtoId String  @db.Uuid
+  clienteId String  @db.Uuid
+  codigo    String?
 
   produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
   cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
@@ -719,6 +727,14 @@ model Orcamento {
   /// Mesmo corte do pedido: segue o dono da carteira do cliente.
   representanteId String? @db.Uuid
 
+  /// A proposta ainda está sendo montada — nasceu agora e nunca foi gravada.
+  ///
+  /// É o que decide se a tela abre editável ou só para leitura: enquanto for
+  /// verdadeiro, quem criou continua lançando item e condição sem precisar
+  /// pedir permissão para editar. O primeiro "Salvar a proposta" desliga isto,
+  /// e a partir daí toda gravada é uma EDIÇÃO — e vira linha em `edicoes`.
+  emElaboracao Boolean @default(true)
+
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
@@ -727,6 +743,7 @@ model Orcamento {
   cliente       Cliente?        @relation(fields: [clienteId], references: [id], onDelete: Restrict)
   representante Usuario?        @relation(fields: [representanteId], references: [id], onDelete: SetNull)
   itens         OrcamentoItem[]
+  edicoes       OrcamentoEdicao[]
   pedidos       Pedido[]
 
   @@unique([organizacaoId, numero])
@@ -768,4 +785,28 @@ model OrcamentoItem {
   @@index([orcamentoId])
   @@index([produtoId])
   @@map("orcamento_item")
+}
+
+/// Cada vez que uma proposta já gravada foi reaberta e salva de novo.
+///
+/// A montagem inicial não entra: `Orcamento.criadoEm` já conta quando ela
+/// nasceu, e repetir isso aqui faria toda proposta abrir com uma linha que não
+/// informa nada. O log responde outra pergunta — "mexeram nisto DEPOIS?" —, e
+/// é ela que importa quando o cliente liga dizendo que o preço combinado era
+/// outro.
+///
+/// `usuarioId` é opcional só para o preposto poder ser excluído sem levar o
+/// histórico junto: quem editou some, o fato de ter sido editado fica.
+model OrcamentoEdicao {
+  id          String  @id @default(uuid()) @db.Uuid
+  orcamentoId String  @db.Uuid
+  usuarioId   String? @db.Uuid
+
+  editadoEm DateTime @default(now())
+
+  orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  usuario   Usuario?  @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([orcamentoId, editadoEm])
+  @@map("orcamento_edicao")
 }

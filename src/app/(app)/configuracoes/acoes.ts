@@ -1,12 +1,14 @@
 "use server";
 
 /**
- * Preferências de conta do usuário logado — hoje só a de animação.
+ * Preferências de conta do usuário logado.
  */
 
 import { revalidatePath } from "next/cache";
 
 import { escopoAtual } from "@/lib/sessao";
+
+export type EstadoFormulario = { erro?: string };
 
 /**
  * Liga e desliga a animação da conta.
@@ -32,4 +34,32 @@ export async function alternarReduzirAnimacoes(): Promise<void> {
   });
 
   revalidatePath("/configuracoes");
+}
+
+/**
+ * O texto que entra preenchido em "Condições" num orçamento novo.
+ *
+ * É de cada usuário, não do escritório: cada representante negocia ICMS,
+ * frete e prazo do jeito que costuma fechar, e o texto de um não é o do outro.
+ */
+export async function salvarObservacoesPadrao(
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    const { usuarioId, organizacaoId, db } = await escopoAtual();
+
+    const bruto = formData.get("observacoesPadrao");
+    const texto = typeof bruto === "string" && bruto.trim() !== "" ? bruto.trim() : null;
+
+    await db.usuario.updateMany({
+      where: { id: usuarioId, organizacaoId },
+      data: { observacoesPadrao: texto },
+    });
+  } catch (erro) {
+    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
+  }
+
+  revalidatePath("/configuracoes");
+  return {};
 }

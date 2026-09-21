@@ -17,6 +17,7 @@ export default async function PaginaNovoProduto() {
     return (
       <Pagina>
         <Cabecalho
+          voltar={{ href: "/produtos", rotulo: "Produtos" }}
           icone={PackagePlus}
           titulo="Novo produto"
           acao={
@@ -37,6 +38,7 @@ export default async function PaginaNovoProduto() {
   return (
     <Pagina>
       <Cabecalho
+        voltar={{ href: "/produtos", rotulo: "Produtos" }}
         icone={PackagePlus}
         titulo="Novo produto"
         descricao="Digite as medidas e veja a descrição e o preço se montarem."

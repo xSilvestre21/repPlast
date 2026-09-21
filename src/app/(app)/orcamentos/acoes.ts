@@ -56,7 +56,13 @@ function lerData(valor: FormDataEntryValue | null): Date | null {
 async function exigirAberto(db: DbOrganizacao, orcamentoId: string, organizacaoId: string) {
   const orcamento = await db.orcamento.findFirst({
     where: { id: orcamentoId, organizacaoId },
-    select: { id: true, status: true, fornecedorId: true, clienteId: true },
+    select: {
+      id: true,
+      status: true,
+      fornecedorId: true,
+      clienteId: true,
+      emElaboracao: true,
+    },
   });
 
   if (!orcamento) throw new Error("Orçamento não encontrado.");
@@ -125,7 +131,7 @@ export async function criarOrcamento(
   let destino: string;
 
   try {
-    const { organizacaoId, db } = await contexto();
+    const { organizacaoId, usuarioId, db } = await contexto();
 
     const clienteId = lerTexto(formData.get("clienteId"));
     const avulsoNome = lerTexto(formData.get("clienteAvulsoNome"));
@@ -143,7 +149,7 @@ export async function criarOrcamento(
     }
     if (!fornecedorId) return { erro: "Escolha a indústria." };
 
-    const [cliente, fornecedor, organizacao] = await Promise.all([
+    const [cliente, fornecedor, usuario] = await Promise.all([
       clienteId
         ? db.cliente.findFirst({
             where: { id: clienteId, organizacaoId },
@@ -154,9 +160,9 @@ export async function criarOrcamento(
         where: { id: fornecedorId, organizacaoId },
         select: { id: true, ipiPercentual: true },
       }),
-      db.organizacao.findUnique({
-        where: { id: organizacaoId },
-        select: { observacoesPadrao: true },
+      db.usuario.findUnique({
+        where: { id: usuarioId },
+        select: { nome: true, observacoesPadrao: true },
       }),
     ]);
 
@@ -187,8 +193,11 @@ export async function criarOrcamento(
         numero: contador.proximoNumeroOrcamento - 1,
         // Congelado na criação, como no pedido.
         ipiPercentual: fornecedor.ipiPercentual,
-        // As condições que se repetem em toda proposta entram preenchidas.
-        observacoes: organizacao?.observacoesPadrao ?? cliente?.observacoes ?? null,
+        // As condições que se repetem em toda proposta entram preenchidas —
+        // com o padrão de quem está criando, não do escritório.
+        observacoes: usuario?.observacoesPadrao ?? cliente?.observacoes ?? null,
+        // Quem assina embaixo é quem está criando — dá para trocar na ficha.
+        vendedor: usuario?.nome ?? null,
         // Mesmo corte do pedido: a proposta é da carteira, não de quem digitou.
         // Sem cliente ainda não há carteira — a proposta nasce do escritório.
         representanteId: cliente?.representanteId ?? null,
@@ -205,14 +214,22 @@ export async function criarOrcamento(
   redirect(destino);
 }
 
+/**
+ * Grava a proposta e devolve a pessoa para a lista.
+ *
+ * Sair da tela é parte do ato: gravar é dizer "terminei com esta", e a proposta
+ * passa a abrir só para leitura. Quem precisar mexer de novo clica em editar —
+ * e essa segunda gravada vira linha no log, porque é ela que responde ao
+ * cliente que liga dizendo que o combinado era outro.
+ */
 export async function atualizarOrcamento(
   orcamentoId: string,
   _estado: EstadoFormulario,
   formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
-    const { organizacaoId, db } = await contexto();
-    await exigirAberto(db, orcamentoId, organizacaoId);
+    const { organizacaoId, usuarioId, db } = await contexto();
+    const orcamento = await exigirAberto(db, orcamentoId, organizacaoId);
 
     await db.orcamento.updateMany({
       where: { id: orcamentoId, organizacaoId },
@@ -222,14 +239,21 @@ export async function atualizarOrcamento(
         prazoPagamento: lerTexto(formData.get("prazoPagamento")),
         observacoes: lerTexto(formData.get("observacoes")),
         vendedor: lerTexto(formData.get("vendedor")),
+        emElaboracao: false,
       },
     });
+
+    // Montar a proposta não é editá-la: o log começa na segunda gravada.
+    if (!orcamento.emElaboracao) {
+      await db.orcamentoEdicao.create({ data: { orcamentoId, usuarioId } });
+    }
   } catch (erro) {
     return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
   }
 
+  revalidatePath("/orcamentos");
   revalidatePath(`/orcamentos/${orcamentoId}`);
-  return {};
+  redirect("/orcamentos");
 }
 
 /**

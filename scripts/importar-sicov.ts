@@ -365,8 +365,10 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
   const valquiria = sicov.users.find((u: any) => u.profile === "admin");
   const usuarios = new Map<string, string>();
 
-  await tx.organizacao.update({
-    where: { id: orgId },
+  // O texto padrão de "Condições" é de cada usuário agora — o do SICOV era do
+  // escritório inteiro, então vai para quem ocupa o lugar do admin dele.
+  await tx.usuario.update({
+    where: { id: admin.id },
     data: { observacoesPadrao: texto(sicov.settings[0]?.defaultObservations) },
   });
 

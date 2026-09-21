@@ -19,7 +19,12 @@ import {
 import type { EstadoFormulario } from "../acoes";
 
 export type ProdutoOpcao = { id: string; descricao: string; fornecedor: string };
-export type CodigoRegistrado = { produtoId: string; descricao: string; codigo: string };
+export type CodigoRegistrado = {
+  produtoId: string;
+  descricao: string;
+  /** Nulo quando o cliente não numera este produto — o vínculo vale do mesmo jeito. */
+  codigo: string | null;
+};
 
 export function SecaoCodigos({
   codigos,
@@ -37,13 +42,13 @@ export function SecaoCodigos({
   return (
     <SecaoCartao
       icone={Hash}
-      titulo="Códigos deste cliente"
-      descricao="O código que ELE usa para cada produto. Sai na coluna COD.CLI do pedido e é opcional — quando não houver, a coluna sai vazia."
+      titulo="Produtos deste cliente"
+      descricao="São estes que aparecem ao lançar pedido ou proposta para ele. O código é o que ELE usa — opcional, e quando não houver a coluna COD.CLI sai vazia."
     >
       <Painel className="mb-4">
         {codigos.length === 0 ? (
           <EstadoVazio discreto icone={Hash}>
-            Nenhum código registrado para este cliente.
+            Nenhum produto vinculado a este cliente.
           </EstadoVazio>
         ) : (
           codigos.map((codigo) => (
@@ -53,15 +58,19 @@ export function SecaoCodigos({
               </span>
 
               <div className="flex items-center gap-3 ml-auto shrink-0">
-                <span className="font-mono text-corpo text-carimbo numerico">
-                  {codigo.codigo}
-                </span>
+                {codigo.codigo ? (
+                  <span className="font-mono text-corpo text-carimbo numerico">
+                    {codigo.codigo}
+                  </span>
+                ) : (
+                  <span className="text-mini text-tinta-3">sem código</span>
+                )}
                 <form action={remover}>
                   <input type="hidden" name="produtoId" value={codigo.produtoId} />
                   <BotaoTexto
                     type="submit"
                     perigoso
-                    aria-label={`Remover código de ${codigo.descricao}`}
+                    aria-label={`Desvincular ${codigo.descricao}`}
                   >
                     remover
                   </BotaoTexto>
@@ -74,7 +83,7 @@ export function SecaoCodigos({
 
       {produtos.length === 0 ? (
         <p className="text-corpo text-tinta-3">
-          Cadastre produtos antes de registrar os códigos do cliente.
+          Cadastre produtos antes de vinculá-los a este cliente.
         </p>
       ) : (
         <form action={enviar} className="space-y-4">
@@ -93,13 +102,13 @@ export function SecaoCodigos({
             <Campo
               name="codigo"
               rotulo="Código no cliente"
-              required
               placeholder="121010011"
+              dica="Opcional."
               className="flex-1 min-w-40"
             />
 
             <Botao type="submit" variante="secundaria" carregando={enviando}>
-              {enviando ? "Salvando…" : "Salvar código"}
+              {enviando ? "Salvando…" : "Vincular produto"}
             </Botao>
           </div>
         </form>

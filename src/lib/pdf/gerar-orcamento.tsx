@@ -47,7 +47,7 @@ export async function carregarOrcamentoParaPdf(
   const orcamento = await db.orcamento.findFirst({
     where: { id: orcamentoId, organizacaoId },
     include: {
-      cliente: { select: { apelido: true, razaoSocial: true, municipio: true, uf: true } },
+      cliente: { select: { apelido: true } },
       fornecedor: { select: { nome: true, municipio: true, logo: true } },
       itens: { orderBy: { ordem: "asc" } },
     },
@@ -70,15 +70,10 @@ export async function carregarOrcamentoParaPdf(
       },
       logo: orcamento.fornecedor.logo ? Buffer.from(orcamento.fornecedor.logo) : null,
 
-      cliente: orcamento.cliente
-        ? { ...orcamento.cliente, cadastrado: true }
-        : {
-            apelido: orcamento.clienteAvulsoNome ?? "(sem destinatário)",
-            razaoSocial: orcamento.clienteAvulsoNome ?? "(sem destinatário)",
-            municipio: orcamento.clienteAvulsoMunicipio,
-            uf: null,
-            cadastrado: false,
-          },
+      cliente: {
+        apelido:
+          orcamento.cliente?.apelido ?? orcamento.clienteAvulsoNome ?? "(sem destinatário)",
+      },
       attn: orcamento.attn,
 
       itens: orcamento.itens.map((i) => ({

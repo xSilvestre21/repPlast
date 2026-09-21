@@ -231,7 +231,13 @@ export function ListaPrepostos({
           <Recado estado={estado} />
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Campo name="nome" rotulo="Nome" required placeholder="Maria Augusta" />
+            <Campo
+              name="nome"
+              rotulo="Nome"
+              required
+              placeholder="Maria Augusta Ferraz"
+              dica="Nome e sobrenome — assina o rodapé das propostas dele."
+            />
             <Campo
               name="email"
               rotulo="E-mail"

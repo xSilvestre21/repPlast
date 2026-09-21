@@ -64,6 +64,7 @@ export default async function PaginaFornecedor({ params }: PageProps<"/fornecedo
   return (
     <Pagina>
       <Cabecalho
+        voltar={{ href: "/fornecedores", rotulo: "Fornecedores" }}
         icone={Factory}
         titulo={fornecedor.nome}
         descricao="Condições comerciais, logo e aditivos desta indústria."

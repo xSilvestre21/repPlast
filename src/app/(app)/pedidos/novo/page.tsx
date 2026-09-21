@@ -26,6 +26,7 @@ export default async function PaginaNovoPedido() {
     return (
       <Pagina>
         <Cabecalho
+          voltar={{ href: "/pedidos", rotulo: "Pedidos" }}
           icone={FilePlus2}
           titulo="Novo pedido"
           acao={
@@ -48,6 +49,7 @@ export default async function PaginaNovoPedido() {
   return (
     <Pagina>
       <Cabecalho
+        voltar={{ href: "/pedidos", rotulo: "Pedidos" }}
         icone={FilePlus2}
         titulo="Novo pedido"
         descricao="O número é gerado na sequência desta indústria."

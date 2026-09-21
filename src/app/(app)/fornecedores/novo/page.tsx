@@ -10,6 +10,7 @@ export default function PaginaNovoFornecedor() {
   return (
     <Pagina>
       <Cabecalho
+        voltar={{ href: "/fornecedores", rotulo: "Fornecedores" }}
         icone={Factory}
         titulo="Nova indústria"
         descricao="Depois de salvar você poderá subir o logo dela e cadastrar os aditivos."

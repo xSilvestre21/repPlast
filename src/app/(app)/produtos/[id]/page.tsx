@@ -29,6 +29,7 @@ export default async function PaginaProduto({ params }: PageProps<"/produtos/[id
   return (
     <Pagina>
       <Cabecalho
+        voltar={{ href: "/produtos", rotulo: "Produtos" }}
         icone={Package}
         titulo="Produto"
         descricao={produto.descricao}

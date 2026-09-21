@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Loader2, type LucideIcon } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, Loader2, type LucideIcon } from "lucide-react";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 
 /*
@@ -130,11 +130,20 @@ export function Cabecalho({
   acao,
   icone,
   selo,
+  voltar,
 }: {
   titulo: string;
   descricao?: string;
   acao?: ReactNode;
   icone?: LucideIcon;
+  /**
+   * O caminho de volta, escrito por extenso.
+   *
+   * A barra do topo já leva para a lista, mas ela é um menu: quem não tem
+   * costume de computador não lê aquilo como "sair daqui". A seta com o nome
+   * do destino diz as duas coisas — que dá para voltar e para onde.
+   */
+  voltar?: { href: string; rotulo: string };
   /**
    * O estado do documento, ao lado do título.
    *
@@ -146,6 +155,17 @@ export function Cabecalho({
 }) {
   return (
     <header className="mb-7 surgir">
+      {voltar && (
+        <Link
+          href={voltar.href}
+          className="inline-flex items-center gap-1.5 mb-3 text-corpo text-tinta-2
+            transition-colors hover:text-carimbo"
+        >
+          <ArrowLeft size={15} strokeWidth={2} aria-hidden="true" />
+          Voltar para {voltar.rotulo}
+        </Link>
+      )}
+
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
         <div className="min-w-0">
           <div className="flex items-center flex-wrap gap-3">

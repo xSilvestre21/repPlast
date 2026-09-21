@@ -131,9 +131,16 @@ export async function excluirCliente(id: string, _formData: FormData): Promise<v
 }
 
 /* -------------------------------------------------------------------------- */
-/* Códigos do produto no cliente (coluna COD.CLI do pedido)                    */
+/* Produtos do cliente (e o código dele, quando houver)                        */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Liga um produto a este cliente.
+ *
+ * O código é opcional: ele preenche a coluna COD.CLI do pedido, e nem todo
+ * cliente numera o que compra. O que a linha afirma é o vínculo — é ela que faz
+ * o produto aparecer na hora de lançar pedido ou proposta para ele.
+ */
 export async function salvarCodigoProduto(
   clienteId: string,
   _estado: EstadoFormulario,
@@ -146,7 +153,6 @@ export async function salvarCodigoProduto(
     const codigo = lerTexto(formData.get("codigo"));
 
     if (!produtoId) return { erro: "Escolha o produto." };
-    if (!codigo) return { erro: "Informe o código que este cliente usa." };
 
     const [cliente, produto] = await Promise.all([
       db.cliente.count({ where: { id: clienteId, organizacaoId } }),

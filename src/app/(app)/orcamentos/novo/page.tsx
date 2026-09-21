@@ -28,6 +28,7 @@ export default async function PaginaNovoOrcamento() {
     return (
       <Pagina>
         <Cabecalho
+          voltar={{ href: "/orcamentos", rotulo: "Orçamentos" }}
           icone={FileText}
           titulo="Novo orçamento"
           acao={
@@ -47,6 +48,7 @@ export default async function PaginaNovoOrcamento() {
   return (
     <Pagina>
       <Cabecalho
+        voltar={{ href: "/orcamentos", rotulo: "Orçamentos" }}
         icone={FileText}
         titulo="Novo orçamento"
         descricao="O número é do seu escritório, e segue a sua própria sequência."

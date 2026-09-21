@@ -42,6 +42,7 @@ export default async function PaginaCliente({ params }: PageProps<"/clientes/[id
   return (
     <Pagina>
       <Cabecalho
+        voltar={{ href: "/clientes", rotulo: "Clientes" }}
         icone={Building2}
         titulo={cliente.apelido}
         descricao={cliente.razaoSocial}

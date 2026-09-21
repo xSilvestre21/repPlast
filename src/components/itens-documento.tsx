@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useMemo, useState, type ReactNode } from "react";
 
 import { ListOrdered, Package } from "lucide-react";
 
@@ -89,6 +89,8 @@ export function SecaoItens({
   produtos,
   totais,
   editavel,
+  motivoTravado = "Pedido travado: desmarque o envio para editar.",
+  semProdutos,
   adicionar,
   atualizar,
   remover,
@@ -98,6 +100,10 @@ export function SecaoItens({
   produtos: ProdutoOpcao[];
   totais: Totais;
   editavel: boolean;
+  /** Por que não dá para mexer. Cada documento trava pelo seu próprio motivo. */
+  motivoTravado?: string;
+  /** O que dizer quando não há produto nenhum para escolher. */
+  semProdutos?: ReactNode;
   adicionar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   atualizar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   remover: (formData: FormData) => void | Promise<void>;
@@ -108,20 +114,23 @@ export function SecaoItens({
   /** Rótulo da coluna de preço: muda por família, como nos pedidos reais. */
   const rotuloPreco = itens.length > 0 ? ROTULO_COLUNA_PRECO[itens[0].familia] : "PREÇO";
 
+  /** Há formulário embaixo? Sem isso, o vazio convidaria a escolher o que não existe. */
+  const podeAdicionar = produtos.length > 0 || !semProdutos;
+
   return (
     <SecaoCartao
       icone={ListOrdered}
       titulo={`Itens (${itens.length})`}
       descricao={
-        editavel
-          ? "As colunas são as mesmas do PDF que a indústria vai receber."
-          : "Pedido travado: desmarque o envio para editar."
+        editavel ? "As colunas são as mesmas do PDF que a indústria vai receber." : motivoTravado
       }
     >
       {itens.length === 0 ? (
         <div className="mb-4">
           <EstadoVazio discreto icone={Package}>
-            Nenhum item ainda. Escolha um produto abaixo para começar.
+            {editavel && podeAdicionar
+              ? "Nenhum item ainda. Escolha um produto abaixo para começar."
+              : "Nenhum item lançado."}
           </EstadoVazio>
         </div>
       ) : (
@@ -203,7 +212,16 @@ export function SecaoItens({
       {editavel && (
         <div className="mt-5 pt-5 border-t border-filete">
           <MensagemErro>{estadoAdicao.erro}</MensagemErro>
-          <FormularioAdicao produtos={produtos} enviar={enviarAdicao} enviando={adicionando} />
+          {/*
+            Sem produto para escolher, o formulário viraria uma armadilha: três
+            campos habilitados e uma lista vazia, sem dizer o que falta. O aviso
+            ocupa o lugar dele e aponta onde resolver.
+          */}
+          {!podeAdicionar ? (
+            semProdutos
+          ) : (
+            <FormularioAdicao produtos={produtos} enviar={enviarAdicao} enviando={adicionando} />
+          )}
         </div>
       )}
     </SecaoCartao>

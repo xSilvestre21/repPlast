@@ -15,6 +15,7 @@
 import { Document, Image, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 
 import { ROTULO_COLUNA_PRECO, ROTULO_UNIDADE, type Familia, type UnidadeVenda } from "../produto-preco";
+import "./hifenizacao";
 
 export interface ItemOrcamentoPdf {
   codigoCliente: string | null;
@@ -37,18 +38,12 @@ export interface DadosOrcamentoPdf {
   logo: Buffer | null;
 
   /**
-   * Para quem a proposta vai.
+   * Para quem a proposta vai — só o nome, e é o apelido.
    *
-   * `cadastrado` falso quer dizer que ainda não é cliente — o documento sai
-   * igual, porque quem recebe não tem nada com o estado do nosso cadastro.
+   * Sai igual para quem ainda não é cliente: quem recebe a carta não tem nada
+   * com o estado do nosso cadastro.
    */
-  cliente: {
-    apelido: string;
-    razaoSocial: string;
-    municipio: string | null;
-    uf: string | null;
-    cadastrado: boolean;
-  };
+  cliente: { apelido: string };
   attn: string | null;
 
   itens: ItemOrcamentoPdf[];
@@ -65,15 +60,15 @@ export interface DadosOrcamentoPdf {
 
 const MOEDA = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 });
 const MES = [
-  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
-  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
 
 function dinheiro(valor: string) {
-  return MOEDA.format(Number(valor));
+  return `R$ ${MOEDA.format(Number(valor))}`;
 }
 
-/** "Barretos, 14 de setembro de 2026" — a abertura de uma carta, não de um formulário. */
+/** "Americana, 16 de Setembro de 2026" — a abertura de uma carta, não de um formulário. */
 function dataPorExtenso(cidade: string | null, data: Date) {
   const dia = data.getDate();
   const texto = `${dia} de ${MES[data.getMonth()]} de ${data.getFullYear()}`;
@@ -87,78 +82,115 @@ function dataCurta(data: Date) {
 
 const e = StyleSheet.create({
   pagina: {
-    paddingTop: 34,
-    paddingBottom: 44,
+    paddingTop: 30,
+    paddingBottom: 34,
     paddingHorizontal: 40,
-    fontSize: 9,
+    fontSize: 10,
     fontFamily: "Helvetica",
     color: "#111",
   },
 
-  topo: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
-  logo: { maxWidth: 210, maxHeight: 56, objectFit: "contain" },
-  marca: { fontSize: 15, fontFamily: "Helvetica-Bold" },
-  dataTopo: { fontSize: 9, textAlign: "right" },
+  /*
+   * Altura FIXA, e é o que segura o cabeçalho de pé.
+   *
+   * Cada indústria manda o logo com a moldura que quiser: o da QualyPlast tem
+   * a marca num terço da altura do arquivo, o da Eripack ocupa quase tudo.
+   * Fosse a altura livre, o destinatário subiria ou desceria conforme o
+   * arquivo — na Eripack ele chegou a encostar no logo. Com a caixa fixa, cada
+   * logo cresce até onde couber e o resto do documento não se mexe.
+   */
+  topo: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    height: 64,
+  },
+  /*
+   * A largura é que manda aqui, e a altura só existe como trava.
+   *
+   * O arquivo que a indústria manda costuma vir com moldura transparente em
+   * volta da arte — o da QualyPlast tem 1600x869 e a marca ocupa um terço da
+   * altura. Limitando pela altura, o `contain` encolhe a MOLDURA até caber e a
+   * marca some junto; limitando pela largura, ela sai do tamanho do modelo
+   * impresso e a moldura vira só espaço em branco, que é o que ela é.
+   */
+  /*
+   * `objectPositionX: 0` encosta a arte na margem, e não é detalhe.
+   *
+   * O `contain` centraliza a imagem na caixa, então um logo mais "quadrado"
+   * que a caixa sobra espaço dos dois lados — e ele aparecia deslocado uns
+   * 16pt para dentro, desalinhado do nome do cliente e da tabela logo abaixo.
+   */
+  logo: { maxWidth: 150, maxHeight: 64, objectFit: "contain", objectPositionX: 0 },
+  marca: { fontSize: 14, fontFamily: "Helvetica-Bold" },
+  dataTopo: { fontSize: 10, textAlign: "right" },
 
-  regua: { borderBottomWidth: 1, borderBottomColor: "#111", marginTop: 14, marginBottom: 16 },
+  destinatario: { fontSize: 12, fontFamily: "Helvetica-Bold", marginTop: 12 },
+  aos: { fontSize: 10, fontFamily: "Helvetica-Bold", marginTop: 4 },
+  abertura: { marginTop: 3 },
 
-  destinatario: { fontSize: 11, fontFamily: "Helvetica-Bold" },
-  cidadeCliente: { fontSize: 9, color: "#444", marginTop: 2 },
-  aos: { fontSize: 9, fontFamily: "Helvetica-Bold", marginTop: 6 },
-  abertura: { marginTop: 14, lineHeight: 1.5 },
-
-  numero: { fontSize: 9, color: "#444", marginTop: 3 },
+  numero: { fontSize: 10, color: "#444", marginTop: 2 },
 
   // Tabela
   cabecalho: {
     flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: "#111",
-    paddingBottom: 4,
-    marginTop: 18,
-    fontSize: 7.5,
+    borderTopWidth: 0.5,
+    borderTopColor: "#999",
+    borderBottomWidth: 0.5,
+    borderBottomColor: "#999",
+    paddingVertical: 3.5,
+    marginTop: 12,
+    fontSize: 9,
     fontFamily: "Helvetica-Bold",
   },
-  linha: {
-    flexDirection: "row",
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#CCC",
-    paddingVertical: 5,
-  },
-  cQtd: { width: "9%" },
-  cUn: { width: "7%" },
-  cCod: { width: "12%" },
-  cItem: { width: "38%", paddingRight: 6 },
-  cPreco: { width: "12%", textAlign: "right" },
-  cIpi: { width: "10%", textAlign: "right" },
-  cTotal: { width: "12%", textAlign: "right" },
+  // Sem filete entre as linhas: o modelo separa item de item pelo espaço, e um
+  // traço por linha transformaria quatro produtos numa grade.
+  linha: { flexDirection: "row", paddingVertical: 4 },
+  fimDaTabela: { borderTopWidth: 0.5, borderTopColor: "#999" },
+
+  cQtd: { width: "5.5%" },
+  cUn: { width: "4.5%" },
+  // O código do cliente enche a coluna inteira ("P00B00006"), e sem a folga ele
+  // encostaria na descrição — os dois viravam uma palavra só.
+  cCod: { width: "9.5%", paddingRight: 5 },
+  cItem: { width: "34%", paddingRight: 6 },
+  cPreco: { width: "10.5%", textAlign: "right" },
+  cTotalSemIpi: { width: "11%", textAlign: "right" },
+  cIpi: { width: "11%", textAlign: "right" },
+  cTotal: { width: "14%", textAlign: "right" },
 
   // Totais
-  totais: { marginTop: 14, alignSelf: "flex-end", width: 210 },
+  totais: { marginTop: 20, alignSelf: "flex-end", width: 275 },
   linhaTotal: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 2 },
   totalGeral: {
     flexDirection: "row",
     justifyContent: "space-between",
-    borderTopWidth: 1,
-    borderTopColor: "#111",
-    marginTop: 4,
-    paddingTop: 5,
-    fontSize: 11,
+    marginTop: 2,
+    fontSize: 11.5,
     fontFamily: "Helvetica-Bold",
   },
 
-  condicoes: { marginTop: 22, fontSize: 8.5, color: "#333", lineHeight: 1.55 },
-  rotuloBloco: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: "#666", marginBottom: 3 },
+  condicoes: { marginTop: 13 },
+  /*
+   * Entrelinha das condições, medida contra o modelo impresso.
+   *
+   * O número parece pequeno porque no react-pdf `lineHeight` NÃO é múltiplo do
+   * corpo da fonte — o padrão dele equivale a ~0,56 aqui. 0,48 é o que
+   * reproduz as seis linhas coladas do modelo, e ele precisa estar no próprio
+   * `Text`: posto no `View`, não desce para os filhos.
+   */
+  linhaCondicao: { lineHeight: 0.65 },
 
-  fecho: { marginTop: 26, lineHeight: 1.5 },
-  assinatura: { marginTop: 16, fontFamily: "Helvetica-Bold" },
+  fecho: { marginTop: 21 },
+  saudacao: { marginTop: 12 },
+  assinatura: { marginTop: 2, fontFamily: "Helvetica-Bold" },
 
   rodape: {
     position: "absolute",
-    bottom: 22,
+    bottom: 18,
     left: 40,
     right: 40,
-    fontSize: 7.5,
+    fontSize: 8,
     color: "#888",
     textAlign: "center",
   },
@@ -173,7 +205,12 @@ export function DocumentoOrcamento({ dados }: { dados: DadosOrcamentoPdf }) {
       title={`Orçamento ${dados.numero} — ${dados.cliente.apelido}`}
       author={dados.fornecedor.nome}
     >
-      <Page size="A4" style={e.pagina}>
+      {/*
+        Paisagem, como o modelo impresso sempre foi: são oito colunas, e em
+        retrato a descrição do produto perde metade da largura e passa a
+        quebrar em duas linhas.
+      */}
+      <Page size="A4" orientation="landscape" style={e.pagina}>
         <View style={e.topo}>
           {dados.logo ? (
             // O <Image> aqui é o do react-pdf, não o do HTML: não existe alt
@@ -195,19 +232,13 @@ export function DocumentoOrcamento({ dados }: { dados: DadosOrcamentoPdf }) {
           </View>
         </View>
 
-        <View style={e.regua} />
-
-        <Text style={e.destinatario}>{dados.cliente.razaoSocial}</Text>
-        {dados.cliente.municipio && (
-          <Text style={e.cidadeCliente}>
-            {dados.cliente.municipio}
-            {dados.cliente.uf ? `/${dados.cliente.uf}` : ""}
-          </Text>
-        )}
+        {/* O apelido, e não a razão social: a proposta é uma carta, e quem a
+            recebe se reconhece pelo nome com que atende ao telefone. */}
+        <Text style={e.destinatario}>{dados.cliente.apelido}</Text>
         {dados.attn && <Text style={e.aos}>A/C {dados.attn}</Text>}
 
         <Text style={e.abertura}>
-          Segue abaixo nossa proposta com os valores e demais condições de fornecimento.
+          Segue abaixo nossa proposta com os valores e demais condições de fornecimento
         </Text>
 
         {/* Tabela */}
@@ -217,7 +248,8 @@ export function DocumentoOrcamento({ dados }: { dados: DadosOrcamentoPdf }) {
           <Text style={e.cCod}>CÓD.CLI</Text>
           <Text style={e.cItem}>ITEM</Text>
           <Text style={e.cPreco}>{rotuloPreco}</Text>
-          <Text style={e.cIpi}>IPI</Text>
+          <Text style={e.cTotalSemIpi}>TOTAL S/ IPI</Text>
+          <Text style={e.cIpi}>VALOR IPI</Text>
           <Text style={e.cTotal}>TOTAL</Text>
         </View>
 
@@ -228,46 +260,57 @@ export function DocumentoOrcamento({ dados }: { dados: DadosOrcamentoPdf }) {
             <Text style={e.cCod}>{item.codigoCliente ?? ""}</Text>
             <Text style={e.cItem}>{item.descricao}</Text>
             <Text style={e.cPreco}>{dinheiro(item.precoUnitario)}</Text>
+            <Text style={e.cTotalSemIpi}>{dinheiro(item.totalSemIpi)}</Text>
             <Text style={e.cIpi}>{dinheiro(item.valorIpi)}</Text>
             <Text style={e.cTotal}>{dinheiro(item.total)}</Text>
           </View>
         ))}
 
+        <View style={e.fimDaTabela} />
+
         <View style={e.totais}>
           <View style={e.linhaTotal}>
-            <Text>Subtotal s/ IPI</Text>
+            <Text>Subtotal s/ IPI:</Text>
             <Text>{dinheiro(dados.subtotalSemIpi)}</Text>
           </View>
           {temIpi && (
             <View style={e.linhaTotal}>
-              <Text>IPI ({dados.ipiPercentual}%)</Text>
+              <Text>Total IPI ({dados.ipiPercentual}%):</Text>
               <Text>{dinheiro(dados.valorIpi)}</Text>
             </View>
           )}
           <View style={e.totalGeral}>
-            <Text>TOTAL</Text>
+            <Text>TOTAL GERAL:</Text>
             <Text>{dinheiro(dados.totalGeral)}</Text>
           </View>
         </View>
 
         {(dados.observacoes || dados.prazoPagamento || dados.validoAte) && (
           <View style={e.condicoes}>
-            <Text style={e.rotuloBloco}>CONDIÇÕES</Text>
             {dados.prazoPagamento && (
-              <Text>Condições de pagamento: {dados.prazoPagamento}</Text>
+              <Text style={e.linhaCondicao}>
+                Condições de pagamento: {dados.prazoPagamento}
+              </Text>
             )}
-            {dados.observacoes && <Text>{dados.observacoes}</Text>}
+            {dados.observacoes && <Text style={e.linhaCondicao}>{dados.observacoes}</Text>}
             {dados.validoAte && (
-              <Text>Proposta válida até {dataCurta(dados.validoAte)}.</Text>
+              <Text style={e.linhaCondicao}>
+                Proposta válida até: {dataCurta(dados.validoAte)}
+              </Text>
             )}
           </View>
         )}
 
         <Text style={e.fecho}>
-          No aguardo de um retorno positivo, permanecemos à disposição para qualquer
-          esclarecimento.
+          No aguardo de um retorno positivo, coloco-me à disposição para maiores
+          esclarecimentos
         </Text>
-        {dados.vendedor && <Text style={e.assinatura}>{dados.vendedor}</Text>}
+        {dados.vendedor && (
+          <>
+            <Text style={e.saudacao}>Sds</Text>
+            <Text style={e.assinatura}>{dados.vendedor}</Text>
+          </>
+        )}
 
         <Text
           style={e.rodape}

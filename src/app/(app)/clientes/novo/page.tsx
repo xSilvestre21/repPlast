@@ -10,6 +10,7 @@ export default function PaginaNovoCliente() {
   return (
     <Pagina>
       <Cabecalho
+        voltar={{ href: "/clientes", rotulo: "Clientes" }}
         icone={UserRoundPlus}
         titulo="Novo cliente"
         descricao="Depois de salvar você poderá registrar os códigos que este cliente usa para cada produto."
