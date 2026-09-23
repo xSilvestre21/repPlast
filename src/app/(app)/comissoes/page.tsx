@@ -20,6 +20,7 @@ import {
 import { competenciaDe, progressoDaMeta } from "@/lib/comissao";
 import {
   acertoDoPedido,
+  canceladosDaCompetencia,
   pedidosDaCompetencia,
   percentualDoPedido,
   prepostoDoPedido,
@@ -48,14 +49,24 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
 
   const { organizacaoId, db, ehAdmin, usuarioId } = await escopoAtual();
 
-  const [organizacao, pedidos] = await Promise.all([
+  const [organizacao, pedidos, cancelados] = await Promise.all([
     dbAdministrativo().organizacao.findUnique({
       where: { id: organizacaoId },
       select: { metaComissaoMensal: true },
     }),
     pedidosDaCompetencia(db, organizacaoId, competencia, ehAdmin ? null : usuarioId),
+    canceladosDaCompetencia(db, organizacaoId, competencia, ehAdmin ? null : usuarioId),
   ]);
 
+  /*
+   * A soma é dos ENVIADOS, e só deles.
+   *
+   * O cancelado desce junto para a lista mais abaixo, porque a pergunta "cadê o
+   * pedido da FLEXOPET deste mês?" merece a resposta "foi cancelado" em vez do
+   * silêncio de uma linha que sumiu. Mas ele não passa por aqui: `resumirComissao`
+   * vê apenas `pedidos`, e é esta variável que alimenta as quatro caixas, a meta
+   * e o rateio por preposto.
+   */
   const total = resumirComissao(pedidos);
 
   /*
@@ -79,17 +90,26 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
         diferenca: total.diferencaDoPreposto,
       };
 
-  // Agrupa por indústria, mantendo a ordem alfabética.
-  const porFornecedor = [...Map.groupBy(pedidos, (p) => p.fornecedor.id).entries()]
+  /*
+   * Agrupa por indústria, mantendo a ordem alfabética.
+   *
+   * O cancelado entra na LISTA do grupo e fica de fora do `resumo`: é o mesmo
+   * corte do total geral, um nível abaixo. Sem isso, a soma da indústria não
+   * bateria com a soma das linhas que ela mostra.
+   */
+  const porFornecedor = [
+    ...Map.groupBy([...pedidos, ...cancelados], (p) => p.fornecedor.id).entries(),
+  ]
     .map(([, doFornecedor]) => ({
       fornecedor: doFornecedor[0].fornecedor,
       pedidos: doFornecedor,
-      resumo: resumirComissao(doFornecedor),
+      resumo: resumirComissao(doFornecedor.filter((p) => p.status === "ENVIADO")),
     }))
     .sort((a, b) => a.fornecedor.nome.localeCompare(b.fornecedor.nome, "pt-BR"));
 
   // Agrupa por preposto. Pedido da casa (sem preposto) fica de fora: ele já
-  // aparece no "fica com o escritório".
+  // aparece no "fica com o escritório". Cancelado também não entra — esta
+  // tabela é de quanto cada um rendeu, e o cancelado rendeu nada.
   const porPreposto = [
     ...Map.groupBy(
       pedidos.filter((p) => prepostoDoPedido(p)),
@@ -299,6 +319,16 @@ function iso(data: Date | null): string | null {
  * recebe. Esconder com `if` na tela deixaria o número viajando.
  */
 function paraLinha(pedido: PedidoDaComissao, ehAdmin: boolean): LinhaPedido {
+  /*
+   * O cancelado vale ZERO aqui, e não o que valeria se tivesse ido em frente.
+   *
+   * Ele está na lista para ser visto, não para ser contado — e uma linha
+   * exibindo "R$ 1.420,00 previsto" ao lado de um total que não a inclui faria
+   * a página parecer que erra a conta. Também não se acerta um pedido
+   * cancelado: não há o que a indústria pague.
+   */
+  const cancelado = pedido.status === "CANCELADO";
+
   const percentual = percentualDoPedido(pedido);
   const percentualPreposto = pedido.comissaoPercentualPreposto?.toString() ?? null;
   const acerto = acertoDoPedido(pedido);
@@ -317,26 +347,31 @@ function paraLinha(pedido: PedidoDaComissao, ehAdmin: boolean): LinhaPedido {
     id: pedido.id,
     numero: pedido.numero,
     status: pedido.status,
+    motivoCancelamento: cancelado ? (pedido.motivoCancelamento ?? "") : "",
     apelidoCliente: pedido.cliente.apelido,
     enviadoEm: pedido.enviadoEm ? DATA.format(pedido.enviadoEm) : null,
     prazoEntrega: iso(pedido.prazoEntrega),
     entregueEm: iso(pedido.entregueEm),
     base: pedido.subtotalSemIpi.toString(),
     // O percentual da indústria é conta do escritório com a indústria.
-    percentual: ehAdmin ? percentual : "",
-    previsto: (ehAdmin ? previsto.total : previsto.doPreposto).toNumber(),
+    percentual: ehAdmin && !cancelado ? percentual : "",
+    previsto: cancelado ? 0 : (ehAdmin ? previsto.total : previsto.doPreposto).toNumber(),
     valorRecebido: pedido.valorRecebido
       ? escreverNumeroBr(pedido.valorRecebido.toString(), 2)
       : "",
     percentualRecebido: pedido.comissaoPercentualRecebido
       ? escreverNumeroBr(pedido.comissaoPercentualRecebido.toString())
       : "",
-    recebido: recebido ? (ehAdmin ? recebido.total : recebido.doPreposto).toNumber() : null,
+    recebido: cancelado
+      ? null
+      : recebido
+        ? (ehAdmin ? recebido.total : recebido.doPreposto).toNumber()
+        : null,
     preposto: ehAdmin ? (preposto?.nome ?? null) : null,
-    rateio: fatias(previsto),
-    rateioRecebido: fatias(recebido),
+    rateio: cancelado ? null : fatias(previsto),
+    rateioRecebido: cancelado ? null : fatias(recebido),
     // Quem recebe da indústria é o escritório; é ele que lança o acerto.
-    podeAcertar: ehAdmin,
+    podeAcertar: ehAdmin && !cancelado,
   };
 }
 

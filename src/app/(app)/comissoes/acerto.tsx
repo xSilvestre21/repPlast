@@ -12,7 +12,7 @@
  * daquele momento: o pedido foi enviado e ainda não foi pago.
  */
 
-import { Check, ChevronDown, Clock, TriangleAlert } from "lucide-react";
+import { Ban, Check, ChevronDown, Clock, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useActionState, useId, useState } from "react";
 
@@ -36,6 +36,8 @@ export type LinhaPedido = {
   id: string;
   numero: number;
   status: string;
+  /** Vazio quando o pedido não foi cancelado, ou quando ninguém escreveu. */
+  motivoCancelamento: string;
   apelidoCliente: string;
   enviadoEm: string | null;
   /** "AAAA-MM-DD", como o input date espera. */
@@ -149,7 +151,14 @@ export function LinhaComissao({
             ) : (
               <>
                 <span className="block font-medium">{formatarMoeda(pedido.previsto)}</span>
-                <span className="block text-mini text-tinta-3">previsto</span>
+                {/*
+                  "previsto" seria mentira no cancelado: não se prevê nada dele.
+                  A legenda diz por que o zero está ali e por que o total não
+                  cresceu ao a linha aparecer.
+                */}
+                <span className="block text-mini text-tinta-3">
+                  {pedido.status === "CANCELADO" ? "fora da soma" : "previsto"}
+                </span>
               </>
             )}
             {rateio && (
@@ -181,6 +190,19 @@ export function LinhaComissao({
           )}
         </span>
       </div>
+
+      {/*
+        O motivo em linha PRÓPRIA, e não na fileira de números acima: é frase, e
+        espremido entre o valor e o selo ele quebrava "R$ 0,00 fora da soma" em
+        três linhas. Responde a pergunta que a linha zerada levanta — por que
+        este pedido está no mês sem somar nada.
+      */}
+      {pedido.motivoCancelamento && (
+        <p className="flex items-start gap-1 text-mini text-perigo mt-1">
+          <Ban size={11} strokeWidth={2} aria-hidden="true" className="shrink-0 mt-[3px]" />
+          {pedido.motivoCancelamento}
+        </p>
+      )}
 
       <div
         id={painel}

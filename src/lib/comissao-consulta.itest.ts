@@ -1,6 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { pedidosDaCompetencia, prepostoDoPedido } from "./comissao-consulta";
+import {
+  canceladosDaCompetencia,
+  pedidosDaCompetencia,
+  prepostoDoPedido,
+  resumirComissao,
+} from "./comissao-consulta";
 import { type Ator, dbAdministrativo, dbParaOrganizacao } from "./db";
 
 const admin = dbAdministrativo();
@@ -45,6 +50,18 @@ beforeAll(async () => {
 
   await admin.pedido.create({ data: { ...base, numero: 1, representanteId: prepostoId } });
   await admin.pedido.create({ data: { ...base, numero: 2 } });
+
+  // O cancelado da mesma competência, com a mesma base dos outros dois: se ele
+  // vazasse para a soma, o total saltaria de 2000 para 3000 e o teste acusaria.
+  await admin.pedido.create({
+    data: {
+      ...base,
+      numero: 3,
+      status: "CANCELADO",
+      canceladoEm: new Date(),
+      motivoCancelamento: "Cliente desistiu da compra",
+    },
+  });
 });
 
 afterAll(async () => {
@@ -85,5 +102,48 @@ describe("pedidosDaCompetencia resolve o preposto", () => {
 
     expect(pedidos).toHaveLength(1);
     expect(pedidos[0].representante?.nome).toBe("Preposto de Teste");
+  });
+});
+
+describe("o cancelado aparece, mas não soma", () => {
+  it("fica FORA de `pedidosDaCompetencia`", async () => {
+    const db = dbParaOrganizacao(org, DONO);
+    const enviados = await pedidosDaCompetencia(db, org, "2026-09");
+
+    // É esta consulta que alimenta a soma, os gráficos, o CSV e o painel.
+    expect(enviados.map((p) => p.numero).sort()).toEqual([1, 2]);
+  });
+
+  it("a soma da competência ignora o cancelado", async () => {
+    const db = dbParaOrganizacao(org, DONO);
+    const total = resumirComissao(await pedidosDaCompetencia(db, org, "2026-09"));
+
+    // Dois pedidos de R$ 1.000 a 5% — e não três. `Decimal`, por ser dinheiro.
+    expect(total.base.toString()).toBe("2000");
+    expect(total.valor.toString()).toBe("100");
+  });
+
+  it("mas aparece em `canceladosDaCompetencia`", async () => {
+    const db = dbParaOrganizacao(org, DONO);
+    const cancelados = await canceladosDaCompetencia(db, org, "2026-09");
+
+    expect(cancelados.map((p) => p.numero)).toEqual([3]);
+    expect(cancelados[0].status).toBe("CANCELADO");
+  });
+
+  it("traz o motivo junto — é o que explica a linha zerada", async () => {
+    const db = dbParaOrganizacao(org, DONO);
+    const [cancelado] = await canceladosDaCompetencia(db, org, "2026-09");
+
+    expect(cancelado.motivoCancelamento).toBe("Cliente desistiu da compra");
+  });
+
+  it("cai na competência do pedido, não na do cancelamento", async () => {
+    const db = dbParaOrganizacao(org, DONO);
+
+    // Foi cancelado hoje, mas a entrega era de setembro de 2026 — é no mês
+    // dele que ele tem de aparecer. "O que perdi neste mês" é outra pergunta,
+    // e quem responde é o gráfico de cancelados, que filtra por `canceladoEm`.
+    await expect(canceladosDaCompetencia(db, org, "2026-10")).resolves.toEqual([]);
   });
 });

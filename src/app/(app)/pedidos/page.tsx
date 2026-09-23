@@ -1,55 +1,30 @@
-import { FilePlus2, Plus, ScrollText } from "lucide-react";
+import { Plus, ScrollText } from "lucide-react";
 
-import { SeloStatus } from "@/components/selo-status";
-import {
-  BotaoLink,
-  Cabecalho,
-  Cartao,
-  CorpoLinha,
-  EstadoVazio,
-  FimDaLinha,
-  LinhaLista,
-  Paginacao,
-  ValorLinha,
-  formatarMoeda,
-} from "@/components/ui";
-import { escopoAtual } from "@/lib/sessao";
 import { Pagina } from "@/components/pagina";
+import { BotaoLink, Cabecalho } from "@/components/ui";
+import { escopoAtual } from "@/lib/sessao";
 
-const DATA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" });
-
-/**
- * Quantos por página.
- *
- * Um escritório em atividade acumula centenas de pedidos — a organização de
- * referência tem 193 —, e carregar todos de uma vez é o que deixava a tela
- * lenta para abrir.
- */
-const POR_PAGINA = 15;
+import { buscarPedidos, statusDoParametro } from "./consulta";
+import { ListaPedidos } from "./lista";
 
 export default async function PaginaPedidos({ searchParams }: PageProps<"/pedidos">) {
   const { organizacaoId, db } = await escopoAtual();
   const parametros = await searchParams;
-  const pagina = Math.max(1, Number(parametros.pagina) || 1);
 
-  const [total, pedidos] = await Promise.all([
-    db.pedido.count({ where: { organizacaoId } }),
-    db.pedido.findMany({
-      where: { organizacaoId },
-      orderBy: [{ criadoEm: "desc" }, { numero: "desc" }],
-      take: POR_PAGINA,
-      skip: (pagina - 1) * POR_PAGINA,
-      include: {
-        cliente: { select: { apelido: true } },
-        fornecedor: { select: { nome: true } },
-        _count: { select: { itens: true } },
-      },
-    }),
-  ]);
+  /*
+   * A URL decide como a tela ABRE — é o que faz o link copiado e o F5 trazerem
+   * a mesma lista. Daí em diante quem pede as fatias é o cliente, sem navegar
+   * (ver `lista.tsx`).
+   */
+  const busca = typeof parametros.busca === "string" ? parametros.busca.trim() : "";
+  const status = statusDoParametro(parametros.status);
 
-  const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
-  const enderecoDaPagina = (destino: number) =>
-    destino > 1 ? `/pedidos?pagina=${destino}` : "/pedidos";
+  /*
+   * A primeira fatia vem daqui, renderizada no servidor. É isso que mantém a
+   * cascata de entrada: as linhas já chegam no HTML, e a animação é da página
+   * abrindo — não de uma lista que trocou de conteúdo.
+   */
+  const inicial = await buscarPedidos(db, organizacaoId, { busca, status, pagina: 0 });
 
   return (
     <Pagina>
@@ -64,53 +39,7 @@ export default async function PaginaPedidos({ searchParams }: PageProps<"/pedido
         }
       />
 
-      {total === 0 ? (
-        <EstadoVazio icone={FilePlus2}>
-          Nenhum pedido lançado.
-          <br />
-          Comece escolhendo o cliente e a indústria.
-        </EstadoVazio>
-      ) : (
-        <>
-          <Cartao className="divide-y divide-filete overflow-hidden palco">
-            {pedidos.map((pedido) => (
-              <LinhaLista key={pedido.id} href={`/pedidos/${pedido.id}`}>
-                <div className="flex items-center gap-3 min-w-0 basis-full sm:basis-0 sm:flex-1">
-                  {/* Largura fixa: o nº 99 e o nº 2262 têm de começar a empurrar
-                      o nome do cliente a partir do mesmo ponto. */}
-                  <span className="cifra numerico shrink-0 w-16 text-tinta-2">
-                    #{pedido.numero}
-                  </span>
-
-                  <CorpoLinha
-                    titulo={pedido.cliente.apelido}
-                    detalhe={`${pedido.fornecedor.nome} · ${pedido._count.itens} item(ns) · ${DATA.format(pedido.criadoEm)}`}
-                  />
-                </div>
-
-                <FimDaLinha>
-                  <ValorLinha
-                    className="w-32"
-                    riscado={pedido.status === "CANCELADO"}
-                    valor={formatarMoeda(pedido.totalGeral.toString())}
-                  />
-                  <div className="w-24 flex justify-end">
-                    <SeloStatus status={pedido.status} />
-                  </div>
-                </FimDaLinha>
-              </LinhaLista>
-            ))}
-          </Cartao>
-
-          <Paginacao
-            pagina={pagina}
-            paginas={paginas}
-            total={total}
-            href={enderecoDaPagina}
-            rotuloItem="pedido"
-          />
-        </>
-      )}
+      <ListaPedidos inicial={inicial} buscaInicial={busca} statusInicial={status} />
     </Pagina>
   );
 }

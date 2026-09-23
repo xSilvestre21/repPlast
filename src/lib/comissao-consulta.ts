@@ -17,6 +17,8 @@ export interface PedidoDaComissao {
   id: string;
   numero: number;
   status: string;
+  /** Preenchido só no cancelado, e nem sempre — escrever é opcional. */
+  motivoCancelamento: string | null;
   criadoEm: Date;
   enviadoEm: Date | null;
   prazoEntrega: Date | null;
@@ -94,6 +96,8 @@ const CAMPOS_DA_COMISSAO = {
   id: true,
   numero: true,
   status: true,
+  // Para a linha do cancelado dizer POR QUE ela está ali zerada.
+  motivoCancelamento: true,
   criadoEm: true,
   enviadoEm: true,
   prazoEntrega: true,
@@ -172,6 +176,50 @@ export async function pedidosDaCompetencia(
        * condições excludentes, e a segunda só vale para o pedido sem prazo
        * marcado. Sem ela, esse pedido sumiria de toda apuração.
        */
+      OR: [
+        { prazoEntrega: { gte: de, lt: ate } },
+        { prazoEntrega: null, criadoEm: { gte: de, lt: ate } },
+      ],
+      ...(apenasDoPreposto ? { representanteId: apenasDoPreposto } : {}),
+    },
+    orderBy: [{ prazoEntrega: "asc" }, { numero: "asc" }],
+    select: CAMPOS_DA_COMISSAO,
+  });
+
+  return comRepresentante(db, pedidos);
+}
+
+/**
+ * Os CANCELADOS da mesma competência — para aparecer, não para somar.
+ *
+ * Consulta à parte, e não um `status: { in: [...] }` na de cima, de propósito:
+ * `pedidosDaCompetencia` alimenta também os gráficos, a exportação em CSV e o
+ * painel, e alargá-la mudaria os três de uma vez sem ninguém pedir. O caminho
+ * do dinheiro fica intocado; quem quiser mostrar o cancelado junto pede as duas
+ * listas e soma só a primeira.
+ *
+ * A competência é a MESMA regra do enviado (entrega, com a criação como último
+ * recurso). Assim o pedido aparece no mês a que pertencia, e não no mês em que
+ * alguém o cancelou — essa outra pergunta, "o que eu perdi neste mês", é do
+ * gráfico de cancelados, que filtra por `canceladoEm`.
+ *
+ * Entram os cancelados que nunca foram enviados também. Poderia-se argumentar
+ * que só o "enviado e depois cancelado" interessa, já que só ele chegou a
+ * contar — mas no acervo real os dez cancelados nunca foram enviados, e esse
+ * corte deixaria a tela exatamente como estava.
+ */
+export async function canceladosDaCompetencia(
+  db: DbOrganizacao,
+  organizacaoId: string,
+  competencia: string,
+  apenasDoPreposto?: string | null,
+) {
+  const { de, ate } = intervaloDaCompetenciaUtc(competencia);
+
+  const pedidos = await db.pedido.findMany({
+    where: {
+      organizacaoId,
+      status: "CANCELADO",
       OR: [
         { prazoEntrega: { gte: de, lt: ate } },
         { prazoEntrega: null, criadoEm: { gte: de, lt: ate } },

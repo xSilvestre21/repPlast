@@ -422,6 +422,7 @@ describe("o dono do escritório não é preposto de si mesmo", () => {
     id: "p1",
     numero: 1,
     status: "ENVIADO",
+    motivoCancelamento: null,
     criadoEm: new Date("2026-09-03T12:00:00Z"),
     enviadoEm: null,
     prazoEntrega: null,
