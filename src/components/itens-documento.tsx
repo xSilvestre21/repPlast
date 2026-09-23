@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { ListOrdered, Package } from "lucide-react";
@@ -22,11 +23,11 @@ import { CAMPO_IPI, CAMPO_IPI_DEFINIDO } from "@/lib/ipi-do-formulario";
 import { escreverNumeroBr, lerNumeroBr } from "@/lib/numero-br";
 import type { Aditivo } from "@/lib/precificacao";
 import {
-  ROTULO_COLUNA_PRECO,
   ROTULO_UNIDADE,
   type Familia,
   type UnidadeVenda,
   precoUnitario,
+  rotuloColunaPreco,
   unidadesComPreco,
 } from "@/lib/produto-preco";
 
@@ -77,6 +78,14 @@ export type ItemPedido = {
   totalSemIpi: string;
   valorIpi: string;
   total: string;
+  /**
+   * Onde cadastrar esta linha como produto, quando ela ainda não é um.
+   *
+   * Só a proposta usa: a linha feita de conta não tem produto, e enquanto não
+   * tiver a proposta não vira pedido. O link fica na própria linha para o que
+   * falta estar onde se lê.
+   */
+  cadastrarEm?: string;
 };
 
 export type Totais = {
@@ -93,6 +102,7 @@ export function SecaoItens({
   editavel,
   motivoTravado = "Pedido travado: desmarque o envio para editar.",
   semProdutos,
+  adicao,
   adicionar,
   atualizar,
   remover,
@@ -106,6 +116,11 @@ export function SecaoItens({
   motivoTravado?: string;
   /** O que dizer quando não há produto nenhum para escolher. */
   semProdutos?: ReactNode;
+  /**
+   * Um formulário de lançamento no lugar do de catálogo — o da conta, na
+   * proposta para quem ainda não é cliente. Ele traz a própria ação.
+   */
+  adicao?: ReactNode;
   adicionar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   atualizar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   remover: (formData: FormData) => void | Promise<void>;
@@ -114,10 +129,11 @@ export function SecaoItens({
   const [estadoAdicao, enviarAdicao, adicionando] = useActionState(adicionar, {});
 
   /** Rótulo da coluna de preço: muda por família, como nos pedidos reais. */
-  const rotuloPreco = itens.length > 0 ? ROTULO_COLUNA_PRECO[itens[0].familia] : "PREÇO";
+  const rotuloPreco =
+    itens.length > 0 ? rotuloColunaPreco(itens[0].familia, itens[0].unidade) : "PREÇO";
 
   /** Há formulário embaixo? Sem isso, o vazio convidaria a escolher o que não existe. */
-  const podeAdicionar = produtos.length > 0 || !semProdutos;
+  const podeAdicionar = adicao !== undefined || produtos.length > 0 || !semProdutos;
 
   return (
     <SecaoCartao
@@ -131,7 +147,9 @@ export function SecaoItens({
         <div className="mb-4">
           <EstadoVazio discreto icone={Package}>
             {editavel && podeAdicionar
-              ? "Nenhum item ainda. Escolha um produto abaixo para começar."
+              ? adicao
+                ? "Nenhum item ainda. Faça a conta abaixo para começar."
+                : "Nenhum item ainda. Escolha um produto abaixo para começar."
               : "Nenhum item lançado."}
           </EstadoVazio>
         </div>
@@ -219,11 +237,11 @@ export function SecaoItens({
             campos habilitados e uma lista vazia, sem dizer o que falta. O aviso
             ocupa o lugar dele e aponta onde resolver.
           */}
-          {!podeAdicionar ? (
+          {adicao ?? (!podeAdicionar ? (
             semProdutos
           ) : (
             <FormularioAdicao produtos={produtos} enviar={enviarAdicao} enviando={adicionando} />
-          )}
+          ))}
         </div>
       )}
     </SecaoCartao>
@@ -286,7 +304,17 @@ function LinhaItem({
     <tr>
       <Celula className="numerico text-tinta-2">{item.codigoFornecedor ?? "—"}</Celula>
       <Celula className="numerico text-tinta-2">{item.codigoCliente ?? ""}</Celula>
-      <Celula className="font-mono text-mini">{item.descricao}</Celula>
+      <Celula className="font-mono text-mini">
+        {item.descricao}
+        {item.cadastrarEm && (
+          <Link
+            href={item.cadastrarEm}
+            className="block mt-1 font-sans text-carimbo hover:underline whitespace-nowrap"
+          >
+            cadastrar como produto
+          </Link>
+        )}
+      </Celula>
 
       {editavel ? (
         <>

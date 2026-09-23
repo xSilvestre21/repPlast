@@ -98,11 +98,12 @@ export function FormularioNovoOrcamento({
           </div>
 
           {!cadastrado && (
-            <p className="text-mini text-tinta-3 leading-relaxed">
-              A proposta funciona normalmente — ganha número, itens e PDF. Só não vira pedido
-              enquanto não houver cadastro, porque o pedido leva CNPJ e endereço para a indústria.
-              Dá para cadastrar depois, direto da proposta.
-            </p>
+            <div className="rounded-suave border border-filete bg-folha-2 px-4 py-3 text-corpo text-tinta-2 leading-relaxed">
+              <strong className="text-tinta font-semibold">Esta proposta não vira pedido.</strong>{" "}
+              Ela ganha número, itens e PDF, mas os itens são feitos de conta — medidas, fator,
+              aditivos —, sem produto cadastrado. Para virar pedido é preciso, depois, cadastrar o
+              cliente e os itens como produtos dele; a proposta mostra o caminho.
+            </div>
           )}
         </div>
       </SecaoCartao>

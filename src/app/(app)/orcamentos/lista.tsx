@@ -263,7 +263,7 @@ export function ListaOrcamentos({
                       {orcamento.nome}
                       {!orcamento.cadastrado && (
                         <span className="text-mini font-normal text-tinta-3 ml-2">
-                          sem cadastro
+                          sem cadastro · não vira pedido
                         </span>
                       )}
                     </>

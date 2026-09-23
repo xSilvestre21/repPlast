@@ -61,6 +61,7 @@ export async function carregarPedidoParaPdf(
       // Todos os itens de um pedido são da mesma indústria, mas podem ser de
       // famílias diferentes; o rótulo da coluna de preço segue o primeiro.
       familia: (pedido.itens[0]?.familia as Familia | undefined) ?? null,
+      unidade: (pedido.itens[0]?.unidade as UnidadeVenda | undefined) ?? null,
 
       fornecedor: { nome: pedido.fornecedor.nome },
       logo: pedido.fornecedor.logo ? Buffer.from(pedido.fornecedor.logo) : null,

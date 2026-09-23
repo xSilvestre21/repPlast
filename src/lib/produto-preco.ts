@@ -10,7 +10,7 @@
 
 import Decimal from "decimal.js";
 
-import { type Aditivo, pesoMilheiroKg, precoMilheiroSaco } from "./precificacao";
+import { type Aditivo, fatorEfetivo, pesoMilheiroKg, precoMilheiroSaco } from "./precificacao";
 
 export type Familia = "SACO" | "FITA" | "STRETCH" | "BOBINA" | "AVULSO";
 export type UnidadeVenda = "MIL" | "KG" | "UN" | "CX";
@@ -50,6 +50,18 @@ export const ROTULO_COLUNA_PRECO: Record<Familia, string> = {
   AVULSO: "PREÇO UNIT.",
 };
 
+/**
+ * O rótulo da coluna de preço para o documento — a família, corrigida pela
+ * unidade.
+ *
+ * O saco também sai por quilo, e aí a coluna não pode dizer MILHEIRO: o número
+ * embaixo dela é o preço do kg. Vendido por KG, qualquer família lê "PREÇO/KG";
+ * nas demais unidades vale o rótulo da família, como nos pedidos reais.
+ */
+export function rotuloColunaPreco(familia: Familia, unidade: UnidadeVenda): string {
+  return unidade === "KG" ? "PREÇO/KG" : ROTULO_COLUNA_PRECO[familia];
+}
+
 export const ROTULO_UNIDADE: Record<UnidadeVenda, string> = {
   MIL: "MIL",
   KG: "KG",
@@ -67,7 +79,9 @@ export const ROTULO_UNIDADE: Record<UnidadeVenda, string> = {
 export function unidadesDaFamilia(familia: Familia): UnidadeVenda[] {
   switch (familia) {
     case "SACO":
-      return ["MIL"];
+      // Milheiro é o comum; por quilo existe — 27 sacos do acervo do SICOV
+      // eram vendidos assim.
+      return ["MIL", "KG"];
     case "FITA":
       return ["CX", "UN"];
     case "AVULSO":
@@ -101,6 +115,15 @@ export function precoUnitario(
   unidade: UnidadeVenda,
 ): Decimal | null {
   if (produto.familia === "SACO") {
+    /*
+     * Saco por quilo: o preço do kg é o fator — é isso que o fator kg É, o
+     * "R$ por quilo" que a fórmula do milheiro multiplica pelo peso. Os
+     * aditivos por quilo somam em cima dele, como no milheiro; os cobrados
+     * por milheiro não têm milheiro onde entrar e ficam de fora.
+     */
+    if (unidade === "KG") {
+      return produto.fatorKg == null ? null : fatorEfetivo(produto.fatorKg, produto.aditivos);
+    }
     if (unidade !== "MIL") return null;
 
     const { larguraCm, comprimentoCm, espessuraMm, fatorKg } = produto;
@@ -119,7 +142,17 @@ export function precoUnitario(
   }
 
   if (produto.familia === "FITA") {
-    if (unidade === "CX") return produto.precoCaixa == null ? null : new Decimal(produto.precoCaixa);
+    if (unidade === "CX") {
+      if (produto.precoCaixa != null) return new Decimal(produto.precoCaixa);
+
+      // Sem preço de caixa, ela é as unidades que traz vezes o preço de cada
+      // uma — era exatamente a conta do SICOV para a fita.
+      if (produto.precoUnidade != null && produto.unidadesPorCaixa) {
+        return new Decimal(produto.precoUnidade).times(produto.unidadesPorCaixa);
+      }
+
+      return null;
+    }
 
     if (unidade === "UN") {
       if (produto.precoUnidade != null) return new Decimal(produto.precoUnidade);

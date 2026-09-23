@@ -93,6 +93,58 @@ export async function criarCliente(
   redirect(destino);
 }
 
+/**
+ * Cadastra o destinatário de uma proposta avulsa e liga a proposta a ele.
+ *
+ * É o cadastro COMPLETO, o mesmo de Clientes — razão social, CNPJ, endereço —,
+ * porque é daqui que a proposta caminha para virar pedido, e o pedido leva
+ * esses dados à indústria. A tela chega preenchida com o que a proposta sabia
+ * e, ao salvar, volta para ela.
+ */
+export async function criarClienteDaProposta(
+  orcamentoId: string,
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    const { organizacaoId, usuarioId, ehAdmin, db } = await contexto();
+
+    const orcamento = await db.orcamento.findFirst({
+      where: { id: orcamentoId, organizacaoId },
+      select: { clienteId: true },
+    });
+
+    if (!orcamento) return { erro: "Orçamento não encontrado." };
+    if (orcamento.clienteId) return { erro: "Esta proposta já tem cliente cadastrado." };
+
+    const cliente = await db.cliente.create({
+      data: {
+        organizacaoId,
+        representanteId: ehAdmin ? null : usuarioId,
+        ...dadosDoFormulario(formData),
+      },
+      select: { id: true, representanteId: true },
+    });
+
+    await db.orcamento.updateMany({
+      where: { id: orcamentoId, organizacaoId },
+      data: {
+        clienteId: cliente.id,
+        clienteAvulsoNome: null,
+        clienteAvulsoMunicipio: null,
+        // A proposta passa a seguir a carteira de quem ficou com o cliente.
+        representanteId: cliente.representanteId,
+      },
+    });
+  } catch (erro) {
+    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
+  }
+
+  revalidatePath("/clientes");
+  revalidatePath("/orcamentos");
+  redirect(`/orcamentos/${orcamentoId}`);
+}
+
 export async function atualizarCliente(
   id: string,
   _estado: EstadoFormulario,

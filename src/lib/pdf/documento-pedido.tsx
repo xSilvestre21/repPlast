@@ -17,7 +17,7 @@ import {
   View,
 } from "@react-pdf/renderer";
 
-import { ROTULO_COLUNA_PRECO, ROTULO_UNIDADE, type Familia, type UnidadeVenda } from "../produto-preco";
+import { ROTULO_UNIDADE, rotuloColunaPreco, type Familia, type UnidadeVenda } from "../produto-preco";
 import "./hifenizacao";
 
 export interface ItemPdf {
@@ -36,6 +36,8 @@ export interface DadosPedidoPdf {
   numero: number;
   data: Date;
   familia: Familia | null;
+  /** Unidade da primeira linha: saco por quilo muda o rótulo da coluna de preço. */
+  unidade: UnidadeVenda | null;
 
   fornecedor: { nome: string };
   /** Logo da INDÚSTRIA, vindo do banco. */
@@ -258,7 +260,7 @@ export function DocumentoPedido({ pedido }: { pedido: DadosPedidoPdf }) {
 
   // O rótulo da coluna de preço muda por família — MILHEIRO no saco, PREÇO/CX
   // na fita, PREÇO/KG no stretch. Vem dos pedidos reais.
-  const rotuloPreco = pedido.familia ? ROTULO_COLUNA_PRECO[pedido.familia] : "PREÇO";
+  const rotuloPreco = pedido.familia && pedido.unidade ? rotuloColunaPreco(pedido.familia, pedido.unidade) : "PREÇO";
 
   const frete =
     pedido.tipoFrete && pedido.transportadora

@@ -8,12 +8,23 @@
  * indústria costuma exigir no rodapé.
  */
 
-import { Check, FileSignature, ScrollText, ThumbsDown, Timer, UserRoundPlus } from "lucide-react";
+import {
+  Ban,
+  Check,
+  FileSignature,
+  PackagePlus,
+  ScrollText,
+  ThumbsDown,
+  Timer,
+  UserRoundPlus,
+  X,
+} from "lucide-react";
 import { useActionState, useState } from "react";
 
 import {
   AreaTexto,
   Botao,
+  BotaoLink,
   BotaoTexto,
   Campo,
   MensagemErro,
@@ -155,7 +166,7 @@ export function FichaProposta({
 export function DesfechoProposta({
   status,
   temItens,
-  temCliente,
+  viraPedido,
   jaVirouPedido,
   motivoRecusa,
   aceitar,
@@ -167,7 +178,8 @@ export function DesfechoProposta({
 }: {
   status: string;
   temItens: boolean;
-  temCliente: boolean;
+  /** Cliente cadastrado e todo item é produto dele. Ver `PendenciasDoPedido`. */
+  viraPedido: boolean;
   jaVirouPedido: boolean;
   motivoRecusa: string;
   aceitar: (formData: FormData) => void | Promise<void>;
@@ -255,7 +267,7 @@ export function DesfechoProposta({
       )}
 
       {status === "ACEITO" &&
-        (temCliente ? (
+        (viraPedido ? (
           <form action={virarPedido}>
             <Botao type="submit" icone={ScrollText} disabled={!temItens}>
               {jaVirouPedido ? "Gerar outro pedido" : "Virar pedido"}
@@ -263,8 +275,8 @@ export function DesfechoProposta({
           </form>
         ) : (
           <p className="text-corpo text-tinta-2 max-w-sm leading-relaxed">
-            Para virar pedido, cadastre o cliente acima — o pedido leva razão social, CNPJ e
-            endereço para a indústria, e um nome solto não fatura.
+            Aceita, mas não vira pedido: falta cadastrar o cliente e os produtos dele — veja
+            “Esta proposta não vira pedido”, acima.
           </p>
         ))}
     </div>
@@ -273,56 +285,95 @@ export function DesfechoProposta({
 
 
 /**
- * Transforma o destinatário avulso em cliente, sem sair da proposta.
+ * O que falta para a proposta poder virar pedido — dito antes, e não na hora.
  *
- * O sistema antigo recusava a conversão e mandava a pessoa para outra tela,
- * copiar o nome na mão. O cadastro completo continua sendo em Clientes; aqui
- * nasce só o suficiente para o pedido existir.
+ * Proposta para quem ainda não é cliente NÃO vira pedido. O pedido leva razão
+ * social, CNPJ e endereço à indústria, e cada linha dele é um produto do
+ * cliente; a proposta avulsa não tem nenhum dos dois. O caminho existe e é este
+ * cartão: cadastrar o cliente (pelo cadastro completo, que volta vinculado) e
+ * depois os itens como produtos dele — um a um, pela tabela, ou todos de vez.
  */
-export function CadastrarCliente({
-  nome,
-  municipio,
-  cadastrar,
+export function PendenciasDoPedido({
+  cadastrarClienteEm,
+  cliente,
+  itens,
+  itensSemProduto,
+  cadastrarTodos,
 }: {
-  nome: string;
-  municipio: string;
-  cadastrar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
+  cadastrarClienteEm: string;
+  /** Apelido do cliente vinculado; nulo enquanto a proposta é avulsa. */
+  cliente: string | null;
+  itens: number;
+  itensSemProduto: number;
+  cadastrarTodos: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
 }) {
-  const [estado, enviar, salvando] = useActionState(cadastrar, {});
+  const [estado, enviar, cadastrando] = useActionState(cadastrarTodos, {});
 
   return (
     <SecaoCartao
-      icone={UserRoundPlus}
-      tom="mar"
-      titulo="Ainda não é cliente"
-      descricao="Esta proposta foi feita para quem não está no cadastro. Enquanto for assim ela vive normalmente — só não vira pedido."
+      icone={Ban}
+      tom="pessego"
+      titulo="Esta proposta não vira pedido"
+      descricao={
+        cliente
+          ? `Falta cadastrar os itens como produtos da ${cliente}. Enquanto houver linha feita só de conta, a proposta vale para cotar, mas não gera pedido.`
+          : "Ela é para quem ainda não é cliente, e os itens são conta, sem produto. Vale normalmente como proposta — número, itens e PDF —, mas só vira pedido depois de cadastrar o cliente e os produtos dele."
+      }
     >
-      <form action={enviar} className="space-y-4">
-        <MensagemErro>{estado.erro}</MensagemErro>
+      <MensagemErro>{estado.erro}</MensagemErro>
 
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Campo
-            name="apelido"
-            rotulo="Nome curto"
-            required
-            defaultValue={nome}
-            dica="Usado nas listas e no nome do PDF."
-          />
-          <Campo
-            name="razaoSocial"
-            rotulo="Razão social"
-            defaultValue={nome}
-            dica="Sai impressa no pedido. Dá para corrigir depois."
-          />
-          <Campo name="municipio" rotulo="Município" defaultValue={municipio} />
-        </div>
+      <ol className="space-y-3 text-corpo">
+        <li className="flex flex-wrap items-center justify-between gap-3">
+          <span className="flex items-center gap-2">
+            <Marca feito={cliente !== null} />
+            {cliente ? (
+              <>Cliente cadastrado: {cliente}</>
+            ) : (
+              <>1. Cadastrar o cliente, com razão social, CNPJ e endereço</>
+            )}
+          </span>
+          {!cliente && (
+            <BotaoLink href={cadastrarClienteEm} variante="secundaria" icone={UserRoundPlus}>
+              Cadastrar cliente
+            </BotaoLink>
+          )}
+        </li>
 
-        <div className="flex justify-end">
-          <Botao type="submit" variante="secundaria" icone={UserRoundPlus} carregando={salvando}>
-            {salvando ? "Cadastrando…" : "Cadastrar e vincular"}
-          </Botao>
-        </div>
-      </form>
+        <li className="flex flex-wrap items-center justify-between gap-3">
+          <span className="flex items-center gap-2">
+            <Marca feito={itens > 0 && itensSemProduto === 0} />
+            <span>
+              2. Cadastrar os itens como produtos dele
+              <span className="text-tinta-3 numerico">
+                {" "}
+                — {itens - itensSemProduto} de {itens}
+              </span>
+            </span>
+          </span>
+          {cliente && itensSemProduto > 0 && (
+            <form action={enviar}>
+              <Botao type="submit" variante="secundaria" icone={PackagePlus} carregando={cadastrando}>
+                {cadastrando ? "Cadastrando…" : "Cadastrar todos os produtos"}
+              </Botao>
+            </form>
+          )}
+        </li>
+      </ol>
+
+      {cliente && itensSemProduto > 0 && (
+        <p className="mt-3 text-mini text-tinta-3 leading-relaxed">
+          Para completar código da indústria ou do cliente, use “cadastrar como produto” na linha
+          do item — abre o Novo produto com a conta já preenchida.
+        </p>
+      )}
     </SecaoCartao>
+  );
+}
+
+function Marca({ feito }: { feito: boolean }) {
+  return feito ? (
+    <Check size={16} className="text-verde shrink-0" aria-label="feito" />
+  ) : (
+    <X size={16} className="text-perigo shrink-0" aria-label="falta" />
   );
 }

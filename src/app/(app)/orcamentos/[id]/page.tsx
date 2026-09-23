@@ -18,9 +18,10 @@ import { escopoAtual } from "@/lib/sessao";
 import { SeloOrcamento, destinatario } from "../selo";
 import {
   adicionarItem,
+  adicionarItemPorConta,
   atualizarItem,
-  cadastrarClienteDoOrcamento,
   atualizarOrcamento,
+  cadastrarProdutosDaProposta,
   converterEmPedido,
   definirIpiDeTodosOsItens,
   definirStatus,
@@ -28,7 +29,8 @@ import {
   salvarMotivoRecusa,
   removerItem,
 } from "../acoes";
-import { CadastrarCliente, DesfechoProposta, FichaProposta } from "./ficha";
+import { ContaItem } from "./conta-item";
+import { DesfechoProposta, FichaProposta, PendenciasDoPedido } from "./ficha";
 
 const DATA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "UTC" });
 const DATA_HORA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
@@ -75,20 +77,36 @@ export default async function PaginaOrcamento({
    * preço negociado do seu dono, e oferecê-lo aqui levaria esse preço para
    * dentro da proposta de quem não o negociou.
    *
-   * Sem cliente cadastrado não há dono a comparar, e aí a lista é a da indústria
-   * inteira: a proposta avulsa existe justamente para cotar antes de abrir
-   * ficha, e exigir o dono ali fecharia esse caminho.
+   * Sem cliente cadastrado não há produto a oferecer, e aí o item nasce da
+   * CONTA (`ContaItem`): família, medidas, fator, aditivos — com os materiais
+   * e aditivos da indústria da proposta para a conta sair da tabela dela.
    */
-  const produtos = await db.produto.findMany({
-    where: {
-      organizacaoId,
-      fornecedorId: orcamento.fornecedorId,
-      ativo: true,
-      ...(orcamento.clienteId ? { clienteId: orcamento.clienteId } : {}),
-    },
-    orderBy: { descricao: "asc" },
-    include: { aditivos: { include: { aditivo: true } } },
-  });
+  const produtos = orcamento.clienteId
+    ? await db.produto.findMany({
+        where: {
+          organizacaoId,
+          fornecedorId: orcamento.fornecedorId,
+          ativo: true,
+          clienteId: orcamento.clienteId,
+        },
+        orderBy: { descricao: "asc" },
+        include: { aditivos: { include: { aditivo: true } } },
+      })
+    : [];
+
+  const industria = orcamento.clienteId
+    ? null
+    : await db.fornecedor.findFirst({
+        where: { id: orcamento.fornecedorId, organizacaoId },
+        select: {
+          aditivos: { where: { ativo: true }, orderBy: { nome: "asc" } },
+          materiais: { where: { ativo: true }, orderBy: { nome: "asc" } },
+        },
+      });
+
+  /** Linhas feitas de conta que ainda não são produto — o que segura o pedido. */
+  const itensSemProduto = orcamento.itens.filter((i) => i.produtoId === null).length;
+  const viraPedido = orcamento.cliente !== null && itensSemProduto === 0;
 
   /*
    * A proposta abre para LEITURA, e é assim de propósito: depois de gravada ela
@@ -200,11 +218,13 @@ export default async function PaginaOrcamento({
           )}
         </Cartao>
 
-        {!orcamento.cliente && (
-          <CadastrarCliente
-            nome={orcamento.clienteAvulsoNome ?? ""}
-            municipio={orcamento.clienteAvulsoMunicipio ?? ""}
-            cadastrar={cadastrarClienteDoOrcamento.bind(null, orcamento.id)}
+        {!viraPedido && (
+          <PendenciasDoPedido
+            cadastrarClienteEm={`/clientes/novo?orcamento=${orcamento.id}`}
+            cliente={orcamento.cliente?.apelido ?? null}
+            itens={orcamento.itens.length}
+            itensSemProduto={itensSemProduto}
+            cadastrarTodos={cadastrarProdutosDaProposta.bind(null, orcamento.id)}
           />
         )}
 
@@ -241,7 +261,31 @@ export default async function PaginaOrcamento({
             totalSemIpi: item.totalSemIpi.toString(),
             valorIpi: item.valorIpi.toString(),
             total: item.total.toString(),
+            cadastrarEm:
+              orcamento.cliente && item.produtoId === null
+                ? `/produtos/novo?orcamentoItem=${item.id}`
+                : undefined,
           }))}
+          adicao={
+            industria ? (
+              <ContaItem
+                materiais={industria.materiais.map((m) => ({
+                  nome: m.nome,
+                  precoKg: m.precoKg.toString(),
+                  precoMinimoKg: m.precoMinimoKg ? m.precoMinimoKg.toString() : null,
+                  densidade: m.densidade ? m.densidade.toString() : null,
+                }))}
+                aditivos={industria.aditivos.map((a) => ({
+                  id: a.id,
+                  nome: a.nome,
+                  sufixoDescricao: a.sufixoDescricao,
+                  tipo: a.tipo,
+                  valor: a.valor.toString(),
+                }))}
+                adicionar={adicionarItemPorConta.bind(null, orcamento.id)}
+              />
+            ) : undefined
+          }
           produtos={produtos.map((p) => ({
             id: p.id,
             descricao: p.descricao,
@@ -308,7 +352,7 @@ export default async function PaginaOrcamento({
             <DesfechoProposta
               status={orcamento.status}
               temItens={orcamento.itens.length > 0}
-              temCliente={orcamento.cliente !== null}
+              viraPedido={viraPedido}
               jaVirouPedido={orcamento.pedidos.length > 0}
               motivoRecusa={orcamento.motivoRecusa ?? ""}
               aceitar={definirStatus.bind(null, orcamento.id, "ACEITO")}

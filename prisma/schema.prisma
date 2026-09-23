@@ -690,7 +690,9 @@ model Orcamento {
   /// Cotar antes de cadastrar é o começo da conversa, não uma falha de
   /// preenchimento: no backup do sistema antigo, 99 das 166 propostas nasceram
   /// assim. O cadastro vem depois, se o negócio acontecer — e aí o orçamento é
-  /// ligado ao cliente e pode virar pedido.
+  /// ligado ao cliente e, com os itens cadastrados como produtos dele, pode
+  /// virar pedido. Enquanto for nulo, NÃO vira pedido — os itens são conta
+  /// avulsa, sem produto (ver `OrcamentoItem.conta`).
   clienteId String? @db.Uuid
 
   /// O destinatário enquanto ele não é cliente. Nome e cidade é tudo o que se
@@ -795,6 +797,17 @@ model OrcamentoItem {
   valorIpi    Decimal @db.Decimal(14, 2)
   total       Decimal @db.Decimal(14, 2)
   pesoKg      Decimal @default(0) @db.Decimal(14, 3)
+
+  /// Os insumos da conta, quando o item nasceu dela e não do catálogo.
+  ///
+  /// Proposta para quem ainda não é cliente não oferece produto pronto: o
+  /// representante faz a conta ali mesmo — medidas, material, fator, aditivos —
+  /// e a linha entra sem produto. Guardar o que foi digitado é o que permite,
+  /// depois de o cliente ser cadastrado, abrir o Novo produto já preenchido ou
+  /// cadastrar todos de uma vez, sem redigitar. Nulo nos itens de catálogo.
+  ///
+  /// O formato é o do formulário de produto (ver `produtos/leitura.ts`).
+  conta Json?
 
   orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
   produto   Produto?  @relation(fields: [produtoId], references: [id], onDelete: SetNull)

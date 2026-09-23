@@ -1,0 +1,12 @@
+-- O item da proposta avulsa passa a nascer de uma CONTA, e não do catálogo.
+--
+-- Para quem ainda não é cliente não há produto dele a oferecer, e oferecer os
+-- de outros levava o preço negociado com outra empresa para dentro da proposta.
+-- O representante preenche medidas, material, fator e aditivos, e a linha entra
+-- com `produto_id` nulo. A conta fica guardada para, cadastrado o cliente,
+-- virar produto dele sem redigitar — é essa a condição para a proposta virar
+-- pedido.
+--
+-- Nada é preenchido retroativamente: os itens antigos vieram do catálogo e
+-- continuam apontando para o produto.
+ALTER TABLE "orcamento_item" ADD COLUMN "conta" JSONB;

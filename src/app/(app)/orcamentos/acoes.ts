@@ -19,13 +19,22 @@ import { motivoDoFormulario } from "@/lib/motivo";
 import { lerNumeroBr } from "@/lib/numero-br";
 import { arredondarDinheiro } from "@/lib/precificacao";
 import {
+  type ProdutoPrecificavel,
   type UnidadeVenda,
   paraPrecificavel,
   pesoDoItem,
   precoUnitario,
+  unidadesDaFamilia,
 } from "@/lib/produto-preco";
 import { escopoAtual } from "@/lib/sessao";
 import { calcularTotaisPedido } from "@/lib/totais";
+
+import {
+  contaDoFormulario,
+  dadosDoFormulario,
+  formularioDaConta,
+  lerConta,
+} from "../produtos/leitura";
 
 export type EstadoFormulario = { erro?: string };
 
@@ -73,6 +82,28 @@ async function exigirAberto(db: DbOrganizacao, orcamentoId: string, organizacaoI
   }
 
   return orcamento;
+}
+
+/**
+ * Onde a linha nova entra e se ela cobra IPI.
+ *
+ * A linha nova acompanha as que já estão lá — proposta inteira isenta não
+ * obriga a desmarcar a cada item.
+ */
+async function proximaLinha(db: DbOrganizacao, orcamentoId: string, formData: FormData) {
+  const tributados = await db.orcamentoItem.count({ where: { orcamentoId, comIpi: true } });
+  const existentes = await db.orcamentoItem.count({ where: { orcamentoId } });
+
+  const ultimo = await db.orcamentoItem.findFirst({
+    where: { orcamentoId },
+    orderBy: { ordem: "desc" },
+    select: { ordem: true },
+  });
+
+  return {
+    ordem: (ultimo?.ordem ?? 0) + 1,
+    comIpi: ipiDoFormulario(formData) ?? (existentes === 0 || tributados > 0),
+  };
 }
 
 /** Recalcula e grava os totais a partir dos itens — igual ao do pedido. */
@@ -401,6 +432,16 @@ export async function adicionarItem(
     const { organizacaoId, db } = await contexto();
     const orcamento = await exigirAberto(db, orcamentoId, organizacaoId);
 
+    /*
+     * Proposta sem cliente não lança do catálogo: não há produto DELE, e o de
+     * outro cliente traria o preço negociado com outra empresa. Ali a linha
+     * nasce da conta (`adicionarItemPorConta`). A tela já não oferece; isto
+     * fecha o caminho de quem chegar por fora dela.
+     */
+    if (!orcamento.clienteId) {
+      return { erro: "Proposta para quem ainda não é cliente: lance o item pela conta." };
+    }
+
     const produtoId = lerTexto(formData.get("produtoId"));
     if (!produtoId) return { erro: "Escolha o produto." };
 
@@ -426,11 +467,8 @@ export async function adicionarItem(
      * O preço do produto é o que foi negociado com o dono dele; lançá-lo aqui
      * levaria esse preço para dentro da proposta de quem não o negociou. A tela
      * já não oferece, e isto fecha o caminho de quem chegar por fora dela.
-     *
-     * A proposta avulsa escapa: sem cliente não há dono a comparar, e é dela que
-     * sai a cotação de quem ainda nem tem ficha.
      */
-    if (orcamento.clienteId && produto.clienteId !== orcamento.clienteId) {
+    if (produto.clienteId !== orcamento.clienteId) {
       return { erro: "Este produto é de outro cliente. O preço dele foi negociado com outra empresa." };
     }
 
@@ -449,40 +487,121 @@ export async function adicionarItem(
 
     const preco = precoInformado !== null ? String(precoInformado) : precoCalculado!.toString();
 
-    // A linha nova acompanha as que já estão lá — proposta inteira isenta não
-    // obriga a desmarcar a cada item.
-    const tributados = await db.orcamentoItem.count({ where: { orcamentoId, comIpi: true } });
-    const existentes = await db.orcamentoItem.count({ where: { orcamentoId } });
-    const comIpiItem = ipiDoFormulario(formData) ?? (existentes === 0 || tributados > 0);
-
-    const ultimo = await db.orcamentoItem.findFirst({
-      where: { orcamentoId },
-      orderBy: { ordem: "desc" },
-      select: { ordem: true },
-    });
+    const { ordem, comIpi: comIpiItem } = await proximaLinha(db, orcamentoId, formData);
 
     await db.orcamentoItem.create({
       data: {
         orcamentoId,
         produtoId,
-        ordem: (ultimo?.ordem ?? 0) + 1,
+        ordem,
         familia: produto.familia,
         descricao: produto.descricao,
         codigoFornecedor: produto.codigoFornecedor,
-        /*
-         * A coluna COD.CLI só existe quando há cliente: é o número que ELE usa.
-         *
-         * Na proposta avulsa o produto ainda é de outra empresa — é dela que a
-         * lista veio —, e o número dela não tem o que fazer no papel de quem só
-         * pediu preço. Com cliente, a guarda lá em cima já garantiu que o produto
-         * é dele, então o código do produto é o código dele.
-         */
-        codigoCliente: orcamento.clienteId ? produto.codigoCliente : null,
+        // A guarda lá em cima garantiu que o produto é do cliente, então o
+        // código do produto é o número que ELE usa.
+        codigoCliente: produto.codigoCliente,
         unidade,
         quantidade: String(quantidade),
         comIpi: comIpiItem,
         precoUnitario: preco,
         pesoKg: pesoDoItem(precificavel, unidade, quantidade).toDecimalPlaces(3).toString(),
+        totalSemIpi: "0",
+        valorIpi: "0",
+        total: "0",
+      },
+    });
+
+    await recalcularTotais(db, orcamentoId);
+  } catch (erro) {
+    return { erro: erro instanceof Error ? erro.message : "Não foi possível adicionar." };
+  }
+
+  revalidatePath(`/orcamentos/${orcamentoId}`);
+  return {};
+}
+
+/**
+ * Lança uma linha feita de CONTA, sem produto — o item da proposta avulsa.
+ *
+ * Para quem ainda não é cliente não há produto a oferecer: o representante
+ * preenche a família e os campos dela, e a linha entra com a conta guardada.
+ * A leitura é a do cadastro de produto (`dadosDoFormulario`), para que a mesma
+ * conta, depois de o cliente existir, vire produto dele sem ser recusada.
+ */
+export async function adicionarItemPorConta(
+  orcamentoId: string,
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    const { organizacaoId, db } = await contexto();
+    const orcamento = await exigirAberto(db, orcamentoId, organizacaoId);
+
+    if (orcamento.clienteId) {
+      return { erro: "Esta proposta já tem cliente: lance os produtos cadastrados dele." };
+    }
+
+    const descricao = lerTexto(formData.get("descricao"));
+    if (!descricao) return { erro: "Preencha a conta — a descrição sai dela." };
+
+    const quantidade = lerNumeroBr(formData.get("quantidade"));
+    if (quantidade === null || quantidade <= 0) return { erro: "Informe a quantidade." };
+
+    const conta = contaDoFormulario(formData);
+    const dados = dadosDoFormulario(
+      formularioDaConta(conta, { fornecedorId: orcamento.fornecedorId, descricao }),
+    );
+
+    // Os aditivos entram no preço, então só valem os da indústria da proposta.
+    const aditivos = await db.aditivo.findMany({
+      where: { id: { in: conta.aditivos }, fornecedorId: orcamento.fornecedorId },
+      select: { nome: true, sufixoDescricao: true, tipo: true, valor: true },
+    });
+    if (aditivos.length !== conta.aditivos.length) {
+      return { erro: "Algum aditivo escolhido não é desta indústria." };
+    }
+
+    const precificavel: ProdutoPrecificavel = {
+      ...dados,
+      aditivos: aditivos.map((a) => ({ ...a, valor: a.valor.toString() })),
+    };
+
+    const unidade = String(formData.get("unidade") ?? "") as UnidadeVenda;
+    if (!unidadesDaFamilia(dados.familia).includes(unidade)) {
+      return { erro: "Escolha a unidade de venda." };
+    }
+    if (dados.familia === "AVULSO" && unidade !== dados.unidadeAvulsa) {
+      return { erro: "A unidade do item avulso é a do preço digitado." };
+    }
+
+    const precoInformado = lerNumeroBr(formData.get("precoUnitario"));
+    const precoCalculado = precoUnitario(precificavel, unidade);
+
+    if (precoInformado === null && precoCalculado === null) {
+      return { erro: "A conta não fecha um preço para esta unidade." };
+    }
+    if (precoInformado !== null && precoInformado < 0) {
+      return { erro: "O preço não pode ser negativo." };
+    }
+
+    const preco = precoInformado !== null ? String(precoInformado) : precoCalculado!.toString();
+    const { ordem, comIpi } = await proximaLinha(db, orcamentoId, formData);
+
+    await db.orcamentoItem.create({
+      data: {
+        orcamentoId,
+        produtoId: null,
+        ordem,
+        familia: dados.familia,
+        descricao,
+        codigoFornecedor: null,
+        codigoCliente: null,
+        unidade,
+        quantidade: String(quantidade),
+        comIpi,
+        precoUnitario: preco,
+        pesoKg: pesoDoItem(precificavel, unidade, quantidade).toDecimalPlaces(3).toString(),
+        conta,
         totalSemIpi: "0",
         valorIpi: "0",
         total: "0",
@@ -607,7 +726,7 @@ export async function converterEmPedido(
     where: { id: orcamentoId, organizacaoId },
     include: {
       itens: { orderBy: { ordem: "asc" } },
-      cliente: { select: { observacoes: true } },
+      cliente: { select: { apelido: true, observacoes: true } },
       fornecedor: { select: { comissaoPercentual: true } },
     },
   });
@@ -625,13 +744,28 @@ export async function converterEmPedido(
    * papel que a indústria recebe — um nome solto não fatura. A proposta podia
    * viver sem isso porque ela é conversa; o pedido é documento fiscal.
    *
-   * Quem estiver nessa situação não fica sem saída: `cadastrarClienteDoOrcamento`
-   * abre a ficha com o que a proposta já sabe.
+   * Quem estiver nessa situação não fica sem saída: a proposta leva ao
+   * cadastro completo do cliente, que volta vinculado.
    */
   if (!orcamento.clienteId) {
     throw new Error(
-      "Esta proposta é para um cliente que ainda não está cadastrado. " +
-        "Cadastre-o a partir dela antes de virar pedido.",
+      "Proposta para quem ainda não é cliente não vira pedido. " +
+        "Cadastre o cliente e os produtos dela antes.",
+    );
+  }
+
+  /*
+   * E todo item precisa ser um produto do cliente.
+   *
+   * A linha feita de conta não tem produto: é cotação. O pedido leva o código
+   * e o produto para a indústria e para o histórico de compras do cliente, e
+   * uma linha solta ali seria compra que ninguém consegue repetir.
+   */
+  const semProduto = orcamento.itens.filter((i) => i.produtoId === null).length;
+  if (semProduto > 0) {
+    throw new Error(
+      `Faltam ${semProduto} item(ns) cadastrados como produto de ${orcamento.cliente?.apelido}. ` +
+        "Cadastre-os a partir da proposta antes de virar pedido.",
     );
   }
 
@@ -717,61 +851,81 @@ export async function converterEmPedido(
 
 
 /**
- * Transforma o destinatário avulso em cliente de verdade, e liga a proposta a ele.
+ * Cadastra como produto DO CLIENTE cada linha da proposta que nasceu de conta.
  *
- * Existe para que "cadastre o cliente antes" não seja um beco: o sistema
- * antigo recusava a conversão e deixava a pessoa recomeçar em outra tela,
- * copiando o nome na mão. Aqui a ficha nasce com o que a proposta já sabe, e
- * o resto se preenche depois no cadastro.
+ * É o "todos de uma vez" do que o Novo produto faz um a um: com o cliente já
+ * cadastrado, a conta guardada no item vira produto dele — mesma indústria,
+ * mesma leitura do cadastro — e o item passa a apontar para o produto. Preço e
+ * descrição do item não mudam: a proposta é o que o cliente recebeu.
+ *
+ * Vai item a item, sem transação única (o cliente do banco com RLS não abre
+ * uma interativa). Não faz mal: o que já foi ligado sai do filtro, e repetir
+ * o clique retoma de onde parou.
  */
-export async function cadastrarClienteDoOrcamento(
+export async function cadastrarProdutosDaProposta(
   orcamentoId: string,
   _estado: EstadoFormulario,
-  formData: FormData,
+  _formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
-    const { organizacaoId, usuarioId, ehAdmin, db } = await contexto();
+    const { organizacaoId, db } = await contexto();
 
     const orcamento = await db.orcamento.findFirst({
       where: { id: orcamentoId, organizacaoId },
-      select: { clienteId: true, clienteAvulsoNome: true, clienteAvulsoMunicipio: true },
+      select: {
+        clienteId: true,
+        fornecedorId: true,
+        itens: {
+          where: { produtoId: null },
+          orderBy: { ordem: "asc" },
+          select: { id: true, descricao: true, conta: true },
+        },
+      },
     });
 
     if (!orcamento) return { erro: "Orçamento não encontrado." };
-    if (orcamento.clienteId) return { erro: "Esta proposta já tem cliente cadastrado." };
+    if (!orcamento.clienteId) return { erro: "Cadastre o cliente antes dos produtos." };
 
-    const apelido = lerTexto(formData.get("apelido")) ?? orcamento.clienteAvulsoNome;
-    const razaoSocial = lerTexto(formData.get("razaoSocial")) ?? apelido;
+    for (const item of orcamento.itens) {
+      const conta = lerConta(item.conta);
+      if (!conta) {
+        return { erro: `"${item.descricao}" não tem conta guardada; cadastre-o à mão em Produtos.` };
+      }
 
-    if (!apelido || !razaoSocial) return { erro: "Informe o nome do cliente." };
+      const dados = dadosDoFormulario(
+        formularioDaConta(conta, {
+          fornecedorId: orcamento.fornecedorId,
+          clienteId: orcamento.clienteId,
+          descricao: item.descricao,
+        }),
+      );
 
-    const cliente = await db.cliente.create({
-      data: {
-        organizacaoId,
-        apelido,
-        razaoSocial,
-        municipio: lerTexto(formData.get("municipio")) ?? orcamento.clienteAvulsoMunicipio,
-        // Preposto cadastra na própria carteira; administrador, para a casa.
-        representanteId: ehAdmin ? null : usuarioId,
-      },
-      select: { id: true, representanteId: true },
-    });
+      const aditivos = await db.aditivo.count({
+        where: { id: { in: conta.aditivos }, fornecedorId: orcamento.fornecedorId },
+      });
+      if (aditivos !== conta.aditivos.length) {
+        return { erro: `"${item.descricao}" usa um aditivo que não é mais desta indústria.` };
+      }
 
-    await db.orcamento.updateMany({
-      where: { id: orcamentoId, organizacaoId },
-      data: {
-        clienteId: cliente.id,
-        clienteAvulsoNome: null,
-        clienteAvulsoMunicipio: null,
-        // A proposta passa a seguir a carteira de quem ficou com o cliente.
-        representanteId: cliente.representanteId,
-      },
-    });
+      const produto = await db.produto.create({
+        data: {
+          organizacaoId,
+          ...dados,
+          aditivos: { create: conta.aditivos.map((aditivoId) => ({ aditivoId })) },
+        },
+        select: { id: true },
+      });
+
+      await db.orcamentoItem.update({
+        where: { id: item.id },
+        data: { produtoId: produto.id },
+      });
+    }
   } catch (erro) {
     return { erro: erro instanceof Error ? erro.message : "Não foi possível cadastrar." };
   }
 
-  revalidatePath("/clientes");
+  revalidatePath("/produtos");
   revalidatePath(`/orcamentos/${orcamentoId}`);
   return {};
 }
