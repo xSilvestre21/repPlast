@@ -50,3 +50,6 @@ next-env.d.ts
 
 # Documentos de referência (pedidos reais de clientes) — nunca versionar
 /referencia
+
+# Anexos de falha dos testes de navegador (capturas), regenerados a cada run
+/.vitest

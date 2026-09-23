@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "test:db": "vitest run --config vitest.integration.config.mts",
+    "test:navegador": "vitest run --config vitest.browser.config.mts",
     "db:setup": "node --conditions react-server scripts/setup-db-role.mjs",
     "db:seed": "tsx --conditions react-server prisma/seed.ts",
     "db:importar": "tsx --conditions react-server scripts/importar-sicov.ts",
@@ -36,13 +37,17 @@
     "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@vitest/browser-playwright": "^5.0.1",
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.3.4",
+    "playwright": "^1.63.0",
     "prisma": "^7.10.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.13",
     "typescript": "^5",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.0",
+    "vitest-browser-react": "^2.3.0"
   }
 }

@@ -20,6 +20,8 @@ comissões. Porta o sistema legado SICOV (dados reais em `referencia/`, nunca ve
 - `npm run build` / `npm start` — build e produção
 - `npm test` — testes unitários (Vitest, sem banco)
 - `npm run test:db` — testes de integração (`*.itest.ts`), incluindo isolamento multi-tenant
+- `npm run test:navegador` — testes em Chromium (`*.btest.tsx`), para o que só existe depois do
+  layout: um componente que mede a janela não é testável em `node`, onde tudo tem altura zero
 - `npm run typecheck` — TypeScript sem emitir
 - `npm run lint` — ESLint
 - `npm run db:setup` / `npm run db:seed` — papel restrito do banco / dados de exemplo
