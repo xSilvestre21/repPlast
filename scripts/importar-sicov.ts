@@ -616,6 +616,9 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
       clienteId: clientes.get(p.clientId) ?? null,
       familia,
       codigoFornecedor: texto(p.supplierCode),
+      // COD.CLI: o número que ELE usa. Vazio é legítimo — nem todo cliente
+      // numera o que compra, e isso nunca disse nada sobre de quem o produto é.
+      codigoCliente: texto(p.clientCode),
       descricao: p.name,
       material: texto(p.material),
       // `description` do SICOV está preenchido em 1 produto de 444; o texto que
@@ -695,17 +698,6 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
     const criado = await tx.produto.create({ data: dados });
     produtos.set(p._id, criado.id);
     contar("produtos");
-
-    // O código que ESTE cliente usa para ESTE produto — a coluna COD.CLI.
-    const clienteId = clientes.get(p.clientId);
-    if (clienteId && texto(p.clientCode)) {
-      await tx.produtoCodigoCliente.upsert({
-        where: { produtoId_clienteId: { produtoId: criado.id, clienteId } },
-        create: { produtoId: criado.id, clienteId, codigo: p.clientCode.trim() },
-        update: { codigo: p.clientCode.trim() },
-      });
-      contar("códigos do cliente");
-    }
 
     // Os extras que ESTE produto leva. O preço só muda no SACO — é a única
     // família cuja fórmula soma aditivo (ver produto-preco.ts).

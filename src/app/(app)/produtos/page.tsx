@@ -113,7 +113,7 @@ export default async function PaginaProdutos({ searchParams }: PageProps<"/produ
             { cliente: { apelido: { contains: termo, mode: "insensitive" as const } } },
             { cliente: { razaoSocial: { contains: termo, mode: "insensitive" as const } } },
             { fornecedor: { nome: { contains: termo, mode: "insensitive" as const } } },
-            { codigosCliente: { some: { codigo: { contains: termo, mode: "insensitive" as const } } } },
+            { codigoCliente: { contains: termo, mode: "insensitive" as const } },
           ],
         }
       : {}),
@@ -132,7 +132,6 @@ export default async function PaginaProdutos({ searchParams }: PageProps<"/produ
       include: {
         fornecedor: { select: { nome: true } },
         cliente: { select: { apelido: true } },
-        codigosCliente: { select: { codigo: true }, take: 1 },
         aditivos: { include: { aditivo: true } },
       },
     }),
@@ -231,7 +230,7 @@ export default async function PaginaProdutos({ searchParams }: PageProps<"/produ
           <Cartao className="divide-y divide-filete overflow-hidden palco">
             {produtos.map((produto) => {
               const preco = precoDe(produto);
-              const codigoDoCliente = produto.codigosCliente[0]?.codigo;
+              const codigoDoCliente = produto.codigoCliente;
 
               return (
                 <LinhaLista key={produto.id} href={`/produtos/${produto.id}`}>

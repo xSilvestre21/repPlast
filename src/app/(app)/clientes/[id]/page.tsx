@@ -3,12 +3,7 @@ import { notFound } from "next/navigation";
 import { Cabecalho } from "@/components/ui";
 import { escopoAtual } from "@/lib/sessao";
 
-import {
-  atualizarCliente,
-  excluirCliente,
-  removerCodigoProduto,
-  salvarCodigoProduto,
-} from "../acoes";
+import { atualizarCliente, excluirCliente } from "../acoes";
 import { FormularioCliente } from "../formulario";
 import { BotaoExcluir } from "@/components/botao-excluir";
 import { SecaoCodigos } from "./codigos";
@@ -21,19 +16,18 @@ export default async function PaginaCliente({ params }: PageProps<"/clientes/[id
   const { organizacaoId, db } = await escopoAtual();
 
   const [cliente, produtos] = await Promise.all([
-    db.cliente.findFirst({
-      where: { id, organizacaoId },
-      include: {
-        codigosProduto: {
-          include: { produto: { select: { descricao: true } } },
-          orderBy: { produto: { descricao: "asc" } },
-        },
-      },
-    }),
+    db.cliente.findFirst({ where: { id, organizacaoId } }),
+    // Os produtos DELE. O dono é campo do produto, então a consulta é direta —
+    // não há mais tabela de vínculo a atravessar.
     db.produto.findMany({
-      where: { organizacaoId, ativo: true },
+      where: { organizacaoId, clienteId: id, ativo: true },
       orderBy: [{ fornecedor: { nome: "asc" } }, { descricao: "asc" }],
-      select: { id: true, descricao: true, fornecedor: { select: { nome: true } } },
+      select: {
+        id: true,
+        descricao: true,
+        codigoCliente: true,
+        fornecedor: { select: { nome: true } },
+      },
     }),
   ]);
 
@@ -77,18 +71,12 @@ export default async function PaginaCliente({ params }: PageProps<"/clientes/[id
         />
 
         <SecaoCodigos
-          codigos={cliente.codigosProduto.map((c) => ({
-            produtoId: c.produtoId,
-            descricao: c.produto.descricao,
-            codigo: c.codigo,
-          }))}
           produtos={produtos.map((p) => ({
             id: p.id,
             descricao: p.descricao,
             fornecedor: p.fornecedor.nome,
+            codigo: p.codigoCliente,
           }))}
-          salvar={salvarCodigoProduto.bind(null, cliente.id)}
-          remover={removerCodigoProduto.bind(null, cliente.id)}
         />
       </div>
     </Pagina>

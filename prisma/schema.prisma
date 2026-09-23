@@ -150,6 +150,15 @@ model Usuario {
   /// não do escritório: representantes diferentes costumam usar texto diferente.
   observacoesPadrao String?
 
+  /// De onde ele escreve. Abre o cabeçalho da proposta: "Americana, 16 de
+  /// Setembro de 2026".
+  ///
+  /// É de cada usuário pelo mesmo motivo das condições acima — prepostos moram
+  /// em cidades diferentes, e a carta é assinada por quem a escreveu. Antes disto
+  /// o cabeçalho usava a cidade da INDÚSTRIA, que pode estar a 400 km de quem
+  /// assina.
+  municipio String?
+
   organizacao Organizacao          @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   clientes     Cliente[]
   pedidos      Pedido[]
@@ -219,7 +228,6 @@ model Cliente {
   pedidos        Pedido[]
   orcamentos     Orcamento[]
   produtos       Produto[]
-  codigosProduto ProdutoCodigoCliente[]
 
   @@index([organizacaoId])
   @@index([organizacaoId, apelido])
@@ -407,6 +415,16 @@ model Produto {
 
   /// Código do produto na indústria (COD.FORN no PDF).
   codigoFornecedor String?
+  /// Código que o CLIENTE usa para este produto (COD.CLI no PDF).
+  ///
+  /// Mora aqui, e não numa tabela de vínculo, porque o produto já é de um
+  /// cliente só: quem diz de quem ele é é `clienteId`, logo acima. Enquanto
+  /// foram duas estruturas, só uma delas era preenchida ao cadastrar produto e
+  /// só a OUTRA era lida ao lançar item — e o produto do cliente não aparecia.
+  ///
+  /// Anulável porque nem todo cliente numera o que compra: no pedido 2256 a
+  /// coluna vem vazia, e isso nunca impediu o produto de ser dele.
+  codigoCliente    String?
   /// Descrição gerada a partir das medidas; é ela que sai impressa.
   descricao        String
   /// Texto que abre a descrição nas famílias fita/stretch/bobina
@@ -460,7 +478,6 @@ model Produto {
   fornecedor     Fornecedor             @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
   cliente        Cliente?               @relation(fields: [clienteId], references: [id], onDelete: SetNull)
   aditivos       ProdutoAditivo[]
-  codigosCliente ProdutoCodigoCliente[]
   itensPedido    PedidoItem[]
   itensOrcamento OrcamentoItem[]
 
@@ -469,6 +486,8 @@ model Produto {
   @@index([clienteId])
   @@index([organizacaoId, familia])
   @@index([organizacaoId, descricao])
+  /// A forma exata da consulta que monta a lista ao lançar item.
+  @@index([organizacaoId, clienteId, fornecedorId])
   @@map("produto")
 }
 
@@ -483,26 +502,6 @@ model ProdutoAditivo {
   @@map("produto_aditivo")
 }
 
-/// COD.CLI do PDF: o código que aquele cliente usa para aquele produto.
-/// É opcional — no pedido 2256 a coluna vem vazia.
-/// Quais produtos são DESTE cliente — e, quando ele tiver, o código que usa.
-///
-/// A linha é o vínculo; o código é enfeite dela. Nem todo cliente numera o que
-/// compra, e exigir o número para registrar o vínculo deixava de fora justo
-/// quem não numera: o produto existia para a indústria, existia para o cliente,
-/// e mesmo assim não aparecia na hora de lançar o pedido.
-model ProdutoCodigoCliente {
-  produtoId String  @db.Uuid
-  clienteId String  @db.Uuid
-  codigo    String?
-
-  produto Produto @relation(fields: [produtoId], references: [id], onDelete: Cascade)
-  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
-
-  @@id([produtoId, clienteId])
-  @@index([clienteId])
-  @@map("produto_codigo_cliente")
-}
 
 // ---------------------------------------------------------------------------
 // Pedido
@@ -589,6 +588,18 @@ model Pedido {
   /// vendido.
   representanteId String? @db.Uuid
 
+  /// Por que o pedido foi cancelado — cliente desistiu, indústria não entregou,
+  /// erro de lançamento.
+  ///
+  /// É a única pergunta que o pedido cancelado ainda responde. Ele sai da soma da
+  /// comissão mas continua na lista do mês, e sem isto a linha zerada não diz o
+  /// que aconteceu — sobra ao representante lembrar de cor, três meses depois.
+  ///
+  /// Sobrevive a reabrir o pedido de propósito, como o motivo da recusa na
+  /// proposta: se ele cair de novo, o que foi escrito da primeira vez é o ponto
+  /// de partida, não ruído a apagar.
+  motivoCancelamento String?
+
   criadoEm     DateTime  @default(now())
   atualizadoEm DateTime  @updatedAt
   enviadoEm    DateTime?
@@ -659,8 +670,6 @@ model PedidoItem {
 // Comissão
 // ---------------------------------------------------------------------------
 
-
-
 // ---------------------------------------------------------------------------
 // Orçamento
 // ---------------------------------------------------------------------------
@@ -716,6 +725,14 @@ model Orcamento {
   prazoPagamento String?
   observacoes    String?
   vendedor       String?
+
+  /// A cidade que abre o cabeçalho, CONGELADA na criação como o vendedor.
+  ///
+  /// Copiada de `Usuario.municipio` e editável na ficha. Congelar é o que faz
+  /// reimprimir uma proposta de março sair igual ao que o cliente recebeu,
+  /// mesmo que o representante tenha mudado de cidade depois — e é o campo que
+  /// quem viaja troca sem mexer no próprio cadastro.
+  cidade String?
 
   /// Congelado na criação, como no pedido.
   ipiPercentual Decimal @default(0) @db.Decimal(6, 3)

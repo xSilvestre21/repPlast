@@ -382,6 +382,14 @@ export function FormularioProduto({
             onChange={(e) => alterar("codigoFornecedor")(e.target.value)}
           />
 
+          <Campo
+            name="codigoCliente"
+            rotulo="Código no cliente"
+            dica="Sai na coluna COD.CLI. Opcional — nem todo cliente numera o que compra."
+            value={campos.codigoCliente}
+            onChange={(e) => alterar("codigoCliente")(e.target.value)}
+          />
+
           <div>
             <Campo
               name="material"

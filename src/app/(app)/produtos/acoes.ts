@@ -71,6 +71,9 @@ function dadosDoFormulario(formData: FormData) {
     clienteId: lerTexto(formData.get("clienteId")),
     descricao,
     codigoFornecedor: lerTexto(formData.get("codigoFornecedor")),
+    // O número que o CLIENTE usa, ao lado do número que a indústria usa. Vazio
+    // é legítimo: nem todo cliente numera o que compra.
+    codigoCliente: lerTexto(formData.get("codigoCliente")),
     material: lerTexto(formData.get("material")),
     complemento: lerTexto(formData.get("complemento")),
     unidadeRotulo: lerTexto(formData.get("unidadeRotulo")),

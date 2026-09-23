@@ -14,6 +14,8 @@ import { redirect } from "next/navigation";
 
 import type { StatusOrcamento } from "@/generated/prisma/enums";
 import type { DbOrganizacao } from "@/lib/db";
+import { ipiDoFormulario, ipiParaGravar } from "@/lib/ipi-do-formulario";
+import { motivoDoFormulario } from "@/lib/motivo";
 import { lerNumeroBr } from "@/lib/numero-br";
 import { arredondarDinheiro } from "@/lib/precificacao";
 import {
@@ -162,7 +164,7 @@ export async function criarOrcamento(
       }),
       db.usuario.findUnique({
         where: { id: usuarioId },
-        select: { nome: true, observacoesPadrao: true },
+        select: { nome: true, observacoesPadrao: true, municipio: true },
       }),
     ]);
 
@@ -198,6 +200,10 @@ export async function criarOrcamento(
         observacoes: usuario?.observacoesPadrao ?? cliente?.observacoes ?? null,
         // Quem assina embaixo é quem está criando — dá para trocar na ficha.
         vendedor: usuario?.nome ?? null,
+        // E de onde ele escreve, que abre o cabeçalho. Congelada aqui pelo mesmo
+        // motivo que o nome: reimprimir a proposta de março tem de sair igual ao
+        // papel que o cliente recebeu.
+        cidade: usuario?.municipio ?? null,
         // Mesmo corte do pedido: a proposta é da carteira, não de quem digitou.
         // Sem cliente ainda não há carteira — a proposta nasce do escritório.
         representanteId: cliente?.representanteId ?? null,
@@ -239,6 +245,7 @@ export async function atualizarOrcamento(
         prazoPagamento: lerTexto(formData.get("prazoPagamento")),
         observacoes: lerTexto(formData.get("observacoes")),
         vendedor: lerTexto(formData.get("vendedor")),
+        cidade: lerTexto(formData.get("cidade")),
         emElaboracao: false,
       },
     });
@@ -281,14 +288,20 @@ export async function definirStatus(
   }
 
   /*
-   * O motivo viaja junto com a recusa porque é ali que ele se sabe. Vem vazio
-   * quando quem recusou não quis escrever — e um campo em branco não apaga o
-   * que já estava guardado: quem reabre e recusa de novo tem o texto anterior
-   * como ponto de partida.
+   * O motivo viaja junto com a recusa porque é ali que ele se sabe.
+   *
+   * Campo em branco NÃO apaga o que já estava guardado: quem reabre e recusa de
+   * novo encontra a caixa vazia — ela não vem preenchida —, e gravar esse vazio
+   * por cima jogaria fora o motivo da primeira vez sem ninguém ter pedido.
+   *
+   * Isto já estava escrito aqui e o código fazia o contrário: a comparação era
+   * `escrito !== null`, que passa também com string vazia. Para limpar de
+   * propósito existe o "Salvar motivo" da ficha, onde o campo mostra o texto
+   * atual e apagá-lo é uma escolha visível — mesma regra do cancelamento do
+   * pedido (`../pedidos/acoes.ts`).
    */
-  const escrito = motivoDoFormulario(formData);
-  const motivoRecusa =
-    status === "RECUSADO" && escrito !== null ? { motivoRecusa: escrito } : {};
+  const escrito = motivoDoFormulario(formData, "motivoRecusa");
+  const motivoRecusa = status === "RECUSADO" && escrito ? { motivoRecusa: escrito } : {};
 
   await db.orcamento.updateMany({
     where: { id: orcamentoId, organizacaoId },
@@ -297,23 +310,6 @@ export async function definirStatus(
 
   revalidatePath("/orcamentos");
   revalidatePath(`/orcamentos/${orcamentoId}`);
-}
-
-/**
- * O limite do motivo.
- *
- * Generoso para caber uma frase inteira ("pediram 12% e a indústria só deu 5,
- * fecharam com a Selpack"), curto o bastante para não virar depósito de texto
- * num campo que a lista mostra inteiro.
- */
-const LIMITE_DO_MOTIVO = 280;
-
-/** `null` quando o campo nem veio no formulário — que é diferente de veio vazio. */
-function motivoDoFormulario(formData: FormData): string | null {
-  const bruto = formData.get("motivoRecusa");
-  if (typeof bruto !== "string") return null;
-
-  return bruto.trim().slice(0, LIMITE_DO_MOTIVO);
 }
 
 /** Escrever o motivo depois, ou corrigir o que foi escrito na hora. */
@@ -325,15 +321,36 @@ export async function salvarMotivoRecusa(
 
   await db.orcamento.updateMany({
     where: { id: orcamentoId, organizacaoId, status: "RECUSADO" },
-    data: { motivoRecusa: motivoDoFormulario(formData) ?? "" },
+    data: { motivoRecusa: motivoDoFormulario(formData, "motivoRecusa") ?? "" },
   });
 
   revalidatePath("/orcamentos");
   revalidatePath(`/orcamentos/${orcamentoId}`);
 }
 
+/**
+ * Apaga a proposta e devolve o número, quando ela ainda não teve desfecho.
+ *
+ * ABERTO e EXPIRADO são descartáveis: da primeira ninguém respondeu, e a segunda
+ * venceu sem o cliente decidir nada. ACEITO e RECUSADO são o contrário — o
+ * aceito virou ou ainda vira pedido, e o recusado guarda o motivo da perda, que
+ * é a única pergunta que a proposta perdida ainda responde. Para descartar um
+ * desses dois, reabra antes: aí jogar a história fora é uma escolha, não um
+ * clique a mais na mesma tela.
+ */
 export async function excluirOrcamento(orcamentoId: string, _formData: FormData): Promise<void> {
   const { organizacaoId, db } = await contexto();
+
+  const orcamento = await db.orcamento.findFirst({
+    where: { id: orcamentoId, organizacaoId },
+    select: { numero: true, status: true },
+  });
+
+  if (!orcamento) throw new Error("Orçamento não encontrado.");
+
+  if (orcamento.status === "ACEITO" || orcamento.status === "RECUSADO") {
+    throw new Error("Proposta já aceita ou recusada não se apaga — reabra antes, se for para descartar.");
+  }
 
   const nascidos = await db.pedido.count({ where: { orcamentoId, organizacaoId } });
   if (nascidos > 0) {
@@ -341,6 +358,31 @@ export async function excluirOrcamento(orcamentoId: string, _formData: FormData)
   }
 
   await db.orcamento.deleteMany({ where: { id: orcamentoId, organizacaoId } });
+
+  /*
+   * O número volta para o contador quando era o ÚLTIMO emitido — mesma
+   * devolução do pedido (`../pedidos/acoes.ts`), por motivo próprio: o número
+   * do orçamento existe para o documento ser citável ao telefone, e uma
+   * proposta lançada por engano não pode queimar um.
+   *
+   * A condição `proximoNumeroOrcamento: numero + 1` é o que torna isto seguro
+   * sem transação: ela só acerta se o contador ainda estiver exatamente uma
+   * casa à frente desta proposta. Se alguém criou outra nesse meio-tempo, o
+   * contador já andou, a condição não casa e nada é decrementado — porque
+   * decrementar ali entregaria um número repetido à próxima proposta.
+   *
+   * Apagar uma do MEIO não fecha o buraco de propósito: reaproveitar um número
+   * vago faria a proposta de hoje sair com número menor que a de ontem, e a
+   * numeração deixaria de dizer o que veio antes.
+   *
+   * A ordem também é deliberada: apaga primeiro, devolve depois. Ao contrário,
+   * uma falha no apagar deixaria o contador atrás de uma proposta que continua
+   * existindo — e a próxima colidiria com ela.
+   */
+  await db.organizacao.updateMany({
+    where: { id: organizacaoId, proximoNumeroOrcamento: orcamento.numero + 1 },
+    data: { proximoNumeroOrcamento: { decrement: 1 } },
+  });
 
   revalidatePath("/orcamentos");
   redirect("/orcamentos");
@@ -378,6 +420,20 @@ export async function adicionarItem(
       return { erro: "Este produto é de outra indústria. Abra uma proposta separada para ela." };
     }
 
+    /*
+     * E de outro cliente também não.
+     *
+     * O preço do produto é o que foi negociado com o dono dele; lançá-lo aqui
+     * levaria esse preço para dentro da proposta de quem não o negociou. A tela
+     * já não oferece, e isto fecha o caminho de quem chegar por fora dela.
+     *
+     * A proposta avulsa escapa: sem cliente não há dono a comparar, e é dela que
+     * sai a cotação de quem ainda nem tem ficha.
+     */
+    if (orcamento.clienteId && produto.clienteId !== orcamento.clienteId) {
+      return { erro: "Este produto é de outro cliente. O preço dele foi negociado com outra empresa." };
+    }
+
     const unidade = String(formData.get("unidade") ?? "") as UnidadeVenda;
     const precificavel = paraPrecificavel(produto);
 
@@ -397,19 +453,7 @@ export async function adicionarItem(
     // obriga a desmarcar a cada item.
     const tributados = await db.orcamentoItem.count({ where: { orcamentoId, comIpi: true } });
     const existentes = await db.orcamentoItem.count({ where: { orcamentoId } });
-    const comIpiItem = formData.has("comIpiItemDefinido")
-      ? formData.get("comIpiItem") === "on"
-      : existentes === 0 || tributados > 0;
-
-    // A coluna COD.CLI só existe quando há cliente: é o código que ELE usa.
-    const codigoCliente = orcamento.clienteId
-      ? await db.produtoCodigoCliente.findUnique({
-          where: {
-            produtoId_clienteId: { produtoId, clienteId: orcamento.clienteId },
-          },
-          select: { codigo: true },
-        })
-      : null;
+    const comIpiItem = ipiDoFormulario(formData) ?? (existentes === 0 || tributados > 0);
 
     const ultimo = await db.orcamentoItem.findFirst({
       where: { orcamentoId },
@@ -425,7 +469,15 @@ export async function adicionarItem(
         familia: produto.familia,
         descricao: produto.descricao,
         codigoFornecedor: produto.codigoFornecedor,
-        codigoCliente: codigoCliente?.codigo ?? null,
+        /*
+         * A coluna COD.CLI só existe quando há cliente: é o número que ELE usa.
+         *
+         * Na proposta avulsa o produto ainda é de outra empresa — é dela que a
+         * lista veio —, e o número dela não tem o que fazer no papel de quem só
+         * pediu preço. Com cliente, a guarda lá em cima já garantiu que o produto
+         * é dele, então o código do produto é o código dele.
+         */
+        codigoCliente: orcamento.clienteId ? produto.codigoCliente : null,
         unidade,
         quantidade: String(quantidade),
         comIpi: comIpiItem,
@@ -483,7 +535,9 @@ export async function atualizarItem(
       data: {
         quantidade: String(quantidade),
         precoUnitario: String(preco),
-        comIpi: formData.get("comIpi") === "on",
+        // Aqui lia-se `comIpi`, campo que formulário nenhum envia — ver
+        // `ipi-do-formulario.ts`. Sem opinião no formulário, nada muda.
+        ...ipiParaGravar(formData),
         pesoKg: peso,
       },
     });
@@ -598,7 +652,23 @@ export async function converterEmPedido(
       ipiPercentual: orcamento.ipiPercentual,
       comissaoPercentual: orcamento.fornecedor.comissaoPercentual,
       prazoPagamento: orcamento.prazoPagamento,
-      observacoes: orcamento.observacoes ?? orcamento.cliente?.observacoes ?? null,
+      /*
+       * As observações são as do CLIENTE, e não as da proposta.
+       *
+       * As duas se chamam igual e são coisas diferentes, para públicos
+       * diferentes. Na proposta, "Condições" é o que o CLIENTE lê — ICMS,
+       * PIS/COFINS, frete, validade. No pedido, "OBSERVAÇÃO" é o que a
+       * INDÚSTRIA lê no papel que ela imprime: horário de recebimento,
+       * exigências de entrega.
+       *
+       * Vinha `orcamento.observacoes ?? cliente`, e como a proposta nasce com as
+       * condições preenchidas do padrão do usuário, o segundo termo nunca
+       * disparava: a fábrica recebia "I.C.M.S.: 18% (incluso no preço acima)"
+       * onde deveria ler quando pode entregar. `criarPedido` sempre usou o
+       * cliente (`../pedidos/acoes.ts`); eram dois caminhos para o mesmo
+       * documento discordando.
+       */
+      observacoes: orcamento.cliente?.observacoes ?? null,
       vendedor: orcamento.vendedor,
       representanteId: orcamento.representanteId,
       subtotalSemIpi: orcamento.subtotalSemIpi,

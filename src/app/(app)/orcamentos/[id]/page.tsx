@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Building2, Factory, FileDown, Pencil, ScrollText } from "lucide-react";
 
+import { BotaoExcluir } from "@/components/botao-excluir";
 import { SecaoItens } from "@/components/itens-documento";
 import { Pagina } from "@/components/pagina";
 import {
@@ -23,6 +24,7 @@ import {
   converterEmPedido,
   definirIpiDeTodosOsItens,
   definirStatus,
+  excluirOrcamento,
   salvarMotivoRecusa,
   removerItem,
 } from "../acoes";
@@ -68,18 +70,21 @@ export default async function PaginaOrcamento({
    * indústria, não entra, porque a proposta é de uma indústria só e o IPI
    * congelado é o dela.
    *
-   * Sem cliente cadastrado não há vínculo a consultar, e aí a lista é a da
-   * indústria inteira: a proposta avulsa existe justamente para cotar antes de
-   * abrir ficha, e exigir o vínculo ali fecharia esse caminho.
+   * O dono do produto é `clienteId`, no próprio produto. É ele que responde
+   * também por que o produto de outro cliente não entra: cada um carrega o
+   * preço negociado do seu dono, e oferecê-lo aqui levaria esse preço para
+   * dentro da proposta de quem não o negociou.
+   *
+   * Sem cliente cadastrado não há dono a comparar, e aí a lista é a da indústria
+   * inteira: a proposta avulsa existe justamente para cotar antes de abrir
+   * ficha, e exigir o dono ali fecharia esse caminho.
    */
   const produtos = await db.produto.findMany({
     where: {
       organizacaoId,
       fornecedorId: orcamento.fornecedorId,
       ativo: true,
-      ...(orcamento.clienteId
-        ? { codigosCliente: { some: { clienteId: orcamento.clienteId } } }
-        : {}),
+      ...(orcamento.clienteId ? { clienteId: orcamento.clienteId } : {}),
     },
     orderBy: { descricao: "asc" },
     include: { aditivos: { include: { aditivo: true } } },
@@ -97,6 +102,15 @@ export default async function PaginaOrcamento({
   const aberto = orcamento.status === "ABERTO";
   const editavel = aberto && (orcamento.emElaboracao || parametros.editar === "1");
   const para = destinatario(orcamento);
+
+  /*
+   * Descartar só vale para a proposta sem desfecho — a mesma guarda de
+   * `excluirOrcamento`, repetida aqui para o botão nem aparecer onde ele
+   * falharia. Aceita e recusada são história; quem quiser jogar fora reabre
+   * antes. Um já virado pedido some da mesma forma: o pedido é quem manda.
+   */
+  const descartavel =
+    (aberto || orcamento.status === "EXPIRADO") && orcamento.pedidos.length === 0;
 
   return (
     <Pagina>
@@ -118,6 +132,14 @@ export default async function PaginaOrcamento({
               <BotaoLink href={`/orcamentos/${orcamento.id}?editar=1`} icone={Pencil}>
                 Editar
               </BotaoLink>
+            )}
+            {descartavel && (
+              <BotaoExcluir
+                rotulo="Apagar"
+                nome={`Orçamento #${orcamento.numero}`}
+                aviso="Some de vez. Se for a última proposta criada, o número volta para a próxima."
+                acao={excluirOrcamento.bind(null, orcamento.id)}
+              />
             )}
           </div>
         }
@@ -196,16 +218,13 @@ export default async function PaginaOrcamento({
           semProdutos={
             orcamento.cliente && (
               <p className="text-corpo text-tinta-2 leading-relaxed">
-                {orcamento.cliente.apelido} ainda não tem nenhum produto da{" "}
-                {orcamento.fornecedor.nome} cadastrado. Registre o código que ele usa para
-                cada produto na{" "}
-                <Link
-                  href={`/clientes/${orcamento.cliente.id}`}
-                  className="text-carimbo hover:underline font-medium"
-                >
-                  ficha do cliente
+                Nenhum produto da {orcamento.fornecedor.nome} é da{" "}
+                {orcamento.cliente.apelido}. Na{" "}
+                <Link href="/produtos" className="text-carimbo hover:underline font-medium">
+                  ficha do produto
                 </Link>{" "}
-                e eles aparecem aqui.
+                escolha-a no campo Cliente — é lá que mora o preço dela, e é por isso que o
+                produto é de um cliente só.
               </p>
             )
           }
@@ -266,6 +285,7 @@ export default async function PaginaOrcamento({
             validoAte: iso(orcamento.validoAte),
             prazoPagamento: orcamento.prazoPagamento ?? "",
             vendedor: orcamento.vendedor ?? "",
+            cidade: orcamento.cidade ?? "",
             observacoes: orcamento.observacoes ?? "",
           }}
           edicoes={orcamento.edicoes.map((edicao) => ({

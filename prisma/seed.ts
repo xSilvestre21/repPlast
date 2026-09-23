@@ -144,7 +144,8 @@ async function main() {
       material: "PEAD",
       fatorKg: "13.50",
       aditivos: [] as string[],
-      codigoCliente: { clienteId: mariol.id, codigo: "121010011" },
+      clienteId: mariol.id,
+      codigoCliente: "121010011",
     },
     {
       codigoFornecedor: "3353",
@@ -155,7 +156,8 @@ async function main() {
       material: "PEAD",
       fatorKg: "13.50",
       aditivos: [] as string[],
-      codigoCliente: { clienteId: mariol.id, codigo: "121010014" },
+      clienteId: mariol.id,
+      codigoCliente: "121010014",
     },
     {
       codigoFornecedor: "4396",
@@ -166,7 +168,10 @@ async function main() {
       material: "PEAD",
       fatorKg: "13.50",
       aditivos: [deslizante.id],
-      codigoCliente: null,
+      // Dono sim, código não: nem todo cliente numera o que compra, e o
+      // produto é dele do mesmo jeito.
+      clienteId: mariol.id,
+      codigoCliente: null as string | null,
     },
   ];
 
@@ -192,6 +197,8 @@ async function main() {
           fornecedorId: qualyplast.id,
           familia: "SACO",
           codigoFornecedor: p.codigoFornecedor,
+          clienteId: p.clienteId,
+          codigoCliente: p.codigoCliente,
           descricao,
           material: p.material,
           larguraCm: p.larguraCm,
@@ -207,16 +214,6 @@ async function main() {
         where: { produtoId_aditivoId: { produtoId: produto.id, aditivoId } },
         create: { produtoId: produto.id, aditivoId },
         update: {},
-      });
-    }
-
-    if (p.codigoCliente) {
-      await db.produtoCodigoCliente.upsert({
-        where: {
-          produtoId_clienteId: { produtoId: produto.id, clienteId: p.codigoCliente.clienteId },
-        },
-        create: { produtoId: produto.id, ...p.codigoCliente },
-        update: { codigo: p.codigoCliente.codigo },
       });
     }
 

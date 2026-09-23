@@ -13,6 +13,7 @@ import {
   definirIpiDeTodosOsItens,
   atualizarItem,
   cancelarPedido,
+  salvarMotivoCancelamento,
   desmarcarEnvio,
   duplicarPedido,
   enviarPedidoPorEmail,
@@ -21,7 +22,7 @@ import {
   reabrirPedido,
   removerItem,
 } from "../acoes";
-import { AcaoPedido } from "./acoes-status";
+import { AcaoPedido, CancelarPedido, MotivoDoCancelamento } from "./acoes-status";
 import { SecaoCabecalho } from "./cabecalho";
 import { BotaoEnviarEmail } from "./envio";
 import { SecaoItens } from "@/components/itens-documento";
@@ -50,13 +51,17 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
    *
    * As duas condições valem juntas — produto que o cliente compra, mas de outra
    * indústria, não entra, porque o pedido é dirigido a uma indústria só.
+   *
+   * O dono do produto é `clienteId`, no próprio produto — mesma consulta da
+   * proposta, e pelo mesmo motivo: cada produto carrega o preço negociado do
+   * seu dono, e o de outro cliente não tem o que fazer aqui.
    */
   const produtos = await db.produto.findMany({
     where: {
       organizacaoId,
       fornecedorId: pedido.fornecedorId,
       ativo: true,
-      codigosCliente: { some: { clienteId: pedido.clienteId } },
+      clienteId: pedido.clienteId,
     },
     orderBy: { descricao: "asc" },
     include: { aditivos: { include: { aditivo: true } } },
@@ -133,14 +138,7 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
               acao={reabrirPedido.bind(null, pedido.id)}
             />
           ) : (
-            <AcaoPedido
-              rotulo="Cancelar"
-              rotuloOcupado="Cancelando…"
-              variante="perigo"
-              icone="cancelar"
-              confirmacao="Cancelar o pedido estorna a comissão dele. Confirma?"
-              acao={cancelarPedido.bind(null, pedido.id)}
-            />
+            <CancelarPedido acao={cancelarPedido.bind(null, pedido.id)} />
           )}
 
           {!pedido.enviadoEm && (
@@ -158,6 +156,20 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
       />
 
       <div className="space-y-5 palco">
+        {/*
+          O motivo abre a página quando o pedido está cancelado.
+          É o fato mais importante sobre ele: tudo o mais na tela descreve uma
+          venda que não aconteceu.
+        */}
+        {pedido.status === "CANCELADO" && (
+          <Cartao className="p-5 sm:p-6">
+            <MotivoDoCancelamento
+              motivo={pedido.motivoCancelamento ?? ""}
+              acao={salvarMotivoCancelamento.bind(null, pedido.id)}
+            />
+          </Cartao>
+        )}
+
         <Cartao className="p-5 sm:p-6">
           <div className="flex items-start gap-3 mb-3">
             <Emblema icone={Building2} tom="fraco" className="size-4" />
@@ -189,16 +201,12 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
           editavel={editavel}
           semProdutos={
             <p className="text-corpo text-tinta-2 leading-relaxed">
-              {pedido.cliente.apelido} ainda não tem nenhum produto da{" "}
-              {pedido.fornecedor.nome} cadastrado. Registre o código que ele usa para cada
-              produto na{" "}
-              <Link
-                href={`/clientes/${pedido.cliente.id}`}
-                className="text-carimbo hover:underline font-medium"
-              >
-                ficha do cliente
+              Nenhum produto da {pedido.fornecedor.nome} é da {pedido.cliente.apelido}. Na{" "}
+              <Link href="/produtos" className="text-carimbo hover:underline font-medium">
+                ficha do produto
               </Link>{" "}
-              e eles aparecem aqui.
+              escolha-a no campo Cliente — é lá que mora o preço dela, e é por isso que o
+              produto é de um cliente só.
             </p>
           }
           itens={pedido.itens.map((item) => ({

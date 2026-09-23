@@ -14,6 +14,7 @@ export type ValoresProduto = {
   clienteId: string;
   familia: string;
   codigoFornecedor: string;
+  codigoCliente: string;
   descricao: string;
   material: string;
   complemento: string;
@@ -41,6 +42,7 @@ export const VALORES_VAZIOS: ValoresProduto = {
   clienteId: "",
   familia: "SACO",
   codigoFornecedor: "",
+  codigoCliente: "",
   descricao: "",
   material: "",
   complemento: "",

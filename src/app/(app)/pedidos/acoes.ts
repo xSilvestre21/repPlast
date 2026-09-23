@@ -6,6 +6,8 @@ import { redirect } from "next/navigation";
 import type { StatusPedido } from "@/generated/prisma/enums";
 import { type DbOrganizacao } from "@/lib/db";
 import { enviarEmail } from "@/lib/email";
+import { ipiDoFormulario, ipiParaGravar } from "@/lib/ipi-do-formulario";
+import { motivoDoFormulario } from "@/lib/motivo";
 import { lerNumeroBr } from "@/lib/numero-br";
 import { carregarPedidoParaPdf, gerarPdfPedido } from "@/lib/pdf/gerar-pedido";
 import { arredondarDinheiro } from "@/lib/precificacao";
@@ -285,6 +287,13 @@ export async function adicionarItem(
       return { erro: "Este produto é de outra indústria. Abra um pedido separado para ela." };
     }
 
+    // E de outro cliente também não: o preço do produto é o que foi negociado
+    // com o dono dele. Mesma guarda da proposta, sem a exceção do avulso — o
+    // pedido sempre tem cliente.
+    if (produto.clienteId !== pedido.clienteId) {
+      return { erro: "Este produto é de outro cliente. O preço dele foi negociado com outra empresa." };
+    }
+
     const unidade = String(formData.get("unidade") ?? "") as UnidadeVenda;
     const precificavel = paraPrecificavel(produto);
 
@@ -304,9 +313,7 @@ export async function adicionarItem(
     const existentes = await db.pedidoItem.count({ where: { pedidoId } });
     const heranca = existentes === 0 || tributados > 0;
 
-    const comIpiItem = formData.has("comIpiItemDefinido")
-      ? formData.get("comIpiItem") === "on"
-      : heranca;
+    const comIpiItem = ipiDoFormulario(formData) ?? heranca;
 
     const precoInformado = lerNumeroBr(formData.get("precoUnitario"));
     const precoCalculado = precoUnitario(precificavel, unidade);
@@ -319,14 +326,6 @@ export async function adicionarItem(
     }
 
     const preco = precoInformado !== null ? String(precoInformado) : precoCalculado!.toString();
-
-    // O COD.CLI do PDF: o código que ESTE cliente usa para ESTE produto.
-    // Copiado para o item porque é o que sai impresso — se o cadastro mudar
-    // depois, o pedido enviado continua dizendo o que dizia.
-    const codigoCliente = await db.produtoCodigoCliente.findUnique({
-      where: { produtoId_clienteId: { produtoId, clienteId: pedido.clienteId } },
-      select: { codigo: true },
-    });
 
     const ultimo = await db.pedidoItem.findFirst({
       where: { pedidoId },
@@ -344,7 +343,8 @@ export async function adicionarItem(
         // que foi enviado, mesmo que o cadastro mude depois.
         descricao: produto.descricao,
         codigoFornecedor: produto.codigoFornecedor,
-        codigoCliente: codigoCliente?.codigo ?? null,
+        // O COD.CLI do PDF: o código que ESTE cliente usa para ESTE produto.
+        codigoCliente: produto.codigoCliente,
         unidade,
         quantidade: String(quantidade),
         comIpi: comIpiItem,
@@ -398,12 +398,9 @@ export async function atualizarItem(
       data: {
         quantidade: String(quantidade),
         precoUnitario: String(preco),
-        // Mesma leitura da adição: sem o campo marcador, o formulário não
-        // opinou sobre IPI e o valor do item fica como está. É o que mantém a
-        // isenção quando a linha é salva por uma tela que não mostra a caixa.
-        ...(formData.has("comIpiItemDefinido")
-          ? { comIpi: formData.get("comIpiItem") === "on" }
-          : {}),
+        // Sem opinião no formulário, o valor do item fica como está — é o que
+        // mantém a isenção quando a linha é salva por uma tela sem a caixa.
+        ...ipiParaGravar(formData),
         ...(peso ? { pesoKg: peso.toDecimalPlaces(3).toString() } : {}),
       },
     });
@@ -456,7 +453,13 @@ export async function removerItem(pedidoId: string, formData: FormData): Promise
 /* Status                                                                     */
 /* -------------------------------------------------------------------------- */
 
-async function mudarStatus(pedidoId: string, status: StatusPedido, exigido: StatusPedido[]) {
+async function mudarStatus(
+  pedidoId: string,
+  status: StatusPedido,
+  exigido: StatusPedido[],
+  /** O que a transição grava junto. Hoje só o motivo, que viaja com o cancelar. */
+  extra: { motivoCancelamento?: string } = {},
+) {
   const { organizacaoId, db } = await contexto();
 
   const pedido = await db.pedido.findFirst({
@@ -487,6 +490,7 @@ async function mudarStatus(pedidoId: string, status: StatusPedido, exigido: Stat
       status,
       enviadoEm: status === "CANCELADO" ? undefined : enviadoEm,
       canceladoEm: status === "CANCELADO" ? new Date() : null,
+      ...extra,
     },
   });
 
@@ -505,13 +509,61 @@ export async function desmarcarEnvio(pedidoId: string, _formData: FormData): Pro
   await mudarStatus(pedidoId, "ABERTO", ["ENVIADO"]);
 }
 
-/** Cancelar estorna a comissão; o pedido continua existindo, com rastro. */
-export async function cancelarPedido(pedidoId: string, _formData: FormData): Promise<void> {
-  await mudarStatus(pedidoId, "CANCELADO", ["ABERTO", "ENVIADO"]);
+/**
+ * Cancelar estorna a comissão; o pedido continua existindo, com rastro.
+ *
+ * O motivo viaja JUNTO com o cancelamento porque é ali que ele se sabe — quem
+ * acabou de ouvir "o cliente desistiu" é quem consegue escrever isso, e
+ * perguntar depois é perguntar quando já esqueceu. Vem vazio quando ninguém
+ * quis escrever, e um campo em branco não apaga o que já estava guardado: quem
+ * reabre e cancela de novo tem o texto anterior como ponto de partida.
+ */
+export async function cancelarPedido(pedidoId: string, formData: FormData): Promise<void> {
+  const escrito = motivoDoFormulario(formData, "motivoCancelamento");
+
+  /*
+   * Campo em branco NÃO apaga o que já estava guardado.
+   *
+   * Quem reabre e cancela de novo encontra a caixa vazia — ela não vem
+   * preenchida —, e gravar esse vazio por cima jogaria fora o motivo da
+   * primeira vez sem ninguém ter pedido. Para limpar de propósito existe o
+   * "Salvar motivo" na ficha, onde o campo mostra o texto atual e apagá-lo é
+   * uma escolha visível.
+   */
+  await mudarStatus(
+    pedidoId,
+    "CANCELADO",
+    ["ABERTO", "ENVIADO"],
+    escrito ? { motivoCancelamento: escrito } : {},
+  );
 }
 
+/**
+ * Reabrir NÃO apaga o motivo, de propósito.
+ *
+ * Mesma escolha da proposta recusada: se o pedido cair de novo, o que foi
+ * escrito da primeira vez é o ponto de partida. Enquanto ele estiver aberto o
+ * motivo não aparece em lugar nenhum — só volta a ser lido se voltar a valer.
+ */
 export async function reabrirPedido(pedidoId: string, _formData: FormData): Promise<void> {
   await mudarStatus(pedidoId, "ABERTO", ["CANCELADO"]);
+}
+
+/** Escrever o motivo depois, ou corrigir o que foi escrito na hora. */
+export async function salvarMotivoCancelamento(
+  pedidoId: string,
+  formData: FormData,
+): Promise<void> {
+  const { organizacaoId, db } = await contexto();
+
+  await db.pedido.updateMany({
+    where: { id: pedidoId, organizacaoId, status: "CANCELADO" },
+    data: { motivoCancelamento: motivoDoFormulario(formData, "motivoCancelamento") ?? "" },
+  });
+
+  revalidatePath("/pedidos");
+  revalidatePath("/comissoes");
+  revalidatePath(`/pedidos/${pedidoId}`);
 }
 
 /* -------------------------------------------------------------------------- */

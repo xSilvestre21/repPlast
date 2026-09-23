@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState, type ReactNode } from "react";
+import { useActionState, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { ListOrdered, Package } from "lucide-react";
 
@@ -17,6 +17,8 @@ import {
   Tabela,
   formatarMoeda,
 } from "@/components/ui";
+import { SelecaoBuscavel } from "@/components/selecao-buscavel";
+import { CAMPO_IPI, CAMPO_IPI_DEFINIDO } from "@/lib/ipi-do-formulario";
 import { escreverNumeroBr, lerNumeroBr } from "@/lib/numero-br";
 import type { Aditivo } from "@/lib/precificacao";
 import {
@@ -239,7 +241,46 @@ function LinhaItem({
   atualizar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   remover: (formData: FormData) => void | Promise<void>;
 }) {
-  const [, enviar, salvando] = useActionState(atualizar, {});
+  const [estado, enviar, salvando] = useActionState(atualizar, {});
+
+  /*
+   * O que o campo valia quando a pessoa entrou nele.
+   *
+   * É o que responde à única pergunta que importa para gravar: "mexeram nisto
+   * agora?". Comparar com o valor do item não serviria — quem digita `1000`
+   * num campo que se lê `1.000` teria a linha regravada sem ter mudado nada.
+   */
+  const valorAoEntrar = useRef("");
+
+  /**
+   * Grava a linha, e só se houve mudança.
+   *
+   * Existia um botão "salvar" nesta célula, e ele não fazia sentido ao lado de
+   * uma caixa de IPI que já gravava sozinha: a mesma linha pedia clique para
+   * metade do que ela tem e para a outra metade não. Agora a linha inteira se
+   * comporta igual — sair do campo ou teclar Enter grava, e o total se
+   * atualizando é o aviso de que gravou.
+   */
+  function gravar(campo: HTMLInputElement) {
+    if (campo.value === valorAoEntrar.current) return;
+    valorAoEntrar.current = campo.value;
+    campo.form?.requestSubmit();
+  }
+
+  /** Os mesmos três tratadores na quantidade e no preço. */
+  const gravaSozinho = {
+    onFocus: (evento: React.FocusEvent<HTMLInputElement>) => {
+      valorAoEntrar.current = evento.currentTarget.value;
+    },
+    onBlur: (evento: React.FocusEvent<HTMLInputElement>) => gravar(evento.currentTarget),
+    onKeyDown: (evento: React.KeyboardEvent<HTMLInputElement>) => {
+      if (evento.key !== "Enter") return;
+      // Sem isto o Enter faria a submissão implícita do navegador por cima da
+      // ação do React, e a página recarregaria.
+      evento.preventDefault();
+      gravar(evento.currentTarget);
+    },
+  };
 
   return (
     <tr>
@@ -258,11 +299,12 @@ function LinhaItem({
                 indistinguível de formulário sem caixa, e desmarcar nunca
                 salvaria. Só existe quando a caixa existe.
               */}
-              <input type="hidden" name="comIpiItemDefinido" value="1" />
+              <input type="hidden" name={CAMPO_IPI_DEFINIDO} value="1" />
               <input
                 name="quantidade"
                 inputMode="decimal"
                 defaultValue={escreverNumeroBr(item.quantidade, 0)}
+                {...gravaSozinho}
                 aria-label="Quantidade"
                 className={`${CLASSE_CONTROLE_CELULA} w-20 text-right numerico`}
               />
@@ -277,6 +319,7 @@ function LinhaItem({
               // Até 6 casas: é a precisão que o banco guarda, e cortá-la aqui
               // faria o total errar centavos ao salvar a linha.
               defaultValue={escreverNumeroBr(item.precoUnitario, 2, 6)}
+              {...gravaSozinho}
               aria-label="Preço unitário"
               className={`${CLASSE_CONTROLE_CELULA} w-28 text-right numerico`}
             />
@@ -308,7 +351,7 @@ function LinhaItem({
             <input
               form={`item-${item.id}`}
               type="checkbox"
-              name="comIpiItem"
+              name={CAMPO_IPI}
               defaultChecked={item.comIpi}
               disabled={salvando}
               /*
@@ -339,13 +382,24 @@ function LinhaItem({
       <Celula alinhamento="numero">{formatarMoeda(item.total)}</Celula>
 
       {editavel && (
-        <Celula alinhamento="acao" className="whitespace-nowrap">
-          <BotaoTexto type="submit" form={`item-${item.id}`} disabled={salvando}>
-            {salvando ? "…" : "salvar"}
-          </BotaoTexto>
-          <form action={remover} className="inline ml-2">
+        <Celula alinhamento="acao">
+          {/*
+            O erro era descartado: `useActionState` devolvia o estado e ninguém
+            o lia. Com o botão "salvar" ali dava para clicar de novo e perceber;
+            gravando sozinho, uma falha muda seria a linha simplesmente não
+            mudando de valor, sem nada na tela explicando.
+          */}
+          {estado.erro && (
+            <span className="block text-mini text-perigo mb-1">{estado.erro}</span>
+          )}
+          <form action={remover} className="inline">
             <input type="hidden" name="itemId" value={item.id} />
-            <BotaoTexto type="submit" perigoso aria-label={`Remover ${item.descricao}`}>
+            <BotaoTexto
+              type="submit"
+              perigoso
+              disabled={salvando}
+              aria-label={`Remover ${item.descricao}`}
+            >
               remover
             </BotaoTexto>
           </form>
@@ -370,6 +424,21 @@ function FormularioAdicao({
   const [precoManual, setPrecoManual] = useState<string | null>(null);
 
   const produto = produtos.find((p) => p.id === produtoId);
+
+  /*
+   * O código da indústria entra como detalhe porque também é buscável: quem
+   * está com a tabela da fábrica na mão procura pelo código, não pela
+   * descrição inteira.
+   */
+  const opcoesDeProduto = useMemo(
+    () =>
+      produtos.map((p) => ({
+        id: p.id,
+        rotulo: p.descricao,
+        detalhe: p.codigoFornecedor ?? undefined,
+      })),
+    [produtos],
+  );
 
   const unidades = useMemo(
     () => (produto ? unidadesComPreco(produto) : []),
@@ -417,24 +486,29 @@ function FormularioAdicao({
         pela base faria cada uma subir conforme o que tem embaixo dela.
       */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(12rem,2fr)_7rem_8rem_9.5rem_auto_auto] lg:items-start">
-        <Selecao
+        <SelecaoBuscavel
           name="produtoId"
           rotulo="Produto"
           required
+          opcoes={opcoesDeProduto}
           value={produtoId}
-          onChange={(e) => {
-            setProdutoId(e.target.value);
+          aoEscolher={(id) => {
+            setProdutoId(id);
             setUnidade("");
             setPrecoManual(null);
           }}
-        >
-          <option value="">Escolha…</option>
-          {produtos.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.descricao}
-            </option>
-          ))}
-        </Selecao>
+          placeholder="Digite para achar…"
+          /*
+           * Sempre para cima, e não "para onde couber".
+           *
+           * Esta linha é a última coisa do cartão e fica no pé de uma página
+           * longa: embaixo dela não há espaço nenhum. Deixar a medida escolher
+           * fazia o mesmo campo abrir ora para um lado ora para o outro conforme
+           * a rolagem — e um controle que muda de comportamento sem a pessoa ter
+           * mudado nada é pior que um controle que abre sempre no mesmo lugar.
+           */
+          lado="cima"
+        />
 
         <Selecao
           name="unidade"
@@ -488,10 +562,10 @@ function FormularioAdicao({
         <label className="block">
             <span className="rotulo block mb-1.5">IPI</span>
             <span className="flex items-center gap-2 px-3.5 py-2.5 rounded-suave bg-folha-2 border border-transparent">
-              <input type="hidden" name="comIpiItemDefinido" value="1" />
+              <input type="hidden" name={CAMPO_IPI_DEFINIDO} value="1" />
               <input
                 type="checkbox"
-                name="comIpiItem"
+                name={CAMPO_IPI}
                 defaultChecked
                 className="accent-carimbo"
               />

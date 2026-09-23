@@ -52,6 +52,7 @@ export default async function PaginaProduto({ params }: PageProps<"/produtos/[id
           clienteId: produto.clienteId ?? "",
           familia: produto.familia,
           codigoFornecedor: produto.codigoFornecedor ?? "",
+          codigoCliente: produto.codigoCliente ?? "",
           descricao: produto.descricao,
           material: produto.material ?? "",
           complemento: produto.complemento ?? "",
