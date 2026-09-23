@@ -12,7 +12,8 @@
 import { Handshake } from "lucide-react";
 import { useActionState, useState } from "react";
 
-import { Botao, Campo, MensagemErro, SecaoCartao, Selecao } from "@/components/ui";
+import { SelecaoBuscavel } from "@/components/selecao-buscavel";
+import { Botao, Campo, MensagemErro, SecaoCartao } from "@/components/ui";
 
 import type { EstadoFormulario } from "../acoes";
 
@@ -68,15 +69,13 @@ export function FormularioNovoOrcamento({
 
           <div className="grid gap-4 sm:grid-cols-2">
             {cadastrado ? (
-              <Selecao name="clienteId" rotulo="Cliente" required>
-                <option value="">Escolha…</option>
-                {clientes.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.rotulo}
-                    {c.detalhe ? ` — ${c.detalhe}` : ""}
-                  </option>
-                ))}
-              </Selecao>
+              <SelecaoBuscavel
+                name="clienteId"
+                rotulo="Cliente"
+                required
+                opcoes={clientes}
+                placeholder="Digite para achar…"
+              />
             ) : (
               <>
                 <Campo
@@ -90,15 +89,12 @@ export function FormularioNovoOrcamento({
               </>
             )}
 
-            <Selecao name="fornecedorId" rotulo="Indústria" required>
-              <option value="">Escolha…</option>
-              {fornecedores.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.rotulo}
-                  {f.detalhe ? ` — ${f.detalhe}` : ""}
-                </option>
-              ))}
-            </Selecao>
+            <SelecaoBuscavel
+              name="fornecedorId"
+              rotulo="Indústria"
+              required
+              opcoes={fornecedores}
+            />
           </div>
 
           {!cadastrado && (

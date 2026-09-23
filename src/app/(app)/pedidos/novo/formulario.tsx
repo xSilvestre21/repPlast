@@ -3,7 +3,8 @@
 import { Handshake } from "lucide-react";
 import { useActionState } from "react";
 
-import { Botao, MensagemErro, SecaoCartao, Selecao } from "@/components/ui";
+import { SelecaoBuscavel } from "@/components/selecao-buscavel";
+import { Botao, MensagemErro, SecaoCartao } from "@/components/ui";
 
 import type { EstadoFormulario } from "../acoes";
 
@@ -39,36 +40,23 @@ export function FormularioNovoPedido({
         descricao="Vai para uma única indústria — é ela que fatura e é dela a comissão. Se o cliente quer produtos de duas, são dois documentos."
       >
         <div className="grid gap-4 sm:grid-cols-2">
-          <Selecao
+          <SelecaoBuscavel
             name="clienteId"
             rotulo="Cliente"
             required
+            opcoes={clientes}
             defaultValue={clientes.length === 1 ? clientes[0].id : ""}
-          >
-            <option value="">Escolha…</option>
-            {clientes.map((cliente) => (
-              <option key={cliente.id} value={cliente.id}>
-                {cliente.rotulo}
-                {cliente.detalhe ? ` — ${cliente.detalhe}` : ""}
-              </option>
-            ))}
-          </Selecao>
+            placeholder="Digite para achar…"
+          />
 
-          <Selecao
+          <SelecaoBuscavel
             name="fornecedorId"
             rotulo="Indústria"
             required
+            opcoes={fornecedores}
             defaultValue={fornecedores.length === 1 ? fornecedores[0].id : ""}
             dica="O IPI e a comissão dela ficam congelados neste pedido."
-          >
-            <option value="">Escolha…</option>
-            {fornecedores.map((fornecedor) => (
-              <option key={fornecedor.id} value={fornecedor.id}>
-                {fornecedor.rotulo}
-                {fornecedor.detalhe ? ` — ${fornecedor.detalhe}` : ""}
-              </option>
-            ))}
-          </Selecao>
+          />
         </div>
       </SecaoCartao>
 

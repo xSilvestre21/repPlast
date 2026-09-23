@@ -422,19 +422,19 @@ export const CLASSE_CONTROLE_CELULA = `px-2 py-1 text-corpo rounded-miudo ${CONT
  * dica; `AreaTexto` não tinha nada, e cada tela montava o `<label>` na mão com
  * um espaçamento diferente. Era metade do "formulário bagunçado".
  */
-function Rotulo({ children }: { children: ReactNode }) {
+export function Rotulo({ children }: { children: ReactNode }) {
   return <span className="rotulo block mb-1.5 text-tinta-2">{children}</span>;
 }
 
 /** Erro OU dica, nunca os dois: com erro, a dica já não é o que importa. */
-function RodapeCampo({ erro, dica }: { erro?: string; dica?: string }) {
+export function RodapeCampo({ erro, dica }: { erro?: string; dica?: string }) {
   if (erro) return <span className="block text-mini text-perigo mt-1.5">{erro}</span>;
   if (dica) return <span className="block text-mini text-tinta-3 mt-1.5">{dica}</span>;
   return null;
 }
 
 /** A borda e o fundo que um controle ganha quando o valor dele não serve. */
-const CLASSE_ERRO = "border-perigo bg-perigo-fraco";
+export const CLASSE_ERRO = "border-perigo bg-perigo-fraco";
 
 export function Campo({
   rotulo,
