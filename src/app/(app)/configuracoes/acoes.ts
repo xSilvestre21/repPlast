@@ -63,3 +63,33 @@ export async function salvarObservacoesPadrao(
   revalidatePath("/configuracoes");
   return {};
 }
+
+/**
+ * A cidade de onde este usuário escreve.
+ *
+ * De cada um, e não do escritório, pelo mesmo motivo das condições acima:
+ * prepostos moram em cidades diferentes, e a carta é assinada por quem a
+ * escreveu. Cada proposta congela a sua na criação — mudar aqui não reescreve
+ * o cabeçalho de nenhuma proposta que já existe.
+ */
+export async function salvarCidade(
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    const { usuarioId, organizacaoId, db } = await escopoAtual();
+
+    const bruto = formData.get("municipio");
+    const texto = typeof bruto === "string" && bruto.trim() !== "" ? bruto.trim() : null;
+
+    await db.usuario.updateMany({
+      where: { id: usuarioId, organizacaoId },
+      data: { municipio: texto },
+    });
+  } catch (erro) {
+    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
+  }
+
+  revalidatePath("/configuracoes");
+  return {};
+}

@@ -13,6 +13,7 @@
 
 import type { StatusOrcamento } from "@/generated/prisma/enums";
 import type { DbOrganizacao } from "@/lib/db";
+import { numeroProcurado } from "@/lib/numero-procurado";
 import { formatarMoeda } from "@/components/ui";
 
 import { destinatario } from "./selo";
@@ -68,6 +69,7 @@ export async function buscarOrcamentos(
   { busca, status, pagina }: { busca: string; status: FiltroStatusOrcamento; pagina: number },
 ): Promise<FatiaDeOrcamentos> {
   const procurado = busca.trim();
+  const numero = numeroProcurado(procurado);
 
   const onde = {
     organizacaoId,
@@ -75,6 +77,9 @@ export async function buscarOrcamentos(
     ...(procurado
       ? {
           OR: [
+            // Primeiro o número: digitar dígitos quase sempre é procurar por ele.
+            // Some da consulta quando o que se digitou não é número.
+            ...(numero !== null ? [{ numero }] : []),
             { cliente: { apelido: { contains: procurado, mode: "insensitive" as const } } },
             { cliente: { razaoSocial: { contains: procurado, mode: "insensitive" as const } } },
             { fornecedor: { nome: { contains: procurado, mode: "insensitive" as const } } },

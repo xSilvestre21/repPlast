@@ -19,6 +19,7 @@ import {
   MensagemErro,
   SecaoCartao,
 } from "@/components/ui";
+import { LIMITE_DO_MOTIVO } from "@/lib/motivo";
 
 import type { EstadoFormulario } from "../acoes";
 
@@ -28,6 +29,7 @@ export type ValoresProposta = {
   validoAte: string;
   prazoPagamento: string;
   vendedor: string;
+  cidade: string;
   observacoes: string;
 };
 
@@ -97,6 +99,14 @@ export function FichaProposta({
             dica="Assina a proposta no rodapé."
             defaultValue={valores.vendedor}
           />
+          <Campo
+            name="cidade"
+            rotulo="Cidade"
+            disabled={!editavel}
+            dica="Abre o cabeçalho, antes da data. Vem da sua ficha em Configurações."
+            placeholder="Americana"
+            defaultValue={valores.cidade}
+          />
         </div>
 
         <label className="block">
@@ -134,15 +144,6 @@ export function FichaProposta({
     </SecaoCartao>
   );
 }
-
-/**
- * Mesmo teto que `salvarMotivoRecusa` aplica no servidor (`../acoes.ts`).
- *
- * Vive repetido porque arquivo `"use server"` só exporta função assíncrona —
- * uma constante não atravessa de lá para cá. Quem manda é o servidor; este
- * número existe para o campo avisar antes, e não para valer sozinho.
- */
-const LIMITE_DO_MOTIVO = 280;
 
 /**
  * O desfecho.

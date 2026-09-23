@@ -48,7 +48,7 @@ export async function carregarOrcamentoParaPdf(
     where: { id: orcamentoId, organizacaoId },
     include: {
       cliente: { select: { apelido: true } },
-      fornecedor: { select: { nome: true, municipio: true, logo: true } },
+      fornecedor: { select: { nome: true, logo: true } },
       itens: { orderBy: { ordem: "asc" } },
     },
   });
@@ -64,10 +64,16 @@ export async function carregarOrcamentoParaPdf(
       // pedido: uma proposta é de uma indústria e costuma ser de uma família.
       familia: (orcamento.itens[0]?.familia as Familia | undefined) ?? null,
 
-      fornecedor: {
-        nome: orcamento.fornecedor.nome,
-        municipio: orcamento.fornecedor.municipio,
-      },
+      fornecedor: { nome: orcamento.fornecedor.nome },
+      /*
+       * A cidade que abre a carta é a de QUEM ESCREVEU, congelada na proposta.
+       *
+       * Era a do fornecedor, o que dizia ao cliente que a proposta saiu da
+       * cidade da fábrica — a 400 km de quem assinou embaixo, às vezes. Proposta
+       * antiga não tem cidade e abre só com a data, que é discreto; repetir ali a
+       * da indústria seria manter a informação errada de propósito.
+       */
+      cidade: orcamento.cidade,
       logo: orcamento.fornecedor.logo ? Buffer.from(orcamento.fornecedor.logo) : null,
 
       cliente: {

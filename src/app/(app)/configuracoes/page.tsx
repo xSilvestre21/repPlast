@@ -4,7 +4,8 @@ import { Pagina } from "@/components/pagina";
 import { Botao, Cabecalho, SecaoCartao } from "@/components/ui";
 import { escopoAtual, sessaoAtual } from "@/lib/sessao";
 
-import { alternarReduzirAnimacoes, salvarObservacoesPadrao } from "./acoes";
+import { alternarReduzirAnimacoes, salvarCidade, salvarObservacoesPadrao } from "./acoes";
+import { FormCidade } from "./cidade";
 import { FormObservacoesPadrao } from "./observacoes-padrao";
 
 export default async function PaginaConfiguracoes() {
@@ -14,7 +15,7 @@ export default async function PaginaConfiguracoes() {
   const { usuarioId, db } = await escopoAtual();
   const usuario = await db.usuario.findUnique({
     where: { id: usuarioId },
-    select: { observacoesPadrao: true },
+    select: { observacoesPadrao: true, municipio: true },
   });
 
   return (
@@ -26,6 +27,8 @@ export default async function PaginaConfiguracoes() {
       />
 
       <div className="space-y-5 palco">
+        <FormCidade valor={usuario?.municipio ?? ""} salvar={salvarCidade} />
+
         <FormObservacoesPadrao
           valor={usuario?.observacoesPadrao ?? ""}
           salvar={salvarObservacoesPadrao}

@@ -188,9 +188,14 @@ export function ListaOrcamentos({
               />
               <input
                 type="search"
+                name="busca"
+                // O Chrome reclama de campo sem identificação ("A form field
+                // element should have an id or name attribute") e tenta
+                // autopreencher um filtro que não tem nada a preencher.
+                autoComplete="off"
                 value={busca}
                 onChange={(evento) => setBusca(evento.target.value)}
-                placeholder="Cliente ou indústria"
+                placeholder="Número, cliente ou indústria"
                 className={`${CLASSE_CONTROLE} pl-10`}
               />
             </div>

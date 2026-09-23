@@ -34,7 +34,9 @@ export interface DadosOrcamentoPdf {
   validoAte: Date | null;
   familia: Familia | null;
 
-  fornecedor: { nome: string; municipio: string | null };
+  fornecedor: { nome: string };
+  /** De onde a carta foi escrita. Vazia nas propostas anteriores ao campo. */
+  cidade: string | null;
   logo: Buffer | null;
 
   /**
@@ -224,7 +226,7 @@ export function DocumentoOrcamento({ dados }: { dados: DadosOrcamentoPdf }) {
 
           <View>
             <Text style={e.dataTopo}>
-              {dataPorExtenso(dados.fornecedor.municipio, dados.data)}
+              {dataPorExtenso(dados.cidade, dados.data)}
             </Text>
             <Text style={[e.numero, { textAlign: "right" }]}>
               Proposta nº {dados.numero}
