@@ -66,6 +66,7 @@ export default async function PaginaCliente({ params }: PageProps<"/clientes/[id
             telefone: cliente.telefone ?? "",
             email: cliente.email ?? "",
             emailNfe: cliente.emailNfe ?? "",
+            prazoPagamento: cliente.prazoPagamento ?? "",
             observacoes: cliente.observacoes ?? "",
           }}
         />

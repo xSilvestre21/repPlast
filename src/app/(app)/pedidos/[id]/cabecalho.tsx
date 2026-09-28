@@ -60,7 +60,18 @@ export function SecaoCabecalho({
             defaultValue={valores.prazoEntrega}
           />
 
-          <Selecao name="tipoFrete" rotulo="Frete" defaultValue={valores.tipoFrete}>
+          {/*
+            A `key` é o que segura o valor salvo. Depois de salvar, o React
+            reinicia o formulário, e um <select> volta para a opção com que foi
+            montado — não para o novo `defaultValue`. Sem ela, o frete aparecia
+            como "Não informar" e o próximo salvamento apagava o que estava gravado.
+          */}
+          <Selecao
+            key={valores.tipoFrete}
+            name="tipoFrete"
+            rotulo="Frete"
+            defaultValue={valores.tipoFrete}
+          >
             <option value="">Não informar</option>
             <option value="CIF">CIF — a indústria paga</option>
             <option value="FOB">FOB — o cliente paga</option>

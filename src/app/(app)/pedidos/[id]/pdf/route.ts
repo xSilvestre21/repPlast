@@ -30,8 +30,8 @@ export async function GET(
 
   const arquivo = await gerarPdfPedido(pedido.dados);
 
-  // `?abrir` mostra no navegador; sem ele, baixa. A visualização é o que o
-  // usuário quer antes de enviar para a indústria.
+  // Sem parâmetro, baixa com o nome no padrão dos pedidos reais — é o que o
+  // botão da tela faz. `?abrir` mostra no navegador, para quem quiser só olhar.
   const abrirNoNavegador = new URL(requisicao.url).searchParams.has("abrir");
 
   return new Response(new Uint8Array(arquivo), {

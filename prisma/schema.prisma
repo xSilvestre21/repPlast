@@ -213,6 +213,10 @@ model Cliente {
   /// Destino da nota fiscal, impresso no pedido.
   emailNfe String?
 
+  /// Condição de pagamento de costume, ex.: 28/35/42. O pedido nasce com ela
+  /// preenchida e pode trocá-la — o que vale para a indústria é a do pedido.
+  prazoPagamento String?
+
   observacoes String?
   ativo       Boolean @default(true)
 

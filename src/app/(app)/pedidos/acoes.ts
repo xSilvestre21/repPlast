@@ -129,7 +129,7 @@ export async function criarPedido(
   let destino: string;
 
   try {
-    const { organizacaoId, db } = await contexto();
+    const { organizacaoId, usuarioId, db } = await contexto();
 
     const clienteId = lerTexto(formData.get("clienteId"));
     const fornecedorId = lerTexto(formData.get("fornecedorId"));
@@ -137,12 +137,13 @@ export async function criarPedido(
     if (!clienteId) return { erro: "Escolha o cliente." };
     if (!fornecedorId) return { erro: "Escolha a indústria." };
 
-    const [cliente, fornecedor] = await Promise.all([
+    const [cliente, fornecedor, usuario] = await Promise.all([
       db.cliente.findFirst({
         where: { id: clienteId, organizacaoId },
         select: {
           id: true,
           observacoes: true,
+          prazoPagamento: true,
           representanteId: true,
           representante: { select: { comissaoPercentualPadrao: true } },
         },
@@ -151,6 +152,7 @@ export async function criarPedido(
         where: { id: fornecedorId, organizacaoId },
         select: { id: true, ipiPercentual: true, comissaoPercentual: true },
       }),
+      db.usuario.findUnique({ where: { id: usuarioId }, select: { nome: true } }),
     ]);
 
     if (!cliente || !fornecedor) return { erro: "Cliente ou indústria não encontrado." };
@@ -187,6 +189,10 @@ export async function criarPedido(
         // As observações do cliente já entram preenchidas — são recados que se
         // repetem em todo pedido dele.
         observacoes: cliente.observacoes,
+        // O prazo de costume do cliente, que dá para trocar neste pedido.
+        prazoPagamento: cliente.prazoPagamento,
+        // Quem assina embaixo é quem está lançando, como no orçamento.
+        vendedor: usuario?.nome ?? null,
         // O pedido credita o dono da CARTEIRA, não quem digitou: a
         // administradora lança pedido para o cliente do preposto o tempo todo,
         // e a comissão continua sendo dele. Congelado aqui — reatribuir a

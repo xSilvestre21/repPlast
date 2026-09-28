@@ -262,11 +262,6 @@ export function DocumentoPedido({ pedido }: { pedido: DadosPedidoPdf }) {
   // na fita, PREÇO/KG no stretch. Vem dos pedidos reais.
   const rotuloPreco = pedido.familia && pedido.unidade ? rotuloColunaPreco(pedido.familia, pedido.unidade) : "PREÇO";
 
-  const frete =
-    pedido.tipoFrete && pedido.transportadora
-      ? `${pedido.tipoFrete} — ${pedido.transportadora}`
-      : (pedido.tipoFrete ?? pedido.transportadora);
-
   return (
     <Document
       title={`Pedido ${pedido.numero} — ${cliente.razaoSocial}`}
@@ -332,13 +327,14 @@ export function DocumentoPedido({ pedido }: { pedido: DadosPedidoPdf }) {
             coluna={2}
           />
           {/* Frete e transportadora não constam dos pedidos de referência, e
-              por isso ocupam a vaga que fica livre nesta linha: aparecendo, não
+              por isso ocupam vagas que ficam livres nas linhas: aparecendo, não
               empurram nada; ausentes, a linha fica igual à da indústria. */}
-          <Campo rotulo="FRETE" valor={frete} coluna={3} />
+          <Campo rotulo="FRETE" valor={pedido.tipoFrete} coluna={3} />
         </View>
 
         <View style={estilos.linhaGrade}>
           <Campo rotulo="PEDIDO DO CLIENTE" valor={pedido.pedidoDoCliente} coluna={1} />
+          <Campo rotulo="TRANSPORTADORA" valor={pedido.transportadora} coluna={2} />
         </View>
 
         {pedido.observacoes && (

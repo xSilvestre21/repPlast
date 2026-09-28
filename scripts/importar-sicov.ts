@@ -581,6 +581,7 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
         email: texto(c.email),
         // O SICOV tem um e-mail só; ele serve de contato e de destino da NF-e.
         emailNfe: texto(c.email),
+        prazoPagamento: texto(c.paymentTerm),
         observacoes: texto(c.notes),
         ativo: c.active !== false,
         representanteId: usuarios.get(c.representativeId) ?? null,
@@ -758,6 +759,8 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
           telefone: telefone(snap.phone),
           email: texto(snap.email),
           emailNfe: texto(snap.email),
+          // O snapshot não guarda o prazo; o que sobrou dele é o do próprio pedido.
+          prazoPagamento: texto(snap.paymentTerm) ?? texto(o.paymentTerm),
           observacoes: texto(snap.notes),
           representanteId: usuarios.get(o.representativeId) ?? null,
         },

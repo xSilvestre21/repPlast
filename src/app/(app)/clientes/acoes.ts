@@ -58,6 +58,7 @@ function dadosDoFormulario(formData: FormData) {
     telefone: telefone === null ? null : normalizarTelefone(telefone),
     email: validarEmail(lerTexto(formData.get("email")), "O e-mail"),
     emailNfe: validarEmail(lerTexto(formData.get("emailNfe")), "O e-mail para NF-e"),
+    prazoPagamento: lerTexto(formData.get("prazoPagamento")),
     observacoes: lerTexto(formData.get("observacoes")),
   };
 }

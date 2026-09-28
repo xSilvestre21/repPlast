@@ -1,0 +1,11 @@
+-- O prazo de pagamento passa a ser também do CLIENTE, como era no SICOV.
+--
+-- Cada cliente tem a condição de costume ("28/35/42", "à vista") e o pedido
+-- nasce com ela preenchida. `pedido.prazoPagamento` continua sendo o que vale:
+-- é a cópia do momento, que pode ser trocada no pedido e não muda quando o
+-- cadastro muda depois.
+--
+-- Os clientes já importados foram preenchidos à parte, a partir do backup do
+-- SICOV (`paymentTerm`) — o backup não é versionado, então não cabe aqui. Uma
+-- importação nova já traz o campo.
+ALTER TABLE "cliente" ADD COLUMN "prazoPagamento" TEXT;

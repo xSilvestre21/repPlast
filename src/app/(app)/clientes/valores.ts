@@ -22,6 +22,7 @@ export type ValoresCliente = {
   telefone: string;
   email: string;
   emailNfe: string;
+  prazoPagamento: string;
   observacoes: string;
 };
 
@@ -38,5 +39,6 @@ export const VALORES_VAZIOS: ValoresCliente = {
   telefone: "",
   email: "",
   emailNfe: "",
+  prazoPagamento: "",
   observacoes: "",
 };

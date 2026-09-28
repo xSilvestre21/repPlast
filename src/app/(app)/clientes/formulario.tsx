@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, MapPin, MessageSquareText, Phone } from "lucide-react";
+import { BadgeCheck, HandCoins, MapPin, MessageSquareText, Phone } from "lucide-react";
 import { useActionState } from "react";
 
 import { CampoCep, CampoDocumento, CampoTelefone } from "@/components/campo-mascarado";
@@ -96,6 +96,21 @@ export function FormularioCliente({
             type="email"
             dica="Sai impresso no pedido."
             defaultValue={valores.emailNfe}
+          />
+        </div>
+      </SecaoCartao>
+
+      <SecaoCartao
+        icone={HandCoins}
+        titulo="Condições"
+        descricao="Entram preenchidas em todo pedido novo deste cliente, e dá para trocar no pedido."
+      >
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Campo
+            name="prazoPagamento"
+            rotulo="Prazo de pagamento"
+            placeholder="28/35/42"
+            defaultValue={valores.prazoPagamento}
           />
         </div>
       </SecaoCartao>

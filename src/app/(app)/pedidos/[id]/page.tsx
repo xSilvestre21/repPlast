@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Building2, FileText, ScrollText } from "lucide-react";
+import { Building2, FileDown, ScrollText } from "lucide-react";
 
 import { SeloStatus } from "@/components/selo-status";
 import { BotaoLink, Cabecalho, Cartao, Emblema } from "@/components/ui";
@@ -86,13 +86,19 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
           <div className="flex flex-wrap gap-2 items-start">
           {temItens && (
             <>
+              {/*
+                Baixa direto, com o nome que a rota já monta (`2276-AKILAH-…pdf`),
+                como no orçamento. O `download` faz o Link deixar o clique com o
+                navegador em vez de tentar navegar para a rota do arquivo.
+              */}
               <BotaoLink
-                href={`/pedidos/${pedido.id}/pdf?abrir`}
-                target="_blank"
+                href={`/pedidos/${pedido.id}/pdf`}
+                download
+                prefetch={false}
                 variante="secundaria"
-                icone={FileText}
+                icone={FileDown}
               >
-                Ver PDF
+                Baixar PDF
               </BotaoLink>
 
               <BotaoEnviarEmail
