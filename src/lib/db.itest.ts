@@ -290,6 +290,89 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     expect(await dbParaOrganizacao(escritorio, ana).pedidoItem.findMany()).toHaveLength(1);
   });
 
+  it("o histórico de envios herda o corte do pedido", async () => {
+    await admin.envioPedido.create({
+      data: {
+        pedidoId: pedidoDaAna,
+        usuarioId: ana.usuarioId,
+        de: "ana@teste.local",
+        para: ["pcp@industria.local"],
+        assunto: "Pedido 1",
+        corpo: "",
+      },
+    });
+
+    expect(await dbParaOrganizacao(escritorio, bruno).envioPedido.findMany()).toHaveLength(0);
+    expect(await dbParaOrganizacao(escritorio, ana).envioPedido.findMany()).toHaveLength(1);
+    expect(await dbParaOrganizacao(escritorio, dono).envioPedido.findMany()).toHaveLength(1);
+  });
+
+  /*
+   * A única tabela em que o administrador NÃO vê tudo: a caixa de e-mail é da
+   * pessoa, e mandar por ela é falar em nome dela.
+   */
+  it("a caixa de e-mail só existe para a própria dona — nem o administrador a vê", async () => {
+    await dbParaOrganizacao(escritorio, ana).contaEmail.create({
+      data: {
+        organizacaoId: escritorio,
+        usuarioId: ana.usuarioId,
+        provedor: "GMAIL",
+        email: "ana@gmail.com",
+        nomeExibicao: "Ana",
+        host: "smtp.gmail.com",
+        porta: 465,
+        tlsDireto: true,
+        usuarioSmtp: "ana@gmail.com",
+        senhaCifrada: "v1:x:x:x",
+      },
+    });
+
+    expect(await dbParaOrganizacao(escritorio, ana).contaEmail.findMany()).toHaveLength(1);
+    expect(await dbParaOrganizacao(escritorio, bruno).contaEmail.findMany()).toHaveLength(0);
+    expect(await dbParaOrganizacao(escritorio, dono).contaEmail.findMany()).toHaveLength(0);
+
+    const { count } = await dbParaOrganizacao(escritorio, dono).contaEmail.updateMany({
+      data: { host: "smtp.sequestro.local" },
+    });
+    expect(count).toBe(0);
+  });
+
+  it("não deixa cadastrar caixa de e-mail em nome do colega", async () => {
+    await expect(
+      dbParaOrganizacao(escritorio, bruno).contaEmail.create({
+        data: {
+          organizacaoId: escritorio,
+          usuarioId: ana.usuarioId,
+          provedor: "OUTRO",
+          email: "falsa@teste.local",
+          nomeExibicao: "Ana",
+          host: "smtp.teste.local",
+          porta: 587,
+          tlsDireto: false,
+          usuarioSmtp: "falsa@teste.local",
+          senhaCifrada: "v1:x:x:x",
+        },
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("os contatos da indústria não vazam para outro escritório", async () => {
+    const industria = await admin.fornecedor.findFirstOrThrow({
+      where: { organizacaoId: escritorio },
+    });
+    await admin.contatoFornecedor.create({
+      data: { fornecedorId: industria.id, email: "pcp@industria.local" },
+    });
+
+    expect(await dbParaOrganizacao(escritorio, bruno).contatoFornecedor.findMany()).toHaveLength(1);
+    expect(await dbParaOrganizacao(orgA, DONO).contatoFornecedor.findMany()).toHaveLength(0);
+    await expect(
+      dbParaOrganizacao(orgA, DONO).contatoFornecedor.create({
+        data: { fornecedorId: industria.id, email: "invasor@teste.local" },
+      }),
+    ).rejects.toThrow();
+  });
+
   it("indústria sem permissão cadastrada é de todos", async () => {
     const nomes = (await dbParaOrganizacao(escritorio, bruno).fornecedor.findMany()).map(
       (f) => f.nome,

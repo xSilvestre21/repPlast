@@ -70,20 +70,8 @@ export function FormularioFornecedor({
             name="email"
             rotulo="E-mail"
             type="email"
-            dica="Com quem se fala na indústria."
+            dica="Com quem se fala na indústria. Quem recebe o pedido fica em Contatos para pedidos."
             defaultValue={valores.email}
-          />
-          {/*
-            Fica ao lado do e-mail de contato, e não junto da identificação: os
-            dois são e-mail, mas só ESTE recebe o PDF do pedido. Separados em
-            cartões diferentes, era fácil preencher um achando que era o outro.
-          */}
-          <Campo
-            name="emailsPedido"
-            rotulo="E-mails para envio do pedido"
-            dica="Separe por vírgula. É para cá que o PDF do pedido será enviado."
-            defaultValue={valores.emailsPedido}
-            className="sm:col-span-2"
           />
         </div>
       </SecaoCartao>

@@ -458,7 +458,6 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
         cep: cep(s.zipCode),
         telefone: telefone(s.phone),
         email: texto(s.email),
-        emailsPedido: [],
         ipiPercentual: numero(s.ipi ?? 0),
         /*
          * O percentual da indústria.

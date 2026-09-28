@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { emailValido } from "@/lib/envio-pedido";
 import { normalizarCep, normalizarDocumento, normalizarTelefone } from "@/lib/mascara";
 import { lerNumeroBr } from "@/lib/numero-br";
 import { escopoAtual } from "@/lib/sessao";
@@ -28,22 +29,9 @@ function lerTexto(valor: FormDataEntryValue | null): string | null {
   return texto === "" ? null : texto;
 }
 
-function lerEmails(valor: FormDataEntryValue | null): string[] {
-  const texto = typeof valor === "string" ? valor : "";
-
-  return texto
-    .split(/[,;\n]/)
-    .map((e) => e.trim())
-    .filter(Boolean);
-}
-
 function dadosDoFormulario(formData: FormData) {
   const nome = lerTexto(formData.get("nome"));
   if (!nome) throw new Error("O nome da indústria é obrigatório.");
-
-  const emails = lerEmails(formData.get("emailsPedido"));
-  const invalido = emails.find((e) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
-  if (invalido) throw new Error(`E-mail inválido: ${invalido}`);
 
   const uf = lerTexto(formData.get("uf"));
   if (uf && uf.length !== 2) throw new Error("A UF precisa ter duas letras.");
@@ -72,7 +60,6 @@ function dadosDoFormulario(formData: FormData) {
     uf: uf ? uf.toUpperCase() : null,
     telefone: telefone === null ? null : normalizarTelefone(telefone),
     email,
-    emailsPedido: emails,
     ipiPercentual: lerPercentual(formData.get("ipiPercentual"), "O IPI"),
     comissaoPercentual: lerPercentual(formData.get("comissaoPercentual"), "A comissão"),
     fatorKgPadrao: fatorKgPadrao === null ? null : String(fatorKgPadrao),
@@ -491,6 +478,81 @@ export async function salvarFaixasDoMaterial(
       await db.materialFaixa.createMany({
         data: faixas.map((f) => ({ materialId, ...f })),
       });
+    }
+  } catch (erro) {
+    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
+  }
+
+  revalidatePath(`/fornecedores/${fornecedorId}`);
+  return {};
+}
+
+/* -------------------------------------------------------------------------- */
+/* Contatos para pedidos                                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Regrava a lista de quem recebe o pedido nesta indústria.
+ *
+ * Recebe a lista inteira, como as faixas do material, mas NÃO apaga e recria:
+ * cada linha traz o próprio `id`, e o contato que continua mantém o dele. Um
+ * diálogo de envio aberto em outra aba guarda os ids marcados — recriar tudo
+ * faria o envio seguinte dizer "contato não encontrado" sem ninguém ter tirado
+ * contato nenhum.
+ */
+export async function salvarContatos(
+  fornecedorId: string,
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    const { organizacaoId, db } = await contexto();
+
+    const pertence = await db.fornecedor.count({ where: { id: fornecedorId, organizacaoId } });
+    if (pertence === 0) return { erro: "Indústria não encontrada." };
+
+    const ids = formData.getAll("contatoId").map(String);
+    const nomes = formData.getAll("nome").map(String);
+    const setores = formData.getAll("setor").map(String);
+    const emails = formData.getAll("email").map(String);
+    const padroes = formData.getAll("padrao").map(String);
+
+    const linhas: { id: string; nome: string | null; setor: string | null; email: string; padrao: boolean }[] = [];
+    const vistos = new Set<string>();
+
+    for (let i = 0; i < emails.length; i++) {
+      const email = emails[i].trim().toLowerCase();
+      const nome = lerTexto(nomes[i] ?? null);
+      const setor = lerTexto(setores[i] ?? null);
+
+      // Linha toda em branco é a linha nova que a pessoa não usou.
+      if (!email && !nome && !setor) continue;
+      if (!email) return { erro: `Falta o e-mail de ${nome ?? setor ?? "um dos contatos"}.` };
+      if (!emailValido(email)) return { erro: `E-mail inválido: ${email}` };
+      if (vistos.has(email)) return { erro: `${email} aparece duas vezes.` };
+      vistos.add(email);
+
+      linhas.push({ id: ids[i] ?? "", nome, setor, email, padrao: padroes[i] === "sim" });
+    }
+
+    const atuais = await db.contatoFornecedor.findMany({
+      where: { fornecedorId },
+      select: { id: true },
+    });
+    const mantidos = new Set(linhas.map((l) => l.id).filter((id) => atuais.some((a) => a.id === id)));
+
+    await db.contatoFornecedor.deleteMany({
+      where: { fornecedorId, id: { notIn: [...mantidos] } },
+    });
+
+    for (const [ordem, linha] of linhas.entries()) {
+      const dados = { nome: linha.nome, setor: linha.setor, email: linha.email, padrao: linha.padrao, ordem };
+
+      if (mantidos.has(linha.id)) {
+        await db.contatoFornecedor.updateMany({ where: { id: linha.id, fornecedorId }, data: dados });
+      } else {
+        await db.contatoFornecedor.create({ data: { fornecedorId, ...dados } });
+      }
     }
   } catch (erro) {
     return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };

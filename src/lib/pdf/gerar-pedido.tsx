@@ -16,7 +16,7 @@ import { nomeArquivoPedido } from "./nome-arquivo";
 export type PedidoParaPdf = {
   dados: DadosPedidoPdf;
   nomeArquivo: string;
-  emailsFornecedor: string[];
+  fornecedorId: string;
   status: string;
 };
 
@@ -37,7 +37,7 @@ export async function carregarPedidoParaPdf(
     where: { id: pedidoId, organizacaoId },
     include: {
       cliente: true,
-      fornecedor: { select: { nome: true, logo: true, emailsPedido: true } },
+      fornecedor: { select: { nome: true, logo: true } },
       itens: { orderBy: { ordem: "asc" } },
     },
   });
@@ -48,7 +48,7 @@ export async function carregarPedidoParaPdf(
 
   return {
     status: pedido.status,
-    emailsFornecedor: pedido.fornecedor.emailsPedido,
+    fornecedorId: pedido.fornecedorId,
     nomeArquivo: nomeArquivoPedido({
       numero: pedido.numero,
       apelidoCliente: pedido.cliente.apelido,

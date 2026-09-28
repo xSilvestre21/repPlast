@@ -13,7 +13,6 @@ export type ValoresFornecedor = {
   nome: string;
   razaoSocial: string;
   cnpj: string;
-  emailsPedido: string;
   endereco: string;
   bairro: string;
   cep: string;
@@ -30,7 +29,6 @@ export const VALORES_VAZIOS: ValoresFornecedor = {
   nome: "",
   razaoSocial: "",
   cnpj: "",
-  emailsPedido: "",
   endereco: "",
   bairro: "",
   cep: "",

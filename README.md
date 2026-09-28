@@ -111,13 +111,23 @@ criado, reimprimir um pedido antigo devolve exatamente o papel que a indústria 
 
 ### Envio por e-mail
 
-Opcional. Sem configuração o sistema diz isso com todas as letras e sugere baixar o PDF — em vez
-de falhar com um erro do provedor. Para ligar, no `.env`:
+O pedido sai da **caixa de e-mail do próprio representante** (Gmail, Outlook, e-mail do domínio),
+por SMTP — é com ele que a indústria fala, e é para ele que ela responde. Cada usuário cadastra as
+suas contas em **Configurações → Contas de e-mail**; salvar testa a conexão antes de gravar. No
+Gmail, a senha é uma *senha de app* (Conta Google → Segurança → Senhas de app), não a da conta.
+
+Quem recebe fica na indústria, em **Contatos para pedidos**: os marcados como padrão já vêm
+escolhidos no envio. O diálogo deixa trocar a conta, os destinatários, mandar cópia para si e para
+o cliente, editar assunto e texto e anexar mais arquivos (até 20 MB no total, o PDF incluído).
+Cada envio fica registrado no pedido.
+
+A senha da caixa é guardada cifrada (AES-256-GCM) e precisa de uma chave no `.env`:
 
 ```
-RESEND_API_KEY="re_..."
-EMAIL_REMETENTE="pedidos@seudominio.com.br"
+EMAIL_CHAVE="..."   # node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
+
+Perder a chave só obriga cada um a digitar a senha do e-mail de novo.
 
 Enviar o e-mail **também marca o pedido como enviado**, porque é o mesmo fato: um pedido que
 chegou à indústria mas ficou "aberto" no sistema seria uma mentira no controle de comissão. O

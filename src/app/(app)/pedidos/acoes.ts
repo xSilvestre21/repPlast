@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 
 import type { StatusPedido } from "@/generated/prisma/enums";
 import { type DbOrganizacao } from "@/lib/db";
+import { contaParaEnvio } from "@/lib/conta-email";
 import { enviarEmail } from "@/lib/email";
+import { lerListaEmails, montarDestinatarios, problemaNoEnvio } from "@/lib/envio-pedido";
 import { ipiDoFormulario, ipiParaGravar } from "@/lib/ipi-do-formulario";
 import { motivoDoFormulario } from "@/lib/motivo";
 import { lerNumeroBr } from "@/lib/numero-br";
@@ -21,6 +23,9 @@ import { escopoAtual } from "@/lib/sessao";
 import { calcularTotaisPedido } from "@/lib/totais";
 
 export type EstadoFormulario = { erro?: string };
+
+/** O envio fecha o diálogo quando dá certo, e pode voltar com um aviso. */
+export type EstadoEnvio = { erro?: string; enviado?: boolean; aviso?: string };
 
 async function contexto() {
   return escopoAtual();
@@ -577,20 +582,26 @@ export async function salvarMotivoCancelamento(
 /* -------------------------------------------------------------------------- */
 
 /**
- * Manda o PDF para a indústria e marca o pedido como enviado.
+ * Manda o pedido por e-mail, da caixa de quem envia, e marca como enviado.
  *
  * As duas coisas andam juntas de propósito: o envio é o gatilho da comissão, e
  * um pedido que chegou à indústria mas ficou "aberto" no sistema seria uma
  * mentira no controle do mês.
  *
- * O e-mail vai primeiro. Se falhar, nada é marcado — melhor o usuário tentar de
- * novo do que acreditar que enviou.
+ * O e-mail vai primeiro. Se falhar, nada é marcado nem registrado — melhor o
+ * usuário tentar de novo do que acreditar que enviou.
+ *
+ * Tudo o que o diálogo mandou é conferido de novo aqui: a conta tem de ser de
+ * quem está logado, os contatos têm de ser DESTA indústria, e os anexos passam
+ * pelas mesmas regras que o diálogo mostrou (`lib/envio-pedido.ts`).
  */
 export async function enviarPedidoPorEmail(
   pedidoId: string,
-  _estado: EstadoFormulario,
-  _formData: FormData,
-): Promise<EstadoFormulario> {
+  _estado: EstadoEnvio,
+  formData: FormData,
+): Promise<EstadoEnvio> {
+  let aviso: string | undefined;
+
   try {
     const { organizacaoId, usuarioId, papel, db } = await contexto();
     const pedido = await carregarPedidoParaPdf(pedidoId, organizacaoId, { usuarioId, papel });
@@ -599,42 +610,118 @@ export async function enviarPedidoPorEmail(
     if (pedido.status === "CANCELADO") return { erro: "Este pedido está cancelado." };
     if (pedido.dados.itens.length === 0) return { erro: "Não dá para enviar um pedido sem itens." };
 
-    if (pedido.emailsFornecedor.length === 0) {
-      return {
-        erro: "Esta indústria não tem e-mail cadastrado. Preencha no cadastro dela.",
-      };
-    }
+    const conta = await contaParaEnvio(db, usuarioId, String(formData.get("contaId") ?? ""));
+    if (!conta) return { erro: "Escolha de qual e-mail o pedido sai." };
+
+    const contatoIds = formData.getAll("contatoId").map(String);
+    const contatos = contatoIds.length
+      ? await db.contatoFornecedor.findMany({
+          where: { id: { in: contatoIds }, fornecedorId: pedido.fornecedorId },
+          orderBy: { ordem: "asc" },
+          select: { email: true },
+        })
+      : [];
+
+    const avulsos = lerListaEmails(String(formData.get("emailsAvulsos") ?? ""));
+
+    // O endereço do cliente vem do banco, não do formulário: a caixa marcada
+    // diz "mande para ele", e quem ele é o cadastro sabe.
+    const cliente = await db.cliente.findFirst({
+      where: { pedidos: { some: { id: pedidoId } }, organizacaoId },
+      select: { email: true, emailNfe: true },
+    });
+
+    const { para, cc } = montarDestinatarios({
+      contatos: contatos.map((c) => c.email),
+      avulsos,
+      copiaCliente:
+        formData.get("copiaCliente") === "on" ? (cliente?.email ?? cliente?.emailNfe) : null,
+      copiaParaMim: formData.get("copiaParaMim") === "on" ? conta.email : null,
+    });
+
+    const assunto = String(formData.get("assunto") ?? "").trim();
+    const corpo = String(formData.get("corpo") ?? "");
+
+    const extras = formData
+      .getAll("anexo")
+      .filter((a): a is File => a instanceof File && a.size > 0);
 
     const arquivo = await gerarPdfPedido(pedido.dados);
 
-    const resultado = await enviarEmail({
-      para: pedido.emailsFornecedor,
-      assunto: `Pedido nº ${pedido.dados.numero} — ${pedido.dados.cliente.razaoSocial}`,
-      texto: [
-        `Segue em anexo o pedido nº ${pedido.dados.numero}.`,
-        "",
-        `Cliente: ${pedido.dados.cliente.razaoSocial}`,
-        pedido.dados.cliente.cnpj ? `CNPJ: ${pedido.dados.cliente.cnpj}` : null,
-        pedido.dados.pedidoDoCliente ? `Pedido do cliente: ${pedido.dados.pedidoDoCliente}` : null,
-        "",
-        pedido.dados.vendedor ?? "",
-      ]
-        .filter((linha) => linha !== null)
-        .join("\n"),
-      anexos: [{ nome: pedido.nomeArquivo, conteudo: arquivo }],
+    const problema = problemaNoEnvio({
+      para,
+      cc,
+      assunto,
+      anexos: [
+        { nome: pedido.nomeArquivo, tamanho: arquivo.length },
+        ...extras.map((a) => ({ nome: a.name, tamanho: a.size })),
+      ],
     });
+    if (problema) return { erro: problema };
+
+    const anexos = [
+      { nome: pedido.nomeArquivo, conteudo: arquivo, tipo: "application/pdf" },
+      ...(await Promise.all(
+        extras.map(async (a) => ({
+          nome: a.name,
+          conteudo: Buffer.from(await a.arrayBuffer()),
+          tipo: a.type || undefined,
+        })),
+      )),
+    ];
+
+    const resultado = await enviarEmail({ conta, para, cc, assunto, texto: corpo, anexos });
 
     if (!resultado.enviado) return { erro: resultado.motivo };
 
-    if (pedido.status === "ABERTO") {
-      const enviadoEm = new Date();
+    if (resultado.recusados.length > 0) {
+      aviso = `Enviado, mas o servidor recusou: ${resultado.recusados.join(", ")}.`;
+    }
 
+    await db.envioPedido.create({
+      data: {
+        pedidoId,
+        usuarioId,
+        de: conta.email,
+        para,
+        cc,
+        assunto,
+        corpo,
+        anexos: anexos.map((a) => a.nome),
+        idMensagem: resultado.id,
+      },
+    });
+
+    // A conta acabou de provar que funciona — vale como teste.
+    await db.contaEmail.updateMany({
+      where: { id: conta.id, usuarioId },
+      data: { testadaEm: new Date() },
+    });
+
+    // Quem foi digitado à mão entra na lista, mas fora do grupo padrão: o
+    // próximo pedido o oferece, sem passar a mandar para ele sem ninguém pedir.
+    if (formData.get("salvarAvulsos") === "on" && avulsos.length > 0) {
+      const ordem = await db.contatoFornecedor.count({ where: { fornecedorId: pedido.fornecedorId } });
+      await db.contatoFornecedor.createMany({
+        data: avulsos
+          .filter((email) => para.includes(email))
+          .map((email, i) => ({
+            fornecedorId: pedido.fornecedorId,
+            email: email.toLowerCase(),
+            padrao: false,
+            ordem: ordem + i,
+          })),
+        skipDuplicates: true,
+      });
+    }
+
+    if (pedido.status === "ABERTO") {
       // Enviar é o gatilho da comissão. Não há nada a recalcular além disto:
       // o percentual já está congelado no pedido, e a apuração do mês é
       // derivada dos pedidos enviados na hora de exibir.
       await db.pedido.update({
         where: { id: pedidoId },
-        data: { status: "ENVIADO", enviadoEm, canceladoEm: null },
+        data: { status: "ENVIADO", enviadoEm: new Date(), canceladoEm: null },
       });
     }
   } catch (erro) {
@@ -644,7 +731,7 @@ export async function enviarPedidoPorEmail(
   revalidatePath("/pedidos");
   revalidatePath("/comissoes");
   revalidatePath(`/pedidos/${pedidoId}`);
-  return {};
+  return { enviado: true, aviso };
 }
 
 /* -------------------------------------------------------------------------- */

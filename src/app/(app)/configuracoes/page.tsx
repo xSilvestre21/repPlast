@@ -2,10 +2,21 @@ import { Sparkles } from "lucide-react";
 
 import { Pagina } from "@/components/pagina";
 import { Botao, Cabecalho, SecaoCartao } from "@/components/ui";
+import { CAMPOS_PUBLICOS_CONTA } from "@/lib/conta-email";
+import { criptoConfigurada } from "@/lib/cripto";
 import { escopoAtual, sessaoAtual } from "@/lib/sessao";
 
-import { alternarReduzirAnimacoes, salvarCidade, salvarObservacoesPadrao } from "./acoes";
+import {
+  alternarReduzirAnimacoes,
+  definirContaPadrao,
+  excluirContaEmail,
+  salvarCidade,
+  salvarContaEmail,
+  salvarObservacoesPadrao,
+  testarContaEmail,
+} from "./acoes";
 import { FormCidade } from "./cidade";
+import { SecaoContasEmail } from "./contas-email";
 import { FormObservacoesPadrao } from "./observacoes-padrao";
 
 export default async function PaginaConfiguracoes() {
@@ -13,10 +24,17 @@ export default async function PaginaConfiguracoes() {
   const reduzidas = sessao?.reduzirAnimacoes ?? false;
 
   const { usuarioId, db } = await escopoAtual();
-  const usuario = await db.usuario.findUnique({
-    where: { id: usuarioId },
-    select: { observacoesPadrao: true, municipio: true },
-  });
+  const [usuario, contas] = await Promise.all([
+    db.usuario.findUnique({
+      where: { id: usuarioId },
+      select: { nome: true, email: true, observacoesPadrao: true, municipio: true },
+    }),
+    db.contaEmail.findMany({
+      where: { usuarioId },
+      orderBy: [{ padrao: "desc" }, { criadoEm: "asc" }],
+      select: CAMPOS_PUBLICOS_CONTA,
+    }),
+  ]);
 
   return (
     <Pagina>
@@ -27,6 +45,21 @@ export default async function PaginaConfiguracoes() {
       />
 
       <div className="space-y-5 palco">
+        <SecaoContasEmail
+          nomeUsuario={usuario?.nome ?? ""}
+          emailUsuario={usuario?.email ?? ""}
+          criptoConfigurada={criptoConfigurada()}
+          adicionar={salvarContaEmail.bind(null, null)}
+          contas={contas.map((conta) => ({
+            ...conta,
+            testadaEm: conta.testadaEm?.toISOString() ?? null,
+            salvar: salvarContaEmail.bind(null, conta.id),
+            testar: testarContaEmail.bind(null, conta.id),
+            tornarPadrao: definirContaPadrao.bind(null, conta.id),
+            excluir: excluirContaEmail.bind(null, conta.id),
+          }))}
+        />
+
         <FormCidade valor={usuario?.municipio ?? ""} salvar={salvarCidade} />
 
         <FormObservacoesPadrao

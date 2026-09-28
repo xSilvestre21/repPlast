@@ -12,12 +12,14 @@ import {
   removerLogo,
   definirPrepostosDaIndustria,
   removerMaterial,
+  salvarContatos,
   salvarLogo,
   salvarFaixasDoMaterial,
   salvarMaterial,
 } from "../acoes";
 import { FormularioFornecedor } from "../formulario";
 import { SecaoAditivos } from "./aditivos";
+import { SecaoContatos } from "./contatos";
 import { SecaoMateriais } from "./materiais";
 import { SecaoPrepostos } from "./prepostos";
 import { BotaoExcluir } from "@/components/botao-excluir";
@@ -42,6 +44,7 @@ export default async function PaginaFornecedor({ params }: PageProps<"/fornecedo
         include: { faixas: { orderBy: [{ pesoDeKg: "asc" }] } },
       },
       prepostos: { select: { usuarioId: true } },
+      contatos: { orderBy: { ordem: "asc" } },
     },
   });
 
@@ -93,13 +96,28 @@ export default async function PaginaFornecedor({ params }: PageProps<"/fornecedo
             uf: fornecedor.uf ?? "",
             telefone: fornecedor.telefone ?? "",
             email: fornecedor.email ?? "",
-            emailsPedido: fornecedor.emailsPedido.join(", "),
             ipiPercentual: escreverNumeroBr(fornecedor.ipiPercentual.toString()),
             comissaoPercentual: escreverNumeroBr(fornecedor.comissaoPercentual.toString()),
             fatorKgPadrao: fornecedor.fatorKgPadrao
               ? escreverNumeroBr(fornecedor.fatorKgPadrao.toString(), 2)
               : "",
           }}
+        />
+
+        {/*
+          A `key` muda quando a lista salva muda, e remonta a seção com os ids que
+          o banco deu às linhas novas — sem isso, salvar de novo as recriaria.
+        */}
+        <SecaoContatos
+          key={fornecedor.contatos.map((c) => `${c.id}:${c.email}:${c.padrao}`).join("|")}
+          contatos={fornecedor.contatos.map((c) => ({
+            id: c.id,
+            nome: c.nome ?? "",
+            setor: c.setor ?? "",
+            email: c.email,
+            padrao: c.padrao,
+          }))}
+          salvar={salvarContatos.bind(null, fornecedor.id)}
         />
 
         <SecaoLogo

@@ -67,6 +67,17 @@ enum TipoFrete {
   FOB
 }
 
+/// De onde vem a caixa de e-mail do representante. Só decide o preenchimento
+/// sugerido de servidor e porta e o texto de ajuda — o que vale no envio são os
+/// campos gravados na conta.
+enum ProvedorEmail {
+  GMAIL
+  OUTLOOK
+  HOSTINGER
+  LOCAWEB
+  OUTRO
+}
+
 /// Plano de assinatura do escritório.
 ///
 /// PADRAO é o representante que trabalha sozinho — é o que o sistema sempre foi.
@@ -116,6 +127,7 @@ model Organizacao {
   produtos     Produto[]
   pedidos      Pedido[]
   orcamentos   Orcamento[]
+  contasEmail  ContaEmail[]
 
   @@map("organizacao")
 }
@@ -165,6 +177,8 @@ model Usuario {
   orcamentos   Orcamento[]
   edicoes      OrcamentoEdicao[]
   fornecedores FornecedorPreposto[]
+  contasEmail  ContaEmail[]
+  envios       EnvioPedido[]
 
   @@index([organizacaoId])
   @@map("usuario")
@@ -255,8 +269,8 @@ model Fornecedor {
 
   telefone String?
   /// Contato geral da indústria — o vendedor interno, o telefone do escritório.
-  /// NÃO se confunde com `emailsPedido`: aquele é para onde o PDF é disparado,
-  /// este é com quem se fala.
+  /// NÃO se confunde com `contatos`: aqueles recebem o PDF do pedido, este é
+  /// com quem se fala.
   email    String?
 
   /// Logo da INDÚSTRIA — é ele que vai no cabeçalho do PDF, não o do escritório.
@@ -265,8 +279,6 @@ model Fornecedor {
   logo        Bytes?
   /// Content-Type do logo, para servir o arquivo com o cabeçalho certo.
   logoTipo    String?
-  /// Destinatários do e-mail com o pedido em anexo.
-  emailsPedido String[] @default([])
 
   /// Percentual de IPI da indústria, ex.: 9.750.
   ipiPercentual Decimal @default(0) @db.Decimal(6, 3)
@@ -291,9 +303,32 @@ model Fornecedor {
   pedidos     Pedido[]
   orcamentos  Orcamento[]
   prepostos   FornecedorPreposto[]
+  contatos    ContatoFornecedor[]
 
   @@index([organizacaoId])
   @@map("fornecedor")
+}
+
+/// Quem recebe o pedido na indústria — comercial, PCP, faturamento.
+///
+/// Os marcados como `padrao` já vêm escolhidos no envio: são "o grupo" daquela
+/// indústria. Os outros ficam à mão para quando o pedido pede alguém a mais.
+/// Substitui a lista solta `fornecedor.emailsPedido`, que não tinha nome nem
+/// deixava escolher.
+model ContatoFornecedor {
+  id           String  @id @default(uuid()) @db.Uuid
+  fornecedorId String  @db.Uuid
+  nome         String?
+  /// Setor ou função, para saber quem é quem na hora de marcar: "PCP".
+  setor        String?
+  email        String
+  padrao       Boolean @default(true)
+  ordem        Int     @default(0)
+
+  fornecedor Fornecedor @relation(fields: [fornecedorId], references: [id], onDelete: Cascade)
+
+  @@unique([fornecedorId, email])
+  @@map("contato_fornecedor")
 }
 
 /// Tabela de preços do material, por indústria.
@@ -615,6 +650,7 @@ model Pedido {
   representante Usuario?     @relation(fields: [representanteId], references: [id], onDelete: SetNull)
   orcamento     Orcamento?   @relation(fields: [orcamentoId], references: [id], onDelete: SetNull)
   itens         PedidoItem[]
+  envios        EnvioPedido[]
 
   @@unique([fornecedorId, numero])
   @@index([organizacaoId])
@@ -843,4 +879,74 @@ model OrcamentoEdicao {
 
   @@index([orcamentoId, editadoEm])
   @@map("orcamento_edicao")
+}
+
+// ---------------------------------------------------------------------------
+// E-mail
+// ---------------------------------------------------------------------------
+
+/// A caixa de e-mail de um usuário, por onde ele manda os pedidos.
+///
+/// O pedido sai do endereço DELE — é com ele que a indústria fala, e é para ele
+/// que ela responde. O sistema entra na caixa como um programa de e-mail faria:
+/// servidor SMTP, usuário e senha (no Gmail, uma senha de app).
+///
+/// É de um usuário só, e a policy corta até o administrador: mandar e-mail pela
+/// caixa de outra pessoa é falar em nome dela.
+///
+/// `senhaCifrada` é AES-256-GCM com a chave `EMAIL_CHAVE` (ver `lib/cripto.ts`).
+/// Nunca sai do servidor, nem para preencher o formulário de edição.
+model ContaEmail {
+  id            String        @id @default(uuid()) @db.Uuid
+  organizacaoId String        @db.Uuid
+  usuarioId     String        @db.Uuid
+  provedor      ProvedorEmail
+  email         String
+  /// O nome que aparece no "De:" — "Valquiria Silvestre".
+  nomeExibicao  String
+  host          String
+  porta         Int
+  /// TLS desde a conexão (porta 465) ou STARTTLS (porta 587).
+  tlsDireto     Boolean
+  usuarioSmtp   String
+  senhaCifrada  String
+  padrao        Boolean       @default(false)
+  /// Última vez que um teste ou envio passou. Vazio: nunca confirmada.
+  testadaEm     DateTime?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  usuario     Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, email])
+  @@index([organizacaoId])
+  @@map("conta_email")
+}
+
+/// Cada vez que um pedido saiu por e-mail: de quem, para quem, com o quê.
+///
+/// Reenviar é comum — a indústria perdeu, o cliente mudou a quantidade —, e o
+/// `pedido.enviadoEm` só guarda o primeiro. O corpo e o nome dos anexos ficam;
+/// os arquivos não, que o PDF se remonta e o resto é do e-mail enviado.
+model EnvioPedido {
+  id         String   @id @default(uuid()) @db.Uuid
+  pedidoId   String   @db.Uuid
+  usuarioId  String?  @db.Uuid
+  de         String
+  para       String[]
+  cc         String[] @default([])
+  assunto    String
+  corpo      String
+  anexos     String[] @default([])
+  /// O Message-ID devolvido pelo servidor, para achar a mensagem se preciso.
+  idMensagem String?
+  enviadoEm  DateTime @default(now())
+
+  pedido  Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([pedidoId, enviadoEm])
+  @@map("envio_pedido")
 }

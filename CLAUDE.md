@@ -48,7 +48,7 @@ comissões. Porta o sistema legado SICOV (dados reais em `referencia/`, nunca ve
 ## Environment Variables
 
 - Não existe `.env.example`; variáveis em uso: `DIRECT_DATABASE_URL`, `DATABASE_URL`,
-  `APP_DB_ROLE`, `SESSAO_SECRET` e, opcionais, `RESEND_API_KEY`/`EMAIL_REMETENTE` (ver README)
+  `APP_DB_ROLE`, `SESSAO_SECRET` e `EMAIL_CHAVE` (cifra a senha das caixas de e-mail; ver README)
 - Nenhuma `NEXT_PUBLIC_*` hoje — confirmar que o valor é seguro no client antes de criar uma
 - `.env` inteiro é ignorado pelo git, não só `.env.local`
 

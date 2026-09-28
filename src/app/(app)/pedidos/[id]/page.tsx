@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Building2, FileDown, ScrollText } from "lucide-react";
+import { Building2, FileDown, Mail, ScrollText } from "lucide-react";
 
 import { SeloStatus } from "@/components/selo-status";
-import { BotaoLink, Cabecalho, Cartao, Emblema } from "@/components/ui";
+import { BotaoLink, Cabecalho, Cartao, Emblema, Painel, SecaoCartao } from "@/components/ui";
+import { textoPadraoDoEnvio } from "@/lib/envio-pedido";
 import { escreverNumeroBr } from "@/lib/numero-br";
+import { nomeArquivoPedido } from "@/lib/pdf/nome-arquivo";
 import { escopoAtual } from "@/lib/sessao";
 
 import {
@@ -33,18 +35,39 @@ const DATA_HORA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeSty
 export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]">) {
   const { id } = await params;
 
-  const { organizacaoId, db } = await escopoAtual();
+  const { organizacaoId, usuarioId, db } = await escopoAtual();
 
   const pedido = await db.pedido.findFirst({
     where: { id, organizacaoId },
     include: {
       cliente: true,
-      fornecedor: { select: { id: true, nome: true, emailsPedido: true } },
+      fornecedor: {
+        select: {
+          id: true,
+          nome: true,
+          contatos: {
+            orderBy: { ordem: "asc" },
+            select: { id: true, nome: true, setor: true, email: true, padrao: true },
+          },
+        },
+      },
       itens: { orderBy: { ordem: "asc" } },
+      envios: {
+        orderBy: { enviadoEm: "desc" },
+        select: { id: true, de: true, para: true, cc: true, anexos: true, enviadoEm: true },
+      },
     },
   });
 
   if (!pedido) notFound();
+
+  // As caixas de QUEM ESTÁ OLHANDO, não do dono do pedido: a administradora que
+  // manda o pedido do preposto manda do e-mail dela.
+  const contas = await db.contaEmail.findMany({
+    where: { usuarioId },
+    orderBy: [{ padrao: "desc" }, { criadoEm: "asc" }],
+    select: { id: true, email: true, nomeExibicao: true, padrao: true },
+  });
 
   /*
    * O que dá para lançar aqui: produto DESTE cliente E DESTA indústria.
@@ -101,11 +124,32 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
                 Baixar PDF
               </BotaoLink>
 
-              <BotaoEnviarEmail
-                destinatarios={pedido.fornecedor.emailsPedido}
-                jaEnviado={pedido.status === "ENVIADO"}
-                acao={enviarPedidoPorEmail.bind(null, pedido.id)}
-              />
+              {pedido.status !== "CANCELADO" && (
+                <BotaoEnviarEmail
+                  jaEnviado={pedido.status === "ENVIADO"}
+                  acao={enviarPedidoPorEmail.bind(null, pedido.id)}
+                  contas={contas}
+                  contatos={pedido.fornecedor.contatos}
+                  fornecedor={{ id: pedido.fornecedor.id, nome: pedido.fornecedor.nome }}
+                  cliente={{
+                    apelido: pedido.cliente.apelido,
+                    email: pedido.cliente.email ?? pedido.cliente.emailNfe,
+                  }}
+                  textoPadrao={textoPadraoDoEnvio({
+                    numero: pedido.numero,
+                    razaoSocialCliente: pedido.cliente.razaoSocial,
+                    cnpjCliente: pedido.cliente.cnpj,
+                    pedidoDoCliente: pedido.pedidoDoCliente,
+                    vendedor: pedido.vendedor,
+                  })}
+                  nomeArquivoPdf={nomeArquivoPedido({
+                    numero: pedido.numero,
+                    apelidoCliente: pedido.cliente.apelido,
+                    pedidoDoCliente: pedido.pedidoDoCliente,
+                    prazoEntrega: pedido.prazoEntrega,
+                  })}
+                />
+              )}
             </>
           )}
 
@@ -283,6 +327,32 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
               : "",
           }}
         />
+
+        {pedido.envios.length > 0 && (
+          <SecaoCartao
+            icone={Mail}
+            titulo="Envios por e-mail"
+            descricao="Cada vez que o pedido saiu daqui, e para quem."
+          >
+            <Painel>
+              {pedido.envios.map((envio) => (
+                <div key={envio.id} className="px-4 py-3 text-corpo space-y-0.5">
+                  <div className="flex flex-wrap justify-between gap-x-4">
+                    <span className="font-medium">{envio.para.join(", ")}</span>
+                    <span className="text-mini text-tinta-3 numerico">
+                      {DATA_HORA.format(envio.enviadoEm)}
+                    </span>
+                  </div>
+                  <div className="text-mini text-tinta-3">
+                    de {envio.de}
+                    {envio.cc.length > 0 && ` · cópia para ${envio.cc.join(", ")}`}
+                    {envio.anexos.length > 1 && ` · ${envio.anexos.length} anexos`}
+                  </div>
+                </div>
+              ))}
+            </Painel>
+          </SecaoCartao>
+        )}
       </div>
     </Pagina>
   );
