@@ -63,11 +63,18 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
 
   // As caixas de QUEM ESTÁ OLHANDO, não do dono do pedido: a administradora que
   // manda o pedido do preposto manda do e-mail dela.
-  const contas = await db.contaEmail.findMany({
-    where: { usuarioId },
-    orderBy: [{ padrao: "desc" }, { criadoEm: "asc" }],
-    select: { id: true, email: true, nomeExibicao: true, padrao: true },
-  });
+  const [contas, modeloEnvio] = await Promise.all([
+    db.contaEmail.findMany({
+      where: { usuarioId },
+      orderBy: [{ padrao: "desc" }, { criadoEm: "asc" }],
+      select: { id: true, email: true, nomeExibicao: true, padrao: true },
+    }),
+    // O texto também é de quem envia, pelo mesmo motivo.
+    db.usuario.findUnique({
+      where: { id: usuarioId },
+      select: { assuntoEnvioPadrao: true, mensagemEnvioPadrao: true },
+    }),
+  ]);
 
   /*
    * O que dá para lançar aqui: produto DESTE cliente E DESTA indústria.
@@ -135,13 +142,19 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
                     apelido: pedido.cliente.apelido,
                     email: pedido.cliente.email ?? pedido.cliente.emailNfe,
                   }}
-                  textoPadrao={textoPadraoDoEnvio({
-                    numero: pedido.numero,
-                    razaoSocialCliente: pedido.cliente.razaoSocial,
-                    cnpjCliente: pedido.cliente.cnpj,
-                    pedidoDoCliente: pedido.pedidoDoCliente,
-                    vendedor: pedido.vendedor,
-                  })}
+                  textoPadrao={textoPadraoDoEnvio(
+                    {
+                      numero: pedido.numero,
+                      razaoSocialCliente: pedido.cliente.razaoSocial,
+                      cnpjCliente: pedido.cliente.cnpj,
+                      pedidoDoCliente: pedido.pedidoDoCliente,
+                      vendedor: pedido.vendedor,
+                    },
+                    {
+                      assunto: modeloEnvio?.assuntoEnvioPadrao,
+                      corpo: modeloEnvio?.mensagemEnvioPadrao,
+                    },
+                  )}
                   nomeArquivoPdf={nomeArquivoPedido({
                     numero: pedido.numero,
                     apelidoCliente: pedido.cliente.apelido,

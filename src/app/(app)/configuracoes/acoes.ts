@@ -9,7 +9,12 @@ import { revalidatePath } from "next/cache";
 import { contaParaEnvio } from "@/lib/conta-email";
 import { cifrar, decifrar } from "@/lib/cripto";
 import { testarConta } from "@/lib/email";
-import { emailValido } from "@/lib/envio-pedido";
+import {
+  ASSUNTO_ENVIO_PADRAO,
+  MENSAGEM_ENVIO_PADRAO,
+  emailValido,
+  problemaNoModelo,
+} from "@/lib/envio-pedido";
 import { ehProvedor } from "@/lib/provedores-email";
 import { escopoAtual } from "@/lib/sessao";
 
@@ -90,6 +95,47 @@ export async function salvarCidade(
     await db.usuario.updateMany({
       where: { id: usuarioId, organizacaoId },
       data: { municipio: texto },
+    });
+  } catch (erro) {
+    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
+  }
+
+  revalidatePath("/configuracoes");
+  return {};
+}
+
+/**
+ * O assunto e a mensagem com que o e-mail do pedido abre.
+ *
+ * De cada usuário: quem envia assina. Campo vazio volta ao texto de sempre.
+ * Recusa variável que não existe e trecho `{se …}` sem `{fim}` — salvos, iriam
+ * para a indústria com chaves no meio, e a pessoa só veria no primeiro envio.
+ */
+export async function salvarMensagemEnvioPadrao(
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    const { usuarioId, organizacaoId, db } = await escopoAtual();
+
+    // O textarea manda `\r\n`; o modelo guarda `\n`. Igual ao texto de sempre
+    // grava nulo, para que ele continue valendo se um dia mudar.
+    const ler = (nome: string, padrao: string) => {
+      const bruto = formData.get(nome);
+      const texto = typeof bruto === "string" ? bruto.replace(/\r\n?/g, "\n").trim() : "";
+      return texto === "" || texto === padrao ? null : texto;
+    };
+    const assunto = ler("assuntoEnvioPadrao", ASSUNTO_ENVIO_PADRAO);
+    const mensagem = ler("mensagemEnvioPadrao", MENSAGEM_ENVIO_PADRAO);
+
+    // Cada campo por si: um `{se}` no assunto não se fecha com o `{fim}` da mensagem.
+    const problema =
+      (assunto && problemaNoModelo(assunto)) || (mensagem && problemaNoModelo(mensagem));
+    if (problema) return { erro: problema };
+
+    await db.usuario.updateMany({
+      where: { id: usuarioId, organizacaoId },
+      data: { assuntoEnvioPadrao: assunto, mensagemEnvioPadrao: mensagem },
     });
   } catch (erro) {
     return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };

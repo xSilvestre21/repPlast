@@ -4,6 +4,7 @@ import { Pagina } from "@/components/pagina";
 import { Botao, Cabecalho, SecaoCartao } from "@/components/ui";
 import { CAMPOS_PUBLICOS_CONTA } from "@/lib/conta-email";
 import { criptoConfigurada } from "@/lib/cripto";
+import { ASSUNTO_ENVIO_PADRAO, MENSAGEM_ENVIO_PADRAO } from "@/lib/envio-pedido";
 import { escopoAtual, sessaoAtual } from "@/lib/sessao";
 
 import {
@@ -12,11 +13,13 @@ import {
   excluirContaEmail,
   salvarCidade,
   salvarContaEmail,
+  salvarMensagemEnvioPadrao,
   salvarObservacoesPadrao,
   testarContaEmail,
 } from "./acoes";
 import { FormCidade } from "./cidade";
 import { SecaoContasEmail } from "./contas-email";
+import { FormMensagemEnvio } from "./mensagem-envio";
 import { FormObservacoesPadrao } from "./observacoes-padrao";
 
 export default async function PaginaConfiguracoes() {
@@ -27,7 +30,14 @@ export default async function PaginaConfiguracoes() {
   const [usuario, contas] = await Promise.all([
     db.usuario.findUnique({
       where: { id: usuarioId },
-      select: { nome: true, email: true, observacoesPadrao: true, municipio: true },
+      select: {
+        nome: true,
+        email: true,
+        observacoesPadrao: true,
+        municipio: true,
+        assuntoEnvioPadrao: true,
+        mensagemEnvioPadrao: true,
+      },
     }),
     db.contaEmail.findMany({
       where: { usuarioId },
@@ -58,6 +68,12 @@ export default async function PaginaConfiguracoes() {
             tornarPadrao: definirContaPadrao.bind(null, conta.id),
             excluir: excluirContaEmail.bind(null, conta.id),
           }))}
+        />
+
+        <FormMensagemEnvio
+          assunto={usuario?.assuntoEnvioPadrao ?? ASSUNTO_ENVIO_PADRAO}
+          mensagem={usuario?.mensagemEnvioPadrao ?? MENSAGEM_ENVIO_PADRAO}
+          salvar={salvarMensagemEnvioPadrao}
         />
 
         <FormCidade valor={usuario?.municipio ?? ""} salvar={salvarCidade} />

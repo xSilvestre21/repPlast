@@ -171,6 +171,13 @@ model Usuario {
   /// assina.
   municipio String?
 
+  /// Assunto e corpo com que o diálogo de envio do pedido abre, com variáveis
+  /// como `{numero}` e `{cliente}` (ver `lib/envio-pedido.ts`). Nulo quer dizer
+  /// "o texto de sempre". De cada usuário, como as condições acima: quem envia
+  /// assina, e cada um escreve para a indústria do seu jeito.
+  assuntoEnvioPadrao  String?
+  mensagemEnvioPadrao String?
+
   organizacao Organizacao          @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   clientes     Cliente[]
   pedidos      Pedido[]
