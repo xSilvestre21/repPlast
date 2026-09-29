@@ -4,6 +4,7 @@ import { useActionState } from "react";
 
 import { ClipboardList, MessageSquareText, Percent } from "lucide-react";
 
+import { CampoData } from "@/components/campo-data";
 import { AreaTexto, Botao, Campo, MensagemErro, SecaoCartao, Selecao } from "@/components/ui";
 
 import type { EstadoFormulario } from "../acoes";
@@ -53,10 +54,9 @@ export function SecaoCabecalho({
             placeholder="28/35/42"
             defaultValue={valores.prazoPagamento}
           />
-          <Campo
+          <CampoData
             name="prazoEntrega"
             rotulo="Prazo de entrega"
-            type="date"
             defaultValue={valores.prazoEntrega}
           />
 
