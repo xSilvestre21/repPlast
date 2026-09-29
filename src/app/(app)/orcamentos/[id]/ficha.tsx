@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useActionState, useState } from "react";
 
+import { CampoData } from "@/components/campo-data";
 import {
   AreaTexto,
   Botao,
@@ -88,10 +89,9 @@ export function FichaProposta({
             placeholder="Sr. Marcelo"
             defaultValue={valores.attn}
           />
-          <Campo
+          <CampoData
             name="validoAte"
             rotulo="Válido até"
-            type="date"
             disabled={!editavel}
             dica="Não vence sozinho — quem fecha é você."
             defaultValue={valores.validoAte}
