@@ -24,10 +24,13 @@ export type ValoresCabecalho = {
 export function SecaoCabecalho({
   valores,
   editavel,
+  emLeitura = false,
   acao,
 }: {
   valores: ValoresCabecalho;
   editavel: boolean;
+  /** Pedido aberto, mas pronto: dá para editar, só que clicando em Editar. */
+  emLeitura?: boolean;
   acao: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
 }) {
   const [estado, enviar, enviando] = useActionState(acao, {});
@@ -39,7 +42,11 @@ export function SecaoCabecalho({
       <SecaoCartao
         icone={ClipboardList}
         titulo="Condições"
-        descricao="Tudo daqui sai impresso no cabeçalho do pedido, menos a comissão."
+        descricao={
+          emLeitura
+            ? "Em leitura. Para mexer em qualquer coisa, use Editar no alto da página."
+            : "Tudo daqui sai impresso no cabeçalho do pedido, menos a comissão."
+        }
       >
         <fieldset disabled={!editavel} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Campo
@@ -139,7 +146,7 @@ export function SecaoCabecalho({
       {editavel && (
         <div className="flex justify-end">
           <Botao type="submit" carregando={enviando}>
-            {enviando ? "Salvando…" : "Salvar condições"}
+            {enviando ? "Salvando…" : "Salvar e voltar"}
           </Botao>
         </div>
       )}

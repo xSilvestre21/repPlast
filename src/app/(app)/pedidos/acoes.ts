@@ -46,7 +46,7 @@ function lerTexto(valor: FormDataEntryValue | null): string | null {
 async function exigirAberto(db: DbOrganizacao, pedidoId: string, organizacaoId: string) {
   const pedido = await db.pedido.findFirst({
     where: { id: pedidoId, organizacaoId },
-    select: { id: true, status: true, fornecedorId: true, clienteId: true },
+    select: { id: true, status: true, fornecedorId: true, clienteId: true, emElaboracao: true },
   });
 
   if (!pedido) throw new Error("Pedido não encontrado.");
@@ -60,6 +60,72 @@ async function exigirAberto(db: DbOrganizacao, pedidoId: string, organizacaoId: 
   }
 
   return pedido;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Edições                                                                    */
+/* -------------------------------------------------------------------------- */
+
+/** Gravações seguidas da mesma pessoa dentro desta janela contam como uma edição. */
+const JANELA_DA_EDICAO_MS = 30 * 60 * 1000;
+
+/**
+ * Anota que alguém mexeu num pedido que já estava pronto.
+ *
+ * Montar o pedido não é editá-lo: enquanto ele está em elaboração, nada é
+ * anotado — é a mesma regra do orçamento. Depois, cada ação que muda o pedido
+ * passa por aqui, e não só o "Salvar": quem troca a quantidade de um item e
+ * sai da tela sem salvar também mudou o que vai para a indústria.
+ *
+ * Um item alterado, outro removido e as condições salvas, em seguida, são UMA
+ * edição, não três: a linha existente só tem a hora puxada para agora. Puxar a
+ * hora é o que faz a conferência do administrador pegar a mudança mais nova.
+ */
+async function registrarEdicao(
+  db: DbOrganizacao,
+  pedido: { id: string; emElaboracao: boolean },
+  usuarioId: string,
+) {
+  if (pedido.emElaboracao) return;
+
+  const ultima = await db.pedidoEdicao.findFirst({
+    where: { pedidoId: pedido.id },
+    orderBy: { editadoEm: "desc" },
+    select: { id: true, usuarioId: true, editadoEm: true },
+  });
+
+  if (
+    ultima?.usuarioId === usuarioId &&
+    Date.now() - ultima.editadoEm.getTime() < JANELA_DA_EDICAO_MS
+  ) {
+    await db.pedidoEdicao.update({ where: { id: ultima.id }, data: { editadoEm: new Date() } });
+    return;
+  }
+
+  await db.pedidoEdicao.create({ data: { pedidoId: pedido.id, usuarioId } });
+}
+
+/**
+ * As edições de preposto que o administrador ainda não conferiu.
+ *
+ * "Ainda não": as que vieram depois da última conferência, gravada quando o
+ * administrador envia. Preposto é quem não é administrador.
+ */
+async function edicoesDePrepostoPendentes(db: DbOrganizacao, pedidoId: string) {
+  const pedido = await db.pedido.findUnique({
+    where: { id: pedidoId },
+    select: { edicoesConferidasEm: true },
+  });
+
+  return db.pedidoEdicao.findMany({
+    where: {
+      pedidoId,
+      usuario: { papel: { not: "ADMIN" } },
+      ...(pedido?.edicoesConferidasEm ? { editadoEm: { gt: pedido.edicoesConferidasEm } } : {}),
+    },
+    orderBy: { editadoEm: "asc" },
+    select: { id: true },
+  });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -225,8 +291,8 @@ export async function atualizarCabecalho(
   formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
-    const { organizacaoId, db } = await contexto();
-    await exigirAberto(db, pedidoId, organizacaoId);
+    const { organizacaoId, usuarioId, db } = await contexto();
+    const pedido = await exigirAberto(db, pedidoId, organizacaoId);
 
     const comissao = lerNumeroBr(formData.get("comissaoPercentual"));
     if (comissao !== null && (comissao < 0 || comissao > 100)) {
@@ -253,17 +319,25 @@ export async function atualizarCabecalho(
         vendedor: lerTexto(formData.get("vendedor")),
         ipiPercentual: ipi === null ? undefined : String(ipi),
         comissaoPercentual: comissao === null ? null : String(comissao),
+        emElaboracao: false,
       },
     });
 
     // O IPI mudou de valor ou foi desligado: os totais precisam refletir isso.
     await recalcularTotais(db, pedidoId);
+    await registrarEdicao(db, pedido, usuarioId);
   } catch (erro) {
     return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
   }
 
+  /*
+   * Como no orçamento, salvar é dizer "terminei com este": o pedido passa a
+   * abrir só para leitura, e a pessoa volta para a lista. Mexer de novo é
+   * clicar em Editar — e isso fica anotado.
+   */
+  revalidatePath("/pedidos");
   revalidatePath(`/pedidos/${pedidoId}`);
-  return {};
+  redirect("/pedidos");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -276,7 +350,7 @@ export async function adicionarItem(
   formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
-    const { organizacaoId, db } = await contexto();
+    const { organizacaoId, usuarioId, db } = await contexto();
     const pedido = await exigirAberto(db, pedidoId, organizacaoId);
 
     const produtoId = lerTexto(formData.get("produtoId"));
@@ -368,6 +442,7 @@ export async function adicionarItem(
     });
 
     await recalcularTotais(db, pedidoId);
+    await registrarEdicao(db, pedido, usuarioId);
   } catch (erro) {
     return { erro: erro instanceof Error ? erro.message : "Não foi possível adicionar." };
   }
@@ -382,8 +457,8 @@ export async function atualizarItem(
   formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
-    const { organizacaoId, db } = await contexto();
-    await exigirAberto(db, pedidoId, organizacaoId);
+    const { organizacaoId, usuarioId, db } = await contexto();
+    const pedido = await exigirAberto(db, pedidoId, organizacaoId);
 
     const itemId = String(formData.get("itemId") ?? "");
     const quantidade = lerNumeroBr(formData.get("quantidade"));
@@ -417,6 +492,7 @@ export async function atualizarItem(
     });
 
     await recalcularTotais(db, pedidoId);
+    await registrarEdicao(db, pedido, usuarioId);
   } catch (erro) {
     return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
   }
@@ -436,26 +512,28 @@ export async function definirIpiDeTodosOsItens(
   pedidoId: string,
   formData: FormData,
 ): Promise<void> {
-  const { organizacaoId, db } = await contexto();
-  await exigirAberto(db, pedidoId, organizacaoId);
+  const { organizacaoId, usuarioId, db } = await contexto();
+  const pedido = await exigirAberto(db, pedidoId, organizacaoId);
 
   const ligado = formData.get("ligado") === "1";
 
   await db.pedidoItem.updateMany({ where: { pedidoId }, data: { comIpi: ligado } });
   await recalcularTotais(db, pedidoId);
+  await registrarEdicao(db, pedido, usuarioId);
 
   revalidatePath(`/pedidos/${pedidoId}`);
 }
 
 export async function removerItem(pedidoId: string, formData: FormData): Promise<void> {
-  const { organizacaoId, db } = await contexto();
-  await exigirAberto(db, pedidoId, organizacaoId);
+  const { organizacaoId, usuarioId, db } = await contexto();
+  const pedido = await exigirAberto(db, pedidoId, organizacaoId);
 
   const itemId = String(formData.get("itemId") ?? "");
   if (!itemId) return;
 
   await db.pedidoItem.deleteMany({ where: { id: itemId, pedidoId } });
   await recalcularTotais(db, pedidoId);
+  await registrarEdicao(db, pedido, usuarioId);
 
   revalidatePath(`/pedidos/${pedidoId}`);
 }
@@ -471,7 +549,7 @@ async function mudarStatus(
   /** O que a transição grava junto. Hoje só o motivo, que viaja com o cancelar. */
   extra: { motivoCancelamento?: string } = {},
 ) {
-  const { organizacaoId, db } = await contexto();
+  const { organizacaoId, ehAdmin, db } = await contexto();
 
   const pedido = await db.pedido.findFirst({
     where: { id: pedidoId, organizacaoId },
@@ -501,6 +579,9 @@ async function mudarStatus(
       status,
       enviadoEm: status === "CANCELADO" ? undefined : enviadoEm,
       canceladoEm: status === "CANCELADO" ? new Date() : null,
+      // O administrador que marca como enviado passou pela confirmação que
+      // lista as edições dos prepostos: isso conta como conferir.
+      ...(status === "ENVIADO" && ehAdmin ? { edicoesConferidasEm: new Date() } : {}),
       ...extra,
     },
   });
@@ -603,12 +684,22 @@ export async function enviarPedidoPorEmail(
   let aviso: string | undefined;
 
   try {
-    const { organizacaoId, usuarioId, papel, db } = await contexto();
+    const { organizacaoId, usuarioId, papel, ehAdmin, db } = await contexto();
     const pedido = await carregarPedidoParaPdf(pedidoId, organizacaoId, { usuarioId, papel });
 
     if (!pedido) return { erro: "Pedido não encontrado." };
     if (pedido.status === "CANCELADO") return { erro: "Este pedido está cancelado." };
     if (pedido.dados.itens.length === 0) return { erro: "Não dá para enviar um pedido sem itens." };
+
+    // Pedido mexido por preposto só sai depois de o administrador dizer que
+    // conferiu. A caixa desabilitando o botão é conveniência; a regra é esta.
+    if (
+      ehAdmin &&
+      formData.get("conferido") !== "on" &&
+      (await edicoesDePrepostoPendentes(db, pedidoId)).length > 0
+    ) {
+      return { erro: "Um preposto editou este pedido. Confira as alterações e marque que conferiu." };
+    }
 
     const conta = await contaParaEnvio(db, usuarioId, String(formData.get("contaId") ?? ""));
     if (!conta) return { erro: "Escolha de qual e-mail o pedido sai." };
@@ -723,6 +814,11 @@ export async function enviarPedidoPorEmail(
         where: { id: pedidoId },
         data: { status: "ENVIADO", enviadoEm: new Date(), canceladoEm: null },
       });
+    }
+
+    // Enviado pelo administrador, o que havia de edição de preposto foi conferido.
+    if (ehAdmin) {
+      await db.pedido.update({ where: { id: pedidoId }, data: { edicoesConferidasEm: new Date() } });
     }
   } catch (erro) {
     return { erro: erro instanceof Error ? erro.message : "Não foi possível enviar." };

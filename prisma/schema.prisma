@@ -183,6 +183,7 @@ model Usuario {
   pedidos      Pedido[]
   orcamentos   Orcamento[]
   edicoes      OrcamentoEdicao[]
+  edicoesPedido PedidoEdicao[]
   fornecedores FornecedorPreposto[]
   contasEmail  ContaEmail[]
   envios       EnvioPedido[]
@@ -646,6 +647,20 @@ model Pedido {
   /// de partida, não ruído a apagar.
   motivoCancelamento String?
 
+  /// O pedido ainda está sendo montado — nasceu agora e nunca foi salvo.
+  ///
+  /// Mesma regra do orçamento: enquanto verdadeiro, a tela abre editável; o
+  /// primeiro "Salvar e voltar" desliga isto, e dali em diante o pedido abre só
+  /// para leitura. Mexer de novo exige clicar em Editar, e vira linha em `edicoes`.
+  emElaboracao Boolean @default(true)
+
+  /// Até quando o administrador já conferiu as edições dos prepostos.
+  ///
+  /// Enviar com edição de preposto exige marcar "Conferi as alterações", e o
+  /// envio grava a hora aqui. O aviso mostra só o que veio DEPOIS — quem já
+  /// conferiu e enviou não é cobrado de novo pelas mesmas edições.
+  edicoesConferidasEm DateTime?
+
   criadoEm     DateTime  @default(now())
   atualizadoEm DateTime  @updatedAt
   enviadoEm    DateTime?
@@ -658,6 +673,7 @@ model Pedido {
   orcamento     Orcamento?   @relation(fields: [orcamentoId], references: [id], onDelete: SetNull)
   itens         PedidoItem[]
   envios        EnvioPedido[]
+  edicoes       PedidoEdicao[]
 
   @@unique([fornecedorId, numero])
   @@index([organizacaoId])
@@ -886,6 +902,25 @@ model OrcamentoEdicao {
 
   @@index([orcamentoId, editadoEm])
   @@map("orcamento_edicao")
+}
+
+/// Quem mexeu num pedido depois de ele ficar pronto, e quando.
+///
+/// É o que avisa o administrador antes de enviar: pedido editado por preposto
+/// sai para a indústria só depois de alguém conferir. Gravações seguidas da
+/// mesma pessoa contam como UMA edição (ver `registrarEdicao`).
+model PedidoEdicao {
+  id        String  @id @default(uuid()) @db.Uuid
+  pedidoId  String  @db.Uuid
+  usuarioId String? @db.Uuid
+
+  editadoEm DateTime @default(now())
+
+  pedido  Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([pedidoId, editadoEm])
+  @@map("pedido_edicao")
 }
 
 // ---------------------------------------------------------------------------

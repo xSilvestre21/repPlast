@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Building2, FileDown, Mail, ScrollText } from "lucide-react";
+import { Building2, FileDown, History, Mail, Pencil, ScrollText } from "lucide-react";
 
 import { SeloStatus } from "@/components/selo-status";
 import { BotaoLink, Cabecalho, Cartao, Emblema, Painel, SecaoCartao } from "@/components/ui";
@@ -32,10 +32,14 @@ import { Pagina } from "@/components/pagina";
 
 const DATA_HORA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
 
-export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]">) {
+export default async function PaginaPedido({
+  params,
+  searchParams,
+}: PageProps<"/pedidos/[id]">) {
   const { id } = await params;
+  const parametros = await searchParams;
 
-  const { organizacaoId, usuarioId, db } = await escopoAtual();
+  const { organizacaoId, usuarioId, ehAdmin, db } = await escopoAtual();
 
   const pedido = await db.pedido.findFirst({
     where: { id, organizacaoId },
@@ -55,6 +59,14 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
       envios: {
         orderBy: { enviadoEm: "desc" },
         select: { id: true, de: true, para: true, cc: true, anexos: true, enviadoEm: true },
+      },
+      edicoes: {
+        orderBy: { editadoEm: "desc" },
+        select: {
+          id: true,
+          editadoEm: true,
+          usuario: { select: { nome: true, papel: true } },
+        },
       },
     },
   });
@@ -97,8 +109,30 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
     include: { aditivos: { include: { aditivo: true } } },
   });
 
-  const editavel = pedido.status === "ABERTO";
+  /*
+   * Mesma regra do orçamento: o pedido abre para LEITURA depois de pronto.
+   * Uma tela que já chega editável convida a mexer sem querer no que está
+   * prestes a ir para a indústria. Editável só enquanto ele está sendo montado
+   * (`emElaboracao`) ou quando se clicou em Editar de propósito (`?editar=1`).
+   */
+  const aberto = pedido.status === "ABERTO";
+  const editavel = aberto && (pedido.emElaboracao || parametros.editar === "1");
   const temItens = pedido.itens.length > 0;
+
+  /*
+   * O que o administrador ainda precisa conferir antes de mandar: edições de
+   * preposto depois da última conferência. Só ele vê — é ele quem envia pelo
+   * escritório, e é para ele que o aviso existe.
+   */
+  const conferidoEm = pedido.edicoesConferidasEm;
+  const aConferir = ehAdmin
+    ? pedido.edicoes
+        .filter((e) => e.usuario && e.usuario.papel !== "ADMIN")
+        .filter((e) => !conferidoEm || e.editadoEm > conferidoEm)
+        .reverse()
+        .map((e) => ({ id: e.id, quem: e.usuario!.nome, quando: DATA_HORA.format(e.editadoEm) }))
+    : [];
+  const listaAConferir = aConferir.map((e) => `${e.quem} em ${e.quando}`).join("; ");
   const texto = (v: { toString(): string } | null) => (v === null ? null : v.toString());
 
   return (
@@ -134,6 +168,7 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
               {pedido.status !== "CANCELADO" && (
                 <BotaoEnviarEmail
                   jaEnviado={pedido.status === "ENVIADO"}
+                  aConferir={aConferir}
                   acao={enviarPedidoPorEmail.bind(null, pedido.id)}
                   contas={contas}
                   contatos={pedido.fornecedor.contatos}
@@ -166,13 +201,29 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
             </>
           )}
 
+          {aberto && !editavel && (
+            <BotaoLink
+              href={`/pedidos/${pedido.id}?editar=1`}
+              variante="secundaria"
+              icone={Pencil}
+            >
+              Editar
+            </BotaoLink>
+          )}
+
           {pedido.status === "ABERTO" && temItens && (
             <AcaoPedido
               rotulo="Marcar como enviado"
               rotuloOcupado="Marcando…"
               variante="secundaria"
               icone="enviar"
-              confirmacao="Marcar como enviado trava o pedido e passa a contar a comissão. Confirma?"
+              confirmacao={
+                (aConferir.length > 0
+                  ? `Atenção: um preposto editou este pedido (${listaAConferir}). ` +
+                    "Confira as alterações antes de continuar.\n\n"
+                  : "") +
+                "Marcar como enviado trava o pedido e passa a contar a comissão. Confirma?"
+              }
               acao={marcarEnviado.bind(null, pedido.id)}
             />
           )}
@@ -262,6 +313,11 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
 
         <SecaoItens
           editavel={editavel}
+          motivoTravado={
+            aberto
+              ? "Em leitura. Para lançar ou mexer em item, use Editar no alto da página."
+              : undefined
+          }
           semProdutos={
             <p className="text-corpo text-tinta-2 leading-relaxed">
               Nenhum produto da {pedido.fornecedor.nome} é da {pedido.cliente.apelido}. Na{" "}
@@ -323,6 +379,7 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
 
         <SecaoCabecalho
           editavel={editavel}
+          emLeitura={aberto && !editavel}
           acao={atualizarCabecalho.bind(null, pedido.id)}
           valores={{
             pedidoDoCliente: pedido.pedidoDoCliente ?? "",
@@ -340,6 +397,26 @@ export default async function PaginaPedido({ params }: PageProps<"/pedidos/[id]"
               : "",
           }}
         />
+
+        {pedido.edicoes.length > 0 && (
+          <SecaoCartao
+            icone={History}
+            titulo="Edições"
+            descricao="Quem mexeu no pedido depois de ele ficar pronto."
+          >
+            <ul className="space-y-1">
+              {pedido.edicoes.map((edicao) => (
+                <li key={edicao.id} className="text-mini text-tinta-2">
+                  {edicao.usuario?.nome ?? "usuário removido"}
+                  {edicao.usuario && edicao.usuario.papel !== "ADMIN" && (
+                    <span className="text-tinta-3"> (preposto)</span>
+                  )}{" "}
+                  · <span className="numerico">{DATA_HORA.format(edicao.editadoEm)}</span>
+                </li>
+              ))}
+            </ul>
+          </SecaoCartao>
+        )}
 
         {pedido.envios.length > 0 && (
           <SecaoCartao

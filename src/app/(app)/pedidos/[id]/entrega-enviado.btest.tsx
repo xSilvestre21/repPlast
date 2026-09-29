@@ -187,3 +187,56 @@ describe("quem desliga a animação", () => {
   });
 });
 
+
+/**
+ * Pedido editado por preposto: o administrador vê quem e quando, e só consegue
+ * enviar depois de marcar que conferiu.
+ */
+describe("edição de preposto antes de enviar", () => {
+  const esperar = (ms: number) => new Promise((pronto) => setTimeout(pronto, ms));
+
+  async function abrirDialogo(aConferir: { id: string; quem: string; quando: string }[]) {
+    await render(
+      <BotaoEnviarEmail
+        jaEnviado={false}
+        aConferir={aConferir}
+        acao={async () => ({ enviado: true })}
+        contas={[{ id: "c1", email: "eu@exemplo.com", nomeExibicao: "Eu", padrao: true }]}
+        contatos={[{ id: "k1", nome: "Compras", setor: null, email: "compras@exemplo.com", padrao: true }]}
+        fornecedor={{ id: "f1", nome: "QUALYPLAST" }}
+        cliente={{ apelido: "AKILAH", email: null }}
+        textoPadrao={{ assunto: "Pedido 1", corpo: "Segue." }}
+        nomeArquivoPdf="1.pdf"
+      />,
+    );
+    [...document.querySelectorAll("button")].find((b) => b.textContent?.includes("por e-mail"))!.click();
+    await esperar(100);
+    return {
+      dialogo: document.querySelector("dialog")!,
+      enviar: document.querySelector("dialog button[type=submit]") as HTMLButtonElement,
+      conferido: document.querySelector('dialog input[name="conferido"]') as HTMLInputElement | null,
+    };
+  }
+
+  test("mostra quem editou e trava o envio até marcar que conferiu", async () => {
+    const { dialogo, enviar, conferido } = await abrirDialogo([
+      { id: "e1", quem: "Marcos", quando: "29/09/2026, 14:20" },
+    ]);
+
+    expect(dialogo.textContent).toContain("Um preposto editou este pedido");
+    expect(dialogo.textContent).toContain("Marcos");
+    expect(enviar.disabled).toBe(true);
+
+    conferido!.click();
+    await esperar(50);
+    expect(enviar.disabled).toBe(false);
+  });
+
+  test("sem edição a conferir, não há aviso nem caixa", async () => {
+    const { dialogo, enviar, conferido } = await abrirDialogo([]);
+
+    expect(dialogo.textContent).not.toContain("preposto");
+    expect(conferido).toBeNull();
+    expect(enviar.disabled).toBe(false);
+  });
+});

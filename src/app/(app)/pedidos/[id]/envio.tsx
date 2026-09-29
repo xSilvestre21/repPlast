@@ -15,7 +15,7 @@
  */
 
 import Link from "next/link";
-import { Mail, Paperclip, Send, X } from "lucide-react";
+import { Mail, Paperclip, Send, TriangleAlert, X } from "lucide-react";
 import { startTransition, useActionState, useCallback, useEffect, useRef, useState } from "react";
 
 import { Dialogo } from "@/components/dialogo";
@@ -39,11 +39,15 @@ import {
 import type { EstadoEnvio } from "../acoes";
 import { EntregaEnviado } from "./entrega-enviado";
 
+/** Uma edição de preposto que o administrador ainda não conferiu. */
+export type EdicaoAConferir = { id: string; quem: string; quando: string };
+
 export type ContaEnvio = { id: string; email: string; nomeExibicao: string; padrao: boolean };
 export type ContatoEnvio = { id: string; nome: string | null; setor: string | null; email: string; padrao: boolean };
 
 export function BotaoEnviarEmail({
   jaEnviado,
+  aConferir = [],
   acao,
   contas,
   contatos,
@@ -53,6 +57,8 @@ export function BotaoEnviarEmail({
   nomeArquivoPdf,
 }: {
   jaEnviado: boolean;
+  /** Vazio para quem não é administrador: o aviso é dele. */
+  aConferir?: EdicaoAConferir[];
   acao: (estado: EstadoEnvio, formData: FormData) => Promise<EstadoEnvio>;
   contas: ContaEnvio[];
   contatos: ContatoEnvio[];
@@ -145,6 +151,7 @@ export function BotaoEnviarEmail({
           cliente={cliente}
           textoPadrao={textoPadrao}
           nomeArquivoPdf={nomeArquivoPdf}
+          aConferir={aConferir}
           cancelar={() => setAberto(false)}
         />
       </Dialogo>
@@ -164,6 +171,7 @@ function FormEnvio({
   cliente,
   textoPadrao,
   nomeArquivoPdf,
+  aConferir,
   cancelar,
 }: {
   estado: EstadoEnvio;
@@ -175,8 +183,11 @@ function FormEnvio({
   cliente: { apelido: string; email: string | null };
   textoPadrao: { assunto: string; corpo: string };
   nomeArquivoPdf: string;
+  aConferir: EdicaoAConferir[];
   cancelar: () => void;
 }) {
+  // Sem edição a conferir, não há o que marcar — vale como conferido.
+  const [conferido, setConferido] = useState(aConferir.length === 0);
   const [contaId, setContaId] = useState(contas.find((c) => c.padrao)?.id ?? contas[0]?.id ?? "");
   const [marcados, setMarcados] = useState(() => new Set(contatos.filter((c) => c.padrao).map((c) => c.id)));
   const [avulsos, setAvulsos] = useState("");
@@ -238,6 +249,37 @@ function FormEnvio({
       className="space-y-5"
     >
       <MensagemErro>{estado.erro}</MensagemErro>
+
+      {/*
+        Pedido mexido por preposto: o administrador vê quem e quando antes de
+        mandar, e só manda depois de dizer que conferiu. O servidor cobra a
+        mesma caixa — desabilitar o botão aqui é só para não deixar tentar.
+      */}
+      {aConferir.length > 0 && (
+        <div className="rounded-suave border border-filete-forte bg-destaque-fraco px-4 py-3 text-corpo">
+          <p className="flex items-center gap-2 font-semibold text-tinta">
+            <TriangleAlert size={16} strokeWidth={2} aria-hidden="true" className="shrink-0" />
+            {aConferir.length === 1 ? "Um preposto editou este pedido" : "Prepostos editaram este pedido"}
+          </p>
+          <ul className="mt-1.5 space-y-0.5 text-tinta-2">
+            {aConferir.map((edicao) => (
+              <li key={edicao.id}>
+                {edicao.quem} · <span className="numerico">{edicao.quando}</span>
+              </li>
+            ))}
+          </ul>
+          <label className="mt-2.5 flex cursor-pointer items-center gap-2 font-medium text-tinta">
+            <input
+              type="checkbox"
+              name="conferido"
+              checked={conferido}
+              onChange={(e) => setConferido(e.target.checked)}
+              className="size-4 accent-[var(--carimbo)]"
+            />
+            Conferi as alterações
+          </label>
+        </div>
+      )}
 
       <Selecao
         name="contaId"
@@ -403,8 +445,14 @@ function FormEnvio({
           type="submit"
           icone={Send}
           carregando={enviando}
-          disabled={para.length === 0 || passou}
-          title={para.length === 0 ? "Escolha pelo menos um destinatário na indústria" : undefined}
+          disabled={para.length === 0 || passou || !conferido}
+          title={
+            !conferido
+              ? "Confira as alterações do preposto antes de enviar"
+              : para.length === 0
+                ? "Escolha pelo menos um destinatário na indústria"
+                : undefined
+          }
         >
           {enviando
             ? "Enviando…"

@@ -307,6 +307,14 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     expect(await dbParaOrganizacao(escritorio, dono).envioPedido.findMany()).toHaveLength(1);
   });
 
+  it("o histórico de edições herda o corte do pedido", async () => {
+    await admin.pedidoEdicao.create({ data: { pedidoId: pedidoDaAna, usuarioId: ana.usuarioId } });
+
+    expect(await dbParaOrganizacao(escritorio, bruno).pedidoEdicao.findMany()).toHaveLength(0);
+    expect(await dbParaOrganizacao(escritorio, ana).pedidoEdicao.findMany()).toHaveLength(1);
+    expect(await dbParaOrganizacao(escritorio, dono).pedidoEdicao.findMany()).toHaveLength(1);
+  });
+
   /*
    * A única tabela em que o administrador NÃO vê tudo: a caixa de e-mail é da
    * pessoa, e mandar por ela é falar em nome dela.
