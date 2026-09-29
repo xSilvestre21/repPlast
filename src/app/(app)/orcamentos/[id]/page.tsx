@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Building2, Factory, FileDown, Pencil, ScrollText } from "lucide-react";
+import { Building2, Factory, FileDown, Mail, Pencil, ScrollText } from "lucide-react";
 
 import { BotaoExcluir } from "@/components/botao-excluir";
+import { type ContatoEnvio, EnvioPorEmail } from "@/components/envio-email";
 import { SecaoItens } from "@/components/itens-documento";
 import { Pagina } from "@/components/pagina";
 import {
@@ -11,8 +12,12 @@ import {
   Cartao,
   Emblema,
   formatarMoeda,
+  Painel,
+  SecaoCartao,
 } from "@/components/ui";
+import { CONTATO_EMAIL, CONTATO_NFE, textoPadraoDoOrcamento } from "@/lib/envio-orcamento";
 import { escreverNumeroBr } from "@/lib/numero-br";
+import { nomeArquivoOrcamento } from "@/lib/pdf/nome-arquivo";
 import { escopoAtual } from "@/lib/sessao";
 
 import { SeloOrcamento, destinatario } from "../selo";
@@ -25,6 +30,7 @@ import {
   converterEmPedido,
   definirIpiDeTodosOsItens,
   definirStatus,
+  enviarOrcamentoPorEmail,
   excluirOrcamento,
   salvarMotivoRecusa,
   removerItem,
@@ -47,7 +53,7 @@ export default async function PaginaOrcamento({
 }: PageProps<"/orcamentos/[id]">) {
   const { id } = await params;
   const parametros = await searchParams;
-  const { organizacaoId, db } = await escopoAtual();
+  const { organizacaoId, usuarioId, db } = await escopoAtual();
 
   const orcamento = await db.orcamento.findFirst({
     where: { id, organizacaoId },
@@ -60,10 +66,27 @@ export default async function PaginaOrcamento({
         orderBy: { editadoEm: "desc" },
         select: { id: true, editadoEm: true, usuario: { select: { nome: true } } },
       },
+      envios: {
+        orderBy: { enviadoEm: "desc" },
+        select: { id: true, de: true, para: true, cc: true, anexos: true, enviadoEm: true },
+      },
     },
   });
 
   if (!orcamento) notFound();
+
+  // As caixas e o texto de QUEM ESTÁ OLHANDO, como no pedido: quem envia assina.
+  const [contas, modeloEnvio] = await Promise.all([
+    db.contaEmail.findMany({
+      where: { usuarioId },
+      orderBy: [{ padrao: "desc" }, { criadoEm: "asc" }],
+      select: { id: true, email: true, nomeExibicao: true, padrao: true },
+    }),
+    db.usuario.findUnique({
+      where: { id: usuarioId },
+      select: { assuntoOrcamentoPadrao: true, mensagemOrcamentoPadrao: true },
+    }),
+  ]);
 
   /*
    * O que dá para lançar aqui: produto DESTE cliente E DESTA indústria.
@@ -130,12 +153,35 @@ export default async function PaginaOrcamento({
   const descartavel =
     (aberto || orcamento.status === "EXPIRADO") && orcamento.pedidos.length === 0;
 
+  /*
+   * Para quem a proposta vai: os e-mails do cadastro do cliente, os dois já
+   * marcados. O da NF-e só aparece se for outro endereço. Proposta de quem
+   * ainda não é cliente não tem nenhum — a pessoa digita.
+   */
+  const contatosDoCliente: ContatoEnvio[] = [
+    { id: CONTATO_EMAIL, nome: "E-mail", setor: null, email: orcamento.cliente?.email ?? "", padrao: true },
+    {
+      id: CONTATO_NFE,
+      nome: "E-mail da NF-e",
+      setor: null,
+      email: orcamento.cliente?.emailNfe ?? "",
+      padrao: true,
+    },
+  ].filter(
+    (contato, i, todos) =>
+      contato.email && todos.findIndex((outro) => outro.email === contato.email) === i,
+  );
+  const ultimoEnvio = orcamento.envios[0]?.enviadoEm;
+
   return (
     <Pagina>
       <Cabecalho
         voltar={{ href: "/orcamentos", rotulo: "Orçamentos" }}
         titulo={`Orçamento #${orcamento.numero}`}
-        descricao={`${para.nome} · ${orcamento.fornecedor.nome}`}
+        descricao={
+          `${para.nome} · ${orcamento.fornecedor.nome}` +
+          (ultimoEnvio ? ` · enviada em ${DATA_HORA.format(ultimoEnvio)}` : "")
+        }
         acao={
           <div className="flex items-center gap-3">
             <SeloOrcamento status={orcamento.status} />
@@ -146,6 +192,48 @@ export default async function PaginaOrcamento({
             >
               PDF
             </BotaoLink>
+            {orcamento.itens.length > 0 && (
+              <EnvioPorEmail
+                jaEnviado={orcamento.envios.length > 0}
+                acao={enviarOrcamentoPorEmail.bind(null, orcamento.id)}
+                contas={contas}
+                contatos={contatosDoCliente}
+                textoPadrao={textoPadraoDoOrcamento(
+                  {
+                    numero: orcamento.numero,
+                    cliente: para.razaoSocial,
+                    attn: orcamento.attn,
+                    validoAte: orcamento.validoAte,
+                    prazoPagamento: orcamento.prazoPagamento,
+                    vendedor: orcamento.vendedor,
+                  },
+                  {
+                    assunto: modeloEnvio?.assuntoOrcamentoPadrao,
+                    corpo: modeloEnvio?.mensagemOrcamentoPadrao,
+                  },
+                )}
+                nomeArquivoPdf={nomeArquivoOrcamento(
+                  orcamento.numero,
+                  orcamento.cliente?.apelido ?? orcamento.clienteAvulsoNome ?? "proposta",
+                  orcamento.criadoEm,
+                )}
+                documento={{
+                  titulo:
+                    orcamento.envios.length > 0
+                      ? "Reenviar proposta por e-mail"
+                      : "Enviar proposta por e-mail",
+                  descricao: `Para ${para.nome}. A proposta passa a abrir em leitura; aceite e recusa continuam com você.`,
+                  rotuloPara: `Para — ${para.nome}`,
+                  semContatos: para.cadastrado
+                    ? `A ${para.nome} não tem e-mail no cadastro. Digite o endereço abaixo.`
+                    : "Quem ainda não é cliente não tem e-mail guardado. Digite o endereço abaixo.",
+                  placeholderAvulsos: "compras@cliente.com.br",
+                  faltaDestinatario: "Escolha ou digite pelo menos um e-mail do cliente",
+                  tituloEntrega: `Proposta enviada para ${para.nome}`,
+                  este: "esta proposta",
+                }}
+              />
+            )}
             {aberto && !editavel && (
               <BotaoLink href={`/orcamentos/${orcamento.id}?editar=1`} icone={Pencil}>
                 Editar
@@ -364,6 +452,32 @@ export default async function PaginaOrcamento({
             />
           </div>
         </Cartao>
+
+        {orcamento.envios.length > 0 && (
+          <SecaoCartao
+            icone={Mail}
+            titulo="Envios por e-mail"
+            descricao="Cada vez que a proposta saiu, e para quem."
+          >
+            <Painel>
+              {orcamento.envios.map((envio) => (
+                <div key={envio.id} className="px-4 py-3 text-corpo space-y-0.5">
+                  <div className="flex flex-wrap justify-between gap-x-4">
+                    <span className="font-medium">{envio.para.join(", ")}</span>
+                    <span className="text-mini text-tinta-3 numerico">
+                      {DATA_HORA.format(envio.enviadoEm)}
+                    </span>
+                  </div>
+                  <div className="text-mini text-tinta-3">
+                    de {envio.de}
+                    {envio.cc.length > 0 && ` · cópia para ${envio.cc.join(", ")}`}
+                    {envio.anexos.length > 1 && ` · ${envio.anexos.length} anexos`}
+                  </div>
+                </div>
+              ))}
+            </Painel>
+          </SecaoCartao>
+        )}
       </div>
     </Pagina>
   );

@@ -1125,7 +1125,7 @@ body {
 /* O avião de papel cruza em arco (`offset-path`, calculado em pixels pelo    */
 /* componente) enquanto o rastro se desenha pelo mesmo caminho. O cartão      */
 /* pousa quando o avião passa pelo centro, ~45% do voo. Ver                   */
-/* `pedidos/[id]/entrega-enviado.tsx`.                                        */
+/* `components/entrega-enviado.tsx`.                                          */
 /* -------------------------------------------------------------------------- */
 
 .entrega-fundo {

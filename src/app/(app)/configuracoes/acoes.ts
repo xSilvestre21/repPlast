@@ -9,12 +9,9 @@ import { revalidatePath } from "next/cache";
 import { contaParaEnvio } from "@/lib/conta-email";
 import { cifrar, decifrar } from "@/lib/cripto";
 import { testarConta } from "@/lib/email";
-import {
-  ASSUNTO_ENVIO_PADRAO,
-  MENSAGEM_ENVIO_PADRAO,
-  emailValido,
-  problemaNoModelo,
-} from "@/lib/envio-pedido";
+import { emailValido } from "@/lib/envio-pedido";
+import { problemaNoModelo } from "@/lib/modelo-email";
+import { MODELOS_DE_EMAIL, type TipoDeEmail, ehTipoDeEmail } from "@/lib/tipos-de-email";
 import { ehProvedor } from "@/lib/provedores-email";
 import { escopoAtual } from "@/lib/sessao";
 
@@ -105,17 +102,24 @@ export async function salvarCidade(
 }
 
 /**
- * O assunto e a mensagem com que o e-mail do pedido abre.
+ * O assunto e a mensagem com que o e-mail do pedido — ou o da proposta — abre.
  *
  * De cada usuário: quem envia assina. Campo vazio volta ao texto de sempre.
  * Recusa variável que não existe e trecho `{se …}` sem `{fim}` — salvos, iriam
- * para a indústria com chaves no meio, e a pessoa só veria no primeiro envio.
+ * para a indústria ou o cliente com chaves no meio, e a pessoa só veria no
+ * primeiro envio.
+ *
+ * O `tipo` chega preso pelo `.bind` da página, mas argumento de `bind` viaja
+ * do navegador como qualquer outro: é conferido antes de escolher coluna.
  */
 export async function salvarMensagemEnvioPadrao(
+  tipo: TipoDeEmail,
   _estado: EstadoFormulario,
   formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
+    if (!ehTipoDeEmail(tipo)) return { erro: "Tipo de e-mail desconhecido." };
+    const modelo = MODELOS_DE_EMAIL[tipo];
     const { usuarioId, organizacaoId, db } = await escopoAtual();
 
     // O textarea manda `\r\n`; o modelo guarda `\n`. Igual ao texto de sempre
@@ -125,17 +129,18 @@ export async function salvarMensagemEnvioPadrao(
       const texto = typeof bruto === "string" ? bruto.replace(/\r\n?/g, "\n").trim() : "";
       return texto === "" || texto === padrao ? null : texto;
     };
-    const assunto = ler("assuntoEnvioPadrao", ASSUNTO_ENVIO_PADRAO);
-    const mensagem = ler("mensagemEnvioPadrao", MENSAGEM_ENVIO_PADRAO);
+    const assunto = ler(modelo.colunas.assunto, modelo.assuntoPadrao);
+    const mensagem = ler(modelo.colunas.mensagem, modelo.mensagemPadrao);
 
     // Cada campo por si: um `{se}` no assunto não se fecha com o `{fim}` da mensagem.
-    const problema =
-      (assunto && problemaNoModelo(assunto)) || (mensagem && problemaNoModelo(mensagem));
+    const problema = [assunto, mensagem]
+      .map((texto) => texto && problemaNoModelo(texto, modelo.tabela, modelo.doDocumento))
+      .find(Boolean);
     if (problema) return { erro: problema };
 
     await db.usuario.updateMany({
       where: { id: usuarioId, organizacaoId },
-      data: { assuntoEnvioPadrao: assunto, mensagemEnvioPadrao: mensagem },
+      data: { [modelo.colunas.assunto]: assunto, [modelo.colunas.mensagem]: mensagem },
     });
   } catch (erro) {
     return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };

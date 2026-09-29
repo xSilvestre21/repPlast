@@ -26,6 +26,16 @@ import {
   precoUnitario,
   unidadesDaFamilia,
 } from "@/lib/produto-preco";
+import { contaParaEnvio } from "@/lib/conta-email";
+import { enviarEmail } from "@/lib/email";
+import { CONTATO_EMAIL, CONTATO_NFE } from "@/lib/envio-orcamento";
+import {
+  type EstadoEnvio,
+  lerListaEmails,
+  montarDestinatarios,
+  problemaNoEnvio,
+} from "@/lib/envio-pedido";
+import { carregarOrcamentoParaPdf, gerarPdfOrcamento } from "@/lib/pdf/gerar-orcamento";
 import { escopoAtual } from "@/lib/sessao";
 import { calcularTotaisPedido } from "@/lib/totais";
 
@@ -928,4 +938,133 @@ export async function cadastrarProdutosDaProposta(
   revalidatePath("/produtos");
   revalidatePath(`/orcamentos/${orcamentoId}`);
   return {};
+}
+
+/* -------------------------------------------------------------------------- */
+/* Envio por e-mail                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Manda a proposta para o cliente, da caixa de quem está enviando.
+ *
+ * O mesmo caminho do pedido (`enviarPedidoPorEmail`), com duas diferenças. Vai
+ * para o CLIENTE: as caixas marcadas no diálogo são o e-mail e o e-mail da
+ * NF-e do cadastro, e os endereços vêm daqui, do banco — a caixa marcada diz
+ * "mande para ele", e quem ele é o cadastro sabe. E enviar não mexe no status:
+ * aceite e recusa continuam sendo decisão de quem negocia. O que muda é que a
+ * proposta deixa de estar em elaboração — a que foi para o cliente está pronta.
+ */
+export async function enviarOrcamentoPorEmail(
+  orcamentoId: string,
+  _estado: EstadoEnvio,
+  formData: FormData,
+): Promise<EstadoEnvio> {
+  let aviso: string | undefined;
+
+  try {
+    const { organizacaoId, usuarioId, papel, db } = await contexto();
+
+    const orcamento = await db.orcamento.findFirst({
+      where: { id: orcamentoId, organizacaoId },
+      select: {
+        _count: { select: { itens: true } },
+        cliente: { select: { email: true, emailNfe: true } },
+      },
+    });
+    if (!orcamento) return { erro: "Proposta não encontrada." };
+    if (orcamento._count.itens === 0) {
+      return { erro: "Não dá para enviar uma proposta sem itens." };
+    }
+
+    const pdf = await carregarOrcamentoParaPdf(orcamentoId, organizacaoId, { usuarioId, papel });
+    if (!pdf) return { erro: "Proposta não encontrada." };
+
+    const conta = await contaParaEnvio(db, usuarioId, String(formData.get("contaId") ?? ""));
+    if (!conta) return { erro: "Escolha de qual e-mail a proposta sai." };
+
+    const doCadastro: Record<string, string | null | undefined> = {
+      [CONTATO_EMAIL]: orcamento.cliente?.email,
+      [CONTATO_NFE]: orcamento.cliente?.emailNfe,
+    };
+    const contatos = formData
+      .getAll("contatoId")
+      .map((id) => doCadastro[String(id)])
+      .filter((email): email is string => Boolean(email));
+
+    const { para, cc } = montarDestinatarios({
+      contatos,
+      avulsos: lerListaEmails(String(formData.get("emailsAvulsos") ?? "")),
+      copiaParaMim: formData.get("copiaParaMim") === "on" ? conta.email : null,
+    });
+
+    const assunto = String(formData.get("assunto") ?? "").trim();
+    const corpo = String(formData.get("corpo") ?? "");
+
+    const extras = formData
+      .getAll("anexo")
+      .filter((a): a is File => a instanceof File && a.size > 0);
+
+    const arquivo = await gerarPdfOrcamento(pdf.dados);
+
+    const problema = problemaNoEnvio({
+      para,
+      cc,
+      assunto,
+      anexos: [
+        { nome: pdf.nomeArquivo, tamanho: arquivo.length },
+        ...extras.map((a) => ({ nome: a.name, tamanho: a.size })),
+      ],
+      faltaDestinatario: "Escolha ou digite pelo menos um e-mail do cliente.",
+    });
+    if (problema) return { erro: problema };
+
+    const anexos = [
+      { nome: pdf.nomeArquivo, conteudo: arquivo, tipo: "application/pdf" },
+      ...(await Promise.all(
+        extras.map(async (a) => ({
+          nome: a.name,
+          conteudo: Buffer.from(await a.arrayBuffer()),
+          tipo: a.type || undefined,
+        })),
+      )),
+    ];
+
+    const resultado = await enviarEmail({ conta, para, cc, assunto, texto: corpo, anexos });
+    if (!resultado.enviado) return { erro: resultado.motivo };
+
+    if (resultado.recusados.length > 0) {
+      aviso = `Enviada, mas o servidor recusou: ${resultado.recusados.join(", ")}.`;
+    }
+
+    await db.envioOrcamento.create({
+      data: {
+        orcamentoId,
+        usuarioId,
+        de: conta.email,
+        para,
+        cc,
+        assunto,
+        corpo,
+        anexos: anexos.map((a) => a.nome),
+        idMensagem: resultado.id,
+      },
+    });
+
+    // A conta acabou de provar que funciona — vale como teste.
+    await db.contaEmail.updateMany({
+      where: { id: conta.id, usuarioId },
+      data: { testadaEm: new Date() },
+    });
+
+    await db.orcamento.updateMany({
+      where: { id: orcamentoId, organizacaoId },
+      data: { emElaboracao: false },
+    });
+  } catch (erro) {
+    return { erro: erro instanceof Error ? erro.message : "Não foi possível enviar." };
+  }
+
+  revalidatePath("/orcamentos");
+  revalidatePath(`/orcamentos/${orcamentoId}`);
+  return { enviado: true, aviso };
 }

@@ -4,7 +4,7 @@ import { Pagina } from "@/components/pagina";
 import { Botao, Cabecalho, SecaoCartao } from "@/components/ui";
 import { CAMPOS_PUBLICOS_CONTA } from "@/lib/conta-email";
 import { criptoConfigurada } from "@/lib/cripto";
-import { ASSUNTO_ENVIO_PADRAO, MENSAGEM_ENVIO_PADRAO } from "@/lib/envio-pedido";
+import { MODELOS_DE_EMAIL } from "@/lib/tipos-de-email";
 import { escopoAtual, sessaoAtual } from "@/lib/sessao";
 
 import {
@@ -37,6 +37,8 @@ export default async function PaginaConfiguracoes() {
         municipio: true,
         assuntoEnvioPadrao: true,
         mensagemEnvioPadrao: true,
+        assuntoOrcamentoPadrao: true,
+        mensagemOrcamentoPadrao: true,
       },
     }),
     db.contaEmail.findMany({
@@ -71,9 +73,10 @@ export default async function PaginaConfiguracoes() {
         />
 
         <FormMensagemEnvio
-          assunto={usuario?.assuntoEnvioPadrao ?? ASSUNTO_ENVIO_PADRAO}
-          mensagem={usuario?.mensagemEnvioPadrao ?? MENSAGEM_ENVIO_PADRAO}
-          salvar={salvarMensagemEnvioPadrao}
+          tipo="pedido"
+          assunto={usuario?.assuntoEnvioPadrao ?? MODELOS_DE_EMAIL.pedido.assuntoPadrao}
+          mensagem={usuario?.mensagemEnvioPadrao ?? MODELOS_DE_EMAIL.pedido.mensagemPadrao}
+          salvar={salvarMensagemEnvioPadrao.bind(null, "pedido")}
         />
 
         <FormCidade valor={usuario?.municipio ?? ""} salvar={salvarCidade} />
@@ -81,6 +84,14 @@ export default async function PaginaConfiguracoes() {
         <FormObservacoesPadrao
           valor={usuario?.observacoesPadrao ?? ""}
           salvar={salvarObservacoesPadrao}
+        />
+
+        {/* Junto das condições: é o outro texto que toda proposta leva. */}
+        <FormMensagemEnvio
+          tipo="orcamento"
+          assunto={usuario?.assuntoOrcamentoPadrao ?? MODELOS_DE_EMAIL.orcamento.assuntoPadrao}
+          mensagem={usuario?.mensagemOrcamentoPadrao ?? MODELOS_DE_EMAIL.orcamento.mensagemPadrao}
+          salvar={salvarMensagemEnvioPadrao.bind(null, "orcamento")}
         />
 
         <SecaoCartao titulo="Animações" descricao="Como a interface se move para você.">

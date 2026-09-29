@@ -7,7 +7,12 @@ import type { StatusPedido } from "@/generated/prisma/enums";
 import { type DbOrganizacao } from "@/lib/db";
 import { contaParaEnvio } from "@/lib/conta-email";
 import { enviarEmail } from "@/lib/email";
-import { lerListaEmails, montarDestinatarios, problemaNoEnvio } from "@/lib/envio-pedido";
+import {
+  type EstadoEnvio,
+  lerListaEmails,
+  montarDestinatarios,
+  problemaNoEnvio,
+} from "@/lib/envio-pedido";
 import { ipiDoFormulario, ipiParaGravar } from "@/lib/ipi-do-formulario";
 import { motivoDoFormulario } from "@/lib/motivo";
 import { lerNumeroBr } from "@/lib/numero-br";
@@ -24,8 +29,6 @@ import { calcularTotaisPedido } from "@/lib/totais";
 
 export type EstadoFormulario = { erro?: string };
 
-/** O envio fecha o diálogo quando dá certo, e pode voltar com um aviso. */
-export type EstadoEnvio = { erro?: string; enviado?: boolean; aviso?: string };
 
 async function contexto() {
   return escopoAtual();

@@ -178,12 +178,18 @@ model Usuario {
   assuntoEnvioPadrao  String?
   mensagemEnvioPadrao String?
 
+  /// O mesmo, para o e-mail da PROPOSTA — que vai para o cliente, não para a
+  /// indústria, e por isso tem texto e variáveis próprios (`lib/envio-orcamento.ts`).
+  assuntoOrcamentoPadrao  String?
+  mensagemOrcamentoPadrao String?
+
   organizacao Organizacao          @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   clientes     Cliente[]
   pedidos      Pedido[]
   orcamentos   Orcamento[]
   edicoes      OrcamentoEdicao[]
   edicoesPedido PedidoEdicao[]
+  enviosOrcamento EnvioOrcamento[]
   fornecedores FornecedorPreposto[]
   contasEmail  ContaEmail[]
   envios       EnvioPedido[]
@@ -826,6 +832,7 @@ model Orcamento {
   representante Usuario?        @relation(fields: [representanteId], references: [id], onDelete: SetNull)
   itens         OrcamentoItem[]
   edicoes       OrcamentoEdicao[]
+  envios        EnvioOrcamento[]
   pedidos       Pedido[]
 
   @@unique([organizacaoId, numero])
@@ -991,4 +998,30 @@ model EnvioPedido {
 
   @@index([pedidoId, enviadoEm])
   @@map("envio_pedido")
+}
+
+/// Cada envio da proposta por e-mail — de quem, para quem, com quais anexos.
+///
+/// Espelho de `EnvioPedido`. Enviar não muda o status da proposta: aceite e
+/// recusa continuam sendo decisão de quem negocia. O que muda é que ela deixa
+/// de estar em elaboração — proposta que foi para o cliente está pronta.
+model EnvioOrcamento {
+  id          String   @id @default(uuid()) @db.Uuid
+  orcamentoId String   @db.Uuid
+  usuarioId   String?  @db.Uuid
+  de          String
+  para        String[]
+  cc          String[] @default([])
+  assunto     String
+  corpo       String
+  anexos      String[] @default([])
+  /// O Message-ID devolvido pelo servidor, para achar a mensagem se preciso.
+  idMensagem  String?
+  enviadoEm   DateTime @default(now())
+
+  orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  usuario   Usuario?  @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([orcamentoId, enviadoEm])
+  @@map("envio_orcamento")
 }

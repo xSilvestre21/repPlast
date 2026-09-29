@@ -307,6 +307,33 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     expect(await dbParaOrganizacao(escritorio, dono).envioPedido.findMany()).toHaveLength(1);
   });
 
+  it("o histórico de envios da proposta herda o corte do orçamento", async () => {
+    const { fornecedorId } = await admin.pedido.findUniqueOrThrow({ where: { id: pedidoDaAna } });
+    const proposta = await admin.orcamento.create({
+      data: {
+        organizacaoId: escritorio,
+        fornecedorId,
+        clienteId: clienteDaAna,
+        numero: 1,
+        representanteId: ana.usuarioId,
+      },
+    });
+    await admin.envioOrcamento.create({
+      data: {
+        orcamentoId: proposta.id,
+        usuarioId: ana.usuarioId,
+        de: "ana@teste.local",
+        para: ["compras@cliente.local"],
+        assunto: "Proposta 1",
+        corpo: "",
+      },
+    });
+
+    expect(await dbParaOrganizacao(escritorio, bruno).envioOrcamento.findMany()).toHaveLength(0);
+    expect(await dbParaOrganizacao(escritorio, ana).envioOrcamento.findMany()).toHaveLength(1);
+    expect(await dbParaOrganizacao(escritorio, dono).envioOrcamento.findMany()).toHaveLength(1);
+  });
+
   it("o histórico de edições herda o corte do pedido", async () => {
     await admin.pedidoEdicao.create({ data: { pedidoId: pedidoDaAna, usuarioId: ana.usuarioId } });
 

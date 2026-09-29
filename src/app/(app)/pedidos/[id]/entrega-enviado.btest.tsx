@@ -11,11 +11,11 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
 
-import { EntregaEnviado } from "./entrega-enviado";
+import { EntregaEnviado } from "@/components/entrega-enviado";
 import { BotaoEnviarEmail } from "./envio";
 
 const BASE = {
-  fornecedor: "QUALYPLAST EMBALAGENS",
+  titulo: "Pedido enviado para a QUALYPLAST EMBALAGENS",
   para: ["compras@exemplo.com.br", "pcp@exemplo.com.br"],
   cc: ["voce@exemplo.com"],
 };

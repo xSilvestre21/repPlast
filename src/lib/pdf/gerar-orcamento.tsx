@@ -10,32 +10,12 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { type Ator, dbParaOrganizacao } from "../db";
 import type { Familia, UnidadeVenda } from "../produto-preco";
 import { DocumentoOrcamento, type DadosOrcamentoPdf } from "./documento-orcamento";
+import { nomeArquivoOrcamento } from "./nome-arquivo";
 
 export type OrcamentoParaPdf = {
   dados: DadosOrcamentoPdf;
   nomeArquivo: string;
 };
-
-/**
- * Nome do arquivo da proposta.
- *
- * Começa com "orcamento" de propósito: o cliente costuma receber os dois
- * documentos, e o do pedido abre com o número puro. Sem a palavra, dois
- * arquivos na mesma pasta de downloads ficariam indistinguíveis.
- */
-function nomeArquivoOrcamento(numero: number, apelidoCliente: string, data: Date): string {
-  const dia = String(data.getDate()).padStart(2, "0");
-  const mes = String(data.getMonth() + 1).padStart(2, "0");
-
-  const limpo = apelidoCliente
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^A-Za-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
-    .toUpperCase();
-
-  return `orcamento-${numero}-${limpo}-${dia}-${mes}-${data.getFullYear()}.pdf`;
-}
 
 export async function carregarOrcamentoParaPdf(
   orcamentoId: string,

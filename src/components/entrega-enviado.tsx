@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * "Pedido enviado", entregue por um avião de papel.
+ * "Enviado", entregue por um avião de papel — o do pedido e o da proposta.
  *
- * Enviar o pedido é o momento que fecha a venda para quem representa — e o
- * aviso ficava num canto da página, pequeno como um rodapé. Aqui ele vira um
+ * Mandar um documento é o momento que fecha a venda para quem representa — e
+ * o aviso ficava num canto da página, pequeno como um rodapé. Aqui ele vira um
  * acontecimento curto: a tela escurece sem sumir (dá para ver o pedido por
  * trás), o avião de papel — o mesmo ícone do botão de enviar — cruza em arco,
  * e no meio do caminho deixa o cartão no centro dizendo para quem foi.
@@ -45,13 +45,14 @@ function trajetoria(largura: number, altura: number): string {
 }
 
 export function EntregaEnviado({
-  fornecedor,
+  titulo,
   para,
   cc,
   aviso,
   fechar,
 }: {
-  fornecedor: string;
+  /** "Pedido enviado para a QUALYPLAST", "Proposta enviada para a AKILAH". */
+  titulo: string;
   para: string[];
   cc: string[];
   aviso?: string;
@@ -105,7 +106,7 @@ export function EntregaEnviado({
       <div
         role={aviso ? "alertdialog" : "status"}
         aria-live={aviso ? undefined : "polite"}
-        aria-label={aviso ? "Pedido enviado com recusas" : undefined}
+        aria-label={aviso ? `${titulo}, com recusas` : undefined}
         onClick={(evento) => evento.stopPropagation()}
         className="entrega-cartao relative w-full max-w-[26rem] rounded-suave border border-filete bg-folha p-5
           text-center shadow-[var(--sombra-alta)]"
@@ -116,7 +117,7 @@ export function EntregaEnviado({
           aria-hidden="true"
           className="mx-auto mb-3 text-verde"
         />
-        <p className="text-realce font-semibold text-tinta">Pedido enviado para a {fornecedor}</p>
+        <p className="text-realce font-semibold text-tinta">{titulo}</p>
         <p className="mt-1.5 break-words text-corpo text-tinta-2">
           Para {para.join(", ")}
           {cc.length > 0 && ` · cópia para ${cc.join(", ")}`}
