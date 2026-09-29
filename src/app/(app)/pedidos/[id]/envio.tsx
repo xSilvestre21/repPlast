@@ -16,7 +16,7 @@
 
 import Link from "next/link";
 import { Mail, Paperclip, Send, X } from "lucide-react";
-import { startTransition, useActionState, useEffect, useRef, useState } from "react";
+import { startTransition, useActionState, useCallback, useEffect, useRef, useState } from "react";
 
 import { Dialogo } from "@/components/dialogo";
 import {
@@ -25,7 +25,6 @@ import {
   BotaoLink,
   Campo,
   CLASSE_CONTROLE,
-  Mensagem,
   MensagemErro,
   Rotulo,
   Selecao,
@@ -38,6 +37,7 @@ import {
 } from "@/lib/envio-pedido";
 
 import type { EstadoEnvio } from "../acoes";
+import { EntregaEnviado } from "./entrega-enviado";
 
 export type ContaEnvio = { id: string; email: string; nomeExibicao: string; padrao: boolean };
 export type ContatoEnvio = { id: string; nome: string | null; setor: string | null; email: string; padrao: boolean };
@@ -62,26 +62,71 @@ export function BotaoEnviarEmail({
   nomeArquivoPdf: string;
 }) {
   const [aberto, setAberto] = useState(false);
-  const [aviso, setAviso] = useState<string | undefined>();
+  const [enviado, setEnviado] = useState<Enviado | null>(null);
+  // Estável: depois do envio a página revalida e este botão redesenha — uma
+  // função nova a cada vez reiniciaria a contagem para o aviso sumir.
+  const fecharEntrega = useCallback(() => setEnviado(null), []);
+
+  /*
+   * O estado do envio mora AQUI, e não no formulário.
+   *
+   * O formulário só existe com o diálogo aberto, e o envio leva uns cinco
+   * segundos (o PDF, o servidor de e-mail). Quem fechava o diálogo nesse meio —
+   * clique no fundo, Esc, o X — desmontava junto quem esperava a resposta: o
+   * pedido saía, e o aviso de enviado nunca aparecia. Este botão não desmonta.
+   */
+  const [estado, enviar, enviando] = useActionState(acao, {});
+  // Avisa só uma vez por submissão; o estado inicial e o de antes não contam.
+  const avisado = useRef(true);
+  // Para quem foi, guardado na hora do envio — é o que o aviso conta.
+  const destinatarios = useRef<{ para: string[]; cc: string[] }>({ para: [], cc: [] });
+
+  useEffect(() => {
+    if (avisado.current) return;
+    avisado.current = true;
+    if (estado.enviado) {
+      setEnviado({ ...destinatarios.current, aviso: estado.aviso });
+      setAberto(false);
+    } else if (estado.erro) {
+      // Deu errado com o diálogo fechado: reabre, que é onde o erro aparece.
+      // Com ele aberto, isto não muda nada.
+      setAberto(true);
+    }
+  }, [estado]);
+
+  const submeter = useCallback(
+    (dados: FormData, para: string[], cc: string[]) => {
+      avisado.current = false;
+      destinatarios.current = { para, cc };
+      startTransition(() => enviar(dados));
+    },
+    [enviar],
+  );
 
   return (
-    <div className="flex flex-col items-end gap-2">
+    <>
       <Botao
         type="button"
         variante={jaEnviado ? "secundaria" : "primaria"}
         icone={Mail}
+        // Fechado o diálogo no meio do envio, é aqui que se vê que ainda está indo.
+        carregando={enviando}
         onClick={() => {
-          setAviso(undefined);
+          setEnviado(null);
           setAberto(true);
         }}
       >
-        {jaEnviado ? "Reenviar por e-mail" : "Enviar por e-mail"}
+        {enviando ? "Enviando…" : jaEnviado ? "Reenviar por e-mail" : "Enviar por e-mail"}
       </Botao>
 
-      {aviso && (
-        <div className="max-w-sm">
-          <Mensagem tom="verde">{aviso}</Mensagem>
-        </div>
+      {enviado && (
+        <EntregaEnviado
+          fornecedor={fornecedor.nome}
+          para={enviado.para}
+          cc={enviado.cc}
+          aviso={enviado.aviso}
+          fechar={fecharEntrega}
+        />
       )}
 
       <Dialogo
@@ -91,47 +136,47 @@ export function BotaoEnviarEmail({
         descricao={`Para a ${fornecedor.nome}. Dando certo, o pedido fica marcado como enviado.`}
       >
         <FormEnvio
-          acao={acao}
+          estado={estado}
+          enviando={enviando}
+          submeter={submeter}
           contas={contas}
           contatos={contatos}
           fornecedor={fornecedor}
           cliente={cliente}
           textoPadrao={textoPadrao}
           nomeArquivoPdf={nomeArquivoPdf}
-          aoEnviar={(resultado) => {
-            setAviso(resultado.aviso ?? "Pedido enviado.");
-            setAberto(false);
-          }}
           cancelar={() => setAberto(false)}
         />
       </Dialogo>
-    </div>
+    </>
   );
 }
 
+type Enviado = { para: string[]; cc: string[]; aviso?: string };
+
 function FormEnvio({
-  acao,
+  estado,
+  enviando,
+  submeter,
   contas,
   contatos,
   fornecedor,
   cliente,
   textoPadrao,
   nomeArquivoPdf,
-  aoEnviar,
   cancelar,
 }: {
-  acao: (estado: EstadoEnvio, formData: FormData) => Promise<EstadoEnvio>;
+  estado: EstadoEnvio;
+  enviando: boolean;
+  submeter: (dados: FormData, para: string[], cc: string[]) => void;
   contas: ContaEnvio[];
   contatos: ContatoEnvio[];
   fornecedor: { id: string; nome: string };
   cliente: { apelido: string; email: string | null };
   textoPadrao: { assunto: string; corpo: string };
   nomeArquivoPdf: string;
-  aoEnviar: (resultado: EstadoEnvio) => void;
   cancelar: () => void;
 }) {
-  const [estado, enviar, enviando] = useActionState(acao, {});
-
   const [contaId, setContaId] = useState(contas.find((c) => c.padrao)?.id ?? contas[0]?.id ?? "");
   const [marcados, setMarcados] = useState(() => new Set(contatos.filter((c) => c.padrao).map((c) => c.id)));
   const [avulsos, setAvulsos] = useState("");
@@ -148,15 +193,6 @@ function FormEnvio({
     anexos.forEach((arquivo) => lista.items.add(arquivo));
     campoAnexos.current.files = lista.files;
   }, [anexos]);
-
-  // Fecha só quando ESTA submissão deu certo; o estado inicial não conta.
-  const avisado = useRef(false);
-  useEffect(() => {
-    if (estado.enviado && !avisado.current) {
-      avisado.current = true;
-      aoEnviar(estado);
-    }
-  }, [estado, aoEnviar]);
 
   const conta = contas.find((c) => c.id === contaId);
   const { para, cc } = montarDestinatarios({
@@ -197,9 +233,7 @@ function FormEnvio({
       // levando junto o texto que a pessoa escreveu e os arquivos escolhidos.
       onSubmit={(evento) => {
         evento.preventDefault();
-        const dados = new FormData(evento.currentTarget);
-        avisado.current = false;
-        startTransition(() => enviar(dados));
+        submeter(new FormData(evento.currentTarget), para, cc);
       }}
       className="space-y-5"
     >

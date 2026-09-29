@@ -1120,6 +1120,64 @@ body {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Entrega do pedido enviado                                                  */
+/*                                                                            */
+/* O avião de papel cruza em arco (`offset-path`, calculado em pixels pelo    */
+/* componente) enquanto o rastro se desenha pelo mesmo caminho. O cartão      */
+/* pousa quando o avião passa pelo centro, ~45% do voo. Ver                   */
+/* `pedidos/[id]/entrega-enviado.tsx`.                                        */
+/* -------------------------------------------------------------------------- */
+
+.entrega-fundo {
+  animation: esmaecer 200ms ease-out both;
+}
+
+.entrega-aviao {
+  offset-rotate: auto;
+  animation: aviao-voar 1.25s cubic-bezier(0.45, 0.05, 0.35, 1) both;
+}
+
+@keyframes aviao-voar {
+  0%   { offset-distance: 0%;   opacity: 0; }
+  8%   { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+
+.entrega-rastro path {
+  stroke: var(--carimbo);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  opacity: 0.35;
+  animation:
+    rastro-desenhar 1.25s cubic-bezier(0.45, 0.05, 0.35, 1) forwards,
+    rastro-sumir 0.6s ease-in 1.1s forwards;
+}
+
+@keyframes rastro-desenhar {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes rastro-sumir {
+  to { opacity: 0; }
+}
+
+.entrega-cartao {
+  animation: cartao-pousar 420ms cubic-bezier(0.34, 1.56, 0.64, 1) 520ms both;
+}
+
+@keyframes cartao-pousar {
+  from { opacity: 0; transform: translateY(10px) scale(0.92); }
+  to   { opacity: 1; transform: none; }
+}
+
+.entrega-saindo {
+  animation: esmaecer 250ms ease-in reverse forwards;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Confete                                                                    */
 /* -------------------------------------------------------------------------- */
 
@@ -1169,6 +1227,20 @@ body {
 /* -------------------------------------------------------------------------- */
 
 :root[data-animacoes="desativadas"] .confete { display: none; }
+
+/* Sem voo: o avião e o rastro somem, o cartão e o fundo já nascem no lugar. */
+:root[data-animacoes="desativadas"] .entrega-aviao,
+:root[data-animacoes="desativadas"] .entrega-rastro {
+  display: none;
+}
+
+:root[data-animacoes="desativadas"] .entrega-fundo,
+:root[data-animacoes="desativadas"] .entrega-cartao,
+:root[data-animacoes="desativadas"] .entrega-saindo {
+  animation: none;
+  opacity: 1;
+  transform: none;
+}
 
 :root[data-animacoes="desativadas"] .aurora,
 :root[data-animacoes="desativadas"] .pulso::after,
