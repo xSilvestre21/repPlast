@@ -182,3 +182,29 @@ export async function excluirCliente(id: string, _formData: FormData): Promise<v
   revalidatePath("/clientes");
   redirect("/clientes");
 }
+
+/**
+ * Liga e desliga o cliente.
+ *
+ * Inativar, e não apagar: cliente que parou de comprar continua em pedidos,
+ * propostas e comissões de meses fechados. Inativo, ele sai das escolhas de
+ * novo pedido e de nova proposta (que já filtram `ativo`) e da lista padrão —
+ * e volta com um clique, quando voltar a comprar.
+ */
+export async function alternarAtivoCliente(id: string, _formData: FormData): Promise<void> {
+  const { organizacaoId, db } = await contexto();
+
+  const cliente = await db.cliente.findFirst({
+    where: { id, organizacaoId },
+    select: { ativo: true },
+  });
+  if (!cliente) throw new Error("Cliente não encontrado.");
+
+  await db.cliente.updateMany({
+    where: { id, organizacaoId },
+    data: { ativo: !cliente.ativo },
+  });
+
+  revalidatePath("/clientes");
+  revalidatePath(`/clientes/${id}`);
+}

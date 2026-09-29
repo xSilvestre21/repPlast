@@ -1,13 +1,13 @@
 import { notFound } from "next/navigation";
 
-import { Cabecalho } from "@/components/ui";
+import { Botao, Cabecalho, Selo } from "@/components/ui";
 import { escopoAtual } from "@/lib/sessao";
 
-import { atualizarCliente, excluirCliente } from "../acoes";
+import { alternarAtivoCliente, atualizarCliente, excluirCliente } from "../acoes";
 import { FormularioCliente } from "../formulario";
 import { BotaoExcluir } from "@/components/botao-excluir";
 import { SecaoCodigos } from "./codigos";
-import { Building2 } from "lucide-react";
+import { Building2, UserRoundCheck, UserRoundX } from "lucide-react";
 import { Pagina } from "@/components/pagina";
 
 export default async function PaginaCliente({ params }: PageProps<"/clientes/[id]">) {
@@ -40,16 +40,38 @@ export default async function PaginaCliente({ params }: PageProps<"/clientes/[id
         icone={Building2}
         titulo={cliente.apelido}
         descricao={cliente.razaoSocial}
+        selo={!cliente.ativo ? <Selo tom="cancelado">Inativo</Selo> : undefined}
         acao={
-          <BotaoExcluir
-            rotulo="Excluir cliente"
-            nome={cliente.apelido}
-            acao={excluirCliente.bind(null, cliente.id)}
-          />
+          <div className="flex flex-wrap gap-2">
+            {/* Inativar é o caminho de quem parou de comprar: some das escolhas
+                sem apagar nada. Excluir fica para o cadastro feito por engano. */}
+            <form action={alternarAtivoCliente.bind(null, cliente.id)}>
+              <Botao
+                type="submit"
+                variante="secundaria"
+                icone={cliente.ativo ? UserRoundX : UserRoundCheck}
+              >
+                {cliente.ativo ? "Marcar como inativo" : "Reativar"}
+              </Botao>
+            </form>
+            <BotaoExcluir
+              rotulo="Excluir cliente"
+              nome={cliente.apelido}
+              acao={excluirCliente.bind(null, cliente.id)}
+            />
+          </div>
         }
       />
 
       <div className="space-y-5 palco">
+        {!cliente.ativo && (
+          // Neutro, e não vermelho: inativo é situação, não erro.
+          <p className="rounded-suave border border-filete bg-folha-2 px-4 py-3 text-corpo text-tinta-2">
+            Cliente inativo: não aparece ao criar pedido ou proposta, nem na lista padrão de
+            clientes. Pedidos e propostas dele continuam como estão.
+          </p>
+        )}
+
         <FormularioCliente
           acao={atualizarCliente.bind(null, cliente.id)}
           rotuloEnvio="Salvar alterações"
