@@ -70,6 +70,24 @@ export const ROTULO_UNIDADE: Record<UnidadeVenda, string> = {
 };
 
 /**
+ * A unidade de venda que o rótulo do produto (`unidadeRotulo`) diz, ou `null`
+ * quando ele não diz nenhuma que o sistema conheça.
+ *
+ * O rótulo é texto livre vindo do SICOV — "MIL", "mil", "Kg", "Caixas" —, e é
+ * ele que conta que um saco é vendido por quilo e não por milheiro. Lido aqui
+ * uma vez, vale igual para a lista de produtos e para a unidade que o item
+ * já abre escolhida no pedido.
+ */
+export function unidadeDoRotulo(rotulo: string | null | undefined): UnidadeVenda | null {
+  const texto = (rotulo ?? "").trim().toLowerCase();
+  if (texto.startsWith("mil")) return "MIL";
+  if (texto.startsWith("kg") || texto === "quilo") return "KG";
+  if (texto.startsWith("un")) return "UN";
+  if (texto.startsWith("cx") || texto.startsWith("caixa")) return "CX";
+  return null;
+}
+
+/**
  * Unidades em que a família pode ser vendida.
  *
  * A fita aparece com as duas porque o usuário vende tanto rolo avulso quanto

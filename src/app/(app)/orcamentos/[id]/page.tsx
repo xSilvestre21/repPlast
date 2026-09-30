@@ -17,6 +17,7 @@ import {
 } from "@/components/ui";
 import { CONTATO_EMAIL, CONTATO_NFE, textoPadraoDoOrcamento } from "@/lib/envio-orcamento";
 import { escreverNumeroBr } from "@/lib/numero-br";
+import { unidadeDoRotulo } from "@/lib/produto-preco";
 import { nomeArquivoOrcamento } from "@/lib/pdf/nome-arquivo";
 import { escopoAtual } from "@/lib/sessao";
 
@@ -390,6 +391,7 @@ export default async function PaginaOrcamento({
             unidadeAvulsa: p.unidadeAvulsa,
             precoAvulso: texto(p.precoAvulso),
             unidadesPorCaixa: p.unidadesPorCaixa,
+            unidadePadrao: unidadeDoRotulo(p.unidadeRotulo),
             aditivos: p.aditivos.map(({ aditivo }) => ({
               nome: aditivo.nome,
               sufixoDescricao: aditivo.sufixoDescricao,

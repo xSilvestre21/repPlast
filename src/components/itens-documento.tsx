@@ -62,6 +62,12 @@ export type ProdutoOpcao = {
   precoAvulso: string | null;
   unidadesPorCaixa: number | null;
   aditivos: Aditivo[];
+  /**
+   * A unidade em que o produto é vendido, lida do rótulo dele. É a que o item
+   * abre escolhida: um saco vendido por quilo não pode nascer em MIL e depender
+   * de alguém lembrar de trocar. Nula, vale a primeira com preço.
+   */
+  unidadePadrao: UnidadeVenda | null;
 };
 
 export type ItemPedido = {
@@ -473,7 +479,10 @@ function FormularioAdicao({
     [produto],
   );
 
-  const unidadeEfetiva = (unidade || unidades[0]) as UnidadeVenda | undefined;
+  const unidadeEfetiva = (unidade ||
+    (produto?.unidadePadrao && unidades.includes(produto.unidadePadrao)
+      ? produto.unidadePadrao
+      : unidades[0])) as UnidadeVenda | undefined;
 
   /** Preço sugerido pelo motor de preço — o usuário pode sobrescrever. */
   const precoCalculado = useMemo(() => {

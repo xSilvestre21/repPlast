@@ -9,7 +9,7 @@
 
 import type { DbOrganizacao } from "@/lib/db";
 import { lerNumeroBr } from "@/lib/numero-br";
-import { precoMilheiroSaco } from "@/lib/precificacao";
+import { precoUnitario, unidadeDoRotulo } from "@/lib/produto-preco";
 
 /** Quantas linhas por fatia, na primeira e em todas as seguintes. */
 export const POR_PAGINA = 20;
@@ -142,21 +142,33 @@ export async function buscarProdutos(
         return null;
       }
 
-      const preco = precoMilheiroSaco({
-        larguraCm: produto.larguraCm.toString(),
-        comprimentoCm: produto.comprimentoCm.toString(),
-        espessuraMm: produto.espessuraMm.toString(),
-        densidade: produto.densidade ? produto.densidade.toString() : null,
-        fatorKg: produto.fatorKg.toString(),
-        aditivos: produto.aditivos.map(({ aditivo }) => ({
-          nome: aditivo.nome,
-          sufixoDescricao: aditivo.sufixoDescricao,
-          tipo: aditivo.tipo,
-          valor: aditivo.valor.toString(),
-        })),
-      });
+      // Vendido por quilo, o preço é o do kg — mostrar o milheiro com o
+      // rótulo "por KG" dizia um preço que ninguém cobra.
+      const porKg = unidadeDoRotulo(produto.unidadeRotulo) === "KG";
 
-      return { valor: preco.toNumber(), unidade: produto.unidadeRotulo ?? "milheiro" };
+      const preco = precoUnitario(
+        {
+          familia: "SACO",
+          larguraCm: produto.larguraCm.toString(),
+          comprimentoCm: produto.comprimentoCm.toString(),
+          espessuraMm: produto.espessuraMm.toString(),
+          densidade: produto.densidade ? produto.densidade.toString() : null,
+          fatorKg: produto.fatorKg.toString(),
+          aditivos: produto.aditivos.map(({ aditivo }) => ({
+            nome: aditivo.nome,
+            sufixoDescricao: aditivo.sufixoDescricao,
+            tipo: aditivo.tipo,
+            valor: aditivo.valor.toString(),
+          })),
+        },
+        porKg ? "KG" : "MIL",
+      );
+      if (!preco) return null;
+
+      return {
+        valor: preco.toNumber(),
+        unidade: porKg ? "kg" : (produto.unidadeRotulo ?? "milheiro"),
+      };
     }
 
     if (produto.familia === "FITA") {

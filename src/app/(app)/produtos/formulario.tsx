@@ -25,6 +25,7 @@ import {
 import { SelecaoBuscavel } from "@/components/selecao-buscavel";
 import { descricaoFita, descricaoRolo, descricaoSaco, formatarNumero } from "@/lib/descricao";
 import { lerNumeroBr } from "@/lib/numero-br";
+import { unidadeDoRotulo } from "@/lib/produto-preco";
 import {
   DENSIDADE_PADRAO,
   type Aditivo,
@@ -228,6 +229,9 @@ export function FormularioProduto({
     setCampos((atual) => ({
       ...atual,
       familia: novo.familia,
+      // A unidade era da família anterior: "KG" de um saco não diz nada de uma
+      // fita. Trocar de tipo sem trocar de família (stretch ↔ shrink) mantém.
+      unidadeRotulo: novo.familia === atual.familia ? atual.unidadeRotulo : "",
       material:
         tipo.valor === "SACO" || atual.material.trim() === "" || atual.material === tipo.nome
           ? novo.nome
@@ -361,6 +365,19 @@ export function FormularioProduto({
     descricaoManual !== null && descricaoGerada !== "" && descricaoManual !== descricaoGerada;
 
   /** Cálculo ao vivo do saco, com a mesma função que o pedido vai usar. */
+  /** O preço do quilo do saco vendido por kg: o fator, mais os aditivos por kg. */
+  const precoDoKg = useMemo(() => {
+    const fator = lerNumeroBr(campos.fatorKg);
+    return fator === null ? null : fatorEfetivo(fator, aditivosEscolhidos);
+  }, [campos.fatorKg, aditivosEscolhidos]);
+
+  /** Quanto o quilo fica abaixo do piso do material — `null` no caso normal. */
+  const faltaNoKg = (() => {
+    const fator = lerNumeroBr(campos.fatorKg);
+    const minimo = minimoDoMaterial === null ? null : Number(minimoDoMaterial);
+    return fator === null || minimo === null || fator >= minimo ? null : minimo - fator;
+  })();
+
   const calculo = useMemo(() => {
     if (campos.familia !== "SACO") return null;
 
@@ -416,6 +433,18 @@ export function FormularioProduto({
   const ehFita = campos.familia === "FITA";
   const ehAvulso = campos.familia === "AVULSO";
   const ehShrink = tipo.valor === "SHRINK";
+
+  /*
+   * Como o saco é vendido. Mora no rótulo de unidade do produto — o mesmo
+   * texto que veio do SICOV ("MIL", "Kg") —, e é ele que faz o item já abrir
+   * em KG no pedido. Vazio é milheiro, o caso de quase todo saco.
+   */
+  const unidadeDoSaco = unidadeDoRotulo(campos.unidadeRotulo);
+  const sacoPorKg = ehSaco && unidadeDoSaco === "KG";
+  const rotuloLegado =
+    campos.unidadeRotulo.trim() && unidadeDoSaco !== "MIL" && unidadeDoSaco !== "KG"
+      ? campos.unidadeRotulo
+      : null;
 
   /**
    * Escreve o material e, sendo ele um da tabela da indústria, traz a densidade
@@ -524,6 +553,11 @@ export function FormularioProduto({
               }
             />
             <input type="hidden" name="familia" value={campos.familia} />
+            {/* Fora do saco a unidade não se escolhe aqui, mas é do produto e
+                precisa voltar como veio — sem isto, salvar a apagava. */}
+            {!ehSaco && (
+              <input type="hidden" name="unidadeRotulo" value={campos.unidadeRotulo} />
+            )}
 
             <Campo
               name="codigoFornecedor"
@@ -604,9 +638,30 @@ export function FormularioProduto({
           <SecaoCartao
             icone={Ruler}
             titulo="Medidas"
-            descricao="São elas que formam o preço. A sanfona entra só na descrição."
+            descricao={
+              sacoPorKg
+                ? "Por quilo, o preço é o do kg; as medidas formam a descrição. A sanfona entra só nela."
+                : "São elas que formam o preço. A sanfona entra só na descrição."
+            }
           >
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <Selecao
+                name="unidadeRotulo"
+                rotulo="Vendido por"
+                value={sacoPorKg ? "KG" : (rotuloLegado ?? "MIL")}
+                onChange={(e) => alterar("unidadeRotulo")(e.target.value)}
+                dica={
+                  sacoPorKg
+                    ? "O item já abre em KG no pedido e na proposta."
+                    : rotuloLegado
+                      ? "Rótulo do sistema anterior; o preço segue pelo milheiro."
+                      : undefined
+                }
+              >
+                <option value="MIL">Milheiro</option>
+                <option value="KG">Quilo</option>
+                {rotuloLegado && <option value={rotuloLegado}>{rotuloLegado} (sistema anterior)</option>}
+              </Selecao>
               <Campo
                 name="larguraCm"
                 rotulo="Largura"
@@ -647,7 +702,8 @@ export function FormularioProduto({
               />
               <Campo
                 name="fatorKg"
-                rotulo="Fator kg"
+                rotulo={sacoPorKg ? "Preço do quilo" : "Fator kg"}
+                sufixo={sacoPorKg ? "R$" : undefined}
                 inputMode="decimal"
                 required
                 /*
@@ -669,7 +725,9 @@ export function FormularioProduto({
                           materialDaTabela.precoKg,
                           2,
                         )}.`
-                    : "R$ por quilo, multiplicado pelo peso do milheiro."
+                    : sacoPorKg
+                      ? "É o fator kg: o preço do quilo, sem passar pelas medidas."
+                      : "R$ por quilo, multiplicado pelo peso do milheiro."
                 }
                 value={campos.fatorKg}
                 onChange={(e) => alterar("fatorKg")(e.target.value)}
@@ -938,7 +996,44 @@ export function FormularioProduto({
             </BotaoTexto>
           )}
 
-          {calculo && (
+          {/*
+            Saco por quilo: o preço é o fator (com os aditivos por kg), a mesma
+            conta de `precoUnitario` no pedido. Os aditivos por milheiro não
+            têm milheiro onde entrar e ficam de fora — dito aqui, e não
+            descoberto no pedido.
+          */}
+          {sacoPorKg && precoDoKg && (
+            <Cartao className="mt-4 p-4 bg-folha-2">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+                <div className="text-corpo text-tinta-2">Preço do quilo</div>
+                <div className="text-forte font-semibold cifra numerico">
+                  {formatarMoeda(precoDoKg.toNumber())}
+                </div>
+              </div>
+
+              {aditivosEscolhidos.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-filete text-mini text-tinta-3 font-mono numerico leading-relaxed">
+                  preço {formatarNumero(lerNumeroBr(campos.fatorKg) ?? 0, 2)} + aditivos por kg ={" "}
+                  {formatarNumero(precoDoKg.toNumber(), 2)}
+                  {aditivosEscolhidos.some((a) => a.tipo !== "POR_KG") && (
+                    <div className="mt-1 font-sans">
+                      Aditivo cobrado por milheiro não entra no preço do quilo.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {faltaNoKg !== null && materialDaTabela && (
+                <p className="mt-3 pt-3 border-t border-filete text-mini text-perigo leading-relaxed">
+                  Abaixo do mínimo do {materialDaTabela.nome} (
+                  {formatarNumero(minimoDoMaterial ?? 0, 2)}):{" "}
+                  <span className="numerico">{formatarMoeda(faltaNoKg)}</span> a menos por quilo.
+                </p>
+              )}
+            </Cartao>
+          )}
+
+          {calculo && !sacoPorKg && (
             <Cartao className="mt-4 p-4 bg-folha-2">
               <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
                 <div className="text-corpo text-tinta-2">Preço do milheiro</div>

@@ -6,6 +6,7 @@ import { SeloStatus } from "@/components/selo-status";
 import { BotaoLink, Cabecalho, Cartao, Emblema, Painel, SecaoCartao } from "@/components/ui";
 import { textoPadraoDoEnvio } from "@/lib/envio-pedido";
 import { escreverNumeroBr } from "@/lib/numero-br";
+import { unidadeDoRotulo } from "@/lib/produto-preco";
 import { nomeArquivoPedido } from "@/lib/pdf/nome-arquivo";
 import { escopoAtual } from "@/lib/sessao";
 
@@ -358,6 +359,7 @@ export default async function PaginaPedido({
             unidadeAvulsa: p.unidadeAvulsa,
             precoAvulso: texto(p.precoAvulso),
             unidadesPorCaixa: p.unidadesPorCaixa,
+            unidadePadrao: unidadeDoRotulo(p.unidadeRotulo),
             aditivos: p.aditivos.map(({ aditivo }) => ({
               nome: aditivo.nome,
               sufixoDescricao: aditivo.sufixoDescricao,

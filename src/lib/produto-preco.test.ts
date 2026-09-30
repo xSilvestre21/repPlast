@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   ROTULO_COLUNA_PRECO,
+  unidadeDoRotulo,
   pesoDoItem,
   rotuloColunaPreco,
   precoUnitario,
@@ -167,5 +168,22 @@ describe("rótulos do PDF", () => {
     expect(rotuloColunaPreco("SACO", "MIL")).toBe("MILHEIRO");
     expect(rotuloColunaPreco("SACO", "KG")).toBe("PREÇO/KG");
     expect(rotuloColunaPreco("FITA", "CX")).toBe("PREÇO/CX");
+  });
+});
+
+describe("unidade do rótulo do produto", () => {
+  it("lê os rótulos do SICOV em qualquer caixa", () => {
+    expect(unidadeDoRotulo("MIL")).toBe("MIL");
+    expect(unidadeDoRotulo("mil")).toBe("MIL");
+    expect(unidadeDoRotulo("Kg")).toBe("KG");
+    expect(unidadeDoRotulo("KG")).toBe("KG");
+    expect(unidadeDoRotulo("Un")).toBe("UN");
+    expect(unidadeDoRotulo("Caixas")).toBe("CX");
+  });
+
+  it("sem rótulo, ou com um desconhecido, não inventa unidade", () => {
+    expect(unidadeDoRotulo(null)).toBeNull();
+    expect(unidadeDoRotulo("")).toBeNull();
+    expect(unidadeDoRotulo("rolo")).toBeNull();
   });
 });
