@@ -8,7 +8,7 @@
 import { renderToBuffer } from "@react-pdf/renderer";
 
 import { type Ator, dbParaOrganizacao } from "../db";
-import type { Familia, UnidadeVenda } from "../produto-preco";
+import { rotuloPrecoDosItens, type Familia, type UnidadeVenda } from "../produto-preco";
 import { DocumentoOrcamento, type DadosOrcamentoPdf } from "./documento-orcamento";
 import { nomeArquivoOrcamento } from "./nome-arquivo";
 
@@ -40,10 +40,13 @@ export async function carregarOrcamentoParaPdf(
       numero: orcamento.numero,
       data: orcamento.criadoEm,
       validoAte: orcamento.validoAte,
-      // O rótulo da coluna de preço segue a família da primeira linha, como no
-      // pedido: uma proposta é de uma indústria e costuma ser de uma família.
-      familia: (orcamento.itens[0]?.familia as Familia | undefined) ?? null,
-      unidade: (orcamento.itens[0]?.unidade as UnidadeVenda | undefined) ?? null,
+      // O rótulo da coluna de preço olha todas as linhas, como no pedido.
+      rotuloPreco: rotuloPrecoDosItens(
+        orcamento.itens.map((i) => ({
+          familia: i.familia as Familia,
+          unidade: i.unidade as UnidadeVenda,
+        })),
+      ),
 
       fornecedor: { nome: orcamento.fornecedor.nome },
       /*

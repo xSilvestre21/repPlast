@@ -51,15 +51,42 @@ export const ROTULO_COLUNA_PRECO: Record<Familia, string> = {
 };
 
 /**
- * O rótulo da coluna de preço para o documento — a família, corrigida pela
- * unidade.
+ * O rótulo do preço de um item — quem manda é a UNIDADE em que ele foi vendido.
  *
- * O saco também sai por quilo, e aí a coluna não pode dizer MILHEIRO: o número
- * embaixo dela é o preço do kg. Vendido por KG, qualquer família lê "PREÇO/KG";
- * nas demais unidades vale o rótulo da família, como nos pedidos reais.
+ * Na unidade de costume da família dá o rótulo dos pedidos reais (MILHEIRO no
+ * saco, PREÇO/CX na fita, PREÇO/KG no stretch). Fora dela, a família mentia: o
+ * saco por quilo saía sob MILHEIRO e a fita por unidade sob PREÇO/CX, com o
+ * preço do kg e o da unidade embaixo. O avulso por unidade mantém o seu
+ * "PREÇO UNIT.".
  */
 export function rotuloColunaPreco(familia: Familia, unidade: UnidadeVenda): string {
-  return unidade === "KG" ? "PREÇO/KG" : ROTULO_COLUNA_PRECO[familia];
+  switch (unidade) {
+    case "MIL":
+      return "MILHEIRO";
+    case "KG":
+      return "PREÇO/KG";
+    case "CX":
+      return "PREÇO/CX";
+    case "UN":
+      return familia === "AVULSO" ? ROTULO_COLUNA_PRECO.AVULSO : "PREÇO/UN";
+  }
+}
+
+/**
+ * O cabeçalho da coluna de preço de um documento inteiro.
+ *
+ * Todos os itens na mesma unidade: o rótulo dela. Unidades misturadas — um
+ * saco por milheiro e outro por quilo, uma fita por caixa e outra por unidade —
+ * não cabem num rótulo só, e escolher o do primeiro item (como era) punha preço
+ * de kg embaixo de MILHEIRO. Aí o cabeçalho fica genérico, e quem diz a unidade
+ * de cada linha é a coluna UN ao lado.
+ */
+export function rotuloPrecoDosItens(
+  itens: readonly { familia: Familia; unidade: UnidadeVenda }[],
+): string {
+  const rotulos = new Set(itens.map((i) => rotuloColunaPreco(i.familia, i.unidade)));
+  if (rotulos.size === 0) return "PREÇO";
+  return rotulos.size === 1 ? [...rotulos][0] : "PREÇO UNIT.";
 }
 
 export const ROTULO_UNIDADE: Record<UnidadeVenda, string> = {

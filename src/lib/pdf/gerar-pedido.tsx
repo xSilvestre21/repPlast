@@ -9,7 +9,7 @@
 import { renderToBuffer } from "@react-pdf/renderer";
 
 import { type Ator, dbParaOrganizacao } from "../db";
-import type { Familia, UnidadeVenda } from "../produto-preco";
+import { rotuloPrecoDosItens, type Familia, type UnidadeVenda } from "../produto-preco";
 import { DocumentoPedido, type DadosPedidoPdf } from "./documento-pedido";
 import { nomeArquivoPedido } from "./nome-arquivo";
 
@@ -59,9 +59,13 @@ export async function carregarPedidoParaPdf(
       numero: pedido.numero,
       data: pedido.criadoEm,
       // Todos os itens de um pedido são da mesma indústria, mas podem ser de
-      // famílias diferentes; o rótulo da coluna de preço segue o primeiro.
-      familia: (pedido.itens[0]?.familia as Familia | undefined) ?? null,
-      unidade: (pedido.itens[0]?.unidade as UnidadeVenda | undefined) ?? null,
+      // famílias e unidades diferentes: o rótulo olha todas as linhas.
+      rotuloPreco: rotuloPrecoDosItens(
+        pedido.itens.map((item) => ({
+          familia: item.familia as Familia,
+          unidade: item.unidade as UnidadeVenda,
+        })),
+      ),
 
       fornecedor: { nome: pedido.fornecedor.nome },
       logo: pedido.fornecedor.logo ? Buffer.from(pedido.fornecedor.logo) : null,

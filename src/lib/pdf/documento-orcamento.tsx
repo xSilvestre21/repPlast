@@ -14,7 +14,7 @@
 
 import { Document, Image, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 
-import { ROTULO_UNIDADE, rotuloColunaPreco, type Familia, type UnidadeVenda } from "../produto-preco";
+import { ROTULO_UNIDADE, type UnidadeVenda } from "../produto-preco";
 import "./hifenizacao";
 
 export interface ItemOrcamentoPdf {
@@ -32,9 +32,11 @@ export interface DadosOrcamentoPdf {
   numero: number;
   data: Date;
   validoAte: Date | null;
-  familia: Familia | null;
-  /** Unidade da primeira linha: saco por quilo muda o rótulo da coluna de preço. */
-  unidade: UnidadeVenda | null;
+  /**
+   * Cabeçalho da coluna de preço, já decidido olhando TODAS as linhas — ver
+   * `rotuloPrecoDosItens`.
+   */
+  rotuloPreco: string;
 
   fornecedor: { nome: string };
   /** De onde a carta foi escrita. Vazia nas propostas anteriores ao campo. */
@@ -201,7 +203,7 @@ const e = StyleSheet.create({
 });
 
 export function DocumentoOrcamento({ dados }: { dados: DadosOrcamentoPdf }) {
-  const rotuloPreco = dados.familia && dados.unidade ? rotuloColunaPreco(dados.familia, dados.unidade) : "PREÇO";
+  const { rotuloPreco } = dados;
   const temIpi = Number(dados.valorIpi) > 0;
 
   return (

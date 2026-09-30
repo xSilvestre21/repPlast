@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   ROTULO_COLUNA_PRECO,
+  rotuloPrecoDosItens,
   unidadeDoRotulo,
   pesoDoItem,
   rotuloColunaPreco,
@@ -168,6 +169,44 @@ describe("rótulos do PDF", () => {
     expect(rotuloColunaPreco("SACO", "MIL")).toBe("MILHEIRO");
     expect(rotuloColunaPreco("SACO", "KG")).toBe("PREÇO/KG");
     expect(rotuloColunaPreco("FITA", "CX")).toBe("PREÇO/CX");
+  });
+
+  it("fita vendida por unidade não sai sob PREÇO/CX", () => {
+    expect(rotuloColunaPreco("FITA", "UN")).toBe("PREÇO/UN");
+    // O avulso por unidade mantém o rótulo que sempre teve.
+    expect(rotuloColunaPreco("AVULSO", "UN")).toBe("PREÇO UNIT.");
+  });
+
+  it("o cabeçalho do documento olha todas as linhas, não só a primeira", () => {
+    expect(rotuloPrecoDosItens([])).toBe("PREÇO");
+    expect(
+      rotuloPrecoDosItens([
+        { familia: "SACO", unidade: "KG" },
+        { familia: "SACO", unidade: "KG" },
+      ]),
+    ).toBe("PREÇO/KG");
+    // Saco por quilo e stretch dizem a mesma coisa: preço do kg.
+    expect(
+      rotuloPrecoDosItens([
+        { familia: "SACO", unidade: "KG" },
+        { familia: "STRETCH", unidade: "KG" },
+      ]),
+    ).toBe("PREÇO/KG");
+  });
+
+  it("unidades misturadas deixam o cabeçalho genérico", () => {
+    expect(
+      rotuloPrecoDosItens([
+        { familia: "SACO", unidade: "MIL" },
+        { familia: "SACO", unidade: "KG" },
+      ]),
+    ).toBe("PREÇO UNIT.");
+    expect(
+      rotuloPrecoDosItens([
+        { familia: "FITA", unidade: "CX" },
+        { familia: "FITA", unidade: "UN" },
+      ]),
+    ).toBe("PREÇO UNIT.");
   });
 });
 

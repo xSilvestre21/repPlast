@@ -27,7 +27,7 @@ import {
   type Familia,
   type UnidadeVenda,
   precoUnitario,
-  rotuloColunaPreco,
+  rotuloPrecoDosItens,
   unidadesComPreco,
 } from "@/lib/produto-preco";
 
@@ -134,9 +134,8 @@ export function SecaoItens({
 }) {
   const [estadoAdicao, enviarAdicao, adicionando] = useActionState(adicionar, {});
 
-  /** Rótulo da coluna de preço: muda por família, como nos pedidos reais. */
-  const rotuloPreco =
-    itens.length > 0 ? rotuloColunaPreco(itens[0].familia, itens[0].unidade) : "PREÇO";
+  /** Rótulo da coluna de preço: o mesmo do PDF, olhando todas as linhas. */
+  const rotuloPreco = rotuloPrecoDosItens(itens);
 
   /** Há formulário embaixo? Sem isso, o vazio convidaria a escolher o que não existe. */
   const podeAdicionar = adicao !== undefined || produtos.length > 0 || !semProdutos;
