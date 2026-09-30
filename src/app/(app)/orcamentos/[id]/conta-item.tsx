@@ -13,6 +13,7 @@
 
 import { useActionState, useMemo, useState } from "react";
 
+import { SelecaoBuscavel } from "@/components/selecao-buscavel";
 import { Botao, BotaoTexto, Campo, MensagemErro, Selecao, formatarMoeda } from "@/components/ui";
 import { CAMPO_IPI, CAMPO_IPI_DEFINIDO } from "@/lib/ipi-do-formulario";
 import { descricaoFita, descricaoRolo, descricaoSaco, formatarNumero } from "@/lib/descricao";
@@ -83,7 +84,7 @@ type ModoFita = (typeof MODOS_FITA)[number];
 
 const tipoPorValor = (valor: string): Tipo => TIPOS.find((t) => t.valor === valor) ?? TIPOS[0];
 
-const LISTA_MATERIAIS = "materiais-da-proposta";
+const OPCOES_TIPO = TIPOS.map((t) => ({ id: t.valor, rotulo: t.rotulo }));
 
 const CONTA_VAZIA: Conta = {
   familia: "SACO",
@@ -191,6 +192,26 @@ export function ContaItem({
     setTipo(novo);
     setPrecoManual(null);
   }
+
+  /*
+   * As opções do Material do saco — as mesmas do cadastro de produto: a tabela
+   * da indústria, uma vez cada nome, com o preço do kg ao lado; e o material
+   * que já está na conta mas não na tabela, marcado, para não sumir da caixa.
+   */
+  const opcoesMaterial = useMemo(() => {
+    const opcoes = materiais
+      .filter((m, i, todos) => todos.findIndex((o) => o.nome === m.nome) === i)
+      .map((m) => ({
+        id: m.nome,
+        rotulo: m.nome,
+        detalhe: `${formatarMoeda(Number(m.precoKg))} / kg`,
+      }));
+
+    const atual = conta.material.trim();
+    return atual && !opcoes.some((o) => o.id.toLowerCase() === atual.toLowerCase())
+      ? [{ id: conta.material, rotulo: conta.material, detalhe: "fora da tabela" }, ...opcoes]
+      : opcoes;
+  }, [materiais, conta.material]);
 
   const materialDaTabela = materiais.find(
     (m) => m.nome.toLowerCase() === conta.material.trim().toLowerCase(),
@@ -335,43 +356,47 @@ export function ContaItem({
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:items-start">
-        <Selecao
+        <SelecaoBuscavel
           name="tipo"
           rotulo="Tipo"
+          required
+          opcoes={OPCOES_TIPO}
           value={tipo.valor}
-          onChange={(e) => escolherTipo(e.target.value)}
+          aoEscolher={escolherTipo}
           dica={ehShrink ? "Vendido por kg; entra no cadastro como stretch." : undefined}
-        >
-          {TIPOS.map((t) => (
-            <option key={t.valor} value={t.valor}>
-              {t.rotulo}
-            </option>
-          ))}
-        </Selecao>
+        />
         <input type="hidden" name="familia" value={conta.familia} />
 
-        <div>
+        {/*
+          No saco, material é a tabela de preço da indústria: escolhe-se dela,
+          digitando. Nos outros tipos o campo abre a descrição com texto livre.
+        */}
+        {ehSaco ? (
+          <SelecaoBuscavel
+            name="material"
+            rotulo="Material"
+            opcoes={opcoesMaterial}
+            value={conta.material}
+            aoEscolher={escolherMaterial}
+            placeholder="Digite para achar…"
+            vazio="Nenhum material da tabela desta indústria com esse nome."
+            dica={
+              materialDaTabela
+                ? `Tabela desta indústria: ${formatarMoeda(materialDaTabela.precoKg)} / kg.`
+                : conta.material
+                  ? "Fora da tabela desta indústria."
+                  : undefined
+            }
+          />
+        ) : (
           <Campo
             name="material"
-            rotulo={ehSaco ? "Material" : "Nome na descrição"}
-            list={ehSaco && materiais.length > 0 ? LISTA_MATERIAIS : undefined}
-            placeholder={ehSaco ? "PEAD" : tipo.nome || "Nome do item"}
-            dica={
-              ehSaco && materialDaTabela
-                ? `Tabela desta indústria: ${formatarMoeda(materialDaTabela.precoKg)} / kg.`
-                : undefined
-            }
+            rotulo="Nome na descrição"
+            placeholder={tipo.nome || "Nome do item"}
             value={conta.material}
             onChange={(e) => escolherMaterial(e.target.value)}
           />
-          {ehSaco && materiais.length > 0 && (
-            <datalist id={LISTA_MATERIAIS}>
-              {materiais.map((m) => (
-                <option key={m.nome} value={m.nome} />
-              ))}
-            </datalist>
-          )}
-        </div>
+        )}
 
         <Campo
           name="complemento"
