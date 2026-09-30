@@ -1,13 +1,13 @@
 import { notFound } from "next/navigation";
 
-import { Cabecalho } from "@/components/ui";
+import { Botao, Cabecalho, Selo } from "@/components/ui";
 import { escopoAtual } from "@/lib/sessao";
 
-import { atualizarProduto, excluirProduto } from "../acoes";
+import { alternarAtivoProduto, atualizarProduto, excluirProduto } from "../acoes";
 import { carregarClientes, carregarFornecedores, paraCampo } from "../dados";
 import { FormularioProduto } from "../formulario";
 import { BotaoExcluir } from "@/components/botao-excluir";
-import { Package } from "lucide-react";
+import { Archive, ArchiveRestore, Package } from "lucide-react";
 import { Pagina } from "@/components/pagina";
 
 export default async function PaginaProduto({ params }: PageProps<"/produtos/[id]">) {
@@ -21,7 +21,7 @@ export default async function PaginaProduto({ params }: PageProps<"/produtos/[id
       include: { aditivos: { select: { aditivoId: true } } },
     }),
     carregarFornecedores(),
-    carregarClientes(),
+    carregarClientes(id),
   ]);
 
   if (!produto) notFound();
@@ -33,14 +33,38 @@ export default async function PaginaProduto({ params }: PageProps<"/produtos/[id
         icone={Package}
         titulo="Produto"
         descricao={produto.descricao}
+        selo={!produto.ativo ? <Selo tom="cancelado">Inativo</Selo> : undefined}
         acao={
-          <BotaoExcluir
-            rotulo="Excluir produto"
-            nome={produto.descricao}
-            acao={excluirProduto.bind(null, produto.id)}
-          />
+          <div className="flex flex-wrap gap-2">
+            {/* Inativar é o caminho do produto que o cliente deixou de comprar:
+                some das escolhas sem apagar nada. Excluir fica para o cadastro
+                feito por engano. */}
+            <form action={alternarAtivoProduto.bind(null, produto.id)}>
+              <Botao
+                type="submit"
+                variante="secundaria"
+                icone={produto.ativo ? Archive : ArchiveRestore}
+              >
+                {produto.ativo ? "Marcar como inativo" : "Reativar"}
+              </Botao>
+            </form>
+            <BotaoExcluir
+              rotulo="Excluir produto"
+              nome={produto.descricao}
+              acao={excluirProduto.bind(null, produto.id)}
+            />
+          </div>
         }
       />
+
+      {!produto.ativo && (
+        // Neutro, e não vermelho: inativo é situação, não erro.
+        <p className="mb-5 rounded-suave border border-filete bg-folha-2 px-4 py-3 text-corpo text-tinta-2">
+          Produto inativo: não aparece ao adicionar item em pedido ou proposta, nem na ficha do
+          cliente e na lista padrão de produtos. Pedidos e propostas em que ele já entrou
+          continuam como estão.
+        </p>
+      )}
 
       <FormularioProduto
         fornecedores={fornecedores}

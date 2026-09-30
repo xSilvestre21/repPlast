@@ -199,3 +199,30 @@ export async function excluirProduto(id: string, _formData: FormData): Promise<v
   revalidatePath("/produtos");
   redirect("/produtos");
 }
+
+/**
+ * Liga e desliga o produto.
+ *
+ * Inativar, e não apagar: produto que o cliente deixou de comprar continua nos
+ * pedidos e propostas em que já entrou — e um produto com pedido nem pode ser
+ * excluído. Inativo, ele sai das escolhas de item de pedido e de proposta (que
+ * já filtram `ativo`), da ficha do cliente e da lista padrão — e volta com um
+ * clique, quando o cliente voltar a comprar.
+ */
+export async function alternarAtivoProduto(id: string, _formData: FormData): Promise<void> {
+  const { organizacaoId, db } = await contexto();
+
+  const produto = await db.produto.findFirst({
+    where: { id, organizacaoId },
+    select: { ativo: true },
+  });
+  if (!produto) throw new Error("Produto não encontrado.");
+
+  await db.produto.updateMany({
+    where: { id, organizacaoId },
+    data: { ativo: !produto.ativo },
+  });
+
+  revalidatePath("/produtos");
+  revalidatePath(`/produtos/${id}`);
+}

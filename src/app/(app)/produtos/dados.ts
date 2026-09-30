@@ -55,12 +55,19 @@ export function paraCampo(valor: { toString(): string } | null | undefined, casa
  *
  * Só apelido e id: o formulário não precisa de mais nada, e mandar a ficha
  * inteira de 106 clientes para o navegador engordaria a página sem motivo.
+ *
+ * Na edição, o dono atual entra mesmo inativo. Sem ele o seletor abria em
+ * "Sem cliente", e salvar o produto por qualquer outro motivo apagava o dono
+ * em silêncio. Continua fora das opções de quem cadastra produto novo.
  */
-export async function carregarClientes(): Promise<ClienteOpcao[]> {
+export async function carregarClientes(produtoId?: string): Promise<ClienteOpcao[]> {
   const { organizacaoId, db } = await escopoAtual();
 
   const clientes = await db.cliente.findMany({
-    where: { organizacaoId, ativo: true },
+    where: {
+      organizacaoId,
+      OR: [{ ativo: true }, ...(produtoId ? [{ produtos: { some: { id: produtoId } } }] : [])],
+    },
     orderBy: { apelido: "asc" },
     select: { id: true, apelido: true },
   });
