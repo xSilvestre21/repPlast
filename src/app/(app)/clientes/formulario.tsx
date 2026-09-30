@@ -13,10 +13,13 @@ export function FormularioCliente({
   acao,
   valores,
   rotuloEnvio,
+  editavel = true,
 }: {
   acao: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   valores: ValoresCliente;
   rotuloEnvio: string;
+  /** Ficha já gravada, aberta para leitura: tudo travado até clicar em Editar. */
+  editavel?: boolean;
 }) {
   const [estado, enviar, enviando] = useActionState(acao, {});
 
@@ -24,118 +27,126 @@ export function FormularioCliente({
     <form action={enviar} className="space-y-5">
       <MensagemErro>{estado.erro}</MensagemErro>
 
-      <SecaoCartao
-        icone={BadgeCheck}
-        titulo="Identificação"
-        descricao="A razão social, o CNPJ e a IE saem impressos no cabeçalho do pedido."
-      >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Campo
-            name="apelido"
-            rotulo="Nome curto"
-            required
-            dica="Usado nas listas e no nome do arquivo PDF."
-            placeholder="MARIOL"
-            defaultValue={valores.apelido}
-          />
-          <Campo
-            name="razaoSocial"
-            rotulo="Razão social"
-            required
-            placeholder="MARIOL EMBALAGENS LTDA"
-            defaultValue={valores.razaoSocial}
-          />
-          <CampoDocumento
-            name="cnpj"
-            rotulo="CNPJ / CPF"
-            dica="Digite só os números — a pontuação entra sozinha."
-            defaultValue={valores.cnpj}
-          />
-          <Campo
-            name="ie"
-            rotulo="Inscrição estadual"
-            defaultValue={valores.ie}
-            placeholder="204.222.524.111"
-          />
+      {/*
+        Em leitura, o formulário inteiro trava de uma vez — mesmo recurso do
+        cabeçalho do pedido. Mexer exige clicar em Editar no alto da página.
+      */}
+      <fieldset disabled={!editavel} className="space-y-5 min-w-0">
+        <SecaoCartao
+          icone={BadgeCheck}
+          titulo="Identificação"
+          descricao="A razão social, o CNPJ e a IE saem impressos no cabeçalho do pedido."
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Campo
+              name="apelido"
+              rotulo="Nome curto"
+              required
+              dica="Usado nas listas e no nome do arquivo PDF."
+              placeholder="MARIOL"
+              defaultValue={valores.apelido}
+            />
+            <Campo
+              name="razaoSocial"
+              rotulo="Razão social"
+              required
+              placeholder="MARIOL EMBALAGENS LTDA"
+              defaultValue={valores.razaoSocial}
+            />
+            <CampoDocumento
+              name="cnpj"
+              rotulo="CNPJ / CPF"
+              dica="Digite só os números — a pontuação entra sozinha."
+              defaultValue={valores.cnpj}
+            />
+            <Campo
+              name="ie"
+              rotulo="Inscrição estadual"
+              defaultValue={valores.ie}
+              placeholder="204.222.524.111"
+            />
+          </div>
+        </SecaoCartao>
+
+        <SecaoCartao icone={MapPin} titulo="Endereço">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Campo
+              name="endereco"
+              rotulo="Logradouro e número"
+              className="sm:col-span-2 lg:col-span-3"
+              defaultValue={valores.endereco}
+            />
+            <CampoCep name="cep" rotulo="CEP" defaultValue={valores.cep} />
+            <Campo
+              name="bairro"
+              rotulo="Bairro"
+              className="sm:col-span-2"
+              defaultValue={valores.bairro}
+            />
+            <Campo name="municipio" rotulo="Município" defaultValue={valores.municipio} />
+            <Campo
+              name="uf"
+              rotulo="UF"
+              maxLength={2}
+              defaultValue={valores.uf}
+              placeholder="SP"
+            />
+          </div>
+        </SecaoCartao>
+
+        <SecaoCartao icone={Phone} titulo="Contato">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <CampoTelefone name="telefone" rotulo="Telefone" defaultValue={valores.telefone} />
+            <Campo name="email" rotulo="E-mail" type="email" defaultValue={valores.email} />
+            <Campo
+              name="emailNfe"
+              rotulo="E-mail para a NF-e"
+              type="email"
+              dica="Sai impresso no pedido."
+              defaultValue={valores.emailNfe}
+            />
+          </div>
+        </SecaoCartao>
+
+        <SecaoCartao
+          icone={HandCoins}
+          titulo="Condições"
+          descricao="Entram preenchidas em todo pedido novo deste cliente, e dá para trocar no pedido."
+        >
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Campo
+              name="prazoPagamento"
+              rotulo="Prazo de pagamento"
+              placeholder="28/35/42"
+              defaultValue={valores.prazoPagamento}
+            />
+          </div>
+        </SecaoCartao>
+
+        <SecaoCartao
+          icone={MessageSquareText}
+          titulo="Observações"
+          descricao="Recados que costumam se repetir nos pedidos deste cliente — horário de recebimento, exigências de entrega."
+        >
+          <label className="block">
+            <span className="sr-only">Observações</span>
+            <AreaTexto
+              name="observacoes"
+              rows={4}
+              defaultValue={valores.observacoes}
+              placeholder="Recebimento de 2ª a 5ª das 8:00 às 12:00…"
+            />
+          </label>
+        </SecaoCartao>
+      </fieldset>
+
+      {editavel && (
+        <div className="flex justify-end">
+          <Botao type="submit" carregando={enviando}>
+            {enviando ? "Salvando…" : rotuloEnvio}
+          </Botao>
         </div>
-      </SecaoCartao>
-
-      <SecaoCartao icone={MapPin} titulo="Endereço">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Campo
-            name="endereco"
-            rotulo="Logradouro e número"
-            className="sm:col-span-2 lg:col-span-3"
-            defaultValue={valores.endereco}
-          />
-          <CampoCep name="cep" rotulo="CEP" defaultValue={valores.cep} />
-          <Campo
-            name="bairro"
-            rotulo="Bairro"
-            className="sm:col-span-2"
-            defaultValue={valores.bairro}
-          />
-          <Campo name="municipio" rotulo="Município" defaultValue={valores.municipio} />
-          <Campo
-            name="uf"
-            rotulo="UF"
-            maxLength={2}
-            defaultValue={valores.uf}
-            placeholder="SP"
-          />
-        </div>
-      </SecaoCartao>
-
-      <SecaoCartao icone={Phone} titulo="Contato">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <CampoTelefone name="telefone" rotulo="Telefone" defaultValue={valores.telefone} />
-          <Campo name="email" rotulo="E-mail" type="email" defaultValue={valores.email} />
-          <Campo
-            name="emailNfe"
-            rotulo="E-mail para a NF-e"
-            type="email"
-            dica="Sai impresso no pedido."
-            defaultValue={valores.emailNfe}
-          />
-        </div>
-      </SecaoCartao>
-
-      <SecaoCartao
-        icone={HandCoins}
-        titulo="Condições"
-        descricao="Entram preenchidas em todo pedido novo deste cliente, e dá para trocar no pedido."
-      >
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <Campo
-            name="prazoPagamento"
-            rotulo="Prazo de pagamento"
-            placeholder="28/35/42"
-            defaultValue={valores.prazoPagamento}
-          />
-        </div>
-      </SecaoCartao>
-
-      <SecaoCartao
-        icone={MessageSquareText}
-        titulo="Observações"
-        descricao="Recados que costumam se repetir nos pedidos deste cliente — horário de recebimento, exigências de entrega."
-      >
-        <label className="block">
-          <span className="sr-only">Observações</span>
-          <AreaTexto
-            name="observacoes"
-            rows={4}
-            defaultValue={valores.observacoes}
-            placeholder="Recebimento de 2ª a 5ª das 8:00 às 12:00…"
-          />
-        </label>
-      </SecaoCartao>
-
-      <div className="flex justify-end">
-        <Botao type="submit" carregando={enviando}>
-          {enviando ? "Salvando…" : rotuloEnvio}
-        </Botao>
-      </div>
+      )}
     </form>
   );
 }

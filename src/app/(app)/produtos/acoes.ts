@@ -181,7 +181,8 @@ export async function atualizarProduto(
 
   revalidatePath("/produtos");
   revalidatePath(`/produtos/${id}`);
-  return {};
+  // "Salvar e voltar", como no pedido: gravou, a ficha volta a ser leitura.
+  redirect("/produtos");
 }
 
 export async function excluirProduto(id: string, _formData: FormData): Promise<void> {

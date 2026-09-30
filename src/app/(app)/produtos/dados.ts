@@ -11,14 +11,30 @@ import type { ClienteOpcao, FornecedorOpcao } from "./formulario";
  * usuário digita as medidas — sem ida ao servidor. Os materiais entram pelo
  * mesmo motivo: escolher "PEAD" precisa sugerir o fator kg na hora.
  */
-export async function carregarFornecedores(): Promise<FornecedorOpcao[]> {
+export async function carregarFornecedores(produtoId?: string): Promise<FornecedorOpcao[]> {
   const { organizacaoId, db } = await escopoAtual();
 
+  /*
+   * Na edição, a indústria do produto e os aditivos que ele já usa entram
+   * mesmo inativos — pelo mesmo motivo do dono em `carregarClientes`: fora do
+   * seletor, salvar o produto trocaria a indústria ou largaria o aditivo em
+   * silêncio, e o aditivo largado muda o preço.
+   */
+  const doProduto = produtoId ? [{ produtos: { some: { id: produtoId } } }] : [];
+
   const fornecedores = await db.fornecedor.findMany({
-    where: { organizacaoId, ativo: true },
+    where: { organizacaoId, OR: [{ ativo: true }, ...doProduto] },
     orderBy: { nome: "asc" },
     include: {
-      aditivos: { where: { ativo: true }, orderBy: { nome: "asc" } },
+      aditivos: {
+        where: {
+          OR: [
+            { ativo: true },
+            ...(produtoId ? [{ produtos: { some: { produtoId } } }] : []),
+          ],
+        },
+        orderBy: { nome: "asc" },
+      },
       materiais: { where: { ativo: true }, orderBy: { nome: "asc" } },
     },
   });
@@ -53,7 +69,7 @@ export function paraCampo(valor: { toString(): string } | null | undefined, casa
 /**
  * Clientes ativos, para o seletor de dono do produto.
  *
- * Só apelido e id: o formulário não precisa de mais nada, e mandar a ficha
+ * Só apelido e cidade: o formulário não precisa de mais nada, e mandar a ficha
  * inteira de 106 clientes para o navegador engordaria a página sem motivo.
  *
  * Na edição, o dono atual entra mesmo inativo. Sem ele o seletor abria em
@@ -69,8 +85,13 @@ export async function carregarClientes(produtoId?: string): Promise<ClienteOpcao
       OR: [{ ativo: true }, ...(produtoId ? [{ produtos: { some: { id: produtoId } } }] : [])],
     },
     orderBy: { apelido: "asc" },
-    select: { id: true, apelido: true },
+    select: { id: true, apelido: true, municipio: true, uf: true, ativo: true },
   });
 
-  return clientes;
+  // A cidade desempata apelidos parecidos na busca, como no Novo pedido.
+  return clientes.map((c) => ({
+    id: c.id,
+    apelido: c.apelido,
+    detalhe: !c.ativo ? "inativo" : c.municipio ? `${c.municipio}/${c.uf ?? ""}` : undefined,
+  }));
 }

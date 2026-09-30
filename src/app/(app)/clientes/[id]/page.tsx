@@ -1,16 +1,19 @@
 import { notFound } from "next/navigation";
 
-import { Botao, Cabecalho, Selo } from "@/components/ui";
+import { Botao, BotaoLink, Cabecalho, Selo } from "@/components/ui";
 import { escopoAtual } from "@/lib/sessao";
 
 import { alternarAtivoCliente, atualizarCliente, excluirCliente } from "../acoes";
 import { FormularioCliente } from "../formulario";
 import { BotaoExcluir } from "@/components/botao-excluir";
 import { SecaoCodigos } from "./codigos";
-import { Building2, UserRoundCheck, UserRoundX } from "lucide-react";
+import { Building2, Pencil, UserRoundCheck, UserRoundX } from "lucide-react";
 import { Pagina } from "@/components/pagina";
 
-export default async function PaginaCliente({ params }: PageProps<"/clientes/[id]">) {
+export default async function PaginaCliente({
+  params,
+  searchParams,
+}: PageProps<"/clientes/[id]">) {
   const { id } = await params;
 
   const { organizacaoId, db } = await escopoAtual();
@@ -33,6 +36,14 @@ export default async function PaginaCliente({ params }: PageProps<"/clientes/[id
 
   if (!cliente) notFound();
 
+  const parametros = await searchParams;
+  /*
+   * A ficha abre para LEITURA, como pedido e proposta gravados: uma tela que
+   * já chega editável convida a mexer sem querer num cadastro que sai impresso
+   * nos pedidos. Editável só quando se clicou em Editar (`?editar=1`).
+   */
+  const editavel = parametros.editar === "1";
+
   return (
     <Pagina>
       <Cabecalho
@@ -43,6 +54,11 @@ export default async function PaginaCliente({ params }: PageProps<"/clientes/[id
         selo={!cliente.ativo ? <Selo tom="cancelado">Inativo</Selo> : undefined}
         acao={
           <div className="flex flex-wrap gap-2">
+            {!editavel && (
+              <BotaoLink href={`/clientes/${cliente.id}?editar=1`} icone={Pencil}>
+                Editar
+              </BotaoLink>
+            )}
             {/* Inativar é o caminho de quem parou de comprar: some das escolhas
                 sem apagar nada. Excluir fica para o cadastro feito por engano. */}
             <form action={alternarAtivoCliente.bind(null, cliente.id)}>
@@ -74,7 +90,8 @@ export default async function PaginaCliente({ params }: PageProps<"/clientes/[id
 
         <FormularioCliente
           acao={atualizarCliente.bind(null, cliente.id)}
-          rotuloEnvio="Salvar alterações"
+          rotuloEnvio="Salvar e voltar"
+          editavel={editavel}
           valores={{
             apelido: cliente.apelido,
             razaoSocial: cliente.razaoSocial,

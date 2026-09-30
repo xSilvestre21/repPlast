@@ -173,7 +173,9 @@ export function ContaItem({
    *
    * Só reescreve o nome se ele ainda for o padrão do tipo anterior (ou vazio):
    * o que a pessoa digitou ali — "ECOFILME", "Fita adesiva marrom" — é dela, e
-   * trocar de tipo não pode apagar.
+   * trocar de tipo não pode apagar. Saindo do saco, reescreve sempre: ali o
+   * campo é o material da tabela (PEAD), que não tem o que fazer abrindo a
+   * descrição de uma fita ou de um shrink.
    */
   function escolherTipo(valor: string) {
     const novo = tipoPorValor(valor);
@@ -182,7 +184,9 @@ export function ContaItem({
       ...atual,
       familia: novo.familia,
       material:
-        atual.material.trim() === "" || atual.material === tipo.nome ? novo.nome : atual.material,
+        tipo.valor === "SACO" || atual.material.trim() === "" || atual.material === tipo.nome
+          ? novo.nome
+          : atual.material,
     }));
     setTipo(novo);
     setPrecoManual(null);

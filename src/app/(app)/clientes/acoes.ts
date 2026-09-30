@@ -166,7 +166,8 @@ export async function atualizarCliente(
 
   revalidatePath("/clientes");
   revalidatePath(`/clientes/${id}`);
-  return {};
+  // "Salvar e voltar", como no pedido: gravou, a ficha volta a ser leitura.
+  redirect("/clientes");
 }
 
 export async function excluirCliente(id: string, _formData: FormData): Promise<void> {

@@ -1,16 +1,19 @@
 import { notFound } from "next/navigation";
 
-import { Botao, Cabecalho, Selo } from "@/components/ui";
+import { Botao, BotaoLink, Cabecalho, Selo } from "@/components/ui";
 import { escopoAtual } from "@/lib/sessao";
 
 import { alternarAtivoProduto, atualizarProduto, excluirProduto } from "../acoes";
 import { carregarClientes, carregarFornecedores, paraCampo } from "../dados";
 import { FormularioProduto } from "../formulario";
 import { BotaoExcluir } from "@/components/botao-excluir";
-import { Archive, ArchiveRestore, Package } from "lucide-react";
+import { Archive, ArchiveRestore, Package, Pencil } from "lucide-react";
 import { Pagina } from "@/components/pagina";
 
-export default async function PaginaProduto({ params }: PageProps<"/produtos/[id]">) {
+export default async function PaginaProduto({
+  params,
+  searchParams,
+}: PageProps<"/produtos/[id]">) {
   const { id } = await params;
 
   const { organizacaoId, db } = await escopoAtual();
@@ -20,11 +23,19 @@ export default async function PaginaProduto({ params }: PageProps<"/produtos/[id
       where: { id, organizacaoId },
       include: { aditivos: { select: { aditivoId: true } } },
     }),
-    carregarFornecedores(),
+    carregarFornecedores(id),
     carregarClientes(id),
   ]);
 
   if (!produto) notFound();
+
+  const parametros = await searchParams;
+  /*
+   * A ficha abre para LEITURA, como pedido e proposta gravados: uma tela que
+   * já chega editável convida a mexer sem querer num cadastro que sai impresso
+   * nos pedidos. Editável só quando se clicou em Editar (`?editar=1`).
+   */
+  const editavel = parametros.editar === "1";
 
   return (
     <Pagina>
@@ -36,6 +47,11 @@ export default async function PaginaProduto({ params }: PageProps<"/produtos/[id
         selo={!produto.ativo ? <Selo tom="cancelado">Inativo</Selo> : undefined}
         acao={
           <div className="flex flex-wrap gap-2">
+            {!editavel && (
+              <BotaoLink href={`/produtos/${produto.id}?editar=1`} icone={Pencil}>
+                Editar
+              </BotaoLink>
+            )}
             {/* Inativar é o caminho do produto que o cliente deixou de comprar:
                 some das escolhas sem apagar nada. Excluir fica para o cadastro
                 feito por engano. */}
@@ -70,7 +86,8 @@ export default async function PaginaProduto({ params }: PageProps<"/produtos/[id
         fornecedores={fornecedores}
         clientes={clientes}
         acao={atualizarProduto.bind(null, produto.id)}
-        rotuloEnvio="Salvar alterações"
+        rotuloEnvio="Salvar e voltar"
+        editavel={editavel}
         valores={{
           fornecedorId: produto.fornecedorId,
           clienteId: produto.clienteId ?? "",
