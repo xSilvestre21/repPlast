@@ -1,5 +1,7 @@
 import Link from "next/link";
 import {
+  Eye,
+  EyeOff,
   Inbox,
   Plus,
   Receipt,
@@ -14,6 +16,7 @@ import { SeloStatus } from "@/components/selo-status";
 import { ValorAnimado } from "@/components/valor-animado";
 import {
   Barra,
+  Botao,
   BotaoLink,
   Cabecalho,
   Cartao,
@@ -32,7 +35,9 @@ import { competenciaDe, progressoDaMeta } from "@/lib/comissao";
 import { pedidosDaCompetencia, resumirComissao } from "@/lib/comissao-consulta";
 import { clientesSumidos } from "@/lib/positivacao";
 import { dbAdministrativo } from "@/lib/db";
-import { escopoAtual } from "@/lib/sessao";
+import { escopoAtual, sessaoAtual } from "@/lib/sessao";
+
+import { alternarOcultarValores } from "./acoes";
 
 const DATA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" });
 const MES = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" });
@@ -46,6 +51,27 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
   const dias = CORTES.includes(Number(parametros.dias)) ? Number(parametros.dias) : CORTE_PADRAO;
 
   const { organizacaoId, db, ehAdmin, usuarioId } = await escopoAtual();
+
+  // O primeiro nome, como se cumprimenta alguém: "Olá, Luiz!", e não o nome
+  // inteiro do cadastro. `sessaoAtual` é memoizada por requisição — a mesma
+  // leitura que o `escopoAtual` acabou de fazer, sem ida nova ao banco.
+  const sessao = await sessaoAtual();
+  const primeiroNome = sessao?.nome.trim().split(/\s+/)[0];
+  const ocultos = sessao?.ocultarValores ?? false;
+
+  /*
+   * Máscara, e não `filter: blur`: oculto, o número nem chega ao HTML — não
+   * vaza para o leitor de tela nem dá para adivinhar através do desfoque.
+   * Contagens e percentuais continuam: não dizem quanto alguém ganhou.
+   */
+  const moeda = (valor: { toString(): string }) =>
+    ocultos ? (
+      <span role="img" aria-label="Valor oculto">
+        R$ ••••
+      </span>
+    ) : (
+      formatarMoeda(valor.toString())
+    );
   const competencia = competenciaDe(new Date());
 
   const [organizacao, doMes, recentes, clientes] = await Promise.all([
@@ -128,12 +154,21 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
   return (
     <Pagina>
       <Cabecalho
-        titulo="Painel"
+        titulo={primeiroNome ? `Olá, ${primeiroNome}!` : "Painel"}
         descricao="O mês em uma tela: o que você já ganhou, quem parou de comprar e o que entrou por último."
         acao={
-          <BotaoLink href="/pedidos/novo" icone={Plus}>
-            Novo pedido
-          </BotaoLink>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Fora do cartão da comissão de propósito: o cartão inteiro é um
+                link, e botão dentro de link é HTML inválido. */}
+            <form action={alternarOcultarValores}>
+              <Botao type="submit" variante="secundaria" icone={ocultos ? Eye : EyeOff}>
+                {ocultos ? "Mostrar valores" : "Ocultar valores"}
+              </Botao>
+            </form>
+            <BotaoLink href="/pedidos/novo" icone={Plus}>
+              Novo pedido
+            </BotaoLink>
+          </div>
         }
       />
 
@@ -170,11 +205,13 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
                 e não a cor — que faz o olho pousar aqui antes de tudo.
               */}
               <div className="cifra text-heroi mt-5">
-                <ValorAnimado valor={comissaoDoMes.toNumber()} />
+                {/* Ao revelar, o `ValorAnimado` monta do zero e a contagem toca
+                    de novo — a revelação vira o momento da animação. */}
+                {ocultos ? moeda(comissaoDoMes) : <ValorAnimado valor={comissaoDoMes.toNumber()} />}
               </div>
 
               <p className="text-realce text-tinta-2 mt-4 numerico">
-                {formatarMoeda(resumo.base.toString())} vendidos em {doMes.length} pedido
+                {moeda(resumo.base)} vendidos em {doMes.length} pedido
                 {doMes.length === 1 ? "" : "s"}
               </p>
             </div>
@@ -216,9 +253,11 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
                   tom={progresso.batida ? "verde" : "tinta"}
                 />
                 <p className="text-rotulo text-tinta-2 mt-3 numerico">
-                  {progresso.batida
-                    ? `${formatarMoeda(progresso.meta.toString())} — alcançada`
-                    : `Faltam ${formatarMoeda(progresso.falta.toString())}`}
+                  {progresso.batida ? (
+                    <>{moeda(progresso.meta)} — alcançada</>
+                  ) : (
+                    <>Faltam {moeda(progresso.falta)}</>
+                  )}
                 </p>
               </div>
             ) : (
@@ -240,7 +279,7 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
             rotulo="Vendido no mês"
             icone={TrendingUp}
             tom="menta"
-            valor={formatarMoeda(resumo.base.toString())}
+            valor={moeda(resumo.base)}
             detalhe="Base da comissão, sem IPI e sem frete"
           />
         </div>
@@ -265,7 +304,7 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
             rotulo="Ticket médio"
             icone={Receipt}
             tom="sol"
-            valor={ticketMedio ? formatarMoeda(ticketMedio.toString()) : "—"}
+            valor={ticketMedio ? moeda(ticketMedio) : "—"}
             detalhe="Valor médio por pedido enviado no mês"
           />
         </div>
@@ -308,9 +347,7 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
                     detalhe={
                       <span className="numerico">
                         {DATA.format(ultimaCompra)}
-                        {cliente.ultimoValor
-                          ? ` · ${formatarMoeda(cliente.ultimoValor.toString())}`
-                          : null}
+                        {cliente.ultimoValor ? <> · {moeda(cliente.ultimoValor)}</> : null}
                       </span>
                     }
                   />
@@ -368,7 +405,7 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
                     <ValorLinha
                       className="w-28"
                       riscado={pedido.status === "CANCELADO"}
-                      valor={formatarMoeda(pedido.totalGeral.toString())}
+                      valor={moeda(pedido.totalGeral)}
                       nota={DATA.format(pedido.criadoEm)}
                     />
                     <div className="w-24 flex justify-end">

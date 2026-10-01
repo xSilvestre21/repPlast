@@ -150,6 +150,10 @@ model Usuario {
   /// deliberadamente `prefers-reduced-motion` do navegador e usa só isto.
   reduzirAnimacoes Boolean @default(false)
 
+  /// O "olho" do Painel: troca os valores em reais por uma máscara. É da conta,
+  /// e não do navegador, para valer igual no escritório e no celular.
+  ocultarValores Boolean @default(false)
+
   /// Fatia da comissão que este preposto recebe, em percentual DELA — não da
   /// venda. 50 quer dizer "metade do que a indústria pagar ao escritório".
   ///

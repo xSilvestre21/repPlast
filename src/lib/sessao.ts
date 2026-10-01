@@ -33,6 +33,8 @@ export interface Sessao {
   organizacaoNome: string;
   /// Preferência de conta que substitui `prefers-reduced-motion` do sistema.
   reduzirAnimacoes: boolean;
+  /// O Painel troca os valores em reais por uma máscara.
+  ocultarValores: boolean;
 }
 
 function segredo(): string {
@@ -105,6 +107,7 @@ export const sessaoAtual = cache(async (): Promise<Sessao | null> => {
       papel: true,
       ativo: true,
       reduzirAnimacoes: true,
+      ocultarValores: true,
       organizacao: { select: { nome: true, ativa: true, plano: true } },
     },
   });
@@ -122,6 +125,7 @@ export const sessaoAtual = cache(async (): Promise<Sessao | null> => {
     plano: usuario.organizacao.plano,
     organizacaoNome: usuario.organizacao.nome,
     reduzirAnimacoes: usuario.reduzirAnimacoes,
+    ocultarValores: usuario.ocultarValores,
   };
 });
 
