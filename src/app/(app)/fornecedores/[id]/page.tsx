@@ -1,11 +1,12 @@
 import { notFound } from "next/navigation";
 
-import { Cabecalho } from "@/components/ui";
+import { Botao, Cabecalho, Selo } from "@/components/ui";
 import { escreverNumeroBr } from "@/lib/numero-br";
 import { escopoAtual } from "@/lib/sessao";
 
 import {
   adicionarAditivo,
+  alternarAtivoFornecedor,
   atualizarFornecedor,
   excluirFornecedor,
   removerAditivo,
@@ -24,7 +25,7 @@ import { SecaoMateriais } from "./materiais";
 import { SecaoPrepostos } from "./prepostos";
 import { BotaoExcluir } from "@/components/botao-excluir";
 import { SecaoLogo } from "./logo-industria";
-import { Factory } from "lucide-react";
+import { CircleCheck, CircleOff, Factory } from "lucide-react";
 import { Pagina } from "@/components/pagina";
 
 export default async function PaginaFornecedor({ params }: PageProps<"/fornecedores/[id]">) {
@@ -71,17 +72,40 @@ export default async function PaginaFornecedor({ params }: PageProps<"/fornecedo
         icone={Factory}
         titulo={fornecedor.nome}
         descricao="Condições comerciais, logo e aditivos desta indústria."
+        selo={!fornecedor.ativo ? <Selo tom="cancelado">Inativa</Selo> : undefined}
         acao={
-          <BotaoExcluir
-            rotulo="Excluir indústria"
-            nome={fornecedor.nome}
-            aviso="Os aditivos dela serão removidos junto."
-            acao={excluirFornecedor.bind(null, fornecedor.id)}
-          />
+          <div className="flex flex-wrap gap-2">
+            {/* Inativar é o caminho da representação que acabou: some das
+                escolhas sem apagar nada. Excluir fica para o cadastro feito por
+                engano — e nem é possível depois que há produto. */}
+            <form action={alternarAtivoFornecedor.bind(null, fornecedor.id)}>
+              <Botao
+                type="submit"
+                variante="secundaria"
+                icone={fornecedor.ativo ? CircleOff : CircleCheck}
+              >
+                {fornecedor.ativo ? "Marcar como inativa" : "Reativar"}
+              </Botao>
+            </form>
+            <BotaoExcluir
+              rotulo="Excluir indústria"
+              nome={fornecedor.nome}
+              aviso="Os aditivos dela serão removidos junto."
+              acao={excluirFornecedor.bind(null, fornecedor.id)}
+            />
+          </div>
         }
       />
 
       <div className="space-y-5 palco">
+        {!fornecedor.ativo && (
+          // Neutro, e não vermelho: inativa é situação, não erro.
+          <p className="rounded-suave border border-filete bg-folha-2 px-4 py-3 text-corpo text-tinta-2">
+            Indústria inativa: não aparece ao criar pedido, proposta ou produto, nem na lista
+            padrão de fornecedores. Pedidos, propostas e produtos dela continuam como estão.
+          </p>
+        )}
+
         <FormularioFornecedor
           acao={atualizarFornecedor.bind(null, fornecedor.id)}
           rotuloEnvio="Salvar alterações"

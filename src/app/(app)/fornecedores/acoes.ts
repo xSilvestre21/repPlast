@@ -127,6 +127,33 @@ export async function excluirFornecedor(id: string, _formData: FormData): Promis
   redirect("/fornecedores");
 }
 
+/**
+ * Liga e desliga a indústria.
+ *
+ * Inativar, e não apagar: a representação que acabou continua nos pedidos,
+ * propostas e comissões de meses fechados — e indústria com produto nem pode
+ * ser excluída. Inativa, ela sai das escolhas de novo pedido, nova proposta e
+ * novo produto (que já filtram `ativo`) e da lista padrão, e volta com um
+ * clique se a representação voltar.
+ */
+export async function alternarAtivoFornecedor(id: string, _formData: FormData): Promise<void> {
+  const { organizacaoId, db } = await contexto();
+
+  const fornecedor = await db.fornecedor.findFirst({
+    where: { id, organizacaoId },
+    select: { ativo: true },
+  });
+  if (!fornecedor) throw new Error("Indústria não encontrada.");
+
+  await db.fornecedor.updateMany({
+    where: { id, organizacaoId },
+    data: { ativo: !fornecedor.ativo },
+  });
+
+  revalidatePath("/fornecedores");
+  revalidatePath(`/fornecedores/${id}`);
+}
+
 /* -------------------------------------------------------------------------- */
 /* Logo da indústria                                                          */
 /* -------------------------------------------------------------------------- */

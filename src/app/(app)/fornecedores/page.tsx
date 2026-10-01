@@ -1,28 +1,29 @@
 import { Factory, Plus } from "lucide-react";
 
-import {
-  BotaoLink,
-  Cabecalho,
-  Cartao,
-  CorpoLinha,
-  Emblema,
-  EstadoVazio,
-  FimDaLinha,
-  LinhaLista,
-  ValorLinha,
-  formatarPercentual,
-} from "@/components/ui";
+import { BotaoLink, Cabecalho } from "@/components/ui";
 import { escopoAtual } from "@/lib/sessao";
 import { Pagina } from "@/components/pagina";
 
-export default async function PaginaFornecedores() {
-  const { organizacaoId, db } = await escopoAtual();
+import { buscarFornecedores, situacaoDoParametro } from "./consulta";
+import { ListaFornecedores } from "./lista";
 
-  const fornecedores = await db.fornecedor.findMany({
-    where: { organizacaoId },
-    orderBy: { nome: "asc" },
-    include: { _count: { select: { produtos: true, aditivos: true } } },
-  });
+export default async function PaginaFornecedores({ searchParams }: PageProps<"/fornecedores">) {
+  const { organizacaoId, db } = await escopoAtual();
+  const parametros = await searchParams;
+
+  /*
+   * A URL decide como a tela ABRE — é o que faz o link copiado e o F5 trazerem
+   * a mesma lista. Daí em diante quem pede as fatias é o cliente, sem navegar
+   * (ver `lista.tsx`).
+   */
+  const busca = typeof parametros.busca === "string" ? parametros.busca.trim() : "";
+  const situacao = situacaoDoParametro(parametros.situacao);
+
+  const [inicial, algum] = await Promise.all([
+    buscarFornecedores(db, organizacaoId, { busca, situacao, pagina: 0 }),
+    // Distingue "não achei" de "ainda não há indústria nenhuma", que pede outro recado.
+    db.fornecedor.findFirst({ where: { organizacaoId }, select: { id: true } }),
+  ]);
 
   return (
     <Pagina>
@@ -37,53 +38,12 @@ export default async function PaginaFornecedores() {
         }
       />
 
-      {fornecedores.length === 0 ? (
-        <EstadoVazio icone={Factory}>
-          Nenhuma indústria cadastrada ainda.
-          <br />
-          Comece por aqui: sem fornecedor não é possível cadastrar produto nem lançar pedido.
-        </EstadoVazio>
-      ) : (
-        <Cartao className="divide-y divide-filete overflow-hidden palco">
-          {fornecedores.map((f) => (
-            <LinhaLista key={f.id} href={`/fornecedores/${f.id}`}>
-              <Emblema icone={Factory} tom="fraco" className="size-4" />
-
-              <CorpoLinha
-                titulo={f.nome}
-                detalhe={
-                  <>
-                    <span className="numerico">{f._count.produtos}</span> produto(s)
-                    {f._count.aditivos > 0 && (
-                      <>
-                        {" · "}
-                        <span className="numerico">{f._count.aditivos}</span> aditivo(s)
-                      </>
-                    )}
-                  </>
-                }
-              />
-
-              {/* Dois percentuais lado a lado, cada um na sua largura fixa: é o
-                  que faz a coluna de comissão cair no mesmo x em toda a lista,
-                  em vez de escorregar conforme o IPI ao lado tiver uma casa
-                  decimal a mais. */}
-              <FimDaLinha>
-                <ValorLinha
-                  className="w-20"
-                  valor={formatarPercentual(f.ipiPercentual.toString())}
-                  nota="IPI"
-                />
-                <ValorLinha
-                  className="w-24"
-                  valor={formatarPercentual(f.comissaoPercentual.toString())}
-                  nota="Comissão"
-                />
-              </FimDaLinha>
-            </LinhaLista>
-          ))}
-        </Cartao>
-      )}
+      <ListaFornecedores
+        inicial={inicial}
+        buscaInicial={busca}
+        situacaoInicial={situacao}
+        semNenhumFornecedor={!algum}
+      />
     </Pagina>
   );
 }
