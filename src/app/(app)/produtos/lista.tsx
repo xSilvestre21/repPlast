@@ -45,7 +45,12 @@ import {
   formatarMoeda,
 } from "@/components/ui";
 
-import type { FatiaDeProdutos, FiltroSituacaoProduto, FiltrosProduto } from "./consulta";
+import type {
+  CampoMedida,
+  FatiaDeProdutos,
+  FiltroSituacaoProduto,
+  FiltrosProduto,
+} from "./consulta";
 
 /** O tempo entre a última tecla e a ida ao servidor. */
 const ESPERA_MS = 250;
@@ -114,6 +119,15 @@ export function ListaProdutos({
 }) {
   const [filtros, setFiltros] = useState(filtrosIniciais);
 
+  /*
+   * A medida com o foco casa pelo COMEÇO: o "1" do comprimento é o começo de
+   * 110 e de 15, não um saco de um centímetro. Sair do campo devolve o valor
+   * exato — é aí, e só aí, que "nada encontrado" quer dizer que não existe.
+   * Campo vazio não conta, para que só entrar nele não refaça a busca.
+   */
+  const [comFoco, setComFoco] = useState<CampoMedida | null>(null);
+  const digitando = comFoco && filtros[comFoco].trim() ? comFoco : null;
+
   const [linhas, setLinhas] = useState(inicial.linhas);
   const [temMais, setTemMais] = useState(inicial.temMais);
   const [pagina, setPagina] = useState(0);
@@ -138,6 +152,7 @@ export function ListaProdutos({
     setBuscando(true);
     try {
       const consulta = parametros(alvo);
+      if (alvo.digitando) consulta.set("digitando", alvo.digitando);
       consulta.set("pagina", String(alvo.pagina));
 
       const resposta = await fetch(`/produtos/busca?${consulta}`, { signal: controle.signal });
@@ -168,11 +183,11 @@ export function ListaProdutos({
     window.history.replaceState(null, "", endereco(filtros));
 
     const espera = setTimeout(() => {
-      void buscarFatia({ ...filtros, pagina: 0 });
+      void buscarFatia({ ...filtros, digitando, pagina: 0 });
     }, ESPERA_MS);
 
     return () => clearTimeout(espera);
-  }, [filtros, buscarFatia]);
+  }, [filtros, digitando, buscarFatia]);
 
   /* A sentinela: encostou na janela, a fatia seguinte é pedida. */
   useEffect(() => {
@@ -182,7 +197,7 @@ export function ListaProdutos({
     const observador = new IntersectionObserver(
       (entradas) => {
         if (entradas[0]?.isIntersecting) {
-          void buscarFatia({ ...filtros, pagina: pagina + 1 });
+          void buscarFatia({ ...filtros, digitando, pagina: pagina + 1 });
         }
       },
       { rootMargin: "400px" },
@@ -190,7 +205,7 @@ export function ListaProdutos({
 
     observador.observe(alvo);
     return () => observador.disconnect();
-  }, [temMais, buscando, pagina, filtros, buscarFatia]);
+  }, [temMais, buscando, pagina, filtros, digitando, buscarFatia]);
 
   const mudar = <C extends keyof FiltrosProduto>(campo: C, valor: FiltrosProduto[C]) =>
     setFiltros((atuais) => ({ ...atuais, [campo]: valor }));
@@ -243,6 +258,8 @@ export function ListaProdutos({
                     title={medida.rotulo}
                     value={filtros[medida.campo]}
                     onChange={(evento) => mudar(medida.campo, evento.target.value)}
+                    onFocus={() => setComFoco(medida.campo)}
+                    onBlur={() => setComFoco(null)}
                     placeholder={medida.exemplo}
                     className={`${CLASSE_CONTROLE} numerico text-right pr-10`}
                   />

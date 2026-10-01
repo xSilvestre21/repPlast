@@ -7,9 +7,12 @@
  * precisam do mesmo filtro — escrito aqui, uma vez só.
  */
 
+import type { Prisma } from "@/generated/prisma/client";
 import type { DbOrganizacao } from "@/lib/db";
 import { lerNumeroBr } from "@/lib/numero-br";
 import { precoUnitario, unidadeDoRotulo } from "@/lib/produto-preco";
+
+import { faixasDoPrefixo } from "./prefixo-medida";
 
 /** Quantas linhas por fatia, na primeira e em todas as seguintes. */
 export const POR_PAGINA = 20;
@@ -25,6 +28,10 @@ export function situacaoDoParametro(valor: unknown): FiltroSituacaoProduto {
     : "ativos";
 }
 
+export type CampoMedida = "larguraCm" | "comprimentoCm" | "espessuraMm";
+
+const CAMPOS_MEDIDA: CampoMedida[] = ["larguraCm", "comprimentoCm", "espessuraMm"];
+
 /**
  * O que a lista filtra. As medidas ficam como foram digitadas ("0,055"): é
  * assim que voltam para o campo e para a URL.
@@ -35,6 +42,12 @@ export type FiltrosProduto = {
   comprimentoCm: string;
   espessuraMm: string;
   situacao: FiltroSituacaoProduto;
+  /**
+   * A medida que ainda está sendo digitada, que casa pelo COMEÇO e não pelo
+   * valor exato (ver `prefixo-medida.ts`). Só a busca enquanto se digita manda
+   * isto: a URL da página guarda o filtro em repouso, que é o exato.
+   */
+  digitando?: CampoMedida | null;
 };
 
 /** Lê os filtros de uma URL — a da página ou a da rota de busca. */
@@ -47,6 +60,7 @@ export function filtrosDosParametros(ler: (nome: string) => unknown): FiltrosPro
     comprimentoCm: texto(ler("c")),
     espessuraMm: texto(ler("e")),
     situacao: situacaoDoParametro(ler("situacao")),
+    digitando: CAMPOS_MEDIDA.find((campo) => campo === ler("digitando")) ?? null,
   };
 }
 
@@ -81,6 +95,21 @@ function medida(valor: string) {
   return numero === null ? undefined : numero;
 }
 
+/** A condição de uma medida: exata em repouso, pelo começo enquanto se digita. */
+function condicaoDeMedida(
+  campo: CampoMedida,
+  valor: string,
+  digitando: boolean,
+): Prisma.ProdutoWhereInput | null {
+  if (!digitando) {
+    const exata = medida(valor);
+    return exata === undefined ? null : { [campo]: exata };
+  }
+
+  const faixas = faixasDoPrefixo(valor);
+  return faixas ? { OR: faixas.map((faixa) => ({ [campo]: faixa })) } : null;
+}
+
 export async function buscarProdutos(
   db: DbOrganizacao,
   organizacaoId: string,
@@ -90,12 +119,17 @@ export async function buscarProdutos(
   const contem = (texto: string) => ({ contains: texto, mode: "insensitive" as const });
   const { situacao } = filtros;
 
-  const onde = {
+  const porMedida = CAMPOS_MEDIDA.flatMap((campo) => {
+    const condicao = condicaoDeMedida(campo, filtros[campo], filtros.digitando === campo);
+    return condicao ? [condicao] : [];
+  });
+
+  const onde: Prisma.ProdutoWhereInput = {
     organizacaoId,
     ...(situacao === "ativos" ? { ativo: true } : situacao === "inativos" ? { ativo: false } : {}),
-    larguraCm: medida(filtros.larguraCm),
-    comprimentoCm: medida(filtros.comprimentoCm),
-    espessuraMm: medida(filtros.espessuraMm),
+    // Em AND porque cada medida pelo começo já é um OR de faixas, e o OR da
+    // busca por texto logo abaixo ocupa a chave de cima.
+    ...(porMedida.length > 0 ? { AND: porMedida } : {}),
     /*
      * A busca alcança o CLIENTE e a INDÚSTRIA, não só a descrição.
      *
