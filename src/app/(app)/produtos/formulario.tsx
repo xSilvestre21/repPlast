@@ -9,12 +9,14 @@ import {
   Layers,
   Package,
   Ruler,
+  Search,
 } from "lucide-react";
 import { useActionState, useMemo, useState } from "react";
 
 import {
   Botao,
   BotaoTexto,
+  CLASSE_CONTROLE,
   Campo,
   Cartao,
   MensagemErro,
@@ -22,7 +24,7 @@ import {
   Selecao,
   formatarMoeda,
 } from "@/components/ui";
-import { SelecaoBuscavel } from "@/components/selecao-buscavel";
+import { SelecaoBuscavel, achatar } from "@/components/selecao-buscavel";
 import { descricaoFita, descricaoRolo, descricaoSaco, formatarNumero } from "@/lib/descricao";
 import { lerNumeroBr } from "@/lib/numero-br";
 import { unidadeDoRotulo } from "@/lib/produto-preco";
@@ -154,6 +156,9 @@ const UNIDADES_AVULSO = [
   { valor: "CX", rotulo: "Caixa" },
   { valor: "MIL", rotulo: "Milheiro" },
 ] as const;
+
+/** Até quantos aditivos as etiquetas bastam; acima disso aparece a busca. */
+const LIMITE_SEM_BUSCA = 6;
 
 /** `detalhe` desempata apelidos parecidos: a cidade, ou "inativo" para o dono antigo. */
 export type ClienteOpcao = { id: string; apelido: string; detalhe?: string };
@@ -314,6 +319,26 @@ export function FormularioProduto({
     ?.comissaoPercentual;
   const comissaoDaIndustria =
     comissaoBruta && Number(comissaoBruta) > 0 ? Number(comissaoBruta) : null;
+
+  /*
+   * A busca dos aditivos. Uma indústria chega a ter quase trinta, e achar o
+   * "anti-UV" no meio de trinta etiquetas é ler todas.
+   *
+   * O escolhido continua na tela qualquer que seja a busca, e não só por
+   * conforto: etiqueta que some não vai no formulário, e salvar desmarcaria em
+   * silêncio um aditivo que ninguém tirou.
+   */
+  const [buscaAditivo, setBuscaAditivo] = useState("");
+
+  const aditivosVisiveis = useMemo(() => {
+    const termos = achatar(buscaAditivo).split(/\s+/).filter(Boolean);
+    if (termos.length === 0) return aditivosDisponiveis;
+    return aditivosDisponiveis.filter((a) => {
+      if (campos.aditivos.includes(a.id)) return true;
+      const alvo = achatar(`${a.nome} ${a.sufixoDescricao}`);
+      return termos.every((termo) => alvo.includes(termo));
+    });
+  }, [aditivosDisponiveis, buscaAditivo, campos.aditivos]);
 
   const aditivosEscolhidos = useMemo(
     () => aditivosDisponiveis.filter((a) => campos.aditivos.includes(a.id)),
@@ -930,9 +955,43 @@ export function FormularioProduto({
                   : "Entram na descrição. O efeito no preço só existe no saco, que é calculado por fórmula."
             }
           >
-            {aditivosDisponiveis.length > 0 && (
+            {/* Com poucos aditivos a caixa só ficaria entre a pessoa e a
+                etiqueta — o mesmo critério que deixa unidade e frete sem busca. */}
+            {aditivosDisponiveis.length > LIMITE_SEM_BUSCA && (
+              <label className="block mb-3">
+                <span className="sr-only">Buscar aditivo</span>
+                <div className="relative">
+                  <Search
+                    size={15}
+                    strokeWidth={2}
+                    aria-hidden="true"
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-tinta-3 pointer-events-none"
+                  />
+                  <input
+                    type="search"
+                    autoComplete="off"
+                    value={buscaAditivo}
+                    onChange={(e) => setBuscaAditivo(e.target.value)}
+                    onKeyDown={(e) => {
+                      // Enter aqui é "achei", não "salvar o produto".
+                      if (e.key === "Enter") e.preventDefault();
+                    }}
+                    placeholder="Buscar aditivo pelo nome ou pelo sufixo"
+                    className={`${CLASSE_CONTROLE} pl-10`}
+                  />
+                </div>
+              </label>
+            )}
+
+            {aditivosDisponiveis.length > 0 && aditivosVisiveis.length === 0 && (
+              <p className="text-corpo text-tinta-3">
+                Nenhum aditivo com &ldquo;{buscaAditivo.trim()}&rdquo;.
+              </p>
+            )}
+
+            {aditivosVisiveis.length > 0 && (
               <div className="flex flex-wrap gap-2">
-                {aditivosDisponiveis.map((aditivo) => {
+                {aditivosVisiveis.map((aditivo) => {
                   const marcado = campos.aditivos.includes(aditivo.id);
 
                   return (

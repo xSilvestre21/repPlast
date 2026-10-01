@@ -35,7 +35,7 @@ export type OpcaoBuscavel = {
  * "Sertãozinho" tem de aparecer para quem digitou "sertaozinho", e "CEPÊRA"
  * para quem digitou "cepera" — ninguém procura cliente com acento certo.
  */
-function achatar(texto: string): string {
+export function achatar(texto: string): string {
   return texto
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
