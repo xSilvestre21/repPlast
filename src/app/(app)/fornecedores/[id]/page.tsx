@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { Botao, Cabecalho, Selo } from "@/components/ui";
+import { Botao, BotaoLink, Cabecalho, Selo } from "@/components/ui";
 import { escreverNumeroBr } from "@/lib/numero-br";
 import { escopoAtual } from "@/lib/sessao";
 
@@ -25,10 +25,13 @@ import { SecaoMateriais } from "./materiais";
 import { SecaoPrepostos } from "./prepostos";
 import { BotaoExcluir } from "@/components/botao-excluir";
 import { SecaoLogo } from "./logo-industria";
-import { CircleCheck, CircleOff, Factory } from "lucide-react";
+import { Check, CircleCheck, CircleOff, Factory, Pencil } from "lucide-react";
 import { Pagina } from "@/components/pagina";
 
-export default async function PaginaFornecedor({ params }: PageProps<"/fornecedores/[id]">) {
+export default async function PaginaFornecedor({
+  params,
+  searchParams,
+}: PageProps<"/fornecedores/[id]">) {
   const { id } = await params;
 
   const { organizacaoId, db, ehAdmin, plano } = await escopoAtual();
@@ -50,6 +53,15 @@ export default async function PaginaFornecedor({ params }: PageProps<"/fornecedo
   });
 
   if (!fornecedor) notFound();
+
+  const parametros = await searchParams;
+  /*
+   * A ficha abre para LEITURA, como a do cliente e a do produto: IPI, comissão
+   * e preço de material entram na conta de todo pedido, e uma tela que já chega
+   * editável convida a mexer sem querer. Editável só quando se clicou em Editar
+   * (`?editar=1`).
+   */
+  const editavel = parametros.editar === "1";
 
   /*
    * A seção de quem atende só faz sentido para o administrador de um escritório
@@ -75,6 +87,22 @@ export default async function PaginaFornecedor({ params }: PageProps<"/fornecedo
         selo={!fornecedor.ativo ? <Selo tom="cancelado">Inativa</Selo> : undefined}
         acao={
           <div className="flex flex-wrap gap-2">
+            {/* Cada seção desta ficha salva sozinha, então editar não termina
+                necessariamente no botão do formulário de cima: "Concluir" é a
+                saída de quem só mexeu num contato ou num preço de material. */}
+            {editavel ? (
+              <BotaoLink
+                href={`/fornecedores/${fornecedor.id}`}
+                icone={Check}
+                variante="secundaria"
+              >
+                Concluir edição
+              </BotaoLink>
+            ) : (
+              <BotaoLink href={`/fornecedores/${fornecedor.id}?editar=1`} icone={Pencil}>
+                Editar
+              </BotaoLink>
+            )}
             {/* Inativar é o caminho da representação que acabou: some das
                 escolhas sem apagar nada. Excluir fica para o cadastro feito por
                 engano — e nem é possível depois que há produto. */}
@@ -97,7 +125,13 @@ export default async function PaginaFornecedor({ params }: PageProps<"/fornecedo
         }
       />
 
-      <div className="space-y-5 palco">
+      {/*
+        A `key` remonta tudo ao trocar de modo. Ir de edição para leitura é uma
+        navegação sem recarregar, e sem isto o que foi digitado e NÃO salvo
+        continuaria nos campos — a ficha de leitura mostrando o que não está
+        gravado.
+      */}
+      <div key={editavel ? "edicao" : "leitura"} className="space-y-5 palco">
         {!fornecedor.ativo && (
           // Neutro, e não vermelho: inativa é situação, não erro.
           <p className="rounded-suave border border-filete bg-folha-2 px-4 py-3 text-corpo text-tinta-2">
@@ -109,6 +143,7 @@ export default async function PaginaFornecedor({ params }: PageProps<"/fornecedo
         <FormularioFornecedor
           acao={atualizarFornecedor.bind(null, fornecedor.id)}
           rotuloEnvio="Salvar alterações"
+          editavel={editavel}
           valores={{
             nome: fornecedor.nome,
             razaoSocial: fornecedor.razaoSocial ?? "",
@@ -142,6 +177,7 @@ export default async function PaginaFornecedor({ params }: PageProps<"/fornecedo
             padrao: c.padrao,
           }))}
           salvar={salvarContatos.bind(null, fornecedor.id)}
+          editavel={editavel}
         />
 
         <SecaoLogo
@@ -151,6 +187,7 @@ export default async function PaginaFornecedor({ params }: PageProps<"/fornecedo
           versao={String(fornecedor.atualizadoEm.getTime())}
           salvar={salvarLogo.bind(null, fornecedor.id)}
           remover={removerLogo.bind(null, fornecedor.id)}
+          editavel={editavel}
         />
 
 
@@ -162,6 +199,7 @@ export default async function PaginaFornecedor({ params }: PageProps<"/fornecedo
               atende: fornecedor.prepostos.some((v) => v.usuarioId === p.id),
             }))}
             salvar={definirPrepostosDaIndustria.bind(null, fornecedor.id)}
+            editavel={editavel}
           />
         )}
 
@@ -181,6 +219,7 @@ export default async function PaginaFornecedor({ params }: PageProps<"/fornecedo
           salvar={salvarMaterial.bind(null, fornecedor.id)}
           salvarFaixas={salvarFaixasDoMaterial.bind(null, fornecedor.id)}
           remover={removerMaterial.bind(null, fornecedor.id)}
+          editavel={editavel}
         />
 
         <SecaoAditivos
@@ -193,6 +232,7 @@ export default async function PaginaFornecedor({ params }: PageProps<"/fornecedo
           }))}
           adicionar={adicionarAditivo.bind(null, fornecedor.id)}
           remover={removerAditivo.bind(null, fornecedor.id)}
+          editavel={editavel}
         />
       </div>
     </Pagina>

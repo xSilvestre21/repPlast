@@ -108,7 +108,10 @@ export async function atualizarFornecedor(
 
   revalidatePath("/fornecedores");
   revalidatePath(`/fornecedores/${id}`);
-  return {};
+  // De volta à ficha em LEITURA, e não à lista como no cliente: aqui embaixo
+  // ainda moram contatos, logo, materiais e aditivos, e quem acabou de mexer
+  // nos dados quase sempre quer conferir o resto da mesma indústria.
+  redirect(`/fornecedores/${id}`);
 }
 
 export async function excluirFornecedor(id: string, _formData: FormData): Promise<void> {

@@ -15,6 +15,7 @@ export function SecaoLogo({
   versao,
   salvar,
   remover,
+  editavel,
 }: {
   fornecedorId: string;
   nome: string;
@@ -23,6 +24,8 @@ export function SecaoLogo({
   versao: string;
   salvar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   remover: (formData: FormData) => void | Promise<void>;
+  /** Ficha aberta para leitura: o logo aparece, trocar exige Editar. */
+  editavel: boolean;
 }) {
   const [estado, enviar, enviando] = useActionState(salvar, {});
   const [previa, setPrevia] = useState<string | null>(null);
@@ -57,47 +60,49 @@ export function SecaoLogo({
           )}
         </div>
 
-        <div className="flex-1 min-w-56 space-y-3">
-          <input
-            ref={entrada}
-            type="file"
-            name="logo"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={(evento) => {
-              const arquivo = evento.target.files?.[0];
-              setPrevia(arquivo ? URL.createObjectURL(arquivo) : null);
-            }}
-            className="block w-full text-corpo text-tinta-2
-              file:mr-3 file:rounded-full file:border-0 file:px-4 file:py-2 file:text-corpo
-              file:font-medium file:cursor-pointer file:bg-tinta file:text-papel
-              hover:file:brightness-110 file:transition-all"
-          />
+        {editavel && (
+          <div className="flex-1 min-w-56 space-y-3">
+            <input
+              ref={entrada}
+              type="file"
+              name="logo"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={(evento) => {
+                const arquivo = evento.target.files?.[0];
+                setPrevia(arquivo ? URL.createObjectURL(arquivo) : null);
+              }}
+              className="block w-full text-corpo text-tinta-2
+                file:mr-3 file:rounded-full file:border-0 file:px-4 file:py-2 file:text-corpo
+                file:font-medium file:cursor-pointer file:bg-tinta file:text-papel
+                hover:file:brightness-110 file:transition-all"
+            />
 
-          <p className="text-mini text-tinta-3">
-            PNG, JPEG ou WebP, até 2 MB. Fundo transparente fica melhor no papel.
-          </p>
+            <p className="text-mini text-tinta-3">
+              PNG, JPEG ou WebP, até 2 MB. Fundo transparente fica melhor no papel.
+            </p>
 
-          <div className="flex flex-wrap gap-3 items-center">
-            <Botao type="submit" variante="secundaria" disabled={enviando || previa === null}>
-              {enviando ? "Enviando…" : "Salvar logo"}
-            </Botao>
+            <div className="flex flex-wrap gap-3 items-center">
+              <Botao type="submit" variante="secundaria" disabled={enviando || previa === null}>
+                {enviando ? "Enviando…" : "Salvar logo"}
+              </Botao>
 
-            {temLogo && (
-              <BotaoTexto
-                perigoso
-                type="submit"
-                formAction={remover}
-                formNoValidate
-                onClick={() => {
-                  setPrevia(null);
-                  if (entrada.current) entrada.current.value = "";
-                }}
-              >
-                remover logo atual
-              </BotaoTexto>
-            )}
+              {temLogo && (
+                <BotaoTexto
+                  perigoso
+                  type="submit"
+                  formAction={remover}
+                  formNoValidate
+                  onClick={() => {
+                    setPrevia(null);
+                    if (entrada.current) entrada.current.value = "";
+                  }}
+                >
+                  remover logo atual
+                </BotaoTexto>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </form>
     </SecaoCartao>
   );

@@ -25,9 +25,12 @@ export type PrepostoDaIndustria = {
 export function SecaoPrepostos({
   prepostos,
   salvar,
+  editavel,
 }: {
   prepostos: PrepostoDaIndustria[];
   salvar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
+  /** Ficha aberta para leitura: as marcas aparecem, mudar exige Editar. */
+  editavel: boolean;
 }) {
   const [estado, enviar, salvando] = useActionState(salvar, {});
   const [marcados, setMarcados] = useState(
@@ -48,7 +51,7 @@ export function SecaoPrepostos({
       <form action={enviar} className="space-y-4">
         <MensagemErro>{estado.erro}</MensagemErro>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        <fieldset disabled={!editavel} className="grid gap-3 sm:grid-cols-2 min-w-0">
           {prepostos.map((p) => (
             <label
               key={p.id}
@@ -74,7 +77,7 @@ export function SecaoPrepostos({
               {p.nome}
             </label>
           ))}
-        </div>
+        </fieldset>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-mini text-tinta-3 leading-relaxed">
@@ -83,9 +86,11 @@ export function SecaoPrepostos({
               : `Só ${marcados.size} de ${prepostos.length} prepostos verão esta indústria.`}
           </p>
 
-          <Botao type="submit" variante="secundaria" carregando={salvando}>
-            {salvando ? "Salvando…" : "Salvar quem atende"}
-          </Botao>
+          {editavel && (
+            <Botao type="submit" variante="secundaria" carregando={salvando}>
+              {salvando ? "Salvando…" : "Salvar quem atende"}
+            </Botao>
+          )}
         </div>
       </form>
     </SecaoCartao>

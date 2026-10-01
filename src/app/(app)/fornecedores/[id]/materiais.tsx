@@ -52,20 +52,23 @@ function LinhaMaterial({
   salvar,
   salvarFaixas,
   remover,
+  editavel,
 }: {
   material: Material;
   salvar: AcaoSalvar;
   salvarFaixas: AcaoSalvar;
   remover: (formData: FormData) => void | Promise<void>;
+  editavel: boolean;
 }) {
   const [estado, enviar, enviando] = useActionState(salvar, {});
   const [estadoFaixas, enviarFaixas, salvandoFaixas] = useActionState(salvarFaixas, {});
   const [aberto, setAberto] = useState(material.faixas.length > 0);
   const painel = useId();
 
+  // As linhas em branco são para preencher; em leitura, só as faixas que existem.
   const linhas = [
     ...material.faixas,
-    ...Array.from({ length: FAIXAS_EM_BRANCO }, () => ({
+    ...Array.from({ length: editavel ? FAIXAS_EM_BRANCO : 0 }, () => ({
       pesoDeKg: "",
       pesoAteKg: "",
       precoKg: "",
@@ -83,46 +86,53 @@ function LinhaMaterial({
         <form action={enviar} className="flex flex-wrap items-end gap-2 grow">
           <input type="hidden" name="nome" value={material.nome} />
 
-          <div className="min-w-24 grow basis-24 self-center text-corpo font-medium">
-            {material.nome}
-          </div>
+          {/* `contents` para o fieldset não virar uma caixa no meio da linha:
+              os campos continuam filhos diretos do flex, só que travados. */}
+          <fieldset disabled={!editavel} className="contents">
 
-          <label className="basis-28 grow-0">
-            <span className="sr-only">Preço do quilo de {material.nome}</span>
-            <input
-              name="precoKg"
-              inputMode="decimal"
-              required
-              defaultValue={material.precoKg}
-              className={`${CLASSE_CONTROLE} numerico`}
-            />
-          </label>
+            <div className="min-w-24 grow basis-24 self-center text-corpo font-medium">
+              {material.nome}
+            </div>
 
-          <label className="basis-28 grow-0">
-            <span className="sr-only">Valor mínimo do quilo de {material.nome}</span>
-            <input
-              name="precoMinimoKg"
-              inputMode="decimal"
-              placeholder="—"
-              defaultValue={material.precoMinimoKg}
-              className={`${CLASSE_CONTROLE} numerico`}
-            />
-          </label>
+            <label className="basis-28 grow-0">
+              <span className="sr-only">Preço do quilo de {material.nome}</span>
+              <input
+                name="precoKg"
+                inputMode="decimal"
+                required
+                defaultValue={material.precoKg}
+                className={`${CLASSE_CONTROLE} numerico`}
+              />
+            </label>
 
-          <label className="basis-24 grow-0">
-            <span className="sr-only">Densidade de {material.nome}</span>
-            <input
-              name="densidade"
-              inputMode="decimal"
-              placeholder="—"
-              defaultValue={material.densidade}
-              className={`${CLASSE_CONTROLE} numerico`}
-            />
-          </label>
+            <label className="basis-28 grow-0">
+              <span className="sr-only">Valor mínimo do quilo de {material.nome}</span>
+              <input
+                name="precoMinimoKg"
+                inputMode="decimal"
+                placeholder="—"
+                defaultValue={material.precoMinimoKg}
+                className={`${CLASSE_CONTROLE} numerico`}
+              />
+            </label>
 
-          <Botao type="submit" variante="secundaria" tamanho="compacto" carregando={enviando}>
-            {enviando ? "Salvando…" : "Salvar"}
-          </Botao>
+            <label className="basis-24 grow-0">
+              <span className="sr-only">Densidade de {material.nome}</span>
+              <input
+                name="densidade"
+                inputMode="decimal"
+                placeholder="—"
+                defaultValue={material.densidade}
+                className={`${CLASSE_CONTROLE} numerico`}
+              />
+            </label>
+          </fieldset>
+
+          {editavel && (
+            <Botao type="submit" variante="secundaria" tamanho="compacto" carregando={enviando}>
+              {enviando ? "Salvando…" : "Salvar"}
+            </Botao>
+          )}
         </form>
 
         <BotaoTexto
@@ -135,12 +145,14 @@ function LinhaMaterial({
           {material.faixas.length > 0 ? `${material.faixas.length} faixa(s)` : "faixas"}
         </BotaoTexto>
 
-        <form action={remover} className="self-center">
-          <input type="hidden" name="materialId" value={material.id} />
-          <BotaoTexto type="submit" perigoso aria-label={`Remover material ${material.nome}`}>
-            remover
-          </BotaoTexto>
-        </form>
+        {editavel && (
+          <form action={remover} className="self-center">
+            <input type="hidden" name="materialId" value={material.id} />
+            <BotaoTexto type="submit" perigoso aria-label={`Remover material ${material.nome}`}>
+              remover
+            </BotaoTexto>
+          </form>
+        )}
       </div>
 
       <MensagemErro>{estado.erro}</MensagemErro>
@@ -161,46 +173,55 @@ function LinhaMaterial({
             <span className="rotulo basis-28 grow-0">R$ / kg</span>
           </div>
 
-          {linhas.map((f, i) => (
-            <div key={i} className="flex flex-wrap items-end gap-2">
-              <label className="basis-24 grow-0">
-                <span className="sr-only">Peso inicial da faixa {i + 1}</span>
-                <input
-                  name="pesoDeKg"
-                  inputMode="decimal"
-                  placeholder="—"
-                  defaultValue={f.pesoDeKg}
-                  className={`${CLASSE_CONTROLE} numerico`}
-                />
-              </label>
-              <label className="basis-24 grow-0">
-                <span className="sr-only">Peso final da faixa {i + 1}</span>
-                <input
-                  name="pesoAteKg"
-                  inputMode="decimal"
-                  placeholder="—"
-                  defaultValue={f.pesoAteKg}
-                  className={`${CLASSE_CONTROLE} numerico`}
-                />
-              </label>
-              <label className="basis-28 grow-0">
-                <span className="sr-only">Preço da faixa {i + 1}</span>
-                <input
-                  name="precoKg"
-                  inputMode="decimal"
-                  placeholder={i < material.faixas.length ? "" : "35,20"}
-                  defaultValue={f.precoKg}
-                  className={`${CLASSE_CONTROLE} numerico`}
-                />
-              </label>
-            </div>
-          ))}
+          <fieldset disabled={!editavel} className="space-y-2 min-w-0">
+            {linhas.map((f, i) => (
+              <div key={i} className="flex flex-wrap items-end gap-2">
+                <label className="basis-24 grow-0">
+                  <span className="sr-only">Peso inicial da faixa {i + 1}</span>
+                  <input
+                    name="pesoDeKg"
+                    inputMode="decimal"
+                    placeholder="—"
+                    defaultValue={f.pesoDeKg}
+                    className={`${CLASSE_CONTROLE} numerico`}
+                  />
+                </label>
+                <label className="basis-24 grow-0">
+                  <span className="sr-only">Peso final da faixa {i + 1}</span>
+                  <input
+                    name="pesoAteKg"
+                    inputMode="decimal"
+                    placeholder="—"
+                    defaultValue={f.pesoAteKg}
+                    className={`${CLASSE_CONTROLE} numerico`}
+                  />
+                </label>
+                <label className="basis-28 grow-0">
+                  <span className="sr-only">Preço da faixa {i + 1}</span>
+                  <input
+                    name="precoKg"
+                    inputMode="decimal"
+                    placeholder={i < material.faixas.length ? "" : "35,20"}
+                    defaultValue={f.precoKg}
+                    className={`${CLASSE_CONTROLE} numerico`}
+                  />
+                </label>
+              </div>
+            ))}
+          </fieldset>
 
-          <div className="flex justify-end">
-            <Botao type="submit" variante="secundaria" tamanho="compacto" carregando={salvandoFaixas}>
-              {salvandoFaixas ? "Salvando…" : "Salvar faixas"}
-            </Botao>
-          </div>
+          {editavel && (
+            <div className="flex justify-end">
+              <Botao
+                type="submit"
+                variante="secundaria"
+                tamanho="compacto"
+                carregando={salvandoFaixas}
+              >
+                {salvandoFaixas ? "Salvando…" : "Salvar faixas"}
+              </Botao>
+            </div>
+          )}
 
           <MensagemErro>{estadoFaixas.erro}</MensagemErro>
         </form>
@@ -214,11 +235,14 @@ export function SecaoMateriais({
   salvar,
   salvarFaixas,
   remover,
+  editavel,
 }: {
   materiais: Material[];
   salvar: AcaoSalvar;
   salvarFaixas: AcaoSalvar;
   remover: (formData: FormData) => void | Promise<void>;
+  /** Ficha aberta para leitura: a tabela aparece, reajustar exige Editar. */
+  editavel: boolean;
 }) {
   const [estado, enviar, enviando] = useActionState(salvar, {});
 
@@ -229,7 +253,7 @@ export function SecaoMateriais({
       titulo="Materiais"
       descricao="Valor corrente do quilo, piso e densidade de cada tipo de material desta indústria. Ao cadastrar um saco, o valor aparece como sugestão no fator kg e a densidade entra preenchida — os dois passam a ser do produto, então reajustar a tabela não mexe no que já está cadastrado."
     >
-      <Painel className="mb-4">
+      <Painel className={editavel ? "mb-4" : ""}>
         {materiais.length === 0 ? (
           <EstadoVazio discreto icone={Layers}>
             Nenhum material cadastrado para esta indústria.
@@ -251,55 +275,58 @@ export function SecaoMateriais({
                 salvar={salvar}
                 salvarFaixas={salvarFaixas}
                 remover={remover}
+                editavel={editavel}
               />
             ))}
           </>
         )}
       </Painel>
 
-      <form action={enviar} className="space-y-4">
-        <MensagemErro>{estado.erro}</MensagemErro>
+      {editavel && (
+        <form action={enviar} className="space-y-4">
+          <MensagemErro>{estado.erro}</MensagemErro>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Campo
-            name="nome"
-            rotulo="Tipo"
-            required
-            placeholder="PEAD"
-            dica="Sai impresso na descrição do saco."
-          />
-          <Campo
-            name="precoKg"
-            rotulo="Valor"
-            inputMode="decimal"
-            required
-            placeholder="14,00"
-            sufixo="R$"
-            dica="Por quilo. Vira o fator kg sugerido."
-          />
-          <Campo
-            name="precoMinimoKg"
-            rotulo="Valor mínimo"
-            inputMode="decimal"
-            placeholder="12,00"
-            sufixo="R$"
-            dica="Opcional. Abaixo dele o produto avisa, mas salva."
-          />
-          <Campo
-            name="densidade"
-            rotulo="Densidade"
-            inputMode="decimal"
-            placeholder="0,1"
-            dica="Entra na conta do peso. Vazia, o produto usa 0,1."
-          />
-        </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Campo
+              name="nome"
+              rotulo="Tipo"
+              required
+              placeholder="PEAD"
+              dica="Sai impresso na descrição do saco."
+            />
+            <Campo
+              name="precoKg"
+              rotulo="Valor"
+              inputMode="decimal"
+              required
+              placeholder="14,00"
+              sufixo="R$"
+              dica="Por quilo. Vira o fator kg sugerido."
+            />
+            <Campo
+              name="precoMinimoKg"
+              rotulo="Valor mínimo"
+              inputMode="decimal"
+              placeholder="12,00"
+              sufixo="R$"
+              dica="Opcional. Abaixo dele o produto avisa, mas salva."
+            />
+            <Campo
+              name="densidade"
+              rotulo="Densidade"
+              inputMode="decimal"
+              placeholder="0,1"
+              dica="Entra na conta do peso. Vazia, o produto usa 0,1."
+            />
+          </div>
 
-        <div className="flex justify-end">
-          <Botao type="submit" variante="secundaria" carregando={enviando}>
-            {enviando ? "Salvando…" : "Adicionar material"}
-          </Botao>
-        </div>
-      </form>
+          <div className="flex justify-end">
+            <Botao type="submit" variante="secundaria" carregando={enviando}>
+              {enviando ? "Salvando…" : "Adicionar material"}
+            </Botao>
+          </div>
+        </form>
+      )}
     </SecaoCartao>
   );
 }
