@@ -796,9 +796,26 @@ body {
   }
 }
 
-/** `--alvo` é a largura final, escrita no `style` do elemento. */
+/**
+ * `--alvo` é a largura final, escrita no `style` do elemento.
+ *
+ * Registrada como porcentagem para poder ter TRANSIÇÃO: ao entrar, a barra
+ * cresce do zero pela animação; depois, quando o alvo muda com a barra na tela
+ * (a meta trocada no lugar), ela desliza do valor antigo até o novo em vez de
+ * pular. Sem o `@property`, o navegador não sabe interpolar uma variável e a
+ * troca seria instantânea.
+ */
+@property --alvo {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+
 .barra-preenche {
   animation: preencher 1.1s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+  transition:
+    --alvo 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.5s ease;
 }
 
 @keyframes preencher {

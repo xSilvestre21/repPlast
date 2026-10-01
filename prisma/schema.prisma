@@ -7,6 +7,13 @@
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
+  // Relação aninhada vira UM SQL (LATERAL JOIN + JSON), e não uma consulta
+  // por tabela. Com a estratégia antiga, o Prisma 7 disparava as consultas
+  // das relações em paralelo na mesma conexão da transação do RLS — o `pg`
+  // avisa que isso deixa de funcionar na versão 9 ("Calling client.query()
+  // when the client is already executing a query"). A página do pedido, com
+  // cinco relações, era onde aparecia.
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {
@@ -116,11 +123,6 @@ model Organizacao {
   /// e a indústria nem fica sabendo dele.
   proximoNumeroOrcamento Int @default(1)
 
-  /// Meta pessoal de comissão do mês, em reais. É do representante, não da
-  /// indústria: serve para ele acompanhar o próprio objetivo e comemorar ao
-  /// bater. Vazio significa que ele ainda não definiu nenhuma.
-  metaComissaoMensal Decimal? @db.Decimal(14, 2)
-
   usuarios     Usuario[]
   clientes     Cliente[]
   fornecedores Fornecedor[]
@@ -128,6 +130,7 @@ model Organizacao {
   pedidos      Pedido[]
   orcamentos   Orcamento[]
   contasEmail  ContaEmail[]
+  metas        MetaComissao[]
 
   @@map("organizacao")
 }
@@ -197,9 +200,41 @@ model Usuario {
   fornecedores FornecedorPreposto[]
   contasEmail  ContaEmail[]
   envios       EnvioPedido[]
+  metas        MetaComissao[]
 
   @@index([organizacaoId])
   @@map("usuario")
+}
+
+/// A meta de comissão de uma pessoa, a partir de um mês.
+///
+/// Uma linha vale do mês dela em diante, até a próxima: a meta de um mês é a
+/// linha de competência mais recente até ele. Assim trocar a meta em outubro
+/// não reescreve setembro — o que a meta era, e se foi batida, fica guardado
+/// mês a mês, que é o ponto: a meta que faz sentido com a carteira de hoje não
+/// fazia com a de um ano atrás.
+///
+/// De cada USUÁRIO, e só dele (ver a policy): o dono mede contra a comissão do
+/// escritório, o preposto contra a própria fatia. Não entra em cálculo nenhum.
+model MetaComissao {
+  id            String @id @default(uuid()) @db.Uuid
+  organizacaoId String @db.Uuid
+  usuarioId     String @db.Uuid
+  /// "AAAA-MM". Texto e não data: ordena certo como texto e não tem fuso.
+  competencia   String @db.VarChar(7)
+  /// Vazio de propósito: "deste mês em diante, sem meta" é uma escolha que
+  /// também precisa interromper a meta herdada dos meses anteriores.
+  valor         Decimal? @db.Decimal(14, 2)
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  usuario     Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, competencia])
+  @@index([organizacaoId])
+  @@map("meta_comissao")
 }
 
 /// Quais indústrias cada preposto atende.
@@ -684,6 +719,7 @@ model Pedido {
   itens         PedidoItem[]
   envios        EnvioPedido[]
   edicoes       PedidoEdicao[]
+  parcelas      ParcelaRecebimento[]
 
   @@unique([fornecedorId, numero])
   @@index([organizacaoId])
@@ -696,6 +732,39 @@ model Pedido {
   @@index([representanteId])
   @@index([orcamentoId])
   @@map("pedido")
+}
+
+/// Uma parte do recebimento de um pedido — o cliente paga "28/35/42", e a
+/// indústria paga a comissão conforme ele paga.
+///
+/// Sem parcelas, o pedido conta inteiro no mês da entrega, com o acerto nele
+/// mesmo. Com parcelas, cada uma conta no mês do PRÓPRIO vencimento, com a
+/// fatia dela da venda, e o acerto passa a ser dela — é o `installmentIndex`
+/// do SICOV, com `dueDate` e `period` próprios. A soma das bases é sempre o
+/// `subtotalSemIpi` do pedido (a ação que grava confere).
+model ParcelaRecebimento {
+  id         String   @id @default(uuid()) @db.Uuid
+  pedidoId   String   @db.Uuid
+  /// 1, 2, 3… — a ordem dos vencimentos, e o "1/3" da tela.
+  numero     Int
+  vencimento DateTime @db.Date
+  /// A fatia da VENDA (sem IPI) que vence nesta data — não da comissão. A
+  /// comissão sai dela pelo percentual do pedido, como sai do pedido inteiro.
+  base       Decimal  @db.Decimal(14, 2)
+
+  /// O acerto desta parcela, com a mesma regra do acerto do pedido: os dois
+  /// juntos, ou nenhum.
+  valorRecebido              Decimal? @db.Decimal(14, 2)
+  comissaoPercentualRecebido Decimal? @db.Decimal(6, 3)
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  pedido Pedido @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+
+  @@unique([pedidoId, numero])
+  @@index([vencimento])
+  @@map("parcela_recebimento")
 }
 
 /// Item do pedido. Tudo que sai impresso é CONGELADO aqui: um reajuste de fator

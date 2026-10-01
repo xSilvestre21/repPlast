@@ -307,6 +307,38 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     expect(await dbParaOrganizacao(escritorio, dono).envioPedido.findMany()).toHaveLength(1);
   });
 
+  it("as parcelas do recebimento herdam o corte do pedido", async () => {
+    await admin.parcelaRecebimento.create({
+      data: {
+        pedidoId: pedidoDaAna,
+        numero: 1,
+        vencimento: new Date("2026-10-10T00:00:00Z"),
+        base: "100",
+      },
+    });
+
+    expect(await dbParaOrganizacao(escritorio, bruno).parcelaRecebimento.findMany()).toHaveLength(0);
+    expect(await dbParaOrganizacao(escritorio, ana).parcelaRecebimento.findMany()).toHaveLength(1);
+    expect(await dbParaOrganizacao(escritorio, dono).parcelaRecebimento.findMany()).toHaveLength(1);
+
+    // Nem lançar acerto, nem parcelar o pedido do colega.
+    const { count } = await dbParaOrganizacao(escritorio, bruno).parcelaRecebimento.updateMany({
+      data: { valorRecebido: "1", comissaoPercentualRecebido: "1" },
+    });
+    expect(count).toBe(0);
+
+    await expect(
+      dbParaOrganizacao(escritorio, bruno).parcelaRecebimento.create({
+        data: {
+          pedidoId: pedidoDaAna,
+          numero: 2,
+          vencimento: new Date("2026-10-30T00:00:00Z"),
+          base: "1",
+        },
+      }),
+    ).rejects.toThrow();
+  });
+
   it("o histórico de envios da proposta herda o corte do orçamento", async () => {
     const { fornecedorId } = await admin.pedido.findUniqueOrThrow({ where: { id: pedidoDaAna } });
     const proposta = await admin.orcamento.create({
@@ -387,6 +419,34 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
           usuarioSmtp: "falsa@teste.local",
           senhaCifrada: "v1:x:x:x",
         },
+      }),
+    ).rejects.toThrow();
+  });
+
+  /*
+   * Mesmo corte da caixa de e-mail: a meta é o objetivo pessoal de cada um, e
+   * o dono mede a dele contra a comissão do escritório — a do preposto não é
+   * assunto dele, nem para ler, nem para trocar.
+   */
+  it("a meta só existe para a própria dona — nem o administrador a vê", async () => {
+    await dbParaOrganizacao(escritorio, ana).metaComissao.create({
+      data: { organizacaoId: escritorio, usuarioId: ana.usuarioId, competencia: "2026-10", valor: "1000" },
+    });
+
+    expect(await dbParaOrganizacao(escritorio, ana).metaComissao.findMany()).toHaveLength(1);
+    expect(await dbParaOrganizacao(escritorio, bruno).metaComissao.findMany()).toHaveLength(0);
+    expect(await dbParaOrganizacao(escritorio, dono).metaComissao.findMany()).toHaveLength(0);
+
+    const { count } = await dbParaOrganizacao(escritorio, dono).metaComissao.updateMany({
+      data: { valor: "1" },
+    });
+    expect(count).toBe(0);
+  });
+
+  it("não deixa definir meta em nome do colega", async () => {
+    await expect(
+      dbParaOrganizacao(escritorio, bruno).metaComissao.create({
+        data: { organizacaoId: escritorio, usuarioId: ana.usuarioId, competencia: "2026-11", valor: "1" },
       }),
     ).rejects.toThrow();
   });

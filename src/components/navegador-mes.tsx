@@ -1,7 +1,16 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-import { deslocarCompetencia, intervaloDaCompetencia } from "@/lib/comissao";
+import { competenciaDe, deslocarCompetencia, intervaloDaCompetencia } from "@/lib/comissao";
+
+import { SeletorMes } from "./seletor-mes";
+
+/**
+ * O que o seletor troca pelo mês escolhido. Mora aqui, e não no seletor:
+ * constante importada de um arquivo `'use client'` chega ao servidor como
+ * referência de cliente, não como a string.
+ */
+const MARCADOR_MES = "__MES__";
 
 const MES_LONGO = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" });
 
@@ -32,7 +41,8 @@ export function rotuloCurtoDoMes(competencia: string): string {
 }
 
 /**
- * O mês como legenda da página, com as setas de cada lado.
+ * O mês como legenda da página, com as setas de cada lado — e o nome, que abre
+ * a grade do ano para pular direto para um mês antigo (`seletor-mes.tsx`).
  *
  * Mora fora de `ui.tsx` pela razão já documentada em `campo-mascarado.tsx`:
  * aquele arquivo é importado por componentes de cliente, e trazer
@@ -46,10 +56,16 @@ export function rotuloCurtoDoMes(competencia: string): string {
 export function NavegadorMes({
   competencia,
   href,
+  destaques,
+  rotuloDestaque,
   className = "",
 }: {
   competencia: string;
   href: (competencia: string) => string;
+  /** Meses marcados com um ponto verde na grade do seletor ("AAAA-MM"). */
+  destaques?: string[];
+  /** O que o ponto quer dizer, para o leitor de tela: "meta batida". */
+  rotuloDestaque?: string;
   className?: string;
 }) {
   return (
@@ -57,9 +73,15 @@ export function NavegadorMes({
       <Seta href={href(deslocarCompetencia(competencia, -1))} rotulo="Mês anterior">
         <ChevronLeft size={16} strokeWidth={1.5} aria-hidden="true" />
       </Seta>
-      <span className="text-medio font-semibold min-w-52 text-center">
-        {nomeDoMes(competencia)}
-      </span>
+      <SeletorMes
+        atual={competencia}
+        hoje={competenciaDe(new Date())}
+        rotulo={nomeDoMes(competencia)}
+        modelo={href(MARCADOR_MES)}
+        marcador={MARCADOR_MES}
+        destaques={destaques}
+        rotuloDestaque={rotuloDestaque}
+      />
       <Seta href={href(deslocarCompetencia(competencia, 1))} rotulo="Próximo mês">
         <ChevronRight size={16} strokeWidth={1.5} aria-hidden="true" />
       </Seta>

@@ -10,7 +10,14 @@
  * os dois divergirem.
  */
 
-import { intervaloDaCompetenciaUtc, somarComissao, type ResumoComissao } from "./comissao";
+import {
+  competenciaDoPedido,
+  intervaloDaCompetenciaUtc,
+  mesesDeMetaBatida,
+  somarComissao,
+  type LinhaMeta,
+  type ResumoComissao,
+} from "./comissao";
 import type { DbOrganizacao } from "./db";
 
 export interface PedidoDaComissao {
@@ -31,6 +38,88 @@ export interface PedidoDaComissao {
   comissaoPercentualRecebido: { toString(): string } | null;
   cliente: { id: string; apelido: string };
   fornecedor: { id: string; nome: string; comissaoPercentual: { toString(): string } };
+  /** "28/35/42" — de onde o editor de parcelas tira os dias sugeridos. */
+  prazoPagamento: string | null;
+
+  /**
+   * O mês em que ESTE item conta. Para o pedido inteiro, a entrega; para uma
+   * parcela, o vencimento dela. É por aqui que tudo agrupa por mês — não mais
+   * por `competenciaDoPedido`, que não sabe de parcela.
+   */
+  competencia: string;
+  /**
+   * Preenchido quando o item é UMA parcela de um pedido parcelado. Aí
+   * `subtotalSemIpi` e o acerto deixam de ser os do pedido e passam a ser os
+   * dela (ver `expandirParcelas`).
+   */
+  parcela: { id: string; numero: number; total: number; vencimento: Date } | null;
+  /** A venda inteira do pedido, mesmo quando o item é só uma parcela dela. */
+  vendaDoPedido: { toString(): string };
+  /** Todas as parcelas do pedido — o editor reabre com elas. Vazio sem parcelas. */
+  parcelasDoPedido: ParcelaDoPedido[];
+}
+
+export interface ParcelaDoPedido {
+  id: string;
+  numero: number;
+  vencimento: Date;
+  base: { toString(): string };
+  valorRecebido: { toString(): string } | null;
+  comissaoPercentualRecebido: { toString(): string } | null;
+}
+
+/** O pedido como sai do banco, antes de virar item: sem os campos derivados. */
+type PedidoBruto = Omit<
+  PedidoDaComissao,
+  "competencia" | "parcela" | "vendaDoPedido" | "parcelasDoPedido"
+>;
+
+/**
+ * O pedido vira os itens que a comissão soma: ele mesmo, ou uma linha por
+ * parcela.
+ *
+ * É aqui — e só aqui — que o parcelamento acontece. Cada parcela sai com a
+ * base e o acerto DELA no lugar dos do pedido, e com o mês do vencimento como
+ * competência; daí para frente `resumirComissao`, a meta, os gráficos e o CSV
+ * somam itens sem saber que existe parcela. Fosse cada tela a tratar, bastaria
+ * uma esquecer para o mês somar o pedido inteiro e a parcela juntos.
+ *
+ * O acerto do pedido é ignorado no parcelado: a ação de parcelar recusa pedido
+ * já acertado, e cada parcela passa a ter o seu.
+ */
+export function expandirParcelas(
+  pedido: PedidoBruto,
+  parcelas: ParcelaDoPedido[],
+): PedidoDaComissao[] {
+  const ordenadas = [...parcelas].sort((a, b) => a.numero - b.numero);
+
+  if (ordenadas.length === 0) {
+    return [
+      {
+        ...pedido,
+        competencia: competenciaDoPedido(pedido.prazoEntrega, pedido.criadoEm),
+        parcela: null,
+        vendaDoPedido: pedido.subtotalSemIpi,
+        parcelasDoPedido: [],
+      },
+    ];
+  }
+
+  return ordenadas.map((p) => ({
+    ...pedido,
+    subtotalSemIpi: p.base,
+    valorRecebido: p.valorRecebido,
+    comissaoPercentualRecebido: p.comissaoPercentualRecebido,
+    competencia: competenciaDoPedido(p.vencimento, p.vencimento),
+    parcela: { id: p.id, numero: p.numero, total: ordenadas.length, vencimento: p.vencimento },
+    vendaDoPedido: pedido.subtotalSemIpi,
+    parcelasDoPedido: ordenadas,
+  }));
+}
+
+/** Quantos PEDIDOS há numa lista de itens — duas parcelas do mesmo são um. */
+export function contarPedidos(itens: { id: string }[]): number {
+  return new Set(itens.map((i) => i.id)).size;
 }
 
 /**
@@ -110,6 +199,7 @@ const CAMPOS_DA_COMISSAO = {
   comissaoPercentualRecebido: true,
   cliente: { select: { id: true, apelido: true } },
   fornecedor: { select: { id: true, nome: true, comissaoPercentual: true } },
+  prazoPagamento: true,
 } as const;
 
 /**
@@ -149,7 +239,93 @@ async function comRepresentante<T extends { representanteId: string | null }>(
 }
 
 /**
- * Pedidos enviados na competência, com o necessário para calcular a comissão.
+ * As parcelas dos pedidos, numa consulta à parte — pelo mesmo motivo do
+ * `comRepresentante`: relação aninhada no `select` faz o Prisma 7.10 encadear
+ * consultas na mesma conexão. O RLS de `parcela_recebimento` segue o do pedido.
+ */
+async function parcelasDe(db: DbOrganizacao, pedidoIds: string[]) {
+  if (pedidoIds.length === 0) return new Map<string, ParcelaDoPedido[]>();
+
+  const parcelas = await db.parcelaRecebimento.findMany({
+    where: { pedidoId: { in: pedidoIds } },
+    orderBy: { numero: "asc" },
+    select: {
+      id: true,
+      pedidoId: true,
+      numero: true,
+      vencimento: true,
+      base: true,
+      valorRecebido: true,
+      comissaoPercentualRecebido: true,
+    },
+  });
+
+  return Map.groupBy(parcelas, (p) => p.pedidoId);
+}
+
+/**
+ * Os itens de comissão dos pedidos enviados com competência de `deCompetencia`
+ * a `ateCompetencia`, já com as parcelas abertas.
+ *
+ * Busca o pedido que conta pela ENTREGA na janela — o `deliveryDate ||
+ * createdAt` do SICOV; o `OR` existe porque não há COALESCE num `where` — e
+ * também o que tem PARCELA vencendo nela, que pode ter sido entregue meses
+ * antes. Depois de abrir as parcelas, o filtro final é pela competência de cada
+ * item: o pedido parcelado que veio pela entrega mas não tem parcela na janela
+ * sai aqui.
+ *
+ * O mês e a janela passam ambos por esta função, e é isso que garante o ponto
+ * de setembro no gráfico ser o número de setembro na apuração.
+ */
+async function itensEnviadosEntre(
+  db: DbOrganizacao,
+  organizacaoId: string,
+  deCompetencia: string,
+  ateCompetencia: string,
+  apenasDoPreposto?: string | null,
+): Promise<PedidoDaComissao[]> {
+  const { de } = intervaloDaCompetenciaUtc(deCompetencia);
+  const { ate } = intervaloDaCompetenciaUtc(ateCompetencia);
+
+  const brutos = await db.pedido.findMany({
+    where: {
+      organizacaoId,
+      status: "ENVIADO",
+      OR: [
+        { prazoEntrega: { gte: de, lt: ate } },
+        { prazoEntrega: null, criadoEm: { gte: de, lt: ate } },
+        { parcelas: { some: { vencimento: { gte: de, lt: ate } } } },
+      ],
+      ...(apenasDoPreposto ? { representanteId: apenasDoPreposto } : {}),
+    },
+    select: CAMPOS_DA_COMISSAO,
+  });
+
+  const [pedidos, parcelas] = await Promise.all([
+    comRepresentante(db, brutos),
+    parcelasDe(
+      db,
+      brutos.map((p) => p.id),
+    ),
+  ]);
+
+  const quando = (item: PedidoDaComissao) =>
+    (item.parcela?.vencimento ?? item.prazoEntrega ?? item.criadoEm).getTime();
+
+  return pedidos
+    .flatMap((pedido) => expandirParcelas(pedido, parcelas.get(pedido.id) ?? []))
+    .filter((item) => item.competencia >= deCompetencia && item.competencia <= ateCompetencia)
+    .sort(
+      (a, b) =>
+        quando(a) - quando(b) ||
+        a.numero - b.numero ||
+        (a.parcela?.numero ?? 0) - (b.parcela?.numero ?? 0),
+    );
+}
+
+/**
+ * Os itens de comissão da competência: pedidos enviados e parcelas que vencem
+ * nela.
  *
  * `apenasDoPreposto` restringe à carteira de um preposto. O RLS já esconderia
  * o pedido de outro preposto, mas não o pedido DA CASA — aquele é visível a
@@ -162,31 +338,7 @@ export async function pedidosDaCompetencia(
   competencia: string,
   apenasDoPreposto?: string | null,
 ) {
-  const { de, ate } = intervaloDaCompetenciaUtc(competencia);
-
-  const pedidos = await db.pedido.findMany({
-    where: {
-      organizacaoId,
-      status: "ENVIADO",
-      /*
-       * A competência é a ENTREGA, com o envio como último recurso — é o
-       * `deliveryDate || createdAt` do sistema anterior, escrito em Prisma.
-       *
-       * O `OR` é necessário porque não existe "COALESCE" num `where`: são duas
-       * condições excludentes, e a segunda só vale para o pedido sem prazo
-       * marcado. Sem ela, esse pedido sumiria de toda apuração.
-       */
-      OR: [
-        { prazoEntrega: { gte: de, lt: ate } },
-        { prazoEntrega: null, criadoEm: { gte: de, lt: ate } },
-      ],
-      ...(apenasDoPreposto ? { representanteId: apenasDoPreposto } : {}),
-    },
-    orderBy: [{ prazoEntrega: "asc" }, { numero: "asc" }],
-    select: CAMPOS_DA_COMISSAO,
-  });
-
-  return comRepresentante(db, pedidos);
+  return itensEnviadosEntre(db, organizacaoId, competencia, competencia, apenasDoPreposto);
 }
 
 /**
@@ -230,7 +382,9 @@ export async function canceladosDaCompetencia(
     select: CAMPOS_DA_COMISSAO,
   });
 
-  return comRepresentante(db, pedidos);
+  // Inteiro, sem abrir parcela: o cancelado está na lista para ser visto, não
+  // somado, e parcela de pedido cancelado não vence.
+  return (await comRepresentante(db, pedidos)).flatMap((p) => expandirParcelas(p, []));
 }
 
 /**
@@ -239,8 +393,8 @@ export async function canceladosDaCompetencia(
  * Uma consulta só, e não uma por mês. Doze idas ao banco para desenhar um
  * gráfico de doze pontos custariam doze transações — e cada `db` do projeto
  * abre transação própria para injetar o contexto do RLS. O agrupamento por mês
- * acontece depois, em memória, com `competenciaDoPedido` — a MESMA função que
- * a consulta de um mês usa, que é o que garante os dois baterem.
+ * acontece depois, em memória, pela `competencia` de cada item — a mesma que a
+ * consulta de um mês filtra, que é o que garante os dois baterem.
  */
 export async function pedidosDoIntervalo(
   db: DbOrganizacao,
@@ -249,25 +403,55 @@ export async function pedidosDoIntervalo(
   ateCompetencia: string,
   apenasDoPreposto?: string | null,
 ) {
-  const { de } = intervaloDaCompetenciaUtc(deCompetencia);
-  const { ate } = intervaloDaCompetenciaUtc(ateCompetencia);
+  return itensEnviadosEntre(db, organizacaoId, deCompetencia, ateCompetencia, apenasDoPreposto);
+}
 
-  const pedidos = await db.pedido.findMany({
-    where: {
-      organizacaoId,
-      status: "ENVIADO",
-      // Mesmo `OR` da consulta de um mês, e pela mesma razão: não existe
-      // COALESCE num `where`, e sem a segunda condição o pedido sem prazo
-      // marcado sumiria da série inteira.
-      OR: [
-        { prazoEntrega: { gte: de, lt: ate } },
-        { prazoEntrega: null, criadoEm: { gte: de, lt: ate } },
-      ],
-      ...(apenasDoPreposto ? { representanteId: apenasDoPreposto } : {}),
-    },
-    orderBy: [{ prazoEntrega: "asc" }, { numero: "asc" }],
-    select: CAMPOS_DA_COMISSAO,
+/**
+ * Todas as metas que a pessoa já definiu, uma por mês em que mudou.
+ *
+ * São poucas linhas — uma a cada troca de meta —, então vêm todas de uma vez e
+ * `metaVigente` escolhe a de cada mês em memória. O RLS já limita à própria
+ * pessoa; o `usuarioId` no `where` é a defesa em profundidade de sempre.
+ */
+export async function metasDoUsuario(db: DbOrganizacao, usuarioId: string): Promise<LinhaMeta[]> {
+  const linhas = await db.metaComissao.findMany({
+    where: { usuarioId },
+    orderBy: { competencia: "asc" },
+    select: { competencia: true, valor: true },
   });
 
-  return comRepresentante(db, pedidos);
+  return linhas.map((l) => ({ competencia: l.competencia, valor: l.valor?.toString() ?? null }));
+}
+
+/**
+ * Os meses em que a pessoa bateu a meta daquele mês, da primeira meta até `ate`.
+ *
+ * Mede o mesmo número que a tela de comissões mede: o RECEBIDO, e na leitura de
+ * quem olha — o do escritório para o administrador, a fatia do preposto para
+ * ele. Uma consulta para o intervalo inteiro, agrupada por mês com
+ * `competenciaDoPedido`, como os gráficos fazem.
+ */
+export async function mesesComMetaBatida(
+  db: DbOrganizacao,
+  organizacaoId: string,
+  usuarioId: string,
+  ehAdmin: boolean,
+  linhas: LinhaMeta[],
+  ate: string,
+): Promise<string[]> {
+  const de = linhas[0]?.competencia;
+  if (!de || de > ate) return [];
+
+  const pedidos = await pedidosDoIntervalo(db, organizacaoId, de, ate, ehAdmin ? null : usuarioId);
+
+  const alcancado = new Map(
+    [...Map.groupBy(pedidos, (p) => p.competencia)].map(
+      ([mes, doMes]) => {
+        const resumo = resumirComissao(doMes);
+        return [mes, (ehAdmin ? resumo.recebido : resumo.recebidoDoPreposto).toString()];
+      },
+    ),
+  );
+
+  return mesesDeMetaBatida(linhas, alcancado, de, ate);
 }

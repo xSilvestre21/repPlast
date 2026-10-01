@@ -1,7 +1,8 @@
 "use client";
 
 /**
- * Campos que se pontuam sozinhos enquanto a pessoa digita: documento e telefone.
+ * Campos que se pontuam sozinhos enquanto a pessoa digita: documento, telefone,
+ * CEP e dinheiro.
  *
  * Mora fora de `ui.tsx` porque aquele arquivo NÃO é `"use client"` — ele é
  * importado tanto por página de servidor quanto por formulário de cliente, e
@@ -19,7 +20,7 @@
 import type { ChangeEvent, ComponentProps, KeyboardEvent } from "react";
 
 import { Campo } from "@/components/ui";
-import { mascararCep, mascararDocumento, mascararTelefone } from "@/lib/mascara";
+import { mascararCep, mascararDocumento, mascararMoeda, mascararTelefone } from "@/lib/mascara";
 
 type PropsCampo = ComponentProps<typeof Campo>;
 
@@ -52,8 +53,17 @@ function CampoMascarado({
   defaultValue,
   onChange,
   onKeyDown,
+  cursorNoFim = false,
   ...props
-}: PropsCampo & { mascara: (valor: string) => string }) {
+}: PropsCampo & {
+  mascara: (valor: string) => string;
+  /**
+   * Para a máscara que preenche pela direita (dinheiro). Ela INVENTA dígitos —
+   * o "1" vira "0,01" —, e contar dígitos até o cursor o deixaria depois do
+   * primeiro zero, com a próxima tecla entrando no meio do número.
+   */
+  cursorNoFim?: boolean;
+}) {
   /**
    * Remonta a máscara e recoloca o cursor.
    *
@@ -69,7 +79,9 @@ function CampoMascarado({
 
     alvo.value = mascara(alvo.value);
 
-    const destino = posicaoAposDigitos(alvo.value, digitosAteOCursor);
+    const destino = cursorNoFim
+      ? alvo.value.length
+      : posicaoAposDigitos(alvo.value, digitosAteOCursor);
     alvo.setSelectionRange(destino, destino);
 
     onChange?.(evento);
@@ -85,13 +97,29 @@ function CampoMascarado({
    */
   function aoTeclar(evento: KeyboardEvent<HTMLInputElement>) {
     onKeyDown?.(evento);
-    if (evento.key !== "Backspace" || evento.defaultPrevented) return;
+    if (evento.defaultPrevented) return;
 
     const alvo = evento.currentTarget;
     const { selectionStart, selectionEnd, value } = alvo;
 
     // Com trecho selecionado quem manda é a seleção, não o cursor.
     if (selectionStart === null || selectionStart !== selectionEnd) return;
+
+    /*
+     * No dinheiro, digitar e apagar agem sempre no fim — é onde os centavos
+     * entram e saem. Um dígito posto no meio de "1.234,56" não tem leitura
+     * que a pessoa espere. Setas e atalhos seguem livres.
+     */
+    const editaTexto =
+      evento.key === "Backspace" ||
+      evento.key === "Delete" ||
+      (evento.key.length === 1 && !evento.ctrlKey && !evento.metaKey);
+    if (cursorNoFim && editaTexto) {
+      alvo.setSelectionRange(value.length, value.length);
+      return;
+    }
+
+    if (evento.key !== "Backspace") return;
 
     let posicao = selectionStart;
     while (posicao > 0 && !EH_DIGITO.test(value[posicao - 1])) posicao--;
@@ -134,6 +162,27 @@ export function CampoTelefone(props: PropsCampo) {
       placeholder="(17) 3321-5900"
       {...props}
       mascara={mascararTelefone}
+    />
+  );
+}
+
+/**
+ * Dinheiro, com os dígitos entrando como centavos ("5.000,00").
+ *
+ * O `defaultValue` precisa chegar com as duas casas — ver `mascararMoeda`.
+ * `numeric`, e não `decimal`: a vírgula nunca é digitada, então o teclado do
+ * celular só precisa dos números.
+ */
+export function CampoMoeda(props: PropsCampo) {
+  return (
+    <CampoMascarado
+      inputMode="numeric"
+      autoComplete="off"
+      sufixo="R$"
+      placeholder="0,00"
+      {...props}
+      mascara={mascararMoeda}
+      cursorNoFim
     />
   );
 }

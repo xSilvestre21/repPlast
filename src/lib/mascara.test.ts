@@ -12,9 +12,11 @@
 
 import { describe, expect, it } from "vitest";
 
+import { lerNumeroBr } from "./numero-br";
 import {
   mascararCep,
   mascararDocumento,
+  mascararMoeda,
   mascararTelefone,
   normalizarCep,
   normalizarDocumento,
@@ -112,6 +114,46 @@ describe("mascararCep", () => {
   it("ignora a pontuação já digitada e descarta o que passa de 8 dígitos", () => {
     expect(mascararCep("14781-160")).toBe("14781-160");
     expect(mascararCep("147811609999")).toBe("14781-160");
+  });
+});
+
+describe("mascararMoeda", () => {
+  it("entra pela direita como centavos, tecla a tecla", () => {
+    expect(["5", "50", "500", "5000", "50000", "500000"].map(mascararMoeda)).toEqual([
+      "0,05",
+      "0,50",
+      "5,00",
+      "50,00",
+      "500,00",
+      "5.000,00",
+    ]);
+  });
+
+  it("agrupa o milhar", () => {
+    expect(mascararMoeda("123456789")).toBe("1.234.567,89");
+    expect(mascararMoeda("2000000")).toBe("20.000,00");
+  });
+
+  it("reaplicada sobre o próprio resultado, não muda", () => {
+    expect(mascararMoeda("20.000,00")).toBe("20.000,00");
+    expect(mascararMoeda("0,05")).toBe("0,05");
+  });
+
+  it("acompanha o apagar", () => {
+    // "5,00" com o último dígito apagado chega como "5,0".
+    expect(mascararMoeda("5,0")).toBe("0,50");
+    expect(mascararMoeda("0,0")).toBe("");
+  });
+
+  it("só zeros, ou nada, é campo vazio", () => {
+    expect(mascararMoeda("")).toBe("");
+    expect(mascararMoeda("000")).toBe("");
+    expect(mascararMoeda("R$ ")).toBe("");
+  });
+
+  it("sai num formato que o servidor lê de volta", () => {
+    expect(lerNumeroBr(mascararMoeda("123456"))).toBe(1234.56);
+    expect(lerNumeroBr(mascararMoeda("2000000"))).toBe(20000);
   });
 });
 

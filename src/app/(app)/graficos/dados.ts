@@ -1,10 +1,10 @@
 import {
-  competenciaDoPedido,
   deslocarCompetencia,
   pontualidadeEntrega,
   type ResumoComissao,
 } from "@/lib/comissao";
 import {
+  contarPedidos,
   pedidosDaCompetencia,
   pedidosDoIntervalo,
   prepostoDoPedido,
@@ -150,7 +150,8 @@ export async function carregarDadosDosGraficos(
         chave: id,
         rotulo: rotulo(grupo[0]),
         valor: previstoDe(grupo),
-        detalhe: `${grupo.length} ${grupo.length === 1 ? "pedido" : "pedidos"}`,
+        // Pedidos, não itens: duas parcelas do mesmo pedido são um pedido.
+        detalhe: `${contarPedidos(grupo)} ${contarPedidos(grupo) === 1 ? "pedido" : "pedidos"}`,
         href: destino?.(id),
       }),
     );
@@ -168,13 +169,13 @@ export async function carregarDadosDosGraficos(
 
   // A MESMA função de competência da tela de Comissões. É o que garante que o
   // ponto de setembro no gráfico seja o número de setembro na apuração.
-  const porMes = Map.groupBy(daJanela, (pedido) =>
-    competenciaDoPedido(pedido.prazoEntrega, pedido.criadoEm),
-  );
+  // Pela competência de cada ITEM — a parcela conta no mês do vencimento dela.
+  const porMes = Map.groupBy(daJanela, (pedido) => pedido.competencia);
 
   const viraramPedido = orcamentos.filter((orcamento) => orcamento._count.pedidos > 0).length;
 
-  const pontualidades = daJanela
+  // Uma entrega por pedido: as parcelas repetiriam a mesma entrega.
+  const pontualidades = [...new Map(daJanela.map((pedido) => [pedido.id, pedido])).values()]
     .map((pedido) => pontualidadeEntrega(pedido.prazoEntrega, pedido.entregueEm))
     .filter((situacao) => situacao !== null);
 
@@ -190,7 +191,7 @@ export async function carregarDadosDosGraficos(
 
     resumo,
     vista,
-    pedidosDoMes: pedidos.length,
+    pedidosDoMes: contarPedidos(pedidos),
 
     porIndustria: agrupar(
       pedidos,

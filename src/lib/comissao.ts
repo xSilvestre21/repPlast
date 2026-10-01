@@ -293,6 +293,68 @@ export interface ProgressoMeta {
   falta: Decimal;
 }
 
+/** Uma linha de `meta_comissao`: o valor que vale da competência em diante. */
+export interface LinhaMeta {
+  competencia: string;
+  valor: Decimal.Value | null;
+}
+
+export interface MetaVigente {
+  /** `null` quando a pessoa escolheu "sem meta" a partir de `desde`. */
+  valor: string | null;
+  /** O mês em que esta meta foi definida — igual ao pedido, ou anterior a ele. */
+  desde: string;
+}
+
+/**
+ * A meta que vale numa competência: a linha mais recente até ela.
+ *
+ * Uma meta vale do mês em que foi definida em diante, até a próxima. É o que
+ * guarda o passado: trocar a meta em outubro cria uma linha de outubro, e
+ * setembro continua achando a dele. `null` quando nada foi definido até ali.
+ *
+ * "AAAA-MM" compara certo como texto, por isso não há conversão para data.
+ */
+export function metaVigente(linhas: LinhaMeta[], competencia: string): MetaVigente | null {
+  let escolhida: LinhaMeta | null = null;
+
+  for (const linha of linhas) {
+    if (linha.competencia > competencia) continue;
+    if (!escolhida || linha.competencia > escolhida.competencia) escolhida = linha;
+  }
+
+  if (!escolhida) return null;
+
+  return {
+    valor: escolhida.valor === null ? null : new Decimal(escolhida.valor).toString(),
+    desde: escolhida.competencia,
+  };
+}
+
+/**
+ * As competências de `de` a `ate` em que a meta vigente foi batida.
+ *
+ * `alcancadoPorMes` traz o que a pessoa alcançou em cada mês — o mês ausente
+ * conta como zero, e zero só bate meta que não existe (e meta que não existe
+ * não conta como batida).
+ */
+export function mesesDeMetaBatida(
+  linhas: LinhaMeta[],
+  alcancadoPorMes: Map<string, Decimal.Value>,
+  de: string,
+  ate: string,
+): string[] {
+  const batidos: string[] = [];
+
+  for (let mes = de; mes <= ate; mes = deslocarCompetencia(mes, 1)) {
+    const meta = metaVigente(linhas, mes);
+    const progresso = progressoDaMeta(meta?.valor ?? null, alcancadoPorMes.get(mes) ?? 0);
+    if (progresso?.batida) batidos.push(mes);
+  }
+
+  return batidos;
+}
+
 /** Progresso da meta pessoal do mês. `null` quando não há meta definida. */
 export function progressoDaMeta(
   meta: Decimal.Value | null | undefined,

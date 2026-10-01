@@ -6,7 +6,12 @@
 
 import { describe, expect, it } from "vitest";
 
-import { prepostoDoPedido } from "./comissao-consulta";
+import {
+  contarPedidos,
+  expandirParcelas,
+  prepostoDoPedido,
+  resumirComissao,
+} from "./comissao-consulta";
 import {
   comissaoDoPedido,
   competenciaDe,
@@ -14,6 +19,8 @@ import {
   deslocarCompetencia,
   intervaloDaCompetencia,
   intervaloDaCompetenciaUtc,
+  mesesDeMetaBatida,
+  metaVigente,
   pontualidadeEntrega,
   progressoDaMeta,
   ratearComissao,
@@ -434,6 +441,11 @@ describe("o dono do escritório não é preposto de si mesmo", () => {
     comissaoPercentualRecebido: null,
     cliente: { id: "cli-x", apelido: "X" },
     fornecedor: { id: "f1", nome: "F", comissaoPercentual: "5" },
+    prazoPagamento: null,
+    competencia: "2026-09",
+    parcela: null,
+    vendaDoPedido: "1000",
+    parcelasDoPedido: [],
   };
 
   it("devolve o preposto quando o pedido é de um", () => {
@@ -456,5 +468,131 @@ describe("o dono do escritório não é preposto de si mesmo", () => {
 
   it("devolve null quando o pedido é do escritório", () => {
     expect(prepostoDoPedido({ ...base, representante: null })).toBeNull();
+  });
+});
+
+describe("meta por mês", () => {
+  // Setembro: 1.000. Dezembro: 5.000. Fevereiro: sem meta.
+  const linhas = [
+    { competencia: "2026-12", valor: "5000" },
+    { competencia: "2026-09", valor: "1000" },
+    { competencia: "2027-02", valor: null },
+  ];
+
+  it("vale do mês em que foi definida em diante, até a próxima", () => {
+    expect(metaVigente(linhas, "2026-09")).toEqual({ valor: "1000", desde: "2026-09" });
+    expect(metaVigente(linhas, "2026-11")).toEqual({ valor: "1000", desde: "2026-09" });
+    expect(metaVigente(linhas, "2026-12")).toEqual({ valor: "5000", desde: "2026-12" });
+    expect(metaVigente(linhas, "2027-01")).toEqual({ valor: "5000", desde: "2026-12" });
+  });
+
+  it("trocar a meta adiante não reescreve o passado", () => {
+    // Dezembro subiu para 5.000; outubro continua medido contra 1.000.
+    expect(metaVigente(linhas, "2026-10")?.valor).toBe("1000");
+  });
+
+  it("antes da primeira meta não há meta", () => {
+    expect(metaVigente(linhas, "2026-08")).toBeNull();
+    expect(metaVigente([], "2026-10")).toBeNull();
+  });
+
+  it("'sem meta' também vale em diante, interrompendo a herdada", () => {
+    expect(metaVigente(linhas, "2027-03")).toEqual({ valor: null, desde: "2027-02" });
+  });
+
+  it("marca os meses batidos contra a meta de CADA mês", () => {
+    const alcancado = new Map([
+      ["2026-09", "1200"], // bateu 1.000
+      ["2026-10", "800"], // não bateu 1.000
+      ["2026-11", "1000"], // bateu no centavo
+      ["2026-12", "1200"], // 1.200 batia a meta antiga, não a de 5.000
+      ["2027-02", "9000"], // sem meta: não conta como batida
+    ]);
+
+    expect(mesesDeMetaBatida(linhas, alcancado, "2026-08", "2027-03")).toEqual([
+      "2026-09",
+      "2026-11",
+    ]);
+  });
+});
+
+describe("parcelas viram itens da comissão", () => {
+  // Venda de R$ 9.765 a 5%, entregue em 27/07 — o #142 do SICOV.
+  const pedido = {
+    id: "p142",
+    numero: 142,
+    status: "ENVIADO",
+    motivoCancelamento: null,
+    criadoEm: new Date("2026-07-01T12:00:00Z"),
+    enviadoEm: null,
+    prazoEntrega: new Date("2026-07-27T00:00:00Z"),
+    entregueEm: null,
+    subtotalSemIpi: "9765",
+    comissaoPercentual: "5",
+    comissaoPercentualPreposto: null,
+    representante: null,
+    // Um acerto no pedido que o parcelado precisa ignorar.
+    valorRecebido: "9765",
+    comissaoPercentualRecebido: "5",
+    cliente: { id: "c", apelido: "C" },
+    fornecedor: { id: "f", nome: "F", comissaoPercentual: "5" },
+    prazoPagamento: "28/35/42",
+  };
+
+  const parcela = (numero: number, vencimento: string, base: string, recebido?: string) => ({
+    id: `parc-${numero}`,
+    numero,
+    vencimento: new Date(`${vencimento}T00:00:00Z`),
+    base,
+    valorRecebido: recebido ?? null,
+    comissaoPercentualRecebido: recebido ? "5" : null,
+  });
+
+  it("sem parcela, é o pedido inteiro no mês da entrega", () => {
+    const [item] = expandirParcelas(pedido, []);
+
+    expect(item.competencia).toBe("2026-07");
+    expect(item.parcela).toBeNull();
+    expect(resumirComissao([item]).valor.toFixed(2)).toBe("488.25");
+  });
+
+  it("parcelado, cada parcela conta no mês do vencimento, com a fatia dela", () => {
+    // Fora de ordem de propósito: o número manda, não a ordem que veio do banco.
+    const itens = expandirParcelas(pedido, [
+      parcela(3, "2026-09-07", "3255"),
+      parcela(1, "2026-08-24", "3255"),
+      parcela(2, "2026-08-31", "3255"),
+    ]);
+
+    expect(itens.map((i) => [i.competencia, i.parcela?.numero, i.parcela?.total])).toEqual([
+      ["2026-08", 1, 3],
+      ["2026-08", 2, 3],
+      ["2026-09", 3, 3],
+    ]);
+
+    const agosto = itens.filter((i) => i.competencia === "2026-08");
+    expect(resumirComissao(agosto).valor.toFixed(2)).toBe("325.50");
+    expect(itens.every((i) => i.vendaDoPedido === "9765")).toBe(true);
+  });
+
+  it("o acerto é o de cada parcela, e o do pedido não conta", () => {
+    const itens = expandirParcelas(pedido, [
+      parcela(1, "2026-08-24", "3255", "3000"),
+      parcela(2, "2026-08-31", "6510"),
+    ]);
+
+    const r = resumirComissao(itens);
+    expect(r.acertados).toBe(1);
+    expect(r.recebido.toFixed(2)).toBe("150.00");
+  });
+
+  it("duas parcelas no mesmo mês são um pedido só na contagem", () => {
+    const itens = expandirParcelas(pedido, [
+      parcela(1, "2026-10-10", "5000"),
+      parcela(2, "2026-10-30", "4765"),
+    ]);
+
+    expect(itens).toHaveLength(2);
+    expect(contarPedidos(itens)).toBe(1);
   });
 });

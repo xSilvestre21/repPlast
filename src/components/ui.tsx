@@ -825,7 +825,9 @@ export type Alinhamento = "texto" | "numero" | "acao";
 
 const ALINHAMENTO: Record<Alinhamento, string> = {
   texto: "text-left",
-  numero: "text-right numerico",
+  // Número não quebra: "-R$ 2.404,04" partido em "-" e "R$ 2.404,04" lê como
+  // dois valores. Sem espaço, a coluna cresce — que é o que tem de acontecer.
+  numero: "text-right numerico whitespace-nowrap",
   acao: "text-right",
 };
 
@@ -849,11 +851,14 @@ export type ColunaTabela = {
 export function Tabela({
   colunas,
   children,
+  rodape,
   larguraMinima = "min-w-160",
   className = "",
 }: {
   colunas: ColunaTabela[];
   children: ReactNode;
+  /** Linhas de total, em `<tfoot>` — as mesmas colunas, logo abaixo da última linha. */
+  rodape?: ReactNode;
   larguraMinima?: string;
   className?: string;
 }) {
@@ -876,6 +881,7 @@ export function Tabela({
           </tr>
         </thead>
         <tbody className="divide-y divide-filete">{children}</tbody>
+        {rodape && <tfoot className="border-t border-filete-forte">{rodape}</tfoot>}
       </table>
     </div>
   );

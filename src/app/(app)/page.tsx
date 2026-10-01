@@ -1,3 +1,4 @@
+import Decimal from "decimal.js";
 import Link from "next/link";
 import {
   Eye,
@@ -31,10 +32,9 @@ import {
   ValorLinha,
   formatarMoeda,
 } from "@/components/ui";
-import { competenciaDe, progressoDaMeta } from "@/lib/comissao";
-import { pedidosDaCompetencia, resumirComissao } from "@/lib/comissao-consulta";
+import { competenciaDe, metaVigente, progressoDaMeta } from "@/lib/comissao";
+import { metasDoUsuario, pedidosDaCompetencia, resumirComissao } from "@/lib/comissao-consulta";
 import { clientesSumidos } from "@/lib/positivacao";
-import { dbAdministrativo } from "@/lib/db";
 import { escopoAtual, sessaoAtual } from "@/lib/sessao";
 
 import { alternarOcultarValores } from "./acoes";
@@ -74,11 +74,9 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
     );
   const competencia = competenciaDe(new Date());
 
-  const [organizacao, doMes, recentes, clientes] = await Promise.all([
-    dbAdministrativo().organizacao.findUnique({
-      where: { id: organizacaoId },
-      select: { metaComissaoMensal: true },
-    }),
+  const [metas, doMes, recentes, clientes] = await Promise.all([
+    // A meta é de cada pessoa e de cada mês — a deste mês, de quem está olhando.
+    metasDoUsuario(db, usuarioId),
 
     // Mesmo corte da tela de comissões: o preposto vê o mês dele.
     pedidosDaCompetencia(db, organizacaoId, competencia, ehAdmin ? null : usuarioId),
@@ -124,10 +122,23 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
    */
   const comissaoDoMes = ehAdmin ? resumo.valor : resumo.previstoDoPreposto;
 
-  const meta = organizacao?.metaComissaoMensal ?? null;
-  const progresso = progressoDaMeta(meta?.toString() ?? null, comissaoDoMes);
+  const meta = metaVigente(metas, competencia)?.valor ?? null;
+  const progresso = progressoDaMeta(meta, comissaoDoMes);
 
-  const ticketMedio = doMes.length > 0 ? resumo.base.dividedBy(doMes.length) : null;
+  /*
+   * Pedidos, não itens: um pedido parcelado pode ter duas parcelas no mês. E o
+   * ticket médio é da VENDA inteira de cada pedido — com a parcela no lugar
+   * dela, um pedido de R$ 10 mil com uma parcela de R$ 2 mil aqui puxaria a
+   * média para baixo sem que nenhum pedido tivesse ficado menor.
+   */
+  const pedidosDoMes = [...new Map(doMes.map((item) => [item.id, item])).values()];
+  const quantosPedidos = pedidosDoMes.length;
+  const ticketMedio =
+    quantosPedidos > 0
+      ? pedidosDoMes
+          .reduce((soma, p) => soma.plus(p.vendaDoPedido.toString()), new Decimal(0))
+          .dividedBy(quantosPedidos)
+      : null;
 
   /*
    * Um único instante para toda a página.
@@ -211,8 +222,8 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
               </div>
 
               <p className="text-realce text-tinta-2 mt-4 numerico">
-                {moeda(resumo.base)} vendidos em {doMes.length} pedido
-                {doMes.length === 1 ? "" : "s"}
+                {moeda(resumo.base)} vendidos em {quantosPedidos} pedido
+                {quantosPedidos === 1 ? "" : "s"}
               </p>
             </div>
           </Cartao>
@@ -288,9 +299,9 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
             rotulo="Pedidos enviados"
             icone={ScrollText}
             tom="mar"
-            valor={doMes.length}
+            valor={quantosPedidos}
             detalhe={
-              doMes.length > 0
+              quantosPedidos > 0
                 ? ehAdmin
                   ? `Comissão média de ${resumo.percentualMedio.toDecimalPlaces(2)}%`
                   : "Sua fatia da comissão"

@@ -1,4 +1,4 @@
-import { competenciaDe, competenciaDoPedido, deslocarCompetencia } from "@/lib/comissao";
+import { competenciaDe, deslocarCompetencia } from "@/lib/comissao";
 import {
   acertoDoPedido,
   pedidosDaCompetencia,
@@ -32,7 +32,9 @@ const BOM = "﻿";
 
 const CABECALHO = [
   "Pedido",
+  "Parcela",
   "Competência",
+  "Vencimento",
   "Prazo de entrega",
   "Entregue em",
   "Enviado em",
@@ -113,7 +115,11 @@ function paraLinha(pedido: PedidoDaComissao, ehAdmin: boolean): string[] {
 
   return [
     String(pedido.numero),
-    competenciaDoPedido(pedido.prazoEntrega, pedido.criadoEm),
+    // Uma linha por parcela: "1/3", e o mês e o vencimento são os DELA. A
+    // planilha soma por competência e bate com a tela.
+    pedido.parcela ? `${pedido.parcela.numero}/${pedido.parcela.total}` : "",
+    pedido.competencia,
+    data(pedido.parcela?.vencimento ?? null),
     data(pedido.prazoEntrega),
     data(pedido.entregueEm),
     data(pedido.enviadoEm),

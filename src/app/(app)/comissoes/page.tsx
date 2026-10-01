@@ -4,6 +4,7 @@ import { Factory, PiggyBank, Send, Users } from "lucide-react";
 import {
   Cabecalho,
   Cartao,
+  Celula,
   CorpoLinha,
   Emblema,
   EstadoVazio,
@@ -12,15 +13,19 @@ import {
   LinhaDado,
   Painel,
   Placa,
+  Tabela,
   Total,
   ValorLinha,
   formatarMoeda,
   formatarPercentual,
 } from "@/components/ui";
-import { competenciaDe, progressoDaMeta } from "@/lib/comissao";
+import { competenciaDe, metaVigente, progressoDaMeta } from "@/lib/comissao";
 import {
   acertoDoPedido,
   canceladosDaCompetencia,
+  contarPedidos,
+  mesesComMetaBatida,
+  metasDoUsuario,
   pedidosDaCompetencia,
   percentualDoPedido,
   prepostoDoPedido,
@@ -29,16 +34,25 @@ import {
 } from "@/lib/comissao-consulta";
 import { ratearComissao } from "@/lib/comissao";
 import { escreverNumeroBr } from "@/lib/numero-br";
-import { dbAdministrativo } from "@/lib/db";
 import { escopoAtual } from "@/lib/sessao";
 
-import { definirMeta, salvarAcerto } from "./acoes";
+import {
+  definirMeta,
+  desfazerParcelas,
+  salvarAcerto,
+  salvarAcertoParcela,
+  salvarParcelas,
+} from "./acoes";
 import { LinhaComissao, type LinhaPedido } from "./acerto";
+import { colunasDaComissao } from "./colunas";
 import { PainelMeta } from "./painel-meta";
 import { Pagina } from "@/components/pagina";
-import { NavegadorMes } from "@/components/navegador-mes";
+import { NavegadorMes, nomeDoMes } from "@/components/navegador-mes";
 
-const DATA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" });
+/** "1 pedido", "8 pedidos" — no lugar do "pedido(s)" de formulário. */
+function plural(n: number, palavra: string): string {
+  return `${n} ${palavra}${n === 1 ? "" : "s"}`;
+}
 
 export default async function PaginaComissoes({ searchParams }: PageProps<"/comissoes">) {
   const parametros = await searchParams;
@@ -49,11 +63,8 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
 
   const { organizacaoId, db, ehAdmin, usuarioId } = await escopoAtual();
 
-  const [organizacao, pedidos, cancelados] = await Promise.all([
-    dbAdministrativo().organizacao.findUnique({
-      where: { id: organizacaoId },
-      select: { metaComissaoMensal: true },
-    }),
+  const [metas, pedidos, cancelados] = await Promise.all([
+    metasDoUsuario(db, usuarioId),
     pedidosDaCompetencia(db, organizacaoId, competencia, ehAdmin ? null : usuarioId),
     canceladosDaCompetencia(db, organizacaoId, competencia, ehAdmin ? null : usuarioId),
   ]);
@@ -118,14 +129,32 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
   ]
     .map(([, doPreposto]) => ({
       nome: prepostoDoPedido(doPreposto[0])!.nome,
-      pedidos: doPreposto.length,
+      // Pedidos, não parcelas: duas parcelas do mesmo pedido são um pedido.
+      pedidos: contarPedidos(doPreposto),
       resumo: resumirComissao(doPreposto),
     }))
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 
-  const meta = organizacao?.metaComissaoMensal ?? null;
+  /*
+   * A meta DESTE mês, de quem está olhando — não a de hoje. É o que deixa
+   * conferir um mês antigo contra o alvo que ele tinha na época.
+   */
+  const vigente = metaVigente(metas, competencia);
+  const meta = vigente?.valor ?? null;
   // A meta acompanha o RECEBIDO: é o que de fato entrou, não o que deve entrar.
-  const progresso = progressoDaMeta(meta?.toString() ?? null, vista.recebido);
+  const progresso = progressoDaMeta(meta, vista.recebido);
+
+  // A marquinha verde do seletor: os meses batidos, da primeira meta até hoje.
+  const batidos = await mesesComMetaBatida(
+    db,
+    organizacaoId,
+    usuarioId,
+    ehAdmin,
+    metas,
+    competenciaDe(new Date()),
+  );
+
+  const colunas = colunasDaComissao(ehAdmin);
 
   return (
     <Pagina>
@@ -143,17 +172,23 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
       <NavegadorMes
         competencia={competencia}
         href={(mes) => `/comissoes?mes=${mes}`}
+        destaques={batidos}
+        rotuloDestaque="meta batida"
         className="mb-7"
       />
 
       <PainelMeta
         competencia={competencia}
-        meta={meta?.toString() ?? null}
+        meta={meta}
+        nomeDoMes={nomeDoMes(competencia).toLowerCase()}
+        herdadaDe={
+          vigente && vigente.desde !== competencia ? nomeDoMes(vigente.desde).toLowerCase() : null
+        }
         alcancado={vista.recebido.toNumber()}
         progresso={progresso?.percentual ?? null}
         batida={progresso?.batida ?? false}
         falta={progresso?.falta.toNumber() ?? null}
-        definirMeta={definirMeta}
+        definirMeta={definirMeta.bind(null, competencia)}
       />
 
       {/*
@@ -170,7 +205,13 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
             <Total
               rotulo="A acertar"
               valor={formatarMoeda(vista.aAcertar.toString())}
-              detalhe={`${porFornecedor.reduce((n, f) => n + f.pedidos.length, 0) - total.acertados} pedido(s)`}
+              // Os pedidos com alguma parte ainda sem acerto — o cancelado não
+              // entra (não há o que a indústria pague), e duas parcelas
+              // pendentes do mesmo pedido contam uma vez.
+              detalhe={plural(
+                contarPedidos(pedidos.filter((p) => acertoDoPedido(p) === null)),
+                "pedido",
+              )}
             />
             <Total
               rotulo="Diferença"
@@ -182,7 +223,9 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
                     ? "perigo"
                     : "verde"
               }
-              detalhe={total.acertados > 0 ? `em ${total.acertados} acertado(s)` : "nada acertado"}
+              detalhe={
+                total.acertados > 0 ? `em ${plural(total.acertados, "acertado")}` : "nada acertado"
+              }
             />
           </GradeTotais>
         </div>
@@ -203,7 +246,7 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
           <Painel>
             {porPreposto.map(({ nome, pedidos: quantos, resumo }) => (
               <LinhaDado key={nome}>
-                <CorpoLinha titulo={nome} detalhe={`${quantos} pedido(s)`} />
+                <CorpoLinha titulo={nome} detalhe={plural(quantos, "pedido")} />
 
                 <FimDaLinha>
                   <ValorLinha
@@ -257,7 +300,9 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
                     </Link>
                     <div className="text-corpo text-tinta-2 mt-0.5 numerico">
                       {formatarMoeda(resumo.base.toString())} vendidos ·{" "}
-                      {doFornecedor.length} pedido(s)
+                      {plural(contarPedidos(doFornecedor), "pedido")}
+                      {ehAdmin &&
+                        ` · ${formatarPercentual(resumo.percentualMedio.toString())} médio`}
                     </div>
                   </div>
                 </div>
@@ -268,32 +313,33 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
                       (ehAdmin ? resumo.valor : resumo.previstoDoPreposto).toString(),
                     )}
                   </div>
-                  <div className="text-mini text-tinta-3 numerico mt-1">
-                    {ehAdmin
-                      ? `${formatarPercentual(resumo.percentualMedio.toString())} sobre a base`
-                      : "sua fatia"}
+                  <div className="text-mini text-tinta-3 mt-1">
+                    {ehAdmin ? "comissão prevista" : "sua fatia"}
                   </div>
-                  {resumo.acertados > 0 && (
-                    <div
-                      className={`text-mini numerico mt-0.5 ${
-                        resumo.diferenca.isNegative() ? "text-perigo" : "text-verde"
-                      }`}
-                    >
-                      recebido {formatarMoeda(resumo.recebido.toString())}
-                    </div>
-                  )}
                 </div>
               </div>
 
-              <Painel>
+              <Tabela
+                colunas={colunas}
+                larguraMinima="min-w-200"
+                rodape={<TotalDaIndustria resumo={resumo} ehAdmin={ehAdmin} />}
+              >
                 {doFornecedor.map((pedido) => (
                   <LinhaComissao
-                    key={pedido.id}
+                    key={`${pedido.id}:${pedido.parcela?.id ?? ""}`}
                     pedido={paraLinha(pedido, ehAdmin)}
-                    salvar={salvarAcerto.bind(null, pedido.id)}
+                    comPercentual={ehAdmin}
+                    // Na parcela, o acerto é DELA; no pedido inteiro, dele.
+                    salvar={
+                      pedido.parcela
+                        ? salvarAcertoParcela.bind(null, pedido.parcela.id)
+                        : salvarAcerto.bind(null, pedido.id)
+                    }
+                    salvarParcelas={salvarParcelas.bind(null, pedido.id)}
+                    desfazerParcelas={desfazerParcelas.bind(null, pedido.id)}
                   />
                 ))}
-              </Painel>
+              </Tabela>
             </Cartao>
           ))}
         </div>
@@ -302,8 +348,52 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
   );
 }
 
+/**
+ * A linha "Total" da indústria, nas mesmas colunas das linhas de cima.
+ *
+ * O recebido e a diferença só existem sobre o que já foi acertado — sem
+ * nenhum acerto, um "R$ 0,00" ali diria que a indústria pagou zero.
+ */
+function TotalDaIndustria({
+  resumo,
+  ehAdmin,
+}: {
+  resumo: ReturnType<typeof resumirComissao>;
+  ehAdmin: boolean;
+}) {
+  const previsto = ehAdmin ? resumo.valor : resumo.previstoDoPreposto;
+  const recebido = ehAdmin ? resumo.recebido : resumo.recebidoDoPreposto;
+  const diferenca = ehAdmin ? resumo.diferenca : resumo.diferencaDoPreposto;
+  const algumAcerto = resumo.acertados > 0;
 
-
+  return (
+    <tr className="font-semibold">
+      {/* Pedido, Cliente, Prazo, Entregue — e o %, quando a coluna existe. */}
+      <Celula colSpan={ehAdmin ? 5 : 4}>Total</Celula>
+      <Celula alinhamento="numero">{formatarMoeda(previsto.toString())}</Celula>
+      <Celula alinhamento="numero">
+        {algumAcerto ? formatarMoeda(recebido.toString()) : <span className="text-tinta-3">—</span>}
+      </Celula>
+      <Celula
+        alinhamento="numero"
+        className={
+          !algumAcerto || diferenca.isZero()
+            ? ""
+            : diferenca.isNegative()
+              ? "text-perigo"
+              : "text-verde"
+        }
+      >
+        {algumAcerto ? (
+          `${diferenca.isPositive() && !diferenca.isZero() ? "+" : ""}${formatarMoeda(diferenca.toString())}`
+        ) : (
+          <span className="text-tinta-3">—</span>
+        )}
+      </Celula>
+      <Celula />
+    </tr>
+  );
+}
 
 /** "AAAA-MM-DD" em UTC — é o que o input `date` espera, e a coluna não tem hora. */
 function iso(data: Date | null): string | null {
@@ -349,19 +439,36 @@ function paraLinha(pedido: PedidoDaComissao, ehAdmin: boolean): LinhaPedido {
     status: pedido.status,
     motivoCancelamento: cancelado ? (pedido.motivoCancelamento ?? "") : "",
     apelidoCliente: pedido.cliente.apelido,
-    enviadoEm: pedido.enviadoEm ? DATA.format(pedido.enviadoEm) : null,
     prazoEntrega: iso(pedido.prazoEntrega),
     entregueEm: iso(pedido.entregueEm),
     base: pedido.subtotalSemIpi.toString(),
     // O percentual da indústria é conta do escritório com a indústria.
     percentual: ehAdmin && !cancelado ? percentual : "",
     previsto: cancelado ? 0 : (ehAdmin ? previsto.total : previsto.doPreposto).toNumber(),
+    // Sempre com duas casas: o campo de dinheiro lê os dígitos como centavos.
     valorRecebido: pedido.valorRecebido
-      ? escreverNumeroBr(pedido.valorRecebido.toString(), 2)
+      ? escreverNumeroBr(pedido.valorRecebido.toString(), 2, 2)
       : "",
     percentualRecebido: pedido.comissaoPercentualRecebido
       ? escreverNumeroBr(pedido.comissaoPercentualRecebido.toString())
       : "",
+    parcela: pedido.parcela
+      ? {
+          numero: pedido.parcela.numero,
+          total: pedido.parcela.total,
+          vencimento: iso(pedido.parcela.vencimento)!,
+        }
+      : null,
+    venda: pedido.vendaDoPedido.toString(),
+    prazoPagamento: pedido.prazoPagamento,
+    // Os dias das parcelas contam da entrega prevista, como no SICOV; o pedido
+    // sem prazo marcado conta do envio, que é o que decide o mês dele também.
+    dataBaseParcelas: iso(pedido.prazoEntrega ?? pedido.enviadoEm ?? pedido.criadoEm)!,
+    parcelasAtuais: pedido.parcelasDoPedido.map((p) => ({
+      vencimento: iso(p.vencimento)!,
+      valor: escreverNumeroBr(p.base.toString(), 2, 2),
+    })),
+    podeParcelar: ehAdmin && !cancelado && !pedido.parcela && !acerto,
     recebido: cancelado
       ? null
       : recebido
@@ -374,5 +481,3 @@ function paraLinha(pedido: PedidoDaComissao, ehAdmin: boolean): LinhaPedido {
     podeAcertar: ehAdmin && !cancelado,
   };
 }
-
-

@@ -1,5 +1,6 @@
 /**
- * Máscaras dos campos que se digitam sem pontuação: documento e telefone.
+ * Máscaras dos campos que se digitam sem pontuação: documento, telefone, CEP e
+ * dinheiro.
  *
  * Este módulo é PURO de propósito — nada de DOM, nada de `server-only`. As duas
  * pontas precisam dele:
@@ -97,6 +98,31 @@ export function mascararCep(valor: string): string {
   const digitos = somenteDigitos(valor).slice(0, DIGITOS_CEP);
 
   return agrupar(digitos, [5, 3], ["-"]);
+}
+
+/**
+ * Dinheiro: "1.234,56", com os dígitos entrando pela direita como centavos.
+ *
+ * É o campo de valor dos apps de banco: digitar 5, 0, 0, 0 mostra "0,05",
+ * "0,50", "5,00", "50,00" — a vírgula nunca precisa ser digitada e nunca fica
+ * no lugar errado. Zeros à esquerda caem, e só zeros vira campo vazio: apagar
+ * tudo devolve o "sem valor" que os formulários já entendem (sem meta, desfazer
+ * o acerto), em vez de um "0,00" que pareceria valor de verdade.
+ *
+ * Por isso o `defaultValue` de um campo de dinheiro precisa vir com as duas
+ * casas ("20.000,00", não "20000"): a máscara leria "20000" como centavos.
+ *
+ * Do lado do servidor não há normalização própria: "1.234,56" é exatamente o
+ * que `lerNumeroBr` já lê.
+ */
+export function mascararMoeda(valor: string): string {
+  const digitos = somenteDigitos(valor).replace(/^0+/, "");
+  if (digitos === "") return "";
+
+  const completo = digitos.padStart(3, "0");
+  const inteiro = completo.slice(0, -2).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+
+  return `${inteiro},${completo.slice(-2)}`;
 }
 
 /* -------------------------------------------------------------------------- */
