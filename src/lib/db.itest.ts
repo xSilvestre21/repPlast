@@ -499,6 +499,83 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     expect(repasse.valor.toString()).toBe("150");
   });
 
+  /*
+   * O compromisso é de quem marcou: o pessoal ninguém mais vê — nem o
+   * administrador —, o compartilhado o escritório inteiro lê, e só o autor
+   * altera ou apaga, mesmo o compartilhado.
+   */
+  it("compromisso pessoal só para o autor; compartilhado para o escritório", async () => {
+    const dia = new Date("2026-10-20T00:00:00.000Z");
+    const ana$ = dbParaOrganizacao(escritorio, ana);
+
+    await ana$.compromisso.create({
+      data: { organizacaoId: escritorio, autorId: ana.usuarioId, titulo: "Pessoal da Ana", data: dia },
+    });
+    await ana$.compromisso.create({
+      data: {
+        organizacaoId: escritorio,
+        autorId: ana.usuarioId,
+        titulo: "Reunião do escritório",
+        data: dia,
+        compartilhado: true,
+      },
+    });
+
+    const titulos = async (quem: Ator) =>
+      (await dbParaOrganizacao(escritorio, quem).compromisso.findMany({ orderBy: { titulo: "asc" } })).map(
+        (c) => c.titulo,
+      );
+
+    expect(await titulos(ana)).toEqual(["Pessoal da Ana", "Reunião do escritório"]);
+    expect(await titulos(bruno)).toEqual(["Reunião do escritório"]);
+    expect(await titulos(dono)).toEqual(["Reunião do escritório"]);
+    expect(await dbParaOrganizacao(orgA, DONO).compromisso.findMany()).toHaveLength(0);
+  });
+
+  it("só o autor altera ou apaga, mesmo o compromisso compartilhado", async () => {
+    const dono$ = dbParaOrganizacao(escritorio, dono);
+
+    const alterados = await dono$.compromisso.updateMany({ data: { titulo: "Invadido" } });
+    expect(alterados.count).toBe(0);
+
+    const apagados = await dono$.compromisso.deleteMany();
+    expect(apagados.count).toBe(0);
+
+    await expect(
+      dbParaOrganizacao(escritorio, bruno).compromisso.create({
+        data: {
+          organizacaoId: escritorio,
+          autorId: ana.usuarioId,
+          titulo: "Em nome da Ana",
+          data: new Date("2026-10-21T00:00:00.000Z"),
+        },
+      }),
+    ).rejects.toThrow();
+
+    expect(
+      (await dbParaOrganizacao(escritorio, ana).compromisso.findMany()).map((c) => c.titulo).sort(),
+    ).toEqual(["Pessoal da Ana", "Reunião do escritório"]);
+  });
+
+  it("o lembrar depois é de cada um", async () => {
+    const [compartilhado] = await dbParaOrganizacao(escritorio, bruno).compromisso.findMany();
+    const ate = new Date(Date.now() + 60_000);
+
+    // Bruno adia o aviso do compromisso compartilhado da Ana — só para ele.
+    await dbParaOrganizacao(escritorio, bruno).avisoAdiado.create({
+      data: { usuarioId: bruno.usuarioId, compromissoId: compartilhado.id, ate },
+    });
+
+    expect(await dbParaOrganizacao(escritorio, bruno).avisoAdiado.findMany()).toHaveLength(1);
+    expect(await dbParaOrganizacao(escritorio, ana).avisoAdiado.findMany()).toHaveLength(0);
+
+    await expect(
+      dbParaOrganizacao(escritorio, bruno).avisoAdiado.create({
+        data: { usuarioId: ana.usuarioId, compromissoId: compartilhado.id, ate },
+      }),
+    ).rejects.toThrow();
+  });
+
   it("os contatos da indústria não vazam para outro escritório", async () => {
     const industria = await admin.fornecedor.findFirstOrThrow({
       where: { organizacaoId: escritorio },

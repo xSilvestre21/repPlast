@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import Link from "next/link";
 import {
+  CalendarDays,
   Eye,
   EyeOff,
   Inbox,
@@ -32,10 +33,16 @@ import {
   ValorLinha,
   formatarMoeda,
 } from "@/components/ui";
+import { colunaDoDia, deveAvisar, diaDaColuna, ordenarDoDia } from "@/lib/agenda";
+import { hojeIso, somarDias } from "@/lib/calendario";
 import { competenciaDe, metaVigente, progressoDaMeta } from "@/lib/comissao";
 import { metasDoUsuario, pedidosDaCompetencia, resumirComissao } from "@/lib/comissao-consulta";
 import { clientesSumidos } from "@/lib/positivacao";
 import { escopoAtual, sessaoAtual } from "@/lib/sessao";
+
+import { AvisoCompromissos, type CompromissoAvisado } from "./aviso-compromissos";
+import { agendaDoIntervalo } from "./calendario/consulta";
+import { Marca } from "./calendario/marca";
 
 import { alternarOcultarValores } from "./acoes";
 
@@ -163,6 +170,83 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
     agora,
   );
 
+  /*
+   * O calendário no Painel: o aviso que abre sozinho e o cartão "Hoje".
+   *
+   * Só o URGENTE abre a janela, do passado até AMANHÃ — ele avisa na véspera,
+   * e o que passou sem ser feito continua avisando. O importante fica na faixa
+   * "Hoje", sem janela. Quem decide é `deveAvisar`; a consulta só não traz o
+   * que nunca poderia avisar.
+   */
+  const hoje = hojeIso(new Date(agora));
+  const amanha = somarDias(hoje, 1);
+
+  const [candidatos, adiamentos, agendaDeHoje] = await Promise.all([
+    db.compromisso.findMany({
+      where: {
+        organizacaoId,
+        concluidoEm: null,
+        importancia: "URGENTE",
+        data: { lte: colunaDoDia(amanha) },
+      },
+      orderBy: [{ data: "asc" }, { hora: "asc" }],
+      select: {
+        id: true,
+        titulo: true,
+        data: true,
+        hora: true,
+        importancia: true,
+        autorId: true,
+        clienteId: true,
+        autor: { select: { nome: true } },
+      },
+    }),
+    db.avisoAdiado.findMany({ where: { usuarioId }, select: { compromissoId: true, ate: true } }),
+    agendaDoIntervalo(
+      db,
+      organizacaoId,
+      { de: hoje, ate: amanha },
+      { usuarioId, apenasDoPreposto: ehAdmin ? null : usuarioId, hoje },
+    ),
+  ]);
+
+  const adiadoAte = new Map(adiamentos.map((a) => [a.compromissoId, a.ate.getTime()]));
+  const aAvisar = candidatos.filter((c) =>
+    deveAvisar(
+      { importancia: c.importancia, dia: diaDaColuna(c.data), concluido: false },
+      hoje,
+      agora,
+      adiadoAte.get(c.id) ?? null,
+    ),
+  );
+
+  // O nome do cliente à parte: relação opcional no `select` dispara o problema
+  // do Prisma 7.10 descrito em `comRepresentante`.
+  const idsDeClientes = [...new Set(aAvisar.map((c) => c.clienteId).filter((id) => id !== null))];
+  const nomesDeClientes = new Map(
+    idsDeClientes.length
+      ? (
+          await db.cliente.findMany({
+            where: { id: { in: idsDeClientes } },
+            select: { id: true, apelido: true },
+          })
+        ).map((c) => [c.id, c.apelido])
+      : [],
+  );
+
+  const avisos: CompromissoAvisado[] = aAvisar.map((c) => ({
+    id: c.id,
+    titulo: c.titulo,
+    dia: diaDaColuna(c.data),
+    hora: c.hora,
+    importancia: c.importancia,
+    meu: c.autorId === usuarioId,
+    autor: c.autor.nome,
+    cliente: c.clienteId ? (nomesDeClientes.get(c.clienteId) ?? null) : null,
+  }));
+
+  const deHoje = [...agendaDeHoje.compromissos, ...agendaDeHoje.automaticos];
+
   return (
     <Pagina>
       <Cabecalho
@@ -183,6 +267,40 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
           </div>
         }
       />
+
+      {avisos.length > 0 && <AvisoCompromissos compromissos={avisos} hoje={hoje} />}
+
+      {/*
+        O dia de hoje numa faixa, acima de tudo — mas só quando há algo nele.
+        Continua aqui depois que a janela do aviso foi fechada: fechar a janela
+        não é resolver o compromisso.
+      */}
+      {deHoje.length > 0 && (
+        <Link href="/calendario" className="block mb-4 group">
+          <Cartao className="elevavel px-5 py-3.5 flex flex-wrap items-center gap-x-4 gap-y-2">
+            <span className="flex items-center gap-2 shrink-0">
+              <Placa icone={CalendarDays} tom="mar" pequena />
+              <span className="font-semibold">Hoje</span>
+              <span className="text-mini text-tinta-3 numerico">{deHoje.length}</span>
+            </span>
+            <span className="flex flex-wrap gap-1.5 min-w-0 flex-1">
+              {ordenarDoDia(deHoje)
+                .slice(0, 5)
+                .map((evento) => (
+                  <span key={evento.chave} className="max-w-56 min-w-0">
+                    <Marca evento={evento} />
+                  </span>
+                ))}
+              {deHoje.length > 5 && (
+                <span className="text-mini text-tinta-3 self-center">+{deHoje.length - 5}</span>
+              )}
+            </span>
+            <span className="text-mini font-semibold text-carimbo group-hover:underline shrink-0">
+              Ver calendário
+            </span>
+          </Cartao>
+        </Link>
+      )}
 
       {/*
         Grade bento: uma calha só, células de tamanhos diferentes.

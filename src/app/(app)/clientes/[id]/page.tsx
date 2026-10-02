@@ -1,12 +1,15 @@
 import { notFound } from "next/navigation";
 
 import { Botao, BotaoLink, Cabecalho, Selo } from "@/components/ui";
+import { diaDaColuna } from "@/lib/agenda";
+import { hojeIso } from "@/lib/calendario";
 import { escopoAtual } from "@/lib/sessao";
 
 import { alternarAtivoCliente, atualizarCliente, excluirCliente } from "../acoes";
 import { FormularioCliente } from "../formulario";
 import { BotaoExcluir } from "@/components/botao-excluir";
 import { SecaoCodigos } from "./codigos";
+import { SecaoCompromissos } from "./compromissos";
 import { Building2, Pencil, UserRoundCheck, UserRoundX } from "lucide-react";
 import { Pagina } from "@/components/pagina";
 
@@ -16,9 +19,10 @@ export default async function PaginaCliente({
 }: PageProps<"/clientes/[id]">) {
   const { id } = await params;
 
-  const { organizacaoId, db } = await escopoAtual();
+  const { organizacaoId, db, usuarioId } = await escopoAtual();
+  const hoje = hojeIso();
 
-  const [cliente, produtos] = await Promise.all([
+  const [cliente, produtos, compromissos] = await Promise.all([
     db.cliente.findFirst({ where: { id, organizacaoId } }),
     // Os produtos DELE. O dono é campo do produto, então a consulta é direta —
     // não há mais tabela de vínculo a atravessar.
@@ -30,6 +34,24 @@ export default async function PaginaCliente({
         descricao: true,
         codigoCliente: true,
         fornecedor: { select: { nome: true } },
+      },
+    }),
+    // Os pendentes: os que vêm pela frente e os que passaram sem ser feitos.
+    // O feito sai — está resolvido, e mora no calendário. O RLS deixa só os
+    // de quem olha e os compartilhados.
+    db.compromisso.findMany({
+      where: { organizacaoId, clienteId: id, concluidoEm: null },
+      orderBy: [{ data: "asc" }, { hora: "asc" }],
+      take: 10,
+      select: {
+        id: true,
+        titulo: true,
+        data: true,
+        hora: true,
+        importancia: true,
+        compartilhado: true,
+        autorId: true,
+        autor: { select: { nome: true } },
       },
     }),
   ]);
@@ -116,6 +138,21 @@ export default async function PaginaCliente({
             descricao: p.descricao,
             fornecedor: p.fornecedor.nome,
             codigo: p.codigoCliente,
+          }))}
+        />
+
+        <SecaoCompromissos
+          clienteId={cliente.id}
+          hoje={hoje}
+          compromissos={compromissos.map((c) => ({
+            id: c.id,
+            titulo: c.titulo,
+            dia: diaDaColuna(c.data),
+            hora: c.hora,
+            importancia: c.importancia,
+            compartilhado: c.compartilhado,
+            meu: c.autorId === usuarioId,
+            autor: c.autor.nome,
           }))}
         />
       </div>
