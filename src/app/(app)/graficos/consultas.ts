@@ -137,3 +137,41 @@ export async function clientesComUltimaCompra(
     ultimoValor: cliente.pedidos[0]?.totalGeral ?? null,
   }));
 }
+
+/**
+ * Os cancelados de uma JANELA de meses, pela data do cancelamento.
+ *
+ * A mesma regra de `pedidosCanceladosDaCompetencia` — o mês é o de quando a
+ * perda aconteceu —, só que para vários meses de uma vez: os cartões escolhem
+ * o próprio período no navegador, e uma consulta por mês seria uma transação
+ * por mês.
+ */
+export async function pedidosCanceladosEntre(
+  db: DbOrganizacao,
+  organizacaoId: string,
+  deCompetencia: string,
+  ateCompetencia: string,
+  apenasDoPreposto?: string | null,
+) {
+  const { de } = intervaloDaCompetencia(deCompetencia);
+  const { ate } = intervaloDaCompetencia(ateCompetencia);
+
+  return db.pedido.findMany({
+    where: {
+      organizacaoId,
+      status: "CANCELADO",
+      canceladoEm: { gte: de, lt: ate },
+      ...(apenasDoPreposto ? { representanteId: apenasDoPreposto } : {}),
+    },
+    orderBy: [{ canceladoEm: "desc" }],
+    select: {
+      id: true,
+      numero: true,
+      canceladoEm: true,
+      subtotalSemIpi: true,
+      motivoCancelamento: true,
+      cliente: { select: { apelido: true } },
+      fornecedor: { select: { nome: true } },
+    },
+  });
+}

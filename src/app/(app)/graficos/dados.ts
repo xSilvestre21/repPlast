@@ -1,17 +1,24 @@
 import {
+  competenciaDe,
+  competenciaDoPedido,
   deslocarCompetencia,
+  metaVigente,
   pontualidadeEntrega,
   type ResumoComissao,
 } from "@/lib/comissao";
 import {
   contarPedidos,
+  metasDoUsuario,
   pedidosDaCompetencia,
   pedidosDoIntervalo,
   prepostoDoPedido,
   resumirComissao,
   type PedidoDaComissao,
 } from "@/lib/comissao-consulta";
+import { corDoPreposto } from "@/lib/cor-preposto";
 import type { DbOrganizacao } from "@/lib/db";
+import type { BaseDosGraficos } from "@/lib/grafico/base";
+import { centavos, itemDoGrafico } from "@/lib/grafico/item";
 import type { ItemBarra, PontoSerie } from "@/lib/grafico/geometria";
 import { SEMANTICAS } from "@/lib/grafico/paleta";
 import { clientesSumidos } from "@/lib/positivacao";
@@ -22,6 +29,7 @@ import {
   clientesComUltimaCompra,
   orcamentosDoIntervalo,
   pedidosCanceladosDaCompetencia,
+  pedidosCanceladosEntre,
 } from "./consultas";
 
 /**
@@ -294,5 +302,123 @@ export async function carregarDadosDosGraficos(
       // ligar, e a ficha tem o telefone.
       href: `/clientes/${sumido.cliente.id}`,
     })),
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* A base da página interativa                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Quantos meses a página carrega. 24 e não 12 porque o mês a mês compara com
+ * o mesmo período do ano anterior: doze meses na tela mais os doze de antes.
+ */
+export const MESES_DA_BASE = 24;
+
+/**
+ * Tudo que a página de gráficos manda ao navegador, numa ida ao banco.
+ *
+ * `carregarDadosDosGraficos` (acima) continua existindo para o PDF, o HTML e o
+ * CSV, que ainda são montados no servidor com o mês e a janela fixos.
+ *
+ * Cada item sai pela visão de quem olha (`itemDoGrafico`), com a conta da
+ * tela de Comissões — é o que faz os totais baterem com os de lá.
+ */
+export async function carregarBaseDosGraficos(
+  db: DbOrganizacao,
+  organizacaoId: string,
+  opcoes: {
+    ehAdmin: boolean;
+    usuarioId: string;
+    plano: string;
+    competencia: string;
+    agora: number;
+  },
+): Promise<BaseDosGraficos> {
+  const { ehAdmin, usuarioId, plano, competencia, agora } = opcoes;
+  const doPreposto = ehAdmin ? null : usuarioId;
+  const comPreposto = ehAdmin && plano === "PLUS";
+
+  const competencias = Array.from({ length: MESES_DA_BASE }, (_, i) =>
+    deslocarCompetencia(competencia, -(MESES_DA_BASE - 1 - i)),
+  );
+  const primeira = competencias[0];
+
+  const [pedidos, cancelados, orcamentos, clientes, metas, prepostos] = await Promise.all([
+    pedidosDoIntervalo(db, organizacaoId, primeira, competencia, doPreposto),
+    pedidosCanceladosEntre(db, organizacaoId, primeira, competencia, doPreposto),
+    orcamentosDoIntervalo(db, organizacaoId, primeira, competencia, doPreposto),
+    clientesComUltimaCompra(db, organizacaoId, doPreposto),
+    metasDoUsuario(db, usuarioId),
+    comPreposto
+      ? db.usuario.findMany({
+          where: { organizacaoId, papel: "REPRESENTANTE" },
+          // A mesma ordem da tela de Comissões: é ela que decide a cor.
+          orderBy: [{ criadoEm: "asc" }, { id: "asc" }],
+          select: { id: true, nome: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const itens = pedidos.map((pedido) => itemDoGrafico(pedido, { ehAdmin, comPreposto }));
+
+  // Uma entrega por PEDIDO: as parcelas repetiriam a mesma mercadoria.
+  const entregas = [...new Map(pedidos.map((p) => [p.id, p])).values()].flatMap((pedido) => {
+    const pontualidade = pontualidadeEntrega(pedido.prazoEntrega, pedido.entregueEm);
+    return pontualidade
+      ? [
+          {
+            competencia: competenciaDoPedido(pedido.prazoEntrega, pedido.criadoEm),
+            situacao: pontualidade.situacao,
+          },
+        ]
+      : [];
+  });
+
+  const metasPorMes: Record<string, number> = {};
+  for (const mes of competencias) {
+    const valor = metaVigente(metas, mes)?.valor;
+    if (valor) metasPorMes[mes] = centavos(valor);
+  }
+
+  return {
+    competencia,
+    competencias,
+    rotulos: Object.fromEntries(
+      competencias.map((mes) => [mes, { curto: rotuloCurtoDoMes(mes), longo: nomeDoMes(mes) }]),
+    ),
+    ehAdmin,
+    comPreposto,
+    itens,
+    metas: metasPorMes,
+    cancelados: cancelados.map((pedido) => ({
+      pedidoId: pedido.id,
+      numero: pedido.numero,
+      cliente: pedido.cliente.apelido,
+      fornecedor: pedido.fornecedor.nome,
+      // `canceladoEm` é instante com hora: o mês é o do calendário de quem
+      // cancelou, como em `pedidosCanceladosDaCompetencia`.
+      competencia: competenciaDe(pedido.canceladoEm!),
+      valor: centavos(pedido.subtotalSemIpi.toString()),
+      motivo: pedido.motivoCancelamento,
+    })),
+    orcamentos: orcamentos.map((orcamento) => ({
+      // A janela de `orcamentosDoIntervalo` é em UTC; o mês sai da mesma régua.
+      competencia: orcamento.criadoEm.toISOString().slice(0, 7),
+      virou: orcamento._count.pedidos > 0,
+    })),
+    entregas,
+    clientes: clientes.map((cliente) => ({
+      id: cliente.id,
+      apelido: cliente.apelido,
+      ultimaCompra: cliente.ultimaCompra?.getTime() ?? null,
+      ultimoValor: cliente.ultimoValor ? centavos(cliente.ultimoValor.toString()) : null,
+    })),
+    prepostos: prepostos.map((preposto, i) => ({
+      id: preposto.id,
+      nome: preposto.nome,
+      cor: corDoPreposto(i),
+    })),
+    agora,
   };
 }
