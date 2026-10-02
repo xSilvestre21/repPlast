@@ -1,11 +1,10 @@
 import Link from "next/link";
-import { Factory, PiggyBank, Send, Users } from "lucide-react";
+import { Factory, HandCoins, PiggyBank, Send, Users } from "lucide-react";
 
 import {
   Cabecalho,
   Cartao,
   Celula,
-  CorpoLinha,
   Emblema,
   EstadoVazio,
   FimDaLinha,
@@ -19,7 +18,12 @@ import {
   formatarMoeda,
   formatarPercentual,
 } from "@/components/ui";
-import { competenciaDe, metaVigente, progressoDaMeta } from "@/lib/comissao";
+import {
+  competenciaDe,
+  metaVigente,
+  progressoDaMeta,
+  type SaldoRepasse,
+} from "@/lib/comissao";
 import {
   acertoDoPedido,
   canceladosDaCompetencia,
@@ -28,9 +32,13 @@ import {
   metasDoUsuario,
   pedidosDaCompetencia,
   percentualDoPedido,
+  percentualPrepostoDoPedido,
   prepostoDoPedido,
+  repassesLancados,
   resumirComissao,
+  saldosDeRepasse,
   type PedidoDaComissao,
+  type RepasseLancado,
 } from "@/lib/comissao-consulta";
 import { ratearComissao } from "@/lib/comissao";
 import { escreverNumeroBr } from "@/lib/numero-br";
@@ -39,6 +47,8 @@ import { escopoAtual } from "@/lib/sessao";
 import {
   definirMeta,
   desfazerParcelas,
+  excluirRepasse,
+  registrarRepasse,
   salvarAcerto,
   salvarAcertoParcela,
   salvarParcelas,
@@ -46,6 +56,7 @@ import {
 import { LinhaComissao, type LinhaPedido } from "./acerto";
 import { colunasDaComissao } from "./colunas";
 import { PainelMeta } from "./painel-meta";
+import { LinhaRepasse, ResumoRepasse, type DadosRepasse } from "./repasse";
 import { Pagina } from "@/components/pagina";
 import { NavegadorMes, nomeDoMes } from "@/components/navegador-mes";
 
@@ -63,11 +74,28 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
 
   const { organizacaoId, db, ehAdmin, usuarioId } = await escopoAtual();
 
-  const [metas, pedidos, cancelados] = await Promise.all([
+  const [metas, pedidos, cancelados, repasses, prepostos] = await Promise.all([
     metasDoUsuario(db, usuarioId),
     pedidosDaCompetencia(db, organizacaoId, competencia, ehAdmin ? null : usuarioId),
     canceladosDaCompetencia(db, organizacaoId, competencia, ehAdmin ? null : usuarioId),
+    repassesLancados(db, organizacaoId, ehAdmin ? null : usuarioId),
+    // Os nomes de quem tem saldo sem ter vendido nada no mês. Só o admin lista.
+    ehAdmin
+      ? db.usuario.findMany({
+          where: { organizacaoId, papel: "REPRESENTANTE" },
+          select: { id: true, nome: true },
+        })
+      : Promise.resolve([]),
   ]);
+
+  const saldos = await saldosDeRepasse(
+    db,
+    organizacaoId,
+    competencia,
+    pedidos,
+    repasses,
+    ehAdmin ? null : usuarioId,
+  );
 
   /*
    * A soma é dos ENVIADOS, e só deles.
@@ -82,17 +110,20 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
 
   /*
    * As mesmas quatro caixas para os dois papéis, com números diferentes: o
-   * administrador vê o que a indústria paga ao escritório, o preposto vê o que
-   * cabe a ele. Não é a mesma tela com um filtro — são duas leituras do mês, e
-   * mostrar ao preposto o total do escritório seria mostrar dinheiro que não é
-   * dele.
+   * administrador vê o que FICA com o escritório depois da fatia dos prepostos,
+   * o preposto vê o que cabe a ele. Não é a mesma tela com um filtro — são duas
+   * leituras do mês, e mostrar ao preposto o total do escritório seria mostrar
+   * dinheiro que não é dele.
+   *
+   * O bruto da indústria não some do administrador: desce para o detalhe das
+   * caixas, porque é com ele que se confere o extrato da indústria.
    */
   const vista = ehAdmin
     ? {
-        previsto: total.valor,
-        recebido: total.recebido,
-        aAcertar: total.aAcertar,
-        diferenca: total.diferenca,
+        previsto: total.previstoDoEscritorio,
+        recebido: total.recebidoDoEscritorio,
+        aAcertar: total.aAcertarDoEscritorio,
+        diferenca: total.diferencaDoEscritorio,
       }
     : {
         previsto: total.previstoDoPreposto,
@@ -118,22 +149,63 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
     }))
     .sort((a, b) => a.fornecedor.nome.localeCompare(b.fornecedor.nome, "pt-BR"));
 
-  // Agrupa por preposto. Pedido da casa (sem preposto) fica de fora: ele já
-  // aparece no "fica com o escritório". Cancelado também não entra — esta
-  // tabela é de quanto cada um rendeu, e o cancelado rendeu nada.
-  const porPreposto = [
-    ...Map.groupBy(
-      pedidos.filter((p) => prepostoDoPedido(p)),
-      (p) => prepostoDoPedido(p)!.id,
-    ).entries(),
-  ]
-    .map(([, doPreposto]) => ({
-      nome: prepostoDoPedido(doPreposto[0])!.nome,
-      // Pedidos, não parcelas: duas parcelas do mesmo pedido são um pedido.
-      pedidos: contarPedidos(doPreposto),
-      resumo: resumirComissao(doPreposto),
+  /*
+   * Agrupa por preposto. Pedido da casa (sem preposto) fica de fora: ele já
+   * aparece no "fica com o escritório". Cancelado também não entra — esta
+   * tabela é de quanto cada um rendeu, e o cancelado rendeu nada.
+   *
+   * Entra também quem não vendeu no mês mas tem saldo de repasse: dívida de
+   * agosto não pode sumir da tela em setembro só porque setembro foi fraco.
+   */
+  const pedidosPorPreposto = Map.groupBy(
+    pedidos.filter((p) => prepostoDoPedido(p)),
+    (p) => prepostoDoPedido(p)!.id,
+  );
+  const nomes = new Map([
+    ...prepostos.map((u) => [u.id, u.nome] as const),
+    ...pedidos.flatMap((p) => {
+      const preposto = prepostoDoPedido(p);
+      return preposto ? [[preposto.id, preposto.nome] as const] : [];
+    }),
+  ]);
+
+  const porPreposto = [...new Set([...pedidosPorPreposto.keys(), ...saldos.keys()])]
+    .filter((id) => {
+      const saldo = saldos.get(id);
+      return (
+        pedidosPorPreposto.has(id) ||
+        (saldo !== undefined && !(saldo.aRepassar.isZero() && saldo.pago.isZero()))
+      );
+    })
+    .map((id) => ({
+      id,
+      dados: montarRepasse(
+        nomes.get(id) ?? "Preposto",
+        pedidosPorPreposto.get(id) ?? [],
+        saldos.get(id),
+        repasses.filter((r) => r.prepostoId === id && r.competencia === competencia),
+        ehAdmin,
+      ),
     }))
-    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+    .sort((a, b) => a.dados.nome.localeCompare(b.dados.nome, "pt-BR"));
+
+  // O mesmo, na tela do preposto: só o dele — `saldos` já veio filtrado.
+  const meuRepasse =
+    !ehAdmin && (pedidos.length > 0 || saldos.has(usuarioId))
+      ? montarRepasse(
+          "",
+          pedidos,
+          saldos.get(usuarioId),
+          repasses.filter((r) => r.competencia === competencia),
+          false,
+        )
+      : null;
+
+  const hoje = new Date().toISOString().slice(0, 10);
+
+  // O bruto só diz algo quando difere do líquido: num mês sem preposto, ou no
+  // escritório de uma pessoa só, seria o mesmo número repetido embaixo.
+  const brutoVisivel = ehAdmin && !total.previstoDoPreposto.isZero();
 
   /*
    * A meta DESTE mês, de quem está olhando — não a de hoje. É o que deixa
@@ -200,8 +272,18 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
       {porFornecedor.length > 0 && (
         <div className="mb-5">
           <GradeTotais>
-            <Total rotulo="Previsto" valor={formatarMoeda(vista.previsto.toString())} />
-            <Total rotulo="Recebido" valor={formatarMoeda(vista.recebido.toString())} />
+            <Total
+              rotulo="Previsto"
+              valor={formatarMoeda(vista.previsto.toString())}
+              detalhe={brutoVisivel ? `bruto ${formatarMoeda(total.valor.toString())}` : undefined}
+            />
+            <Total
+              rotulo="Recebido"
+              valor={formatarMoeda(vista.recebido.toString())}
+              detalhe={
+                brutoVisivel ? `bruto ${formatarMoeda(total.recebido.toString())}` : undefined
+              }
+            />
             <Total
               rotulo="A acertar"
               valor={formatarMoeda(vista.aAcertar.toString())}
@@ -233,8 +315,9 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
 
       {/*
         O que sai para cada preposto no mês — é por esta lista que o
-        administrador paga. Só aparece quando há preposto: num escritório de uma
-        pessoa só, seria um cartão dizendo que ela deve a si mesma.
+        administrador paga, e é nela que lança o pagamento. Só aparece quando há
+        preposto: num escritório de uma pessoa só, seria um cartão dizendo que
+        ela deve a si mesma.
       */}
       {ehAdmin && porPreposto.length > 0 && (
         <Cartao className="p-5 sm:p-6 mb-5">
@@ -244,38 +327,51 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
           </div>
 
           <Painel>
-            {porPreposto.map(({ nome, pedidos: quantos, resumo }) => (
-              <LinhaDado key={nome}>
-                <CorpoLinha titulo={nome} detalhe={plural(quantos, "pedido")} />
-
-                <FimDaLinha>
-                  <ValorLinha
-                    className="w-32"
-                    valor={formatarMoeda(resumo.previstoDoPreposto.toString())}
-                    nota="a pagar"
-                  />
-                  <ValorLinha
-                    className="w-32"
-                    valor={formatarMoeda(resumo.recebidoDoPreposto.toString())}
-                    nota="já acertado"
-                  />
-                </FimDaLinha>
-              </LinhaDado>
+            {porPreposto.map(({ id, dados }) => (
+              <LinhaRepasse
+                key={id}
+                dados={dados}
+                registrar={registrarRepasse.bind(null, id, competencia)}
+                sugestao={
+                  dados.aRepassar > 0 ? escreverNumeroBr(dados.aRepassar.toFixed(2), 2, 2) : ""
+                }
+                hoje={hoje}
+              />
             ))}
 
-            {/* O resto é do escritório, e cai na MESMA coluna de "a pagar": é
-                com esse número que os de cima se comparam. */}
+            {/* O resto é do escritório, nas mesmas colunas de previsto e devido:
+                é com esses números que os de cima se comparam. */}
             <LinhaDado className="bg-folha">
               <span className="text-corpo font-medium flex-1">Fica com o escritório</span>
               <FimDaLinha>
                 <ValorLinha
-                  className="w-32"
+                  className="w-28"
                   valor={formatarMoeda(total.previstoDoEscritorio.toString())}
+                  nota="previsto"
                 />
-                <div className="w-32" aria-hidden="true" />
+                <ValorLinha
+                  className="w-28"
+                  valor={formatarMoeda(total.recebidoDoEscritorio.toString())}
+                  nota="recebido"
+                />
+                <div className="w-28" aria-hidden="true" />
+                <div className="w-28" aria-hidden="true" />
+                {/* O lugar da seta das linhas de cima. */}
+                <div className="w-[19px]" aria-hidden="true" />
               </FimDaLinha>
             </LinhaDado>
           </Painel>
+        </Cartao>
+      )}
+
+      {/* O preposto vê o próprio repasse: quanto o escritório já pagou a ele. */}
+      {meuRepasse && (
+        <Cartao className="p-5 sm:p-6 mb-5">
+          <div className="titulo-regra mb-5">
+            <Placa icone={HandCoins} tom="lilas" pequena />
+            <h2 className="text-realce font-semibold">Repasse do escritório</h2>
+          </div>
+          <ResumoRepasse dados={meuRepasse} />
         </Cartao>
       )}
 
@@ -420,7 +516,7 @@ function paraLinha(pedido: PedidoDaComissao, ehAdmin: boolean): LinhaPedido {
   const cancelado = pedido.status === "CANCELADO";
 
   const percentual = percentualDoPedido(pedido);
-  const percentualPreposto = pedido.comissaoPercentualPreposto?.toString() ?? null;
+  const percentualPreposto = percentualPrepostoDoPedido(pedido);
   const acerto = acertoDoPedido(pedido);
 
   const previsto = ratearComissao(pedido.subtotalSemIpi.toString(), percentual, percentualPreposto);
@@ -479,5 +575,58 @@ function paraLinha(pedido: PedidoDaComissao, ehAdmin: boolean): LinhaPedido {
     rateioRecebido: cancelado ? null : fatias(recebido),
     // Quem recebe da indústria é o escritório; é ele que lança o acerto.
     podeAcertar: ehAdmin && !cancelado,
+  };
+}
+
+/**
+ * Os números de um preposto no mês, já pela visão de quem olha.
+ *
+ * O botão de excluir pagamento só é montado para o administrador — como em
+ * `paraLinha`, o que não entra nas props não chega ao navegador do preposto.
+ */
+function montarRepasse(
+  nome: string,
+  itens: PedidoDaComissao[],
+  saldo: SaldoRepasse | undefined,
+  pagamentos: RepasseLancado[],
+  ehAdmin: boolean,
+): DadosRepasse {
+  const resumo = resumirComissao(itens);
+
+  return {
+    nome,
+    pedidos: contarPedidos(itens),
+    previsto: resumo.previstoDoPreposto.toNumber(),
+    devido: saldo?.devido.toNumber() ?? 0,
+    pago: saldo?.pago.toNumber() ?? 0,
+    anterior: saldo?.anterior.toNumber() ?? 0,
+    aRepassar: saldo?.aRepassar.toNumber() ?? 0,
+    extrato: itens.map((item) => {
+      const percentualPreposto = percentualPrepostoDoPedido(item);
+      const acerto = acertoDoPedido(item);
+
+      return {
+        chave: `${item.id}:${item.parcela?.id ?? ""}`,
+        pedidoId: item.id,
+        numero: item.numero,
+        parcela: item.parcela ? `${item.parcela.numero}/${item.parcela.total}` : null,
+        cliente: item.cliente.apelido,
+        previsto: ratearComissao(
+          item.subtotalSemIpi.toString(),
+          percentualDoPedido(item),
+          percentualPreposto,
+        ).doPreposto.toNumber(),
+        recebido: acerto
+          ? ratearComissao(acerto.base, acerto.percentual, percentualPreposto).doPreposto.toNumber()
+          : null,
+      };
+    }),
+    pagamentos: pagamentos.map((p) => ({
+      id: p.id,
+      pagoEm: iso(p.pagoEm)!,
+      valor: Number(p.valor.toString()),
+      observacao: p.observacao,
+      excluir: ehAdmin ? excluirRepasse.bind(null, p.id) : null,
+    })),
   };
 }

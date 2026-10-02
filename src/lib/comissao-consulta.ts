@@ -10,13 +10,18 @@
  * os dois divergirem.
  */
 
+import Decimal from "decimal.js";
+
 import {
   competenciaDoPedido,
+  deslocarCompetencia,
   intervaloDaCompetenciaUtc,
   mesesDeMetaBatida,
+  saldoDoRepasse,
   somarComissao,
   type LinhaMeta,
   type ResumoComissao,
+  type SaldoRepasse,
 } from "./comissao";
 import type { DbOrganizacao } from "./db";
 
@@ -138,6 +143,22 @@ export function prepostoDoPedido(pedido: PedidoDaComissao) {
 }
 
 /**
+ * A fatia do preposto que vale para o pedido — só quando HÁ preposto.
+ *
+ * A importação do SICOV trouxe pedidos com percentual de representante gravado
+ * e nenhum preposto vinculado: o representante era o próprio dono, ou alguém
+ * que ficou de fora da importação. Contar essa fatia descontaria do escritório
+ * um dinheiro que não é devido a ninguém — e que não apareceria em linha
+ * nenhuma de "por preposto". Sem preposto, a comissão inteira é da casa, por
+ * decisão do usuário. O percentual gravado continua no banco, intocado.
+ */
+export function percentualPrepostoDoPedido(pedido: PedidoDaComissao): string | null {
+  return prepostoDoPedido(pedido)
+    ? (pedido.comissaoPercentualPreposto?.toString() ?? null)
+    : null;
+}
+
+/**
  * O acerto do pedido, quando já houve.
  *
  * Exige os DOIS campos: um acerto com base e sem percentual não é meio acerto,
@@ -168,7 +189,7 @@ export function resumirComissao(pedidos: PedidoDaComissao[]): ResumoComissao {
     pedidos.map((p) => ({
       base: p.subtotalSemIpi.toString(),
       percentual: percentualDoPedido(p),
-      percentualPreposto: p.comissaoPercentualPreposto?.toString() ?? null,
+      percentualPreposto: percentualPrepostoDoPedido(p),
       acerto: acertoDoPedido(p),
     })),
   );
@@ -427,8 +448,8 @@ export async function metasDoUsuario(db: DbOrganizacao, usuarioId: string): Prom
  * Os meses em que a pessoa bateu a meta daquele mês, da primeira meta até `ate`.
  *
  * Mede o mesmo número que a tela de comissões mede: o RECEBIDO, e na leitura de
- * quem olha — o do escritório para o administrador, a fatia do preposto para
- * ele. Uma consulta para o intervalo inteiro, agrupada por mês com
+ * quem olha — o que fica com o escritório (já sem a fatia dos prepostos) para
+ * o administrador, a fatia do preposto para ele. Uma consulta para o intervalo inteiro, agrupada por mês com
  * `competenciaDoPedido`, como os gráficos fazem.
  */
 export async function mesesComMetaBatida(
@@ -448,10 +469,114 @@ export async function mesesComMetaBatida(
     [...Map.groupBy(pedidos, (p) => p.competencia)].map(
       ([mes, doMes]) => {
         const resumo = resumirComissao(doMes);
-        return [mes, (ehAdmin ? resumo.recebido : resumo.recebidoDoPreposto).toString()];
+        return [mes, (ehAdmin ? resumo.recebidoDoEscritorio : resumo.recebidoDoPreposto).toString()];
       },
     ),
   );
 
   return mesesDeMetaBatida(linhas, alcancado, de, ate);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Repasse ao preposto                                                        */
+/* -------------------------------------------------------------------------- */
+
+export interface RepasseLancado {
+  id: string;
+  prepostoId: string;
+  competencia: string;
+  valor: { toString(): string };
+  pagoEm: Date;
+  observacao: string | null;
+}
+
+/**
+ * Todos os repasses lançados — do escritório inteiro, ou de um preposto.
+ *
+ * São poucas linhas (uma ou duas por preposto por mês), então vêm todas: o
+ * saldo precisa do histórico desde o primeiro repasse de cada um. O RLS já
+ * limita o preposto aos próprios; o filtro aqui é a defesa em profundidade.
+ */
+export async function repassesLancados(
+  db: DbOrganizacao,
+  organizacaoId: string,
+  apenasDoPreposto?: string | null,
+): Promise<RepasseLancado[]> {
+  return db.repassePreposto.findMany({
+    where: { organizacaoId, ...(apenasDoPreposto ? { prepostoId: apenasDoPreposto } : {}) },
+    orderBy: [{ pagoEm: "asc" }, { criadoEm: "asc" }],
+    select: {
+      id: true,
+      prepostoId: true,
+      competencia: true,
+      valor: true,
+      pagoEm: true,
+      observacao: true,
+    },
+  });
+}
+
+/**
+ * O saldo de repasse de cada preposto na competência.
+ *
+ * `doMes` são os itens que a tela já buscou para a competência — reaproveitados
+ * para não buscar o mesmo mês duas vezes. Os meses anteriores só são buscados
+ * quando há repasse antes deste mês: sem ele, o saldo anterior é zero por
+ * definição (ver `saldoDoRepasse`), e a consulta seria trabalho jogado fora.
+ *
+ * Devolve um saldo para todo preposto que tenha pedido ou repasse no período —
+ * inclusive quem não vendeu nada este mês mas ainda tem o que receber.
+ */
+export async function saldosDeRepasse(
+  db: DbOrganizacao,
+  organizacaoId: string,
+  competencia: string,
+  doMes: PedidoDaComissao[],
+  repasses: RepasseLancado[],
+  apenasDoPreposto?: string | null,
+): Promise<Map<string, SaldoRepasse>> {
+  const inicio = repasses.map((r) => r.competencia).sort()[0];
+  const anteriores =
+    inicio !== undefined && inicio < competencia
+      ? await pedidosDoIntervalo(
+          db,
+          organizacaoId,
+          inicio,
+          deslocarCompetencia(competencia, -1),
+          apenasDoPreposto,
+        )
+      : [];
+
+  // Devido por preposto e mês: a fatia dele no que a indústria já acertou.
+  const devido = new Map<string, Map<string, string>>();
+  const doPreposto = [...anteriores, ...doMes].filter((p) => prepostoDoPedido(p));
+
+  for (const [prepostoId, dele] of Map.groupBy(doPreposto, (p) => prepostoDoPedido(p)!.id)) {
+    devido.set(
+      prepostoId,
+      new Map(
+        [...Map.groupBy(dele, (p) => p.competencia)].map(([mes, itens]) => [
+          mes,
+          resumirComissao(itens).recebidoDoPreposto.toString(),
+        ]),
+      ),
+    );
+  }
+
+  // Pago por preposto e mês — a soma, porque um mês pode ter vários repasses.
+  const pago = new Map<string, Map<string, Decimal>>();
+  for (const r of repasses) {
+    const dele = pago.get(r.prepostoId) ?? new Map<string, Decimal>();
+    dele.set(r.competencia, (dele.get(r.competencia) ?? new Decimal(0)).plus(r.valor.toString()));
+    pago.set(r.prepostoId, dele);
+  }
+
+  const prepostos = new Set([...devido.keys(), ...pago.keys()]);
+
+  return new Map(
+    [...prepostos].map((id) => [
+      id,
+      saldoDoRepasse(devido.get(id) ?? new Map(), pago.get(id) ?? new Map(), competencia),
+    ]),
+  );
 }

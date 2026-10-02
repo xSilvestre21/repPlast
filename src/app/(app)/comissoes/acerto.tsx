@@ -12,7 +12,16 @@
  * daquele momento: o pedido foi enviado e ainda não foi pago.
  */
 
-import { Ban, Check, ChevronDown, Clock, Scissors, TriangleAlert } from "lucide-react";
+import {
+  Ban,
+  CalendarClock,
+  Check,
+  ChevronDown,
+  Clock,
+  Scissors,
+  TriangleAlert,
+  User,
+} from "lucide-react";
 import Link from "next/link";
 import { useActionState, useId, useState } from "react";
 
@@ -23,7 +32,6 @@ import {
   BotaoTexto,
   CLASSE_CONTROLE,
   Celula,
-  Chip,
   MensagemErro,
   formatarMoeda,
   formatarPercentual,
@@ -35,6 +43,8 @@ import { colunasDaComissao } from "./colunas";
 import { EditorParcelas } from "./parcelas";
 
 const DATA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "UTC" });
+// Sem o ano: a parcela está na lista do mês em que vence, o ano é o da tela.
+const DIA_MES = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" });
 
 export type LinhaPedido = {
   id: string;
@@ -189,24 +199,47 @@ export function LinhaComissao({
           >
             #{pedido.numero}
           </Link>
-          {/* "1/3": esta linha é uma parte do pedido, não ele inteiro. */}
-          {pedido.parcela && (
-            <span
-              className="ml-1.5 text-mini text-tinta-3 numerico"
-              title={`Parcela ${pedido.parcela.numero} de ${pedido.parcela.total}`}
-            >
-              {pedido.parcela.numero}/{pedido.parcela.total}
-            </span>
-          )}
         </Celula>
 
-        <Celula>
-          <span className="flex items-center gap-2 min-w-0">
-            <span className={`truncate ${cancelado ? "text-tinta-3" : ""}`}>
-              {pedido.apelidoCliente}
-            </span>
-            {pedido.preposto && <Chip>{pedido.preposto}</Chip>}
+        {/*
+          `w-full max-w-0`: a coluna do cliente fica com o que SOBRA das colunas
+          de largura fixa, em vez de crescer até caber o nome mais o chip do
+          preposto — numa tabela, texto sem quebra impõe a largura mínima da
+          coluna, e o `truncate` sozinho não a encolhe. Sem isto, o primeiro
+          pedido com preposto empurrava a tabela para a rolagem lateral mesmo
+          em tela larga. A rolagem continua existindo nas telas menores, pelo
+          `min-w-200` da tabela.
+        */}
+        <Celula className="w-full max-w-0">
+          <span className={`block truncate ${cancelado ? "text-tinta-3" : ""}`}>
+            {pedido.apelidoCliente}
           </span>
+          {/*
+            O preposto embaixo do nome, em texto miúdo e alinhado com ele — e
+            não num chip: ao lado, o chip tomava a largura do nome; embaixo, o
+            recuo da borda dele fazia a linha parecer torta.
+          */}
+          {pedido.preposto && (
+            <span className="flex items-center gap-1 text-mini text-tinta-3 mt-0.5 min-w-0">
+              <User size={11} strokeWidth={2} aria-hidden="true" className="shrink-0" />
+              <span className="truncate">{pedido.preposto}</span>
+            </span>
+          )}
+          {/*
+            A marca da parcela, e o porquê de a linha estar NESTE mês: ela cai no mês em que
+            vence, não no da entrega. Antes, o vencimento ocupava a coluna do
+            prazo com a palavra "vencimento" embaixo, e a linha parecia um
+            pedido com prazo diferente.
+          */}
+          {pedido.parcela && (
+            <span className="flex items-center gap-1 text-mini text-carimbo mt-0.5 min-w-0">
+              <CalendarClock size={11} strokeWidth={2} aria-hidden="true" className="shrink-0" />
+              <span className="truncate">
+                Parcela {pedido.parcela.numero} de {pedido.parcela.total} · vence{" "}
+                {DIA_MES.format(paraData(pedido.parcela.vencimento)!)}
+              </span>
+            </span>
+          )}
           {/*
             O motivo sob o nome, na coluna que tem largura sobrando — e não em
             linha própria, onde o filete da tabela o separava do pedido e ele
@@ -230,15 +263,11 @@ export function LinhaComissao({
         */}
         <Celula alinhamento="numero">
           {/*
-            Na parcela, a data que decide o mês é o VENCIMENTO dela — é ele que
-            aparece aqui, e a entrega do pedido desce para a nota.
+            O prazo de entrega do pedido, também na parcela: a coluna diz a
+            mesma coisa em todas as linhas. O vencimento da parcela, que é o que
+            a põe neste mês, fica sob o nome do cliente.
           */}
-          {pedido.parcela ? (
-            <>
-              {DATA.format(paraData(pedido.parcela.vencimento)!)}
-              <span className="block text-mini text-tinta-3 mt-0.5">vencimento</span>
-            </>
-          ) : pedido.prazoEntrega ? (
+          {pedido.prazoEntrega ? (
             DATA.format(paraData(pedido.prazoEntrega)!)
           ) : (
             TRACO

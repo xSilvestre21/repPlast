@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { lerNumeroBr } from "@/lib/numero-br";
 import { problemaNasParcelas } from "@/lib/parcelas";
-import { escopoAtual } from "@/lib/sessao";
+import { escopoAtual, exigirAdmin } from "@/lib/sessao";
 
 export type EstadoFormulario = { erro?: string };
 
@@ -317,6 +317,87 @@ export async function desfazerParcelas(
     return {
       erro: erro instanceof Error ? erro.message : "Não foi possível desfazer o parcelamento.",
     };
+  }
+
+  revalidatePath("/comissoes");
+  return {};
+}
+
+/**
+ * Registra um pagamento do escritório ao preposto, pela comissão de um mês.
+ *
+ * Só o administrador lança — quem paga é o escritório. O RLS de
+ * `repasse_preposto` recusaria a escrita do preposto de qualquer forma; o
+ * `exigirAdmin` existe para a mensagem ser legível em vez de um erro do banco.
+ *
+ * Pagar mais do que o devido é permitido de propósito: adiantamento existe, e
+ * o saldo negativo passa para o mês seguinte como crédito do escritório.
+ */
+export async function registrarRepasse(
+  prepostoId: string,
+  competencia: string,
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(competencia)) return { erro: "Mês inválido." };
+
+    await exigirAdmin();
+    const { organizacaoId, db } = await escopoAtual();
+
+    const texto = (campo: string) => {
+      const bruto = formData.get(campo);
+      return typeof bruto === "string" ? bruto.trim() : "";
+    };
+
+    const valor = lerNumeroBr(texto("valor"));
+    if (valor === null) return { erro: "Não entendi o valor pago." };
+    if (valor <= 0) return { erro: "O valor pago precisa ser maior que zero." };
+
+    // `date` sem hora: monta em UTC para o dia não escorregar pelo fuso.
+    const [ano, mes, dia] = texto("pagoEm").split("-").map(Number);
+    if (!ano || !mes || !dia) return { erro: "Informe a data do pagamento." };
+
+    const preposto = await db.usuario.findFirst({
+      where: { id: prepostoId, organizacaoId, papel: "REPRESENTANTE" },
+      select: { id: true },
+    });
+    if (!preposto) return { erro: "Preposto não encontrado." };
+
+    await db.repassePreposto.create({
+      data: {
+        organizacaoId,
+        prepostoId,
+        competencia,
+        valor: valor.toFixed(2),
+        pagoEm: new Date(Date.UTC(ano, mes - 1, dia)),
+        observacao: texto("observacao") || null,
+      },
+    });
+  } catch (erro) {
+    return { erro: erro instanceof Error ? erro.message : "Não foi possível registrar o pagamento." };
+  }
+
+  revalidatePath("/comissoes");
+  return {};
+}
+
+/** Desfaz um pagamento lançado errado. Excluir, e não lançar outro ao contrário. */
+export async function excluirRepasse(
+  repasseId: string,
+  _estado: EstadoFormulario,
+  _formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    await exigirAdmin();
+    const { organizacaoId, db } = await escopoAtual();
+
+    const { count } = await db.repassePreposto.deleteMany({
+      where: { id: repasseId, organizacaoId },
+    });
+    if (count === 0) return { erro: "Pagamento não encontrado." };
+  } catch (erro) {
+    return { erro: erro instanceof Error ? erro.message : "Não foi possível excluir o pagamento." };
   }
 
   revalidatePath("/comissoes");

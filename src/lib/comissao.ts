@@ -117,6 +117,13 @@ export interface ResumoComissao {
    */
   aAcertarDoPreposto: Decimal;
   diferencaDoPreposto: Decimal;
+  /**
+   * As mesmas duas caixas, no que fica com o escritório — a leitura do
+   * administrador. São RESÍDUO do total menos a fatia do preposto, como em
+   * `ratearComissao`: preposto + escritório fecha no centavo com o total.
+   */
+  aAcertarDoEscritorio: Decimal;
+  diferencaDoEscritorio: Decimal;
 }
 
 /**
@@ -163,21 +170,79 @@ export function somarComissao(pedidos: PedidoComissionavel[]): ResumoComissao {
   const recebidoDoPreposto = somarFatia(comAcerto, (p) => p.acerto!);
   const previstoDoPrepostoNosAcertados = somarFatia(comAcerto, (p) => p);
 
+  const aAcertar = valor.minus(previstoDosAcertados);
+  const diferenca = recebido.minus(previstoDosAcertados);
+  const aAcertarDoPreposto = previstoDoPreposto.minus(previstoDoPrepostoNosAcertados);
+  const diferencaDoPreposto = recebidoDoPreposto.minus(previstoDoPrepostoNosAcertados);
+
   return {
     base,
     valor,
     percentualMedio: base.isZero() ? zero : valor.dividedBy(base).times(100),
     recebido,
-    aAcertar: valor.minus(previstoDosAcertados),
-    diferenca: recebido.minus(previstoDosAcertados),
+    aAcertar,
+    diferenca,
     acertados: comAcerto.length,
     previstoDoPreposto,
     previstoDoEscritorio: valor.minus(previstoDoPreposto),
     recebidoDoPreposto,
     recebidoDoEscritorio: recebido.minus(recebidoDoPreposto),
-    aAcertarDoPreposto: previstoDoPreposto.minus(previstoDoPrepostoNosAcertados),
-    diferencaDoPreposto: recebidoDoPreposto.minus(previstoDoPrepostoNosAcertados),
+    aAcertarDoPreposto,
+    diferencaDoPreposto,
+    aAcertarDoEscritorio: aAcertar.minus(aAcertarDoPreposto),
+    diferencaDoEscritorio: diferenca.minus(diferencaDoPreposto),
   };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Repasse ao preposto                                                        */
+/* -------------------------------------------------------------------------- */
+
+export interface SaldoRepasse {
+  /** A fatia do preposto no que a indústria JÁ acertou neste mês. */
+  devido: Decimal;
+  /** Os repasses lançados para este mês. */
+  pago: Decimal;
+  /** O que sobrou dos meses anteriores — positivo é dívida do escritório. */
+  anterior: Decimal;
+  /** `anterior + devido - pago`. Negativo quando o escritório pagou adiantado. */
+  aRepassar: Decimal;
+}
+
+/**
+ * Quanto o escritório deve ao preposto numa competência, com o saldo que vem
+ * dos meses anteriores.
+ *
+ * O devido é sobre o RECEBIDO, não o previsto: o escritório só repassa o que a
+ * indústria já pagou, e se ela pagar menos os dois perdem juntos.
+ *
+ * O saldo começa no PRIMEIRO repasse lançado — decisão do usuário. Os meses
+ * antes dele contam como acertados fora do sistema; sem esse corte, todo o
+ * histórico importado do SICOV apareceria como dívida no dia em que a tela
+ * nasceu. Sem nenhum repasse ainda, o saldo anterior é zero e só o mês conta.
+ *
+ * "AAAA-MM" compara certo como texto, como em `metaVigente`.
+ */
+export function saldoDoRepasse(
+  devidoPorMes: Map<string, Decimal.Value>,
+  pagoPorMes: Map<string, Decimal.Value>,
+  competencia: string,
+): SaldoRepasse {
+  const zero = new Decimal(0);
+  const inicio = [...pagoPorMes.keys()].sort()[0];
+
+  let anterior = zero;
+  if (inicio !== undefined) {
+    const noIntervalo = (mes: string) => mes >= inicio && mes < competencia;
+
+    for (const [mes, valor] of devidoPorMes) if (noIntervalo(mes)) anterior = anterior.plus(valor);
+    for (const [mes, valor] of pagoPorMes) if (noIntervalo(mes)) anterior = anterior.minus(valor);
+  }
+
+  const devido = new Decimal(devidoPorMes.get(competencia) ?? 0);
+  const pago = new Decimal(pagoPorMes.get(competencia) ?? 0);
+
+  return { devido, pago, anterior, aRepassar: anterior.plus(devido).minus(pago) };
 }
 
 /* -------------------------------------------------------------------------- */

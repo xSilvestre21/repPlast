@@ -131,6 +131,7 @@ model Organizacao {
   orcamentos   Orcamento[]
   contasEmail  ContaEmail[]
   metas        MetaComissao[]
+  repasses     RepassePreposto[]
 
   @@map("organizacao")
 }
@@ -201,6 +202,7 @@ model Usuario {
   contasEmail  ContaEmail[]
   envios       EnvioPedido[]
   metas        MetaComissao[]
+  repasses     RepassePreposto[]
 
   @@index([organizacaoId])
   @@map("usuario")
@@ -214,8 +216,8 @@ model Usuario {
 /// mês a mês, que é o ponto: a meta que faz sentido com a carteira de hoje não
 /// fazia com a de um ano atrás.
 ///
-/// De cada USUÁRIO, e só dele (ver a policy): o dono mede contra a comissão do
-/// escritório, o preposto contra a própria fatia. Não entra em cálculo nenhum.
+/// De cada USUÁRIO, e só dele (ver a policy): o dono mede contra o que fica com
+/// o escritório depois da fatia dos prepostos, o preposto contra a própria fatia. Não entra em cálculo nenhum.
 model MetaComissao {
   id            String @id @default(uuid()) @db.Uuid
   organizacaoId String @db.Uuid
@@ -235,6 +237,35 @@ model MetaComissao {
   @@unique([usuarioId, competencia])
   @@index([organizacaoId])
   @@map("meta_comissao")
+}
+
+/// Um pagamento do escritório ao preposto, pela fatia de uma competência.
+///
+/// O que o escritório DEVE não mora aqui: é derivado dos pedidos, como toda a
+/// comissão (a fatia do preposto no que a indústria já acertou). Aqui fica só o
+/// que foi pago — pode haver vários no mesmo mês, quando o pagamento é parcial.
+///
+/// O saldo começa no primeiro repasse lançado para o preposto: os meses antes
+/// dele contam como acertados fora do sistema (ver `saldoDoRepasse`).
+///
+/// Só o administrador lança; o preposto lê os próprios (ver a policy).
+model RepassePreposto {
+  id            String   @id @default(uuid()) @db.Uuid
+  organizacaoId String   @db.Uuid
+  prepostoId    String   @db.Uuid
+  /// "AAAA-MM" da comissão que este pagamento quita — não o mês em que foi pago.
+  competencia   String   @db.VarChar(7)
+  valor         Decimal  @db.Decimal(14, 2)
+  pagoEm        DateTime @db.Date
+  observacao    String?
+  criadoEm      DateTime @default(now())
+
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  preposto    Usuario     @relation(fields: [prepostoId], references: [id], onDelete: Cascade)
+
+  @@index([organizacaoId])
+  @@index([prepostoId, competencia])
+  @@map("repasse_preposto")
 }
 
 /// Quais indústrias cada preposto atende.

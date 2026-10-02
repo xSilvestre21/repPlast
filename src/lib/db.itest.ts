@@ -451,6 +451,54 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     ).rejects.toThrow();
   });
 
+  /*
+   * O repasse é o pagamento do escritório ao preposto: o administrador vê e
+   * lança todos, o preposto só LÊ os próprios — e não lança nem o dele, porque
+   * um "recebi" lançado por ele apagaria a própria dívida.
+   */
+  it("o repasse aparece para o administrador e para o próprio preposto, não para o colega", async () => {
+    await dbParaOrganizacao(escritorio, dono).repassePreposto.create({
+      data: {
+        organizacaoId: escritorio,
+        prepostoId: ana.usuarioId,
+        competencia: "2026-09",
+        valor: "150",
+        pagoEm: new Date("2026-10-05T00:00:00.000Z"),
+      },
+    });
+
+    expect(await dbParaOrganizacao(escritorio, dono).repassePreposto.findMany()).toHaveLength(1);
+    expect(await dbParaOrganizacao(escritorio, ana).repassePreposto.findMany()).toHaveLength(1);
+    expect(await dbParaOrganizacao(escritorio, bruno).repassePreposto.findMany()).toHaveLength(0);
+    expect(await dbParaOrganizacao(orgA, DONO).repassePreposto.findMany()).toHaveLength(0);
+  });
+
+  it("o preposto não lança nem altera repasse, nem o próprio", async () => {
+    await expect(
+      dbParaOrganizacao(escritorio, ana).repassePreposto.create({
+        data: {
+          organizacaoId: escritorio,
+          prepostoId: ana.usuarioId,
+          competencia: "2026-09",
+          valor: "1000",
+          pagoEm: new Date("2026-10-05T00:00:00.000Z"),
+        },
+      }),
+    ).rejects.toThrow();
+
+    // Vê a linha, mas para escrever ela não existe: nada muda, nada some.
+    const alterados = await dbParaOrganizacao(escritorio, ana).repassePreposto.updateMany({
+      data: { valor: "1" },
+    });
+    expect(alterados.count).toBe(0);
+
+    const apagados = await dbParaOrganizacao(escritorio, ana).repassePreposto.deleteMany();
+    expect(apagados.count).toBe(0);
+
+    const [repasse] = await dbParaOrganizacao(escritorio, dono).repassePreposto.findMany();
+    expect(repasse.valor.toString()).toBe("150");
+  });
+
   it("os contatos da indústria não vazam para outro escritório", async () => {
     const industria = await admin.fornecedor.findFirstOrThrow({
       where: { organizacaoId: escritorio },

@@ -117,10 +117,11 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
   const resumo = resumirComissao(doMes);
 
   /*
-   * O número grande do painel é o que cabe a quem está olhando: o total que a
-   * indústria paga, para o dono do escritório; a fatia dele, para o preposto.
+   * O número grande do painel é o que cabe a quem está olhando: o que fica com
+   * o escritório depois da fatia dos prepostos, para o dono; a fatia dele, para
+   * o preposto. O bruto da indústria fica na tela de comissões, para conferir.
    */
-  const comissaoDoMes = ehAdmin ? resumo.valor : resumo.previstoDoPreposto;
+  const comissaoDoMes = ehAdmin ? resumo.previstoDoEscritorio : resumo.previstoDoPreposto;
 
   const meta = metaVigente(metas, competencia)?.valor ?? null;
   const progresso = progressoDaMeta(meta, comissaoDoMes);

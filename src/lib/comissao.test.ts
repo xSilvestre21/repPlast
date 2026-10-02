@@ -24,6 +24,7 @@ import {
   pontualidadeEntrega,
   progressoDaMeta,
   ratearComissao,
+  saldoDoRepasse,
   somarComissao,
 } from "./comissao";
 
@@ -416,6 +417,116 @@ describe("a visão do preposto tem as quatro caixas na fatia dele", () => {
   });
 });
 
+describe("a visão do administrador é o que fica com o escritório", () => {
+  const pedidos = [
+    // Do preposto, acertado a 3% em vez de 5%.
+    {
+      base: "10000",
+      percentual: 5,
+      percentualPreposto: 50,
+      acerto: { base: "10000", percentual: 3 },
+    },
+    // Do preposto, ainda sem acerto.
+    { base: "20000", percentual: 5, percentualPreposto: 50 },
+    // Da casa, acertado cheio.
+    { base: "4000", percentual: 5, acerto: { base: "4000", percentual: 5 } },
+  ];
+
+  it("as quatro caixas do escritório são o total menos a fatia do preposto", () => {
+    const r = somarComissao(pedidos);
+
+    // Total: previsto 1.700, recebido 500, a acertar 1.000, diferença −200.
+    // Preposto: previsto 750, recebido 150, a acertar 500, diferença −100.
+    expect(r.previstoDoEscritorio.toFixed(2)).toBe("950.00");
+    expect(r.recebidoDoEscritorio.toFixed(2)).toBe("350.00");
+    expect(r.aAcertarDoEscritorio.toFixed(2)).toBe("500.00");
+    expect(r.diferencaDoEscritorio.toFixed(2)).toBe("-100.00");
+  });
+
+  it("escritório e preposto somam o total em cada caixa", () => {
+    const r = somarComissao([
+      { base: "1234.57", percentual: 3.75, percentualPreposto: 33.33 },
+      {
+        base: "987.65",
+        percentual: 4,
+        percentualPreposto: 66.666,
+        acerto: { base: "900.01", percentual: 3.5 },
+      },
+    ]);
+
+    expect(r.aAcertarDoPreposto.plus(r.aAcertarDoEscritorio).toString()).toBe(
+      r.aAcertar.toString(),
+    );
+    expect(r.diferencaDoPreposto.plus(r.diferencaDoEscritorio).toString()).toBe(
+      r.diferenca.toString(),
+    );
+  });
+
+  it("sem preposto, a visão do escritório é o total", () => {
+    const r = somarComissao([{ base: "4000", percentual: 5 }]);
+
+    expect(r.previstoDoEscritorio.toFixed(2)).toBe(r.valor.toFixed(2));
+    expect(r.aAcertarDoEscritorio.toFixed(2)).toBe(r.aAcertar.toFixed(2));
+  });
+});
+
+describe("repasse ao preposto", () => {
+  const devido = new Map([
+    ["2026-07", "500"],
+    ["2026-08", "300"],
+    ["2026-09", "200"],
+    ["2026-10", "400"],
+  ]);
+
+  it("sem nenhum repasse lançado, só o mês conta", () => {
+    const s = saldoDoRepasse(devido, new Map(), "2026-09");
+
+    expect(s.anterior.toFixed(2)).toBe("0.00");
+    expect(s.devido.toFixed(2)).toBe("200.00");
+    expect(s.aRepassar.toFixed(2)).toBe("200.00");
+  });
+
+  it("o saldo começa no primeiro repasse — o que veio antes foi acertado fora", () => {
+    // Julho nunca teve repasse lançado e não vira dívida.
+    const pago = new Map([["2026-08", "300"]]);
+    const s = saldoDoRepasse(devido, pago, "2026-09");
+
+    expect(s.anterior.toFixed(2)).toBe("0.00");
+    expect(s.aRepassar.toFixed(2)).toBe("200.00");
+  });
+
+  it("pagamento parcial passa a diferença para o mês seguinte", () => {
+    const pago = new Map([
+      ["2026-08", "250"],
+      ["2026-09", "200"],
+    ]);
+
+    const setembro = saldoDoRepasse(devido, pago, "2026-09");
+    expect(setembro.anterior.toFixed(2)).toBe("50.00");
+    expect(setembro.aRepassar.toFixed(2)).toBe("50.00");
+
+    const outubro = saldoDoRepasse(devido, pago, "2026-10");
+    expect(outubro.anterior.toFixed(2)).toBe("50.00");
+    expect(outubro.aRepassar.toFixed(2)).toBe("450.00");
+  });
+
+  it("pagar a mais deixa crédito, que abate o mês seguinte", () => {
+    const pago = new Map([["2026-08", "400"]]);
+    const s = saldoDoRepasse(devido, pago, "2026-09");
+
+    expect(s.anterior.toFixed(2)).toBe("-100.00");
+    expect(s.aRepassar.toFixed(2)).toBe("100.00");
+  });
+
+  it("um mês antes do primeiro repasse não herda nada", () => {
+    const pago = new Map([["2026-09", "200"]]);
+    const s = saldoDoRepasse(devido, pago, "2026-08");
+
+    expect(s.anterior.toFixed(2)).toBe("0.00");
+    expect(s.aRepassar.toFixed(2)).toBe("300.00");
+  });
+});
+
 describe("o dono do escritório não é preposto de si mesmo", () => {
   /*
    * Isto foi um bug de verdade: a importação carimbou os 193 pedidos da dona
@@ -464,6 +575,34 @@ describe("o dono do escritório não é preposto de si mesmo", () => {
     });
 
     expect(p).toBeNull();
+  });
+
+  it("fatia gravada sem preposto vinculado volta inteira para o escritório", () => {
+    // O caso dos pedidos importados do SICOV: 50% de representante, ninguém vinculado.
+    const r = resumirComissao([
+      { ...base, comissaoPercentualPreposto: "50", representante: null },
+      {
+        ...base,
+        comissaoPercentualPreposto: "50",
+        representante: { id: "u2", nome: "Valquiria", papel: "ADMIN" },
+      },
+    ]);
+
+    expect(r.previstoDoPreposto.toFixed(2)).toBe("0.00");
+    expect(r.previstoDoEscritorio.toFixed(2)).toBe("100.00");
+  });
+
+  it("com preposto vinculado, a fatia gravada vale", () => {
+    const r = resumirComissao([
+      {
+        ...base,
+        comissaoPercentualPreposto: "50",
+        representante: { id: "u1", nome: "Maria Augusta", papel: "REPRESENTANTE" },
+      },
+    ]);
+
+    expect(r.previstoDoPreposto.toFixed(2)).toBe("25.00");
+    expect(r.previstoDoEscritorio.toFixed(2)).toBe("25.00");
   });
 
   it("devolve null quando o pedido é do escritório", () => {
