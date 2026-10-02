@@ -79,6 +79,18 @@
   --placa-lilas: #ece7ff;
   --placa-lilas-traco: #6d54d6;
 
+  /* A paleta categórica dos gráficos, em ordem fixa (`lib/grafico/tema-echarts.ts`).
+     Validada com o script da skill dataviz contra a --folha de cada tema: no
+     escuro, os traços das placas passam da faixa de luminosidade de marca de
+     gráfico (0,48–0,67), então os valores escuros abaixo são os mesmos tons
+     trazidos para L 0,65. */
+  --grafico-1: #6d54d6;
+  --grafico-2: #d9652f;
+  --grafico-3: #0f8ea6;
+  --grafico-4: #b97f0c;
+  --grafico-5: #c93a86;
+  --grafico-6: #2f6fed;
+
   /*
    * Sombra difusa e neutra, em três alturas.
    *
@@ -151,6 +163,12 @@
     --placa-pessego-traco: #f79367;
     --placa-lilas: rgb(109 84 214 / 0.2);
     --placa-lilas-traco: #a690ff;
+    --grafico-1: #917ae7;
+    --grafico-2: #d17145;
+    --grafico-3: #13a1b4;
+    --grafico-4: #b48806;
+    --grafico-5: #d4619e;
+    --grafico-6: #618de2;
 
     --sombra-sm: 0 1px 2px rgb(0 0 0 / 0.4);
     --sombra: 0 2px 6px -1px rgb(0 0 0 / 0.45), 0 8px 20px -6px rgb(0 0 0 / 0.5);
@@ -204,6 +222,12 @@
   --placa-pessego-traco: #f79367;
   --placa-lilas: rgb(109 84 214 / 0.2);
   --placa-lilas-traco: #a690ff;
+  --grafico-1: #917ae7;
+  --grafico-2: #d17145;
+  --grafico-3: #13a1b4;
+  --grafico-4: #b48806;
+  --grafico-5: #d4619e;
+  --grafico-6: #618de2;
 
   --sombra-sm: 0 1px 2px rgb(0 0 0 / 0.4);
   --sombra: 0 2px 6px -1px rgb(0 0 0 / 0.45), 0 8px 20px -6px rgb(0 0 0 / 0.5);

@@ -41,6 +41,7 @@ import {
   type RepasseLancado,
 } from "@/lib/comissao-consulta";
 import { ratearComissao } from "@/lib/comissao";
+import { corDoPreposto } from "@/lib/cor-preposto";
 import { escreverNumeroBr } from "@/lib/numero-br";
 import { escopoAtual } from "@/lib/sessao";
 
@@ -79,10 +80,12 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
     pedidosDaCompetencia(db, organizacaoId, competencia, ehAdmin ? null : usuarioId),
     canceladosDaCompetencia(db, organizacaoId, competencia, ehAdmin ? null : usuarioId),
     repassesLancados(db, organizacaoId, ehAdmin ? null : usuarioId),
-    // Os nomes de quem tem saldo sem ter vendido nada no mês. Só o admin lista.
+    // Os nomes de quem tem saldo sem ter vendido nada no mês, e a ordem de
+    // cadastro, que decide a cor de cada um. Só o admin lista.
     ehAdmin
       ? db.usuario.findMany({
           where: { organizacaoId, papel: "REPRESENTANTE" },
+          orderBy: [{ criadoEm: "asc" }, { id: "asc" }],
           select: { id: true, nome: true },
         })
       : Promise.resolve([]),
@@ -157,6 +160,9 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
    * Entra também quem não vendeu no mês mas tem saldo de repasse: dívida de
    * agosto não pode sumir da tela em setembro só porque setembro foi fraco.
    */
+  // Inativos entram na conta de propósito: tirá-los mudaria a cor de quem veio depois.
+  const cores = new Map(prepostos.map((u, i) => [u.id, corDoPreposto(i)]));
+
   const pedidosPorPreposto = Map.groupBy(
     pedidos.filter((p) => prepostoDoPedido(p)),
     (p) => prepostoDoPedido(p)!.id,
@@ -181,6 +187,7 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
       id,
       dados: montarRepasse(
         nomes.get(id) ?? "Preposto",
+        cores.get(id) ?? null,
         pedidosPorPreposto.get(id) ?? [],
         saldos.get(id),
         repasses.filter((r) => r.prepostoId === id && r.competencia === competencia),
@@ -194,6 +201,7 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
     !ehAdmin && (pedidos.length > 0 || saldos.has(usuarioId))
       ? montarRepasse(
           "",
+          null,
           pedidos,
           saldos.get(usuarioId),
           repasses.filter((r) => r.competencia === competencia),
@@ -423,7 +431,7 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
                 {doFornecedor.map((pedido) => (
                   <LinhaComissao
                     key={`${pedido.id}:${pedido.parcela?.id ?? ""}`}
-                    pedido={paraLinha(pedido, ehAdmin)}
+                    pedido={paraLinha(pedido, ehAdmin, cores)}
                     comPercentual={ehAdmin}
                     // Na parcela, o acerto é DELA; no pedido inteiro, dele.
                     salvar={
@@ -504,7 +512,11 @@ function iso(data: Date | null): string | null {
  * não é colocado neste objeto não entra no payload que o navegador do preposto
  * recebe. Esconder com `if` na tela deixaria o número viajando.
  */
-function paraLinha(pedido: PedidoDaComissao, ehAdmin: boolean): LinhaPedido {
+function paraLinha(
+  pedido: PedidoDaComissao,
+  ehAdmin: boolean,
+  cores: Map<string, string>,
+): LinhaPedido {
   /*
    * O cancelado vale ZERO aqui, e não o que valeria se tivesse ido em frente.
    *
@@ -565,12 +577,17 @@ function paraLinha(pedido: PedidoDaComissao, ehAdmin: boolean): LinhaPedido {
       valor: escreverNumeroBr(p.base.toString(), 2, 2),
     })),
     podeParcelar: ehAdmin && !cancelado && !pedido.parcela && !acerto,
+    // Só o acerto impede: a linha diz isso em vez de esconder o link calada.
+    parcelarExigeDesfazerAcerto: ehAdmin && !cancelado && !pedido.parcela && acerto !== null,
     recebido: cancelado
       ? null
       : recebido
         ? (ehAdmin ? recebido.total : recebido.doPreposto).toNumber()
         : null,
     preposto: ehAdmin ? (preposto?.nome ?? null) : null,
+    corPreposto: ehAdmin && preposto ? (cores.get(preposto.id) ?? null) : null,
+    // Para o editor de parcelas mostrar quanto de cada uma é do preposto.
+    percentualPreposto: ehAdmin && !cancelado ? percentualPreposto : null,
     rateio: cancelado ? null : fatias(previsto),
     rateioRecebido: cancelado ? null : fatias(recebido),
     // Quem recebe da indústria é o escritório; é ele que lança o acerto.
@@ -586,6 +603,7 @@ function paraLinha(pedido: PedidoDaComissao, ehAdmin: boolean): LinhaPedido {
  */
 function montarRepasse(
   nome: string,
+  cor: string | null,
   itens: PedidoDaComissao[],
   saldo: SaldoRepasse | undefined,
   pagamentos: RepasseLancado[],
@@ -595,6 +613,7 @@ function montarRepasse(
 
   return {
     nome,
+    cor,
     pedidos: contarPedidos(itens),
     previsto: resumo.previstoDoPreposto.toNumber(),
     devido: saldo?.devido.toNumber() ?? 0,

@@ -39,6 +39,7 @@ import {
 import { pontualidadeEntrega } from "@/lib/comissao";
 
 import type { EstadoFormulario } from "./acoes";
+import { BolinhaPreposto } from "./bolinha-preposto";
 import { colunasDaComissao } from "./colunas";
 import { EditorParcelas } from "./parcelas";
 
@@ -66,6 +67,10 @@ export type LinhaPedido = {
 
   /** Nome do preposto que leva a fatia. Nulo quando o pedido é da casa. */
   preposto: string | null;
+  /** A cor dele (`corDoPreposto`). Só na tela do administrador. */
+  corPreposto: string | null;
+  /** A fatia do preposto, para o editor de parcelas mostrar a de cada uma. */
+  percentualPreposto: string | null;
   /**
    * As duas fatias, do previsto e do já acertado.
    *
@@ -95,6 +100,11 @@ export type LinhaPedido = {
    * acerto lançado no pedido inteiro (a ação recusaria parcelar por cima dele).
    */
   podeParcelar: boolean;
+  /**
+   * Parcelaria, não fosse o acerto já lançado no pedido inteiro. A linha diz
+   * isso em vez de esconder o link sem explicação.
+   */
+  parcelarExigeDesfazerAcerto: boolean;
 };
 
 type Acao = (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
@@ -221,7 +231,11 @@ export function LinhaComissao({
           */}
           {pedido.preposto && (
             <span className="flex items-center gap-1 text-mini text-tinta-3 mt-0.5 min-w-0">
-              <User size={11} strokeWidth={2} aria-hidden="true" className="shrink-0" />
+              {pedido.corPreposto ? (
+                <BolinhaPreposto cor={pedido.corPreposto} />
+              ) : (
+                <User size={11} strokeWidth={2} aria-hidden="true" className="shrink-0" />
+              )}
               <span className="truncate">{pedido.preposto}</span>
             </span>
           )}
@@ -287,14 +301,13 @@ export function LinhaComissao({
 
         {/*
           No cancelado, "R$ 0,00 previsto" seria mentira: não se prevê nada
-          dele. A nota diz por que a linha está aqui sem somar.
+          dele. A nota diz por que a linha está aqui sem somar — e fica NO LUGAR
+          do traço, numa linha só: empilhada embaixo dele, empurrava o traço
+          para cima e a célula saía do alinhamento das vizinhas.
         */}
         <Celula alinhamento="numero">
           {cancelado ? (
-            <>
-              {TRACO}
-              <span className="block text-mini text-tinta-3 mt-0.5">fora da soma</span>
-            </>
+            <span className="text-mini text-tinta-3">fora da soma</span>
           ) : (
             <>
               <span className="font-medium">{formatarMoeda(pedido.previsto)}</span>
@@ -328,7 +341,12 @@ export function LinhaComissao({
             pedido.podeAcertar && (
               <BotaoTexto
                 type="button"
-                onClick={() => setAberto((a) => !a)}
+                onClick={() => {
+                  setAberto((a) => !a);
+                  // Fechar abandona o parcelamento em andamento: reabrir mostra
+                  // o acerto, que é o que a linha abre por padrão.
+                  setParcelando(false);
+                }}
                 aria-expanded={aberto}
                 aria-controls={painel}
                 className="inline-flex items-center gap-1"
@@ -357,6 +375,7 @@ export function LinhaComissao({
               <EditorParcelas
                 venda={pedido.venda}
                 percentual={pedido.percentual}
+                percentualPreposto={pedido.percentualPreposto}
                 dataBase={pedido.dataBaseParcelas}
                 prazoSugerido={pedido.prazoPagamento}
                 atuais={pedido.parcelasAtuais}
@@ -420,17 +439,38 @@ export function LinhaComissao({
                 Parcelar mora aqui, no acerto: é conferindo com a indústria que
                 se descobre que o pagamento vem em partes.
               */}
-              {(pedido.podeParcelar || pedido.parcela) && (
-                <BotaoTexto
-                  type="button"
-                  onClick={() => setParcelando(true)}
-                  className="inline-flex items-center gap-1"
-                >
-                  <Scissors size={11} aria-hidden="true" />
-                  {pedido.parcela
-                    ? `editar as ${pedido.parcela.total} parcelas`
-                    : "parcelar o recebimento"}
-                </BotaoTexto>
+              {(pedido.podeParcelar || pedido.parcela || pedido.parcelarExigeDesfazerAcerto) && (
+                /*
+                  Botão de verdade, num rodapé separado por filete. Era um link
+                  miúdo e cinza no fim do painel, que se perdia entre as notas.
+                */
+                <div className="flex flex-wrap items-center gap-3 border-t border-filete pt-3">
+                  {pedido.parcelarExigeDesfazerAcerto ? (
+                    <p className="text-mini text-tinta-3">
+                      Para parcelar o recebimento, desfaça o acerto antes: deixe o valor e o % em
+                      branco e salve.
+                    </p>
+                  ) : (
+                    <>
+                      <Botao
+                        type="button"
+                        variante="secundaria"
+                        tamanho="compacto"
+                        icone={Scissors}
+                        onClick={() => setParcelando(true)}
+                      >
+                        {pedido.parcela
+                          ? `Editar as ${pedido.parcela.total} parcelas`
+                          : "Parcelar o recebimento"}
+                      </Botao>
+                      <span className="text-mini text-tinta-3">
+                        {pedido.parcela
+                          ? "Mude datas e valores; cada parcela conta no mês em que vence."
+                          : "A indústria paga em partes? Cada parcela conta no mês em que vence."}
+                      </span>
+                    </>
+                  )}
+                </div>
               )}
             </form>
             )}

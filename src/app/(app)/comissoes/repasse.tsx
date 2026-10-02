@@ -31,6 +31,7 @@ import {
 } from "@/components/ui";
 
 import type { EstadoFormulario } from "./acoes";
+import { BolinhaPreposto } from "./bolinha-preposto";
 
 const DATA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "UTC" });
 
@@ -60,6 +61,8 @@ export type ItemExtrato = {
 
 export type DadosRepasse = {
   nome: string;
+  /** A cor do preposto (`corDoPreposto`). Nula na tela do próprio preposto. */
+  cor: string | null;
   pedidos: number;
   previsto: number;
   devido: number;
@@ -221,7 +224,15 @@ export function LinhaRepasse({
   return (
     <div>
       <LinhaDado>
-        <CorpoLinha titulo={dados.nome} detalhe={plural(dados.pedidos, "pedido")} />
+        <CorpoLinha
+          titulo={
+            <span className="flex items-center gap-2 min-w-0">
+              {dados.cor && <BolinhaPreposto cor={dados.cor} />}
+              <span className="truncate">{dados.nome}</span>
+            </span>
+          }
+          detalhe={plural(dados.pedidos, "pedido")}
+        />
 
         <FimDaLinha>
           <ValorLinha className="w-28" valor={formatarMoeda(dados.previsto)} nota="previsto" />

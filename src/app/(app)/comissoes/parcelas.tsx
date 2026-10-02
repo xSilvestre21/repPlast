@@ -32,6 +32,7 @@ import {
   MensagemErro,
   formatarMoeda,
 } from "@/components/ui";
+import { ratearComissao } from "@/lib/comissao";
 import { mascararMoeda } from "@/lib/mascara";
 import { dividirIgual, lerPrazoEmDias, restanteDaBase, somarDias } from "@/lib/parcelas";
 
@@ -62,6 +63,7 @@ function mesDe(iso: string): string {
 export function EditorParcelas({
   venda,
   percentual,
+  percentualPreposto,
   dataBase,
   prazoSugerido,
   atuais,
@@ -73,6 +75,8 @@ export function EditorParcelas({
   venda: string;
   /** O percentual da comissão, para mostrar quanto cada parcela rende. */
   percentual: string;
+  /** A fatia do preposto, quando o pedido tem um: cada parcela mostra a dele e a da casa. */
+  percentualPreposto: string | null;
   /** "AAAA-MM-DD" de onde os dias contam: a entrega prevista. */
   dataBase: string;
   prazoSugerido: string | null;
@@ -158,8 +162,20 @@ export function EditorParcelas({
     setGeracao((g) => g + 1);
   }
 
-  const comissao = (valor: Decimal) =>
-    percentual ? formatarMoeda(valor.times(percentual).dividedBy(100).toNumber()) : null;
+  /*
+   * O rateio é o MESMO da tabela (`ratearComissao`): a casa fica com o resíduo,
+   * então preposto + casa fecha no centavo com a comissão da parcela.
+   */
+  const comissao = (valor: Decimal) => {
+    if (!percentual) return null;
+    const r = ratearComissao(valor, percentual, percentualPreposto);
+    return {
+      total: formatarMoeda(r.total.toNumber()),
+      fatias: percentualPreposto
+        ? `preposto ${formatarMoeda(r.doPreposto.toNumber())} · casa ${formatarMoeda(r.doEscritorio.toNumber())}`
+        : null,
+    };
+  };
 
   return (
     <div className="space-y-4">
@@ -195,6 +211,7 @@ export function EditorParcelas({
             {linhas.map((linha, i) => {
               const ultima = i === linhas.length - 1;
               const valor = ultima ? restante : paraDecimal(linha.valor);
+              const rende = restanteInvalido ? null : comissao(valor);
 
               return (
                 <li
@@ -246,8 +263,11 @@ export function EditorParcelas({
 
                   <span className="text-mini text-tinta-3 leading-snug">
                     {mesDe(linha.vencimento)}
-                    {comissao(valor) && !restanteInvalido && (
-                      <span className="block numerico">comissão {comissao(valor)}</span>
+                    {rende && (
+                      <>
+                        <span className="block numerico">comissão {rende.total}</span>
+                        {rende.fatias && <span className="block numerico">{rende.fatias}</span>}
+                      </>
                     )}
                   </span>
 
