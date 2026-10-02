@@ -702,8 +702,34 @@ body {
 .marca-nav {
   position: absolute;
   inset: 0;
-  border-radius: 999px;
+  /* O raio de quem a contém: pílula nas abas, o canto do Painel no Painel. */
+  border-radius: inherit;
   background: var(--tinta);
+}
+
+/**
+ * A gaveta do menu do celular (`MenuCelular`): entra pela esquerda.
+ *
+ * O `<dialog>` nativo nasce centralizado; aqui ele vai para a borda e ocupa a
+ * altura toda. `@starting-style` dá a entrada sem JavaScript — e quem desligou
+ * as animações na conta a vê aparecer direto (a regra fica no bloco
+ * `data-animacoes`, no fim do arquivo: o sistema ignora o `prefers-reduced-motion`
+ * de propósito).
+ */
+.gaveta {
+  inset: 0 auto 0 0;
+  border-radius: 0 1.25rem 1.25rem 0;
+  transition:
+    translate 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    overlay 260ms allow-discrete,
+    display 260ms allow-discrete;
+  translate: 0 0;
+}
+
+@starting-style {
+  .gaveta[open] {
+    translate: -100% 0;
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1268,6 +1294,9 @@ body {
 /* -------------------------------------------------------------------------- */
 
 :root[data-animacoes="desativadas"] .confete { display: none; }
+
+/* A gaveta do menu do celular aparece no lugar, sem entrar deslizando. */
+:root[data-animacoes="desativadas"] .gaveta { transition: none; }
 
 /* Sem voo: o avião e o rastro somem, o cartão e o fundo já nascem no lugar. */
 :root[data-animacoes="desativadas"] .entrega-aviao,
