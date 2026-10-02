@@ -17,7 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import type { EventoAgenda } from "@/lib/agenda";
+import type { EventoAgenda, TipoEvento } from "@/lib/agenda";
 
 export interface Aparencia {
   cor: string;
@@ -50,13 +50,33 @@ export function aparencia(evento: EventoAgenda): Aparencia {
   return { cor: "var(--grafico-2)", icone: PhoneCall, rotulo: "Cliente sumido" };
 }
 
-/** Os tipos, para a legenda e os filtros. */
-export const LEGENDA: { chave: string; rotulo: string; cor: string; icone: LucideIcon }[] = [
+/**
+ * Os tipos que se ligam e desligam no calendário.
+ *
+ * Cada filtro leva o ícone e a cor do tipo — e por isso ele É a legenda desses
+ * tipos: não há uma segunda lista repetindo "Entrega", "Parcela" embaixo da
+ * grade.
+ */
+export const TIPOS_FILTRAVEIS: {
+  tipo: TipoEvento;
+  rotulo: string;
+  cor: string;
+  icone: LucideIcon;
+}[] = [
+  { tipo: "compromisso", rotulo: "Compromissos", cor: "var(--tinta-2)", icone: CalendarClock },
+  { tipo: "entrega", rotulo: "Entregas", cor: "var(--grafico-3)", icone: Truck },
+  { tipo: "parcela", rotulo: "Parcelas", cor: "var(--grafico-1)", icone: Coins },
+  { tipo: "sumido", rotulo: "Clientes sumidos", cor: "var(--grafico-2)", icone: PhoneCall },
+];
+
+/**
+ * O que os filtros não explicam: os destaques de atenção. Esses não se
+ * desligam — são estados de um compromisso ou de uma entrega, não tipos.
+ */
+export const LEGENDA_DE_DESTAQUES: { chave: string; rotulo: string; cor: string; icone: LucideIcon }[] = [
   { chave: "urgente", rotulo: "Urgente", cor: "var(--perigo)", icone: AlertTriangle },
   { chave: "importante", rotulo: "Importante", cor: "var(--grafico-4)", icone: Flag },
-  { chave: "entrega", rotulo: "Entrega", cor: "var(--grafico-3)", icone: Truck },
-  { chave: "parcela", rotulo: "Parcela", cor: "var(--grafico-1)", icone: Coins },
-  { chave: "sumido", rotulo: "Cliente sumido", cor: "var(--grafico-2)", icone: PhoneCall },
+  { chave: "atrasada", rotulo: "Entrega atrasada", cor: "var(--perigo)", icone: Truck },
 ];
 
 const resolvido = (e: EventoAgenda) => e.situacao === "concluido" || e.situacao === "paga";

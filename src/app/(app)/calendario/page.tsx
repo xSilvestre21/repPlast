@@ -1,9 +1,9 @@
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, Plus } from "lucide-react";
 
 import { ManterEscolhas } from "@/components/manter-escolhas";
 import { NavegadorMes } from "@/components/navegador-mes";
 import { Pagina } from "@/components/pagina";
-import { Cabecalho } from "@/components/ui";
+import { BotaoLink, Cabecalho } from "@/components/ui";
 import { DIAS_DA_LISTA } from "@/lib/agenda";
 import { hojeIso, semanasDoMes, somarDias } from "@/lib/calendario";
 import { escopoAtual } from "@/lib/sessao";
@@ -70,6 +70,16 @@ export default async function PaginaCalendario({ searchParams }: PageProps<"/cal
         icone={CalendarDays}
         titulo="Calendário"
         descricao="Seus compromissos, as entregas prometidas, as parcelas a receber e os clientes a ligar."
+        acao={
+          // No cabeçalho, como o "Novo pedido": é a ação principal da tela.
+          // Um link com `?novo=1`, que a agenda lê para abrir o formulário — e
+          // `ManterEscolhas` leva junto o mês, a visão e os filtros atuais.
+          <ManterEscolhas doLink={["novo"]}>
+            <BotaoLink href="/calendario?novo=1" icone={Plus}>
+              Novo compromisso
+            </BotaoLink>
+          </ManterEscolhas>
+        }
       />
 
       {/* A visão e os filtros escolhidos depois do carregamento vão junto. */}
