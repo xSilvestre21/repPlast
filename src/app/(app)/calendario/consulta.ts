@@ -54,11 +54,27 @@ export async function agendaDoIntervalo(
   organizacaoId: string,
   intervalo: { de: DataIso; ate: DataIso },
   quem: { usuarioId: string; apenasDoPreposto: string | null; hoje: DataIso },
+  opcoes: {
+    /**
+     * Falso para quem já tem a última compra de cada cliente em mãos — o
+     * Painel busca isso para a lista de sumidos e monta o lembrete do dia
+     * sozinho. Buscar de novo aqui era repetir a consulta mais pesada da tela.
+     */
+    sumidos?: boolean;
+  } = {},
 ): Promise<AgendaDoIntervalo> {
+  const comSumidos = opcoes.sumidos ?? true;
   const faixa = { gte: colunaDoDia(intervalo.de), lt: colunaDoDia(intervalo.ate) };
   const doPreposto = quem.apenasDoPreposto ? { representanteId: quem.apenasDoPreposto } : {};
 
-  const [compromissos, pedidos, parcelas, clientes] = await Promise.all([
+  /*
+   * Tudo numa leva só. Cada consulta abre a própria transação (é como o RLS
+   * recebe o contexto, ver `db.ts`), então o que pesa é a ESPERA em fila: uma
+   * consulta que só começa quando a anterior termina. Os nomes dos clientes
+   * vinculados vêm junto, por filtro de relação, e não numa segunda ida depois
+   * de saber os ids.
+   */
+  const [compromissos, nomesDosVinculados, pedidos, parcelas, clientes] = await Promise.all([
     db.compromisso.findMany({
       where: { organizacaoId, data: faixa },
       orderBy: [{ data: "asc" }, { hora: "asc" }],
@@ -75,6 +91,17 @@ export async function agendaDoIntervalo(
         autorId: true,
         autor: { select: { nome: true } },
       },
+    }),
+    /*
+     * O nome do cliente à parte, e não como `cliente` no `select` acima: é
+     * relação OPCIONAL no compromisso, e o Prisma 7.10 encadeia consultas na
+     * mesma conexão quando uma relação opcional entra no `select` (ver
+     * `comRepresentante`). Cliente que o RLS esconde fica sem nome — o
+     * compromisso compartilhado do colega pode citar um cliente da carteira dele.
+     */
+    db.cliente.findMany({
+      where: { organizacaoId, compromissos: { some: { organizacaoId, data: faixa } } },
+      select: { id: true, apelido: true },
     }),
     db.pedido.findMany({
       where: {
@@ -111,27 +138,10 @@ export async function agendaDoIntervalo(
         },
       },
     }),
-    clientesComUltimaCompra(db, organizacaoId, quem.apenasDoPreposto),
+    comSumidos ? clientesComUltimaCompra(db, organizacaoId, quem.apenasDoPreposto) : [],
   ]);
 
-  /*
-   * O nome do cliente vinculado vem numa consulta à parte: `cliente` é relação
-   * OPCIONAL no compromisso, e o Prisma 7.10 encadeia consultas na mesma conexão
-   * quando uma relação opcional entra no `select` (ver `comRepresentante`).
-   * Cliente que o RLS esconde fica sem nome — o compromisso compartilhado do
-   * colega pode citar um cliente da carteira dele.
-   */
-  const idsDeClientes = [...new Set(compromissos.map((c) => c.clienteId).filter((id) => id !== null))];
-  const nomes = new Map(
-    idsDeClientes.length
-      ? (
-          await db.cliente.findMany({
-            where: { id: { in: idsDeClientes } },
-            select: { id: true, apelido: true },
-          })
-        ).map((c) => [c.id, c.apelido])
-      : [],
-  );
+  const nomes = new Map(nomesDosVinculados.map((c) => [c.id, c.apelido]));
 
   return {
     compromissos: compromissos.map((c) => ({

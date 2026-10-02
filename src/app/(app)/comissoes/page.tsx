@@ -91,14 +91,16 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
       : Promise.resolve([]),
   ]);
 
-  const saldos = await saldosDeRepasse(
-    db,
-    organizacaoId,
-    competencia,
-    pedidos,
-    repasses,
-    ehAdmin ? null : usuarioId,
-  );
+  /*
+   * As duas consultas que dependem da primeira leva, juntas: o saldo de repasse
+   * e os meses de meta batida não dependem um do outro, e em sequência a tela
+   * esperava pela soma dos dois.
+   */
+  const [saldos, batidos] = await Promise.all([
+    saldosDeRepasse(db, organizacaoId, competencia, pedidos, repasses, ehAdmin ? null : usuarioId),
+    // A marquinha verde do seletor: os meses batidos, da primeira meta até hoje.
+    mesesComMetaBatida(db, organizacaoId, usuarioId, ehAdmin, metas, competenciaDe(new Date())),
+  ]);
 
   /*
    * A soma é dos ENVIADOS, e só deles.
@@ -223,16 +225,6 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
   const meta = vigente?.valor ?? null;
   // A meta acompanha o RECEBIDO: é o que de fato entrou, não o que deve entrar.
   const progresso = progressoDaMeta(meta, vista.recebido);
-
-  // A marquinha verde do seletor: os meses batidos, da primeira meta até hoje.
-  const batidos = await mesesComMetaBatida(
-    db,
-    organizacaoId,
-    usuarioId,
-    ehAdmin,
-    metas,
-    competenciaDe(new Date()),
-  );
 
   const colunas = colunasDaComissao(ehAdmin);
 

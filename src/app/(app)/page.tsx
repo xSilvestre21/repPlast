@@ -33,7 +33,7 @@ import {
   ValorLinha,
   formatarMoeda,
 } from "@/components/ui";
-import { colunaDoDia, deveAvisar, diaDaColuna, ordenarDoDia } from "@/lib/agenda";
+import { colunaDoDia, deveAvisar, diaDaColuna, eventoDeSumido, ordenarDoDia } from "@/lib/agenda";
 import { hojeIso, somarDias } from "@/lib/calendario";
 import { competenciaDe, metaVigente, progressoDaMeta } from "@/lib/comissao";
 import { metasDoUsuario, pedidosDaCompetencia, resumirComissao } from "@/lib/comissao-consulta";
@@ -81,7 +81,29 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
     );
   const competencia = competenciaDe(new Date());
 
-  const [metas, doMes, recentes, clientes] = await Promise.all([
+  /*
+   * Um único instante para toda a página.
+   *
+   * A regra de pureza do React existe por causa de componentes de cliente, que
+   * podem re-renderizar e produzir valores diferentes a cada vez. Este é um
+   * componente de SERVIDOR e a rota é dinâmica: ele roda uma vez por
+   * requisição, e "quantos dias sem comprar" depende justamente de agora.
+   */
+  // eslint-disable-next-line react-hooks/purity
+  const agora = Date.now();
+  const hoje = hojeIso(new Date(agora));
+  const amanha = somarDias(hoje, 1);
+
+  /*
+   * TODAS as consultas da tela numa leva só.
+   *
+   * Cada consulta abre a própria transação (é como o RLS recebe o contexto, ver
+   * `db.ts`), e o que pesava era a fila: o calendário só começava depois do
+   * mês, e os nomes dos clientes do aviso só depois do calendário — três idas
+   * em sequência. Em paralelo, a tela espera pela mais lenta, não pela soma.
+   */
+  const [metas, doMes, recentes, clientes, candidatos, adiamentos, nomesDosAvisados, agendaDeHoje] =
+    await Promise.all([
     // A meta é de cada pessoa e de cada mês — a deste mês, de quem está olhando.
     metasDoUsuario(db, usuarioId),
 
@@ -119,6 +141,60 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
         },
       },
     }),
+
+    /*
+     * O aviso que abre sozinho: só o URGENTE, do passado até AMANHÃ — ele avisa
+     * na véspera, e o que passou sem ser feito continua avisando. Quem decide é
+     * `deveAvisar`; a consulta só não traz o que nunca poderia avisar.
+     */
+    db.compromisso.findMany({
+      where: {
+        organizacaoId,
+        concluidoEm: null,
+        importancia: "URGENTE",
+        data: { lte: colunaDoDia(amanha) },
+      },
+      orderBy: [{ data: "asc" }, { hora: "asc" }],
+      select: {
+        id: true,
+        titulo: true,
+        data: true,
+        hora: true,
+        importancia: true,
+        autorId: true,
+        clienteId: true,
+        autor: { select: { nome: true } },
+      },
+    }),
+    db.avisoAdiado.findMany({ where: { usuarioId }, select: { compromissoId: true, ate: true } }),
+
+    // O nome do cliente desses compromissos, já na mesma leva — por filtro de
+    // relação, e não numa ida a mais depois de saber os ids. À parte do
+    // `select` de cima porque é relação opcional (ver `comRepresentante`).
+    db.cliente.findMany({
+      where: {
+        organizacaoId,
+        compromissos: {
+          some: {
+            organizacaoId,
+            concluidoEm: null,
+            importancia: "URGENTE",
+            data: { lte: colunaDoDia(amanha) },
+          },
+        },
+      },
+      select: { id: true, apelido: true },
+    }),
+
+    // A faixa "Hoje". Sem os sumidos: a última compra de cada cliente já está
+    // na consulta de cima, e o lembrete do dia sai dela (`lembretesDeHoje`).
+    agendaDoIntervalo(
+      db,
+      organizacaoId,
+      { de: hoje, ate: amanha },
+      { usuarioId, apenasDoPreposto: ehAdmin ? null : usuarioId, hoje },
+      { sumidos: false },
+    ),
   ]);
 
   const resumo = resumirComissao(doMes);
@@ -148,16 +224,6 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
           .dividedBy(quantosPedidos)
       : null;
 
-  /*
-   * Um único instante para toda a página.
-   *
-   * A regra de pureza do React existe por causa de componentes de cliente, que
-   * podem re-renderizar e produzir valores diferentes a cada vez. Este é um
-   * componente de SERVIDOR e a rota é dinâmica: ele roda uma vez por
-   * requisição, e "quantos dias sem comprar" depende justamente de agora.
-   */
-  // eslint-disable-next-line react-hooks/purity
-  const agora = Date.now();
 
   const sumidos = clientesSumidos(
     clientes.map((cliente) => ({
@@ -170,46 +236,6 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
     agora,
   );
 
-  /*
-   * O calendário no Painel: o aviso que abre sozinho e o cartão "Hoje".
-   *
-   * Só o URGENTE abre a janela, do passado até AMANHÃ — ele avisa na véspera,
-   * e o que passou sem ser feito continua avisando. O importante fica na faixa
-   * "Hoje", sem janela. Quem decide é `deveAvisar`; a consulta só não traz o
-   * que nunca poderia avisar.
-   */
-  const hoje = hojeIso(new Date(agora));
-  const amanha = somarDias(hoje, 1);
-
-  const [candidatos, adiamentos, agendaDeHoje] = await Promise.all([
-    db.compromisso.findMany({
-      where: {
-        organizacaoId,
-        concluidoEm: null,
-        importancia: "URGENTE",
-        data: { lte: colunaDoDia(amanha) },
-      },
-      orderBy: [{ data: "asc" }, { hora: "asc" }],
-      select: {
-        id: true,
-        titulo: true,
-        data: true,
-        hora: true,
-        importancia: true,
-        autorId: true,
-        clienteId: true,
-        autor: { select: { nome: true } },
-      },
-    }),
-    db.avisoAdiado.findMany({ where: { usuarioId }, select: { compromissoId: true, ate: true } }),
-    agendaDoIntervalo(
-      db,
-      organizacaoId,
-      { de: hoje, ate: amanha },
-      { usuarioId, apenasDoPreposto: ehAdmin ? null : usuarioId, hoje },
-    ),
-  ]);
-
   const adiadoAte = new Map(adiamentos.map((a) => [a.compromissoId, a.ate.getTime()]));
   const aAvisar = candidatos.filter((c) =>
     deveAvisar(
@@ -219,20 +245,7 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
       adiadoAte.get(c.id) ?? null,
     ),
   );
-
-  // O nome do cliente à parte: relação opcional no `select` dispara o problema
-  // do Prisma 7.10 descrito em `comRepresentante`.
-  const idsDeClientes = [...new Set(aAvisar.map((c) => c.clienteId).filter((id) => id !== null))];
-  const nomesDeClientes = new Map(
-    idsDeClientes.length
-      ? (
-          await db.cliente.findMany({
-            where: { id: { in: idsDeClientes } },
-            select: { id: true, apelido: true },
-          })
-        ).map((c) => [c.id, c.apelido])
-      : [],
-  );
+  const nomesDeClientes = new Map(nomesDosAvisados.map((c) => [c.id, c.apelido]));
 
   const avisos: CompromissoAvisado[] = aAvisar.map((c) => ({
     id: c.id,
@@ -245,7 +258,14 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
     cliente: c.clienteId ? (nomesDeClientes.get(c.clienteId) ?? null) : null,
   }));
 
-  const deHoje = [...agendaDeHoje.compromissos, ...agendaDeHoje.automaticos];
+  const lembretesDeHoje = clientes
+    .filter((c) => c.pedidos[0]?.enviadoEm)
+    .map((c) =>
+      eventoDeSumido({ id: c.id, apelido: c.apelido, ultimaCompra: c.pedidos[0].enviadoEm! }),
+    )
+    .filter((e) => e.dia === hoje);
+
+  const deHoje = [...agendaDeHoje.compromissos, ...agendaDeHoje.automaticos, ...lembretesDeHoje];
 
   return (
     <Pagina>
