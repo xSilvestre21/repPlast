@@ -191,6 +191,43 @@ function alcanceDe(distancia: number): "perto" | "media" | "longe" {
 }
 
 /**
+ * Os tipos de view transition de uma viagem entre abas.
+ *
+ * A direção sai da posição na barra, não do histórico; o alcance sai da
+ * distância entre abas. O primeiro tipo move o conteúdo (`Pagina`), o segundo
+ * só ajusta a duração da pílula (ver `:active-view-transition-type` em
+ * globals.css) — nenhum dos dois lê o outro.
+ *
+ * Função à parte porque são DOIS caminhos até o Painel — a aba e o nome do
+ * escritório — e os dois precisam viajar igual.
+ */
+function tiposDaViagem(destino: number, atual: number): string[] {
+  const direcao = destino > atual ? "nav-direita" : "nav-esquerda";
+  const alcance = alcanceDe(Math.abs(destino - atual));
+  return [`${direcao}-${alcance}`, `nav-${alcance}`];
+}
+
+/**
+ * Guarda o tamanho da aba de DESTINO antes de navegar.
+ *
+ * Trava `width`/`height` da pílula em `globals.css` no valor final, para ela
+ * só andar de lado, nunca redimensionar em voo — encolher/crescer ENQUANTO
+ * desliza é o que fazia a viagem parecer arquear (ver comentário lá). Sem a
+ * medida, a pílula viaja com o tamanho da última aba clicada: era o salto de
+ * quem saía de "Fornecedores" pelo nome do escritório.
+ */
+function medirPilula(destino: Element | null) {
+  if (!destino) return;
+  const retangulo = destino.getBoundingClientRect();
+  // Escondida (a barra some no celular), não há pílula para ajustar.
+  if (retangulo.width === 0) return;
+
+  const raiz = document.documentElement.style;
+  raiz.setProperty("--largura-pilula", `${retangulo.width}px`);
+  raiz.setProperty("--altura-pilula", `${retangulo.height}px`);
+}
+
+/**
  * Uma aba da barra: ícone e rótulo, como todas — o Painel inclusive.
  *
  * O Painel se distingue sem sair da família: fica no centro, entre as
@@ -215,8 +252,6 @@ function Aba({
 }) {
   const ativo = indice === indiceAtual;
   const inicio = item.grupo === "inicio";
-  const direcao = indice > indiceAtual ? "nav-direita" : "nav-esquerda";
-  const alcance = alcanceDe(Math.abs(indice - indiceAtual));
   const Icone = item.icone;
 
   return (
@@ -226,21 +261,8 @@ function Aba({
         aria-current={ativo ? "page" : undefined}
         aria-label={item.rotulo}
         title={item.rotulo}
-        // A direção sai da posição na barra, não do histórico; o alcance sai da
-        // distância entre abas. O primeiro tipo move o conteúdo (`Pagina`), o
-        // segundo só ajusta a duração da pílula (ver `:active-view-transition-type`
-        // em globals.css) — nenhum dos dois lê o outro.
-        transitionTypes={[`${direcao}-${alcance}`, `nav-${alcance}`]}
-        // O tamanho do destino, medido na hora do clique: trava `width`/`height`
-        // da pílula em `globals.css` no valor final, para ela só andar de lado,
-        // nunca redimensionar em voo — encolher/crescer ENQUANTO desliza é o que
-        // fazia a viagem parecer arquear (ver comentário lá).
-        onClick={(evento) => {
-          const raiz = document.documentElement.style;
-          const retangulo = evento.currentTarget.getBoundingClientRect();
-          raiz.setProperty("--largura-pilula", `${retangulo.width}px`);
-          raiz.setProperty("--altura-pilula", `${retangulo.height}px`);
-        }}
+        transitionTypes={tiposDaViagem(indice, indiceAtual)}
+        onClick={(evento) => medirPilula(evento.currentTarget)}
         className={`relative isolate flex items-center gap-1.5 rounded-full py-1.5 text-corpo
           whitespace-nowrap transition-colors duration-200 ${
             inicio ? "px-3.5" : "px-2.5 lg:px-3"
@@ -248,8 +270,8 @@ function Aba({
             ativo
               ? "text-papel font-semibold"
               : inicio
-                ? "text-tinta font-semibold hover:bg-folha"
-                : "text-tinta-2 font-medium hover:bg-folha hover:text-tinta"
+                ? "text-tinta font-semibold hover:bg-folha-2"
+                : "text-tinta-2 font-medium hover:bg-folha-2 hover:text-tinta"
           }`}
       >
         {/*
@@ -436,6 +458,7 @@ export function Navegacao({
   const caminho = usePathname();
   const itens = ITENS_PRINCIPAIS;
   const indiceAtual = itens.findIndex((item) => estaAtivo(item.href, caminho));
+  const indicePainel = itens.findIndex((item) => item.grupo === "inicio");
   const itensMenu = mostrarPrepostos ? [...ITENS_MENU, ITEM_PREPOSTOS] : ITENS_MENU;
 
   return (
@@ -455,8 +478,17 @@ export function Navegacao({
             nomeOrganizacao={nomeOrganizacao}
           />
 
+          {/*
+            O nome do escritório leva ao Painel — e faz a MESMA viagem que a aba
+            dele: mede a aba do Painel e manda a direção do deslize. Sem isso a
+            pílula ia com o tamanho da aba de onde se saiu e se corrigia no fim.
+          */}
           <Link
             href="/"
+            transitionTypes={tiposDaViagem(indicePainel, indiceAtual)}
+            onClick={() =>
+              medirPilula(document.querySelector('nav[aria-label="Principal"] a[href="/"]'))
+            }
             className="min-w-0 max-w-[50vw] truncate text-medio font-extrabold tracking-[-0.03em]
               transition-colors hover:text-carimbo sm:max-w-[220px]"
           >
@@ -472,11 +504,13 @@ export function Navegacao({
             abortar a animação.
           */}
           <nav aria-label="Principal" className="hidden sm:block flex-1 min-w-0">
-            <ul
-              aria-label="Seções"
-              className="mx-auto flex w-max items-center gap-0.5 rounded-full border border-filete
-                bg-folha-2/70 p-1"
-            >
+            {/*
+              Sem fundo nem borda próprios: as abas ficam direto no fundo do
+              topo. Uma cápsula cinza em volta delas pesava o cabeçalho — quem
+              separa os grupos são as divisórias, e quem marca a aba atual é a
+              pílula.
+            */}
+            <ul aria-label="Seções" className="mx-auto flex w-max items-center gap-0.5">
               {itens.map((item, indice) => (
                 <Fragment key={item.href}>
                   {/* A divisória antes do Painel e depois dele: os grupos se
