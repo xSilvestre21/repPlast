@@ -96,9 +96,13 @@ export function CartaoMensal({ base }: { base: BaseDosGraficos }) {
     const comZoom = meses.length > 12;
 
     return {
+      // No celular a legenda quebra em duas linhas, e o gráfico desce para
+      // dar lugar a ela — sem isto a segunda linha caía em cima do eixo.
+      media: [{ query: { maxWidth: 520 }, option: { grid: { top: 64 } } }],
       legend: {
         top: 0,
         left: 0,
+        right: 0,
         icon: "roundRect",
         itemWidth: 12,
         itemHeight: 4,
@@ -145,13 +149,15 @@ export function CartaoMensal({ base }: { base: BaseDosGraficos }) {
           barMaxWidth: 22,
           barGap: "12%",
           smooth: 0.25,
+          // A curva não "estufa" entre dois meses: sem isto, um mês zerado
+          // depois de um pico desenhava a linha passando abaixo do zero.
+          smoothMonotone: "x",
           symbol: "circle",
           symbolSize: 7,
           lineStyle: { width: 2, type: "solid" },
           // O previsto é o fantasma do recebido: presente, mas recessivo.
           itemStyle: { color: cores.tinta3, borderRadius: [4, 4, 0, 0], opacity: visao === "barras" ? 0.45 : 1 },
           areaStyle: acumulado ? { opacity: 0.08 } : undefined,
-          universalTransition: true,
         },
         {
           name: "Recebido",
@@ -166,13 +172,13 @@ export function CartaoMensal({ base }: { base: BaseDosGraficos }) {
           })),
           barMaxWidth: 22,
           smooth: 0.25,
+          smoothMonotone: "x",
           symbol: "circle",
           symbolSize: 7,
           lineStyle: { width: 2.5 },
           itemStyle: { color: cores.verde, borderRadius: [4, 4, 0, 0] },
           areaStyle: acumulado || visao === "linha" ? { opacity: 0.12 } : undefined,
           emphasis: { focus: "series" },
-          universalTransition: true,
         },
         ...(mostrarMeta
           ? [
@@ -196,6 +202,7 @@ export function CartaoMensal({ base }: { base: BaseDosGraficos }) {
                 type: "line",
                 data: ajustar(series.anterior),
                 smooth: 0.25,
+                smoothMonotone: "x",
                 symbol: "emptyCircle",
                 symbolSize: 5,
                 lineStyle: { width: 1.5, type: "dotted", color: cores.categoricas[0] },
@@ -269,6 +276,11 @@ export function CartaoMensal({ base }: { base: BaseDosGraficos }) {
         rotulo="Comissão mês a mês, previsto e recebido"
         aoClicar={(e) => {
           const mes = meses[e.dataIndex];
+          if (mes) router.push(`/comissoes?mes=${mes}`);
+        }}
+        // Na linha, acertar o ponto é difícil: a coluna inteira do mês abre.
+        aoClicarCategoria={(i) => {
+          const mes = meses[i];
           if (mes) router.push(`/comissoes?mes=${mes}`);
         }}
       />

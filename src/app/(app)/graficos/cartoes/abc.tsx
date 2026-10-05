@@ -75,24 +75,33 @@ export function CartaoAbc({ base }: { base: BaseDosGraficos }) {
 
   const opcao = useMemo<OpcaoGrafico>(() => {
     const n = curva.itens.length;
+    /*
+     * Cada faixa vai do primeiro cliente dela até o primeiro da seguinte — não
+     * até o último dela. Num eixo sem folga (`boundaryGap: false`) isso deixava
+     * um vão de um cliente entre as faixas, uma listra escura sem significado.
+     */
     const faixa = (banda: Banda) => {
       const daBanda = curva.itens.filter((i) => i.banda === banda);
       if (daBanda.length === 0) return null;
+      const fim = Math.min(n - 1, curva.itens.indexOf(daBanda.at(-1)!) + 1);
       return [
         {
           xAxis: curva.itens.indexOf(daBanda[0]),
           // O fundo da faixa: o tom da curva, mais apagado quanto mais baixa a classe.
           itemStyle: { color: comAlfa(cores.categoricas[0], { A: 0.12, B: 0.07, C: 0.03 }[banda]) },
+          // Acima da área do gráfico: dentro, o rótulo caía sobre a linha de
+          // 95% e sobre a própria curva, que lá em cima já encosta nos 100%.
           label: {
             show: true,
-            position: "insideTop",
+            position: "top",
+            distance: 6,
             formatter: `${banda} · ${curva.contagem[banda]}`,
             color: cores.tinta2,
             fontSize: 11,
             fontWeight: 600,
           },
         },
-        { xAxis: curva.itens.indexOf(daBanda.at(-1)!) },
+        { xAxis: fim },
       ];
     };
 
@@ -110,7 +119,7 @@ export function CartaoAbc({ base }: { base: BaseDosGraficos }) {
           );
         },
       },
-      grid: { left: 8, right: 12, top: 16, bottom: 8 },
+      grid: { left: 8, right: 12, top: 30, bottom: 8 },
       xAxis: {
         type: "category",
         data: curva.itens.map((i) => i.rotulo),
@@ -144,7 +153,15 @@ export function CartaoAbc({ base }: { base: BaseDosGraficos }) {
             silent: true,
             symbol: "none",
             lineStyle: { color: cores.fileteForte, type: "dashed" },
-            label: { formatter: "{c}%", color: cores.tinta3, fontSize: 10 },
+            // Dentro do gráfico, na ponta direita e ABAIXO do traço (acima está
+            // a curva, que ali já encosta nos 100%). Por fora, o rótulo passava
+            // da borda do canvas e virava "9" e "8".
+            label: {
+              position: "insideEndBottom",
+              formatter: "{c}%",
+              color: cores.tinta3,
+              fontSize: 10,
+            },
             data: [{ yAxis: 80 }, { yAxis: 95 }],
           },
         },
@@ -202,6 +219,12 @@ export function CartaoAbc({ base }: { base: BaseDosGraficos }) {
           rotulo="Curva ABC de clientes"
           aoClicar={(e) => {
             const item = curva.itens[e.dataIndex];
+            if (item) router.push(`/clientes/${item.chave}`);
+          }}
+          // Com muitos clientes os pontos somem da curva; o clique em qualquer
+          // altura da coluna abre o cliente daquela posição.
+          aoClicarCategoria={(i) => {
+            const item = curva.itens[i];
             if (item) router.push(`/clientes/${item.chave}`);
           }}
         />

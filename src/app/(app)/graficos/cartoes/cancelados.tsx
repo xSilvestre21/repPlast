@@ -7,19 +7,24 @@
  * pergunta é "o que eu perdi neste mês" (ver `pedidosCanceladosDaCompetencia`).
  * A lista traz o motivo, quando alguém o escreveu — é ele que diz se a perda
  * era evitável.
+ *
+ * Cada pedido é um bloco da barra do mês: clicar no bloco abre AQUELE pedido.
+ * Uma barra única por mês só podia levar a uma lista, e quem clica num
+ * cancelamento quer o pedido. Clicar no vão da coluna abre a lista do mês.
  */
 
 import { BarChart3, List, XCircle } from "lucide-react";
-import Link from "next/link";
-import { useMemo } from "react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 
 import { CartaoGrafico } from "@/components/grafico/cartao-grafico";
 import { Grafico, type OpcaoGrafico } from "@/components/grafico/echarts";
 import { SeletorPeriodo, SeletorVisao, mesesDoPeriodo, type Periodo } from "@/components/grafico/seletores";
 import { useParametro } from "@/components/grafico/use-parametro";
+import { ListaItens } from "@/components/grafico/lista-itens";
 import { useTemaGrafico } from "@/components/grafico/use-tema-grafico";
 import { canceladosPorMes, mesesAte, noPeriodo } from "@/lib/grafico/agregar";
-import type { BaseDosGraficos } from "@/lib/grafico/base";
+import type { BaseDosGraficos, CanceladoGrafico } from "@/lib/grafico/base";
 import { escapar, moedaCompactaDe, moedaDe } from "@/lib/grafico/formato";
 
 import { descreverPeriodo } from "./periodo";
@@ -28,7 +33,10 @@ const VISOES = ["meses", "lista"] as const;
 const PERIODOS = ["3", "6", "12"] as const;
 
 export function CartaoCancelados({ base }: { base: BaseDosGraficos }) {
+  const router = useRouter();
   const cores = useTemaGrafico();
+  // O mês clicado no gráfico, para a lista mostrar só ele.
+  const [mesDaLista, setMesDaLista] = useState<string | null>(null);
 
   const [visao, setVisao] = useParametro("can_visao", "meses", VISOES);
   const [periodo, setPeriodo] = useParametro<Periodo>("can_periodo", "6", PERIODOS);
@@ -41,32 +49,61 @@ export function CartaoCancelados({ base }: { base: BaseDosGraficos }) {
   const porMes = useMemo(() => canceladosPorMes(doPeriodo, meses), [doPeriodo, meses]);
   const total = doPeriodo.reduce((acc, c) => acc + c.valor, 0);
 
+  /*
+   * Os pedidos de cada mês, do maior para o menor: o maior fica na base da
+   * pilha. A camada k é o k-ésimo pedido de cada mês — uma série por camada,
+   * empilhadas, e cada bloco carrega o pedido que representa.
+   */
+  const camadas = useMemo(() => {
+    const doMes = meses.map((m) =>
+      doPeriodo.filter((c) => c.competencia === m).sort((a, b) => b.valor - a.valor),
+    );
+    const altura = Math.max(0, ...doMes.map((l) => l.length));
+    return Array.from({ length: altura }, (_, k) => doMes.map((l) => l[k] ?? null));
+  }, [doPeriodo, meses]);
+
   const opcao = useMemo<OpcaoGrafico>(
     () => ({
       tooltip: {
-        trigger: "axis",
-        axisPointer: { type: "shadow" },
-        formatter: (p: { dataIndex: number }[]) => {
-          const i = p[0]?.dataIndex ?? 0;
-          const n = porMes.quantidade[i];
-          return `<b>${escapar(base.rotulos[meses[i]]?.longo ?? meses[i])}</b><br/>${moedaDe(porMes.valor[i])} em vendas<br/><span style="opacity:.7">${n} ${n === 1 ? "pedido" : "pedidos"}</span>`;
+        trigger: "item",
+        formatter: (p: { data?: { pedido?: CanceladoGrafico } }) => {
+          const c = p.data?.pedido;
+          if (!c) return "";
+          return (
+            `<b>#${c.numero} · ${escapar(c.cliente)}</b><br/>${moedaDe(c.valor)} em vendas` +
+            `<br/><span style="opacity:.7">${escapar(c.fornecedor)}` +
+            `${c.motivo ? ` · ${escapar(c.motivo)}` : ""}</span>` +
+            `<br/><span style="opacity:.7">clique para abrir o pedido</span>`
+          );
         },
       },
       grid: { left: 8, right: 8, top: 12, bottom: 8 },
       xAxis: { type: "category", data: meses.map((m) => base.rotulos[m]?.curto ?? m) },
       yAxis: { type: "value", axisLabel: { formatter: (v: number) => moedaCompactaDe(v) } },
-      series: [
-        {
-          type: "bar",
-          barMaxWidth: 28,
-          // Perda é o vermelho de verdade: é o único cartão em que ele é o dado.
-          itemStyle: { color: cores.perigo, borderRadius: [4, 4, 0, 0] },
-          data: porMes.valor,
-        },
-      ],
+      series: camadas.map((camada, k) => ({
+        type: "bar",
+        stack: "cancelados",
+        barMaxWidth: 28,
+        // Perda é o vermelho de verdade: é o único cartão em que ele é o dado.
+        // O fio da cor do cartão separa um pedido do outro dentro da barra.
+        itemStyle: { color: cores.perigo, borderColor: cores.folha, borderWidth: 1 },
+        emphasis: { itemStyle: { color: cores.perigo, opacity: 0.8 } },
+        data: camada.map((c, i) =>
+          c
+            ? {
+                value: c.valor,
+                pedido: c,
+                // Ponta arredondada só no bloco de cima de cada mês.
+                itemStyle: camadas[k + 1]?.[i] ? undefined : { borderRadius: [4, 4, 0, 0] },
+              }
+            : null,
+        ),
+      })),
     }),
-    [porMes, meses, base.rotulos, cores],
+    [camadas, meses, base.rotulos, cores],
   );
+
+  const daLista = mesDaLista ? doPeriodo.filter((c) => c.competencia === mesDaLista) : doPeriodo;
 
   return (
     <CartaoGrafico
@@ -92,32 +129,40 @@ export function CartaoCancelados({ base }: { base: BaseDosGraficos }) {
       }
     >
       {visao === "lista" ? (
-        <ul className="max-h-[17rem] overflow-y-auto divide-y divide-filete rounded-suave border border-filete">
-          {doPeriodo.map((c) => (
-            <li key={c.pedidoId}>
-              <Link href={`/pedidos/${c.pedidoId}`} className="block px-3 py-2 hover:bg-folha-2 transition-colors">
-                <span className="flex items-baseline justify-between gap-3">
-                  <span className="text-corpo truncate">
-                    <span className="numerico text-tinta-3">#{c.numero}</span> {c.cliente}
-                  </span>
-                  <span className="numerico text-corpo font-medium text-perigo shrink-0">{moedaDe(c.valor)}</span>
-                </span>
-                <span className="block text-mini text-tinta-3 truncate">
-                  {base.rotulos[c.competencia]?.curto} · {c.fornecedor}
-                  {c.motivo ? ` · ${c.motivo}` : " · sem motivo escrito"}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <ListaItens
+          filtro={mesDaLista ? base.rotulos[mesDaLista]?.longo : null}
+          aoLimparFiltro={() => setMesDaLista(null)}
+          vazio="Nenhum pedido cancelado neste mês."
+          itens={daLista.map((c) => ({
+            chave: c.pedidoId,
+            href: `/pedidos/${c.pedidoId}`,
+            titulo: (
+              <>
+                <span className="numerico text-tinta-3">#{c.numero}</span> {c.cliente}
+              </>
+            ),
+            destaque: (
+              <span className="numerico text-corpo font-medium text-perigo">{moedaDe(c.valor)}</span>
+            ),
+            detalhe: `${base.rotulos[c.competencia]?.curto} · ${c.fornecedor}${
+              c.motivo ? ` · ${c.motivo}` : " · sem motivo escrito"
+            }`,
+          }))}
+        />
       ) : (
         <Grafico
           opcao={opcao}
           altura={240}
           rotulo="Valor dos pedidos cancelados por mês"
           aoClicar={(e) => {
-            // O mês clicado abre a lista já no período — o pedido está lá.
-            if (porMes.quantidade[e.dataIndex] > 0) setVisao("lista");
+            const pedido = (e.data as { pedido?: CanceladoGrafico } | null)?.pedido;
+            if (pedido) router.push(`/pedidos/${pedido.pedidoId}`);
+          }}
+          aoClicarCategoria={(i) => {
+            // O vão da coluna: a lista daquele mês.
+            if (!porMes.quantidade[i]) return;
+            setMesDaLista(meses[i]);
+            setVisao("lista");
           }}
         />
       )}

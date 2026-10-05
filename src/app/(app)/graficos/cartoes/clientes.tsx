@@ -16,6 +16,7 @@ import { BarChart3, LayoutGrid, Search, Table2, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
+import { AreaRolavel } from "@/components/grafico/area-rolavel";
 import { CartaoGrafico } from "@/components/grafico/cartao-grafico";
 import { Grafico, type OpcaoGrafico } from "@/components/grafico/echarts";
 import {
@@ -41,6 +42,12 @@ const METRICAS = ["previsto", "recebido"] as const;
 
 /** Altura de cada barra, com o respiro. Abaixo de ~24px o nome não cabe ao lado. */
 const POR_BARRA = 28;
+
+/**
+ * Quantos clientes o mapa desenha um a um; o resto vira um bloco "Outros".
+ * Com 50 clientes, a cauda virava uma parede de quadradinhos sem nome.
+ */
+const BLOCOS = 18;
 
 export function CartaoClientes({ base }: { base: BaseDosGraficos }) {
   const router = useRouter();
@@ -72,8 +79,11 @@ export function CartaoClientes({ base }: { base: BaseDosGraficos }) {
   const opcao = useMemo<OpcaoGrafico>(() => {
     const tooltip = {
       trigger: "item" as const,
-      formatter: (p: { data: { fatia: Fatia } }) => {
-        const f = p.data.fatia;
+      formatter: (p: { data?: { fatia?: Fatia } }) => {
+        // O fundo cinza de cada barra e a raiz do treemap também disparam o
+        // balão, e não têm fatia: sem isto, o balão quebrava a página.
+        const f = p.data?.fatia;
+        if (!f) return "";
         return `<b>${escapar(f.rotulo)}</b><br/>${moedaDe(f.valor)} · ${porcento(
           total ? f.valor / total : 0,
         )}<br/><span style="opacity:.7">${f.pedidos} ${f.pedidos === 1 ? "pedido" : "pedidos"}</span>`;
@@ -81,6 +91,22 @@ export function CartaoClientes({ base }: { base: BaseDosGraficos }) {
     };
 
     if (visao === "treemap") {
+      const cauda = filtrado.slice(BLOCOS);
+      const blocos: Fatia[] =
+        cauda.length > 1
+          ? [
+              ...filtrado.slice(0, BLOCOS),
+              {
+                // Chave vazia: o clique em "Outros" abre a tabela, não uma ficha.
+                chave: "",
+                rotulo: `Outros (${cauda.length})`,
+                valor: cauda.reduce((acc, f) => acc + f.valor, 0),
+                pedidos: cauda.reduce((acc, f) => acc + f.pedidos, 0),
+              },
+            ]
+          : filtrado;
+      const maior = Math.max(1, ...blocos.map((f) => f.valor));
+
       return {
         tooltip,
         series: [
@@ -97,33 +123,41 @@ export function CartaoClientes({ base }: { base: BaseDosGraficos }) {
             label: {
               show: true,
               // Bloco pequeno demais fica sem nome — "G R" quebrado não é
-              // rótulo. O tooltip e a tabela têm todos.
-              formatter: (p: { name: string; value: number }) =>
-                total && p.value / total < 0.02 ? "" : `${p.name}\n${moedaCompactaDe(p.value)}`,
+              // rótulo. Entre pequeno e grande, só o nome: o valor cortado em
+              // "R$ 5,…" era pior que nenhum. O tooltip e a tabela têm todos.
+              formatter: (p: { name: string; value: number }) => {
+                const parte = total ? p.value / total : 0;
+                if (parte < 0.015) return "";
+                if (parte < 0.06) return p.name;
+                return `${p.name}\n${moedaCompactaDe(p.value)}`;
+              },
+              // Texto simples, não `rich`: o treemap estica a caixa do rótulo
+              // ao bloco inteiro, e texto rico nela gruda no topo.
               color: "#fff",
               fontSize: 11,
               lineHeight: 15,
               overflow: "truncate",
             },
-            universalTransition: true,
             /*
              * Um tom só, mais opaco quanto maior: proporção sem arco-íris. O
              * `colorMappingBy` do treemap não respeita uma paleta de uma cor —
              * ele volta à paleta categórica do tema, e cliente não tem cor de
              * identidade. Daí a cor e a opacidade postas item a item.
              */
-            data: filtrado.map((f) => ({
-              name: f.rotulo,
-              value: f.valor,
-              id: f.chave,
-              fatia: f,
-              itemStyle: {
-                color: comAlfa(
-                  cores.categoricas[0],
-                  0.35 + 0.65 * (f.valor / Math.max(1, filtrado[0]?.valor ?? 1)),
-                ),
-              },
-            })),
+            data: blocos.map((f) => {
+              // "Outros" é resto, não cliente: fica no cinza, fora da escala.
+              const alfa = f.chave ? 0.35 + 0.65 * (f.valor / maior) : 0.35;
+              return {
+                name: f.rotulo,
+                value: f.valor,
+                id: f.chave,
+                fatia: f,
+                itemStyle: { color: comAlfa(f.chave ? cores.categoricas[0] : cores.tinta3, alfa) },
+                // No tema claro, bloco apagado é quase branco: o nome passa
+                // para a tinta, senão branco sobre lilás-claro some.
+                ...(cores.modo === "claro" && alfa < 0.65 ? { label: { color: cores.tinta } } : {}),
+              };
+            }),
           },
         ],
       };
@@ -138,13 +172,17 @@ export function CartaoClientes({ base }: { base: BaseDosGraficos }) {
       yAxis: {
         type: "category",
         data: linhas.map((f) => f.rotulo),
+        // O nome também abre o cliente — é nele que a mão vai primeiro.
+        triggerEvent: true,
         axisLabel: { color: cores.tinta2, fontSize: 12, width: 130, overflow: "truncate" },
         axisLine: { show: false },
       },
       series: [
         {
           type: "bar",
-          barMaxWidth: 14,
+          // Um pouco mais grossa quando o cartão estica ao lado do vizinho:
+          // com poucas barras, 14px deixava fios soltos num mar de vazio.
+          barMaxWidth: 18,
           // Ponta arredondada só no fim da barra; a base fica rente ao eixo.
           itemStyle: { color: cores.categoricas[0], borderRadius: [0, 4, 4, 0] },
           emphasis: { itemStyle: { opacity: 0.85 } },
@@ -157,7 +195,6 @@ export function CartaoClientes({ base }: { base: BaseDosGraficos }) {
             fontSize: 11,
             formatter: (p: { value: number }) => moedaDe(p.value),
           },
-          universalTransition: true,
           data: linhas.map((f) => ({ value: f.valor, id: f.chave, fatia: f })),
         },
       ],
@@ -213,15 +250,35 @@ export function CartaoClientes({ base }: { base: BaseDosGraficos }) {
         />
       ) : (
         // A lista longa rola DENTRO do cartão — a página nunca rola de lado nem
-        // cresce sem fim por causa de um gráfico.
-        <div className={visao === "barras" ? "max-h-[26rem] overflow-y-auto pr-1" : ""}>
+        // cresce sem fim por causa de um gráfico. O mapa tem altura fixa: o
+        // teto é ela mesma, e ele só cresce se o vizinho for mais alto.
+        <AreaRolavel
+          teto={visao === "barras" ? 416 : altura}
+          conteudo={altura}
+          className={visao === "barras" ? "pr-1" : ""}
+        >
           <Grafico
             opcao={opcao}
             altura={altura}
             rotulo="Comissão por cliente"
-            aoClicar={(e) => abrir((e.data as { id: string }).id)}
+            aoClicar={(e) => {
+              const id = (e.data as { id: string }).id;
+              if (id) abrir(id);
+              else setVisao("tabela"); // "Outros": a tabela tem um a um
+            }}
+            // Nas barras, a linha inteira do cliente (e o nome) abre a ficha,
+            // não só a barra — a de quem vendeu pouco é um fio difícil de acertar.
+            aoClicarCategoria={
+              visao === "barras"
+                ? (i) => {
+                    const f = [...filtrado].reverse()[i];
+                    if (f) abrir(f.chave);
+                  }
+                : undefined
+            }
+            eixoDaCategoria="y"
           />
-        </div>
+        </AreaRolavel>
       )}
     </CartaoGrafico>
   );

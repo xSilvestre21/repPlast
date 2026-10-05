@@ -29,11 +29,13 @@ export function PainelGraficos({ base }: { base: BaseDosGraficos }) {
 
       {/*
         A ordem é a que o usuário pediu: quem e de onde veio a comissão, depois
-        a tendência, os prepostos e a concentração, e o resto em seguida. Cada
-        cartão tem a própria altura — o grid alinha o topo, sem esticar um
-        cartão curto para acompanhar o vizinho.
+        a tendência, os prepostos e a concentração, e o resto em seguida.
+
+        Cartões lado a lado têm SEMPRE a mesma altura: o grid estica o mais
+        baixo e o gráfico dele cresce para ocupar a sobra (`CartaoGrafico`).
+        Alinhados só pelo topo, o mais baixo deixava um vão vazio embaixo.
       */}
-      <div className="grid gap-5 lg:grid-cols-2 items-start">
+      <div className="grid gap-5 lg:grid-cols-2">
         <CartaoClientes base={base} />
         <CartaoIndustrias base={base} />
       </div>
@@ -42,14 +44,14 @@ export function PainelGraficos({ base }: { base: BaseDosGraficos }) {
 
       {/* Sem preposto (plano Padrão, ou a tela do próprio preposto), a curva ABC
           fica sozinha na linha e ganha a largura toda. */}
-      <div className={`grid gap-5 items-start ${base.comPreposto ? "lg:grid-cols-2" : ""}`}>
+      <div className={`grid gap-5 ${base.comPreposto ? "lg:grid-cols-2" : ""}`}>
         {base.comPreposto && <CartaoPrepostos base={base} />}
         <CartaoAbc base={base} />
       </div>
 
       <CartaoMapaCalor base={base} />
 
-      <div className="grid gap-5 lg:grid-cols-3 items-start">
+      <div className="grid gap-5 lg:grid-cols-3">
         <CartaoCancelados base={base} />
         <CartaoOrcamentos base={base} />
         <CartaoPontualidade base={base} />

@@ -24,6 +24,7 @@ import { SEMANTICAS } from "@/lib/grafico/paleta";
 import { clientesSumidos } from "@/lib/positivacao";
 
 import { nomeDoMes, rotuloCurtoDoMes } from "@/components/navegador-mes";
+import { nomeCompleto } from "@/lib/nome-usuario";
 
 import {
   clientesComUltimaCompra,
@@ -355,7 +356,7 @@ export async function carregarBaseDosGraficos(
           where: { organizacaoId, papel: "REPRESENTANTE" },
           // A mesma ordem da tela de Comissões: é ela que decide a cor.
           orderBy: [{ criadoEm: "asc" }, { id: "asc" }],
-          select: { id: true, nome: true },
+          select: { id: true, nome: true, sobrenome: true },
         })
       : Promise.resolve([]),
   ]);
@@ -368,6 +369,9 @@ export async function carregarBaseDosGraficos(
     return pontualidade
       ? [
           {
+            pedidoId: pedido.id,
+            numero: pedido.numero,
+            cliente: pedido.cliente.apelido,
             competencia: competenciaDoPedido(pedido.prazoEntrega, pedido.criadoEm),
             situacao: pontualidade.situacao,
           },
@@ -403,9 +407,13 @@ export async function carregarBaseDosGraficos(
       motivo: pedido.motivoCancelamento,
     })),
     orcamentos: orcamentos.map((orcamento) => ({
+      id: orcamento.id,
+      numero: orcamento.numero,
+      cliente: orcamento.cliente?.apelido ?? orcamento.clienteAvulsoNome ?? "—",
       // A janela de `orcamentosDoIntervalo` é em UTC; o mês sai da mesma régua.
       competencia: orcamento.criadoEm.toISOString().slice(0, 7),
       virou: orcamento._count.pedidos > 0,
+      pedidoId: orcamento.pedidos[0]?.id ?? null,
     })),
     entregas,
     clientes: clientes.map((cliente) => ({
@@ -416,7 +424,7 @@ export async function carregarBaseDosGraficos(
     })),
     prepostos: prepostos.map((preposto, i) => ({
       id: preposto.id,
-      nome: preposto.nome,
+      nome: nomeCompleto(preposto),
       cor: corDoPreposto(i),
     })),
     agora,

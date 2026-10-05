@@ -16,6 +16,7 @@ import { Grid3x3 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 
+import { AreaRolavel } from "@/components/grafico/area-rolavel";
 import { CartaoGrafico } from "@/components/grafico/cartao-grafico";
 import { Grafico, type OpcaoGrafico } from "@/components/grafico/echarts";
 import {
@@ -78,7 +79,9 @@ export function CartaoMapaCalor({ base }: { base: BaseDosGraficos }) {
           );
         },
       },
-      grid: { left: 8, right: 16, top: 8, bottom: 56 },
+      // O fundo reserva a régua E os números das alças dela, que ficam por
+      // cima da barra: com 56px, "R$ 7,3 mil" caía em cima dos meses.
+      grid: { left: 8, right: 16, top: 8, bottom: 76 },
       xAxis: {
         type: "category",
         data: meses.map((m) => base.rotulos[m]?.curto ?? m),
@@ -88,6 +91,8 @@ export function CartaoMapaCalor({ base }: { base: BaseDosGraficos }) {
       yAxis: {
         type: "category",
         data: linhas.map((l) => l.rotulo),
+        // O nome do cliente na lateral também abre a ficha.
+        triggerEvent: true,
         axisLine: { show: false },
         axisLabel: { color: cores.tinta2, fontSize: 11, width: 120, overflow: "truncate" },
       },
@@ -97,11 +102,15 @@ export function CartaoMapaCalor({ base }: { base: BaseDosGraficos }) {
         calculable: true,
         orient: "horizontal",
         left: "center",
-        bottom: 0,
-        itemHeight: 140,
+        bottom: 4,
+        itemHeight: 160,
         itemWidth: 10,
-        text: [moedaCompactaDe(grade.maximo), "R$ 0"],
+        // Só os números das alças, em reais — com `text` nas pontas, cada valor
+        // aparecia duas vezes. Sem o formatador saíam os centavos crus
+        // ("730920"): a base dos gráficos guarda dinheiro em centavos.
+        formatter: (valor: number) => moedaCompactaDe(valor),
         textStyle: { color: cores.tinta3, fontSize: 10 },
+        handleStyle: { borderColor: cores.fileteForte },
         // Do quase-fundo ao tom cheio: um tom só, mais escuro quanto mais comissão.
         inRange: {
           color: [comAlfa(cores.categoricas[0], 0.06), comAlfa(cores.categoricas[0], 0.45), cores.categoricas[0]],
@@ -119,6 +128,8 @@ export function CartaoMapaCalor({ base }: { base: BaseDosGraficos }) {
       ],
     };
   }, [grade, meses, base.rotulos, cores]);
+
+  const alturaDaGrade = Math.max(240, grade.linhas.length * ALTURA_DA_LINHA + 100);
 
   return (
     <CartaoGrafico
@@ -146,18 +157,27 @@ export function CartaoMapaCalor({ base }: { base: BaseDosGraficos }) {
       }
     >
       {/* Com todos os clientes a grade cresce — e rola dentro do cartão. */}
-      <div className={todos === "sim" ? "max-h-[36rem] overflow-y-auto pr-1" : ""}>
+      <AreaRolavel
+        teto={todos === "sim" ? 576 : alturaDaGrade}
+        conteudo={alturaDaGrade}
+        className={todos === "sim" ? "pr-1" : ""}
+      >
         <Grafico
           opcao={opcao}
-          altura={Math.max(220, grade.linhas.length * ALTURA_DA_LINHA + 80)}
+          altura={alturaDaGrade}
           rotulo="Mapa de calor da comissão por cliente e mês"
           aoClicar={(e) => {
             const [, y] = e.data as [number, number, number];
             const cliente = [...grade.linhas].reverse()[y];
             if (cliente) router.push(`/clientes/${cliente.chave}`);
           }}
+          aoClicarCategoria={(y) => {
+            const cliente = [...grade.linhas].reverse()[y];
+            if (cliente) router.push(`/clientes/${cliente.chave}`);
+          }}
+          eixoDaCategoria="y"
         />
-      </div>
+      </AreaRolavel>
     </CartaoGrafico>
   );
 }

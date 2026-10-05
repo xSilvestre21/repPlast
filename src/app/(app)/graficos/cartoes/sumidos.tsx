@@ -15,6 +15,7 @@ import { ListOrdered, ScatterChart, UserMinus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 
+import { AreaRolavel } from "@/components/grafico/area-rolavel";
 import { CartaoGrafico } from "@/components/grafico/cartao-grafico";
 import { Grafico, type OpcaoGrafico } from "@/components/grafico/echarts";
 import { SeletorVisao } from "@/components/grafico/seletores";
@@ -116,31 +117,33 @@ export function CartaoSumidos({ base }: { base: BaseDosGraficos }) {
       }
     >
       {visao === "ranking" ? (
-        <ul className="max-h-[22rem] overflow-y-auto divide-y divide-filete rounded-suave border border-filete">
-          {lista.map((s) => (
-            <li key={s.id}>
-              <button
-                type="button"
-                onClick={() => router.push(`/clientes/${s.id}`)}
-                className="w-full text-left px-3 py-2 hover:bg-folha-2 transition-colors cursor-pointer"
-              >
-                <span className="flex items-baseline justify-between gap-3">
-                  <span className="text-corpo truncate">{s.apelido}</span>
-                  <span className="numerico text-corpo font-semibold text-perigo shrink-0">
-                    {s.dias} <span className="text-mini font-normal text-tinta-3">dias</span>
+        <AreaRolavel teto={352} className="rounded-suave border border-filete">
+          <ul className="divide-y divide-filete">
+            {lista.map((s) => (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/clientes/${s.id}`)}
+                  className="w-full text-left px-3 py-2 hover:bg-folha-2 transition-colors cursor-pointer"
+                >
+                  <span className="flex items-baseline justify-between gap-3">
+                    <span className="text-corpo truncate">{s.apelido}</span>
+                    <span className="numerico text-corpo font-semibold text-perigo shrink-0">
+                      {s.dias} <span className="text-mini font-normal text-tinta-3">dias</span>
+                    </span>
                   </span>
-                </span>
-                <span className="block h-1 mt-1.5 rounded-full bg-folha-2 overflow-hidden">
-                  <span
-                    className="block h-full rounded-full"
-                    style={{ width: `${(s.dias / maisDias) * 100}%`, background: "var(--grafico-2)" }}
-                  />
-                </span>
-                <span className="block text-mini text-tinta-3 mt-1">última compra {moedaDe(s.ultimoValor)}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
+                  <span className="block h-1 mt-1.5 rounded-full bg-folha-2 overflow-hidden">
+                    <span
+                      className="block h-full rounded-full"
+                      style={{ width: `${(s.dias / maisDias) * 100}%`, background: "var(--grafico-2)" }}
+                    />
+                  </span>
+                  <span className="block text-mini text-tinta-3 mt-1">última compra {moedaDe(s.ultimoValor)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </AreaRolavel>
       ) : (
         <Grafico
           opcao={opcao}

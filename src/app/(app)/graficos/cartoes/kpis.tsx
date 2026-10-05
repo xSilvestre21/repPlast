@@ -9,6 +9,7 @@
  */
 
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
+import Link from "next/link";
 import { useMemo } from "react";
 
 import { Grafico } from "@/components/grafico/echarts";
@@ -67,7 +68,12 @@ export function FaixaKpis({ base }: { base: BaseDosGraficos }) {
           chave === "recebido" ? cores.verde : chave === "diferenca" ? cores.tinta3 : cores.categoricas[0];
 
         return (
-          <div key={chave} className="bg-folha px-4 pt-3.5 pb-2 min-w-0">
+          // O total abre a apuração do mês em Comissões, de onde ele vem.
+          <Link
+            key={chave}
+            href={`/comissoes?mes=${base.competencia}`}
+            className="block bg-folha hover:bg-folha-2 transition-colors px-4 pt-3.5 pb-2 min-w-0"
+          >
             <div className="flex items-center justify-between gap-2">
               <span className="rotulo">{rotulo}</span>
               <Variacao atual={valor} anterior={antes} contra={nomeAnterior} invertida={chave === "aAcertar"} />
@@ -113,7 +119,7 @@ export function FaixaKpis({ base }: { base: BaseDosGraficos }) {
                 ],
               }}
             />
-          </div>
+          </Link>
         );
       })}
     </div>

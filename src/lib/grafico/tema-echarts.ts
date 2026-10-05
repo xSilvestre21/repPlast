@@ -110,7 +110,15 @@ export function temaEcharts(c: CoresDoGrafico) {
     backgroundColor: "transparent",
     textStyle: { fontFamily: c.fonte, color: c.tinta2 },
     title: { textStyle: { color: c.tinta } },
-    legend: { textStyle: { color: c.tinta2 }, inactiveColor: c.fileteForte },
+    legend: {
+      textStyle: { color: c.tinta2 },
+      inactiveColor: c.fileteForte,
+      // As setas da legenda que rola quando os nomes não cabem.
+      pageIconColor: c.tinta2,
+      pageIconInactiveColor: c.fileteForte,
+      pageIconSize: 10,
+      pageTextStyle: { color: c.tinta3, fontSize: 11 },
+    },
     tooltip: {
       backgroundColor: c.folha,
       borderColor: c.filete,

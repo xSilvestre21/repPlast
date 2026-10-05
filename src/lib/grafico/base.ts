@@ -49,6 +49,27 @@ export interface CanceladoGrafico {
 
 export type SituacaoEntregaGrafico = "no_prazo" | "atrasado" | "adiantado";
 
+export interface OrcamentoGrafico {
+  id: string;
+  numero: number;
+  /** O apelido do cliente, ou o nome de quem ainda não é cliente. */
+  cliente: string;
+  /** Mês em que a proposta foi CRIADA. */
+  competencia: string;
+  virou: boolean;
+  /** O pedido em que ela virou, para o clique levar direto a ele. */
+  pedidoId: string | null;
+}
+
+export interface EntregaGrafico {
+  pedidoId: string;
+  numero: number;
+  cliente: string;
+  /** Mês da entrega prometida. */
+  competencia: string;
+  situacao: SituacaoEntregaGrafico;
+}
+
 export interface BaseDosGraficos {
   /** O mês de referência da página. */
   competencia: string;
@@ -64,9 +85,10 @@ export interface BaseDosGraficos {
   /** Meta vigente em cada competência, em centavos; ausente = sem meta. */
   metas: Record<string, number>;
   cancelados: CanceladoGrafico[];
-  orcamentos: { competencia: string; virou: boolean }[];
+  /** Cada proposta, para o cartão poder abrir a que foi clicada. */
+  orcamentos: OrcamentoGrafico[];
   /** Uma por pedido com entrega registrada, no mês da entrega prometida. */
-  entregas: { competencia: string; situacao: SituacaoEntregaGrafico }[];
+  entregas: EntregaGrafico[];
   clientes: {
     id: string;
     apelido: string;

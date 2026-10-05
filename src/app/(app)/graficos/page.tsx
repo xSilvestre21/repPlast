@@ -1,22 +1,15 @@
-import { BarChart3, FileDown, Sheet } from "lucide-react";
+import { BarChart3 } from "lucide-react";
 
 import { ManterEscolhas } from "@/components/manter-escolhas";
 import { NavegadorMes } from "@/components/navegador-mes";
 import { Pagina } from "@/components/pagina";
-import { BotaoLink, Cabecalho } from "@/components/ui";
+import { Cabecalho } from "@/components/ui";
 import { competenciaDe } from "@/lib/comissao";
 import { escopoAtual } from "@/lib/sessao";
 
 import { carregarBaseDosGraficos } from "./dados";
+import { BotoesExportacao, LinkRelatorioHtml } from "./exportacao";
 import { PainelGraficos } from "./painel";
-
-/**
- * O que o relatório PDF/HTML aceita (`exportar/parametros.ts`). A tela tem
- * períodos por cartão; o relatório ainda tem uma janela só, então ele recebe
- * a do mês a mês e o corte do cartão de sumidos, quando foram escolhidos.
- */
-const JANELAS_DO_RELATORIO = [3, 6, 12];
-const CORTES_DO_RELATORIO = [30, 60, 90, 180];
 
 export default async function PaginaGraficos({ searchParams }: PageProps<"/graficos">) {
   const parametros = await searchParams;
@@ -60,58 +53,14 @@ export default async function PaginaGraficos({ searchParams }: PageProps<"/grafi
     return consulta ? `/graficos?${consulta}` : "/graficos";
   };
 
-  const janela = JANELAS_DO_RELATORIO.includes(Number(parametros.mes_periodo))
-    ? Number(parametros.mes_periodo)
-    : 6;
-  const dias = CORTES_DO_RELATORIO.includes(Number(parametros.sum_dias))
-    ? Number(parametros.sum_dias)
-    : 60;
-
-  /*
-   * O CSV leva os PEDIDOS, não o gráfico: todo cartão desta aba é uma soma
-   * dessas linhas, então quem as tem no Excel refaz qualquer um deles — e
-   * também os cruzamentos que a tela não mostra.
-   */
-  const enderecoCsv = (escopo: "mes" | "janela") =>
-    `/graficos/exportar/csv?mes=${competencia}&escopo=${escopo}&meses=${janela}`;
-
-  const enderecoRelatorio = (formato: "pdf" | "html") =>
-    `/graficos/exportar/${formato}?mes=${competencia}&meses=${janela}&dias=${dias}`;
-
   return (
     <Pagina>
       <Cabecalho
         icone={BarChart3}
         titulo="Gráficos"
         descricao="A mesma apuração da tela de Comissões, vista de vários lados. Cada cartão escolhe o próprio período; passe o mouse para os números e clique para abrir o que está por trás."
-        acao={
-          <div className="flex flex-wrap gap-2 items-start">
-            <BotaoLink
-              href={enderecoRelatorio("pdf")}
-              target="_blank"
-              variante="secundaria"
-              icone={FileDown}
-            >
-              Relatório PDF
-            </BotaoLink>
-            <BotaoLink
-              href={enderecoCsv("mes")}
-              target="_blank"
-              variante="secundaria"
-              icone={Sheet}
-            >
-              CSV do mês
-            </BotaoLink>
-            <BotaoLink
-              href={enderecoCsv("janela")}
-              target="_blank"
-              variante="secundaria"
-              icone={Sheet}
-            >
-              CSV de {janela} meses
-            </BotaoLink>
-          </div>
-        }
+        // Os links leem o período dos cartões na hora — ver `exportacao.tsx`.
+        acao={<BotoesExportacao competencia={competencia} />}
       />
 
       {/* As escolhas feitas nos cartões depois do carregamento vão junto. */}
@@ -122,9 +71,7 @@ export default async function PaginaGraficos({ searchParams }: PageProps<"/grafi
       <PainelGraficos base={base} />
 
       <p className="text-mini text-tinta-3 text-center pt-7">
-        <a href={enderecoRelatorio("html")} target="_blank" className="hover:text-carimbo">
-          Baixar o relatório como um arquivo HTML que abre sozinho
-        </a>
+        <LinkRelatorioHtml competencia={competencia} />
       </p>
     </Pagina>
   );

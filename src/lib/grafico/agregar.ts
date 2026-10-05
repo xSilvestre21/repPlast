@@ -172,16 +172,16 @@ export function acumular(valores: number[]): number[] {
 /* Hierarquia e grade                                                         */
 /* -------------------------------------------------------------------------- */
 
-export interface NoSunburst {
+export interface NoArvore {
   id: string;
   name: string;
   /** Centavos. */
   value: number;
-  children?: NoSunburst[];
+  children?: NoArvore[];
 }
 
-/** Indústria por fora, cliente por dentro dela — o anel externo do sunburst. */
-export function industriaCliente(itens: ItemGrafico[], metrica: Metrica): NoSunburst[] {
+/** Indústria e, dentro dela, os clientes — os blocos do mapa de indústrias. */
+export function industriaCliente(itens: ItemGrafico[], metrica: Metrica): NoArvore[] {
   return porIndustria(itens, metrica)
     .filter((industria) => industria.valor > 0)
     .map((industria) => ({
@@ -195,6 +195,88 @@ export function industriaCliente(itens: ItemGrafico[], metrica: Metrica): NoSunb
         .filter((c) => c.valor > 0)
         .map((c) => ({ id: `${industria.chave}:${c.chave}`, name: c.rotulo, value: c.valor })),
     }));
+}
+
+export interface NoFluxo {
+  /** "i:<indústria>", "c:<cliente>" ou "c:outros" — único entre os dois lados. */
+  id: string;
+  nome: string;
+  lado: "industria" | "cliente";
+  /** Centavos. */
+  valor: number;
+  outros?: boolean;
+}
+
+export interface LigacaoFluxo {
+  origem: string;
+  destino: string;
+  /** Centavos. */
+  valor: number;
+}
+
+/**
+ * Indústria → cliente, para o diagrama de fluxo (Sankey).
+ *
+ * O cliente é UM nó só, mesmo comprando de várias indústrias: as faixas delas
+ * convergem nele — é justamente o que o diagrama mostra e o mapa não mostrava.
+ * Ficam os `maxClientes` maiores no total; o resto vira um nó "Outros"
+ * (só quando são dois ou mais — "Outros (1)" não ajuda ninguém).
+ *
+ * A ordem é a do maior para o menor nos dois lados, "Outros" no fim: o
+ * diagrama usa essa ordem como está, então ela é a ordem de leitura.
+ */
+export function fluxoIndustriaCliente(
+  arvore: NoArvore[],
+  maxClientes = 10,
+): { nos: NoFluxo[]; ligacoes: LigacaoFluxo[] } {
+  const totalDoCliente = new Map<string, { nome: string; valor: number }>();
+  for (const industria of arvore) {
+    for (const filho of industria.children ?? []) {
+      const cliente = filho.id.split(":")[1] ?? filho.id;
+      const atual = totalDoCliente.get(cliente) ?? { nome: filho.name, valor: 0 };
+      atual.valor += filho.value;
+      totalDoCliente.set(cliente, atual);
+    }
+  }
+
+  const ordenados = [...totalDoCliente.entries()].sort((a, b) => b[1].valor - a[1].valor);
+  const resto = ordenados.slice(maxClientes);
+  const agrupa = resto.length >= 2;
+  const visiveis = new Set((agrupa ? ordenados.slice(0, maxClientes) : ordenados).map(([id]) => id));
+  const noDoCliente = (cliente: string) => (visiveis.has(cliente) ? `c:${cliente}` : "c:outros");
+
+  const somaLigacao = new Map<string, LigacaoFluxo>();
+  for (const industria of arvore) {
+    for (const filho of industria.children ?? []) {
+      const destino = noDoCliente(filho.id.split(":")[1] ?? filho.id);
+      const chave = `i:${industria.id}>${destino}`;
+      const ligacao = somaLigacao.get(chave) ?? { origem: `i:${industria.id}`, destino, valor: 0 };
+      ligacao.valor += filho.value;
+      somaLigacao.set(chave, ligacao);
+    }
+  }
+
+  const nos: NoFluxo[] = [
+    ...[...arvore]
+      .sort((a, b) => b.value - a.value)
+      .map((i) => ({ id: `i:${i.id}`, nome: i.name, lado: "industria" as const, valor: i.value })),
+    ...ordenados
+      .filter(([id]) => visiveis.has(id))
+      .map(([id, c]) => ({ id: `c:${id}`, nome: c.nome, lado: "cliente" as const, valor: c.valor })),
+    ...(agrupa
+      ? [
+          {
+            id: "c:outros",
+            nome: `Outros (${resto.length})`,
+            lado: "cliente" as const,
+            valor: resto.reduce((acc, [, c]) => acc + c.valor, 0),
+            outros: true,
+          },
+        ]
+      : []),
+  ];
+
+  return { nos, ligacoes: [...somaLigacao.values()].filter((l) => l.valor > 0) };
 }
 
 export interface Grade {

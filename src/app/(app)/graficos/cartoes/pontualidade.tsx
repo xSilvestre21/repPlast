@@ -7,23 +7,33 @@
  * vermelho atrasado, azul adiantado. Mês a mês em barras 100% empilhadas, para
  * comparar a proporção entre meses de volumes diferentes; ou a rosca do
  * período inteiro, com a taxa no meio.
+ *
+ * Clicar num pedaço (o atrasado de setembro, a fatia dos adiantados) abre a
+ * lista dessas entregas, e cada linha abre o pedido.
  */
 
-import { BarChart3, PieChart, Truck } from "lucide-react";
-import { useMemo } from "react";
+import { BarChart3, List, PieChart, Truck } from "lucide-react";
+import { useMemo, useState } from "react";
 
 import { CartaoGrafico } from "@/components/grafico/cartao-grafico";
 import { Grafico, type OpcaoGrafico } from "@/components/grafico/echarts";
+import { ListaItens } from "@/components/grafico/lista-itens";
 import { SeletorPeriodo, SeletorVisao, mesesDoPeriodo, type Periodo } from "@/components/grafico/seletores";
 import { useParametro } from "@/components/grafico/use-parametro";
 import { useTemaGrafico } from "@/components/grafico/use-tema-grafico";
-import { SITUACOES, mesesAte, pontualidadeNoPeriodo } from "@/lib/grafico/agregar";
+import { SITUACOES, mesesAte, noPeriodo, pontualidadeNoPeriodo } from "@/lib/grafico/agregar";
 import type { BaseDosGraficos, SituacaoEntregaGrafico } from "@/lib/grafico/base";
 import { porcento } from "@/lib/grafico/formato";
 
 import { descreverPeriodo } from "./periodo";
 
-const VISOES = ["meses", "rosca"] as const;
+const VISOES = ["meses", "rosca", "lista"] as const;
+
+/** O que o clique no gráfico escolheu mostrar na lista. */
+interface FiltroDaLista {
+  mes: string | null;
+  situacao: SituacaoEntregaGrafico | null;
+}
 const PERIODOS = ["3", "6", "12"] as const;
 
 const ROTULO: Record<SituacaoEntregaGrafico, string> = {
@@ -43,6 +53,12 @@ export function CartaoPontualidade({ base }: { base: BaseDosGraficos }) {
     [base.competencia, periodo],
   );
   const dados = useMemo(() => pontualidadeNoPeriodo(base, meses), [base, meses]);
+  const [filtro, setFiltro] = useState<FiltroDaLista>({ mes: null, situacao: null });
+
+  function abrirLista(novo: FiltroDaLista) {
+    setFiltro(novo);
+    setVisao("lista");
+  }
   const semAtraso = dados.contagem.no_prazo + dados.contagem.adiantado;
   const taxa = dados.total ? semAtraso / dados.total : 0;
 
@@ -131,6 +147,27 @@ export function CartaoPontualidade({ base }: { base: BaseDosGraficos }) {
     };
   }, [visao, dados, meses, base.rotulos, cores, taxa]);
 
+  // A mais recente primeiro.
+  const daLista = noPeriodo(base.entregas, meses)
+    .filter(
+      (e) => (!filtro.mes || e.competencia === filtro.mes) && (!filtro.situacao || e.situacao === filtro.situacao),
+    )
+    .sort((a, b) => b.competencia.localeCompare(a.competencia) || b.numero - a.numero);
+
+  const descricaoDoFiltro =
+    [
+      filtro.mes ? base.rotulos[filtro.mes]?.longo : null,
+      filtro.situacao ? ROTULO[filtro.situacao].toLowerCase() : null,
+    ]
+      .filter(Boolean)
+      .join(" · ") || null;
+
+  const TOM: Record<SituacaoEntregaGrafico, string> = {
+    no_prazo: "text-verde",
+    adiantado: "text-carimbo",
+    atrasado: "text-perigo",
+  };
+
   return (
     <CartaoGrafico
       titulo="Pontualidade de entrega"
@@ -157,13 +194,49 @@ export function CartaoPontualidade({ base }: { base: BaseDosGraficos }) {
             opcoes={[
               { valor: "meses", rotulo: "Por mês", icone: BarChart3 },
               { valor: "rosca", rotulo: "Rosca", icone: PieChart },
+              { valor: "lista", rotulo: "Lista", icone: List },
             ]}
           />
           <SeletorPeriodo opcoes={PERIODOS} atual={periodo} aoEscolher={setPeriodo} />
         </>
       }
     >
-      <Grafico opcao={opcao} altura={240} rotulo="Entregas no prazo, adiantadas e atrasadas" />
+      {visao === "lista" ? (
+        <ListaItens
+          filtro={descricaoDoFiltro}
+          aoLimparFiltro={() => setFiltro({ mes: null, situacao: null })}
+          vazio="Nenhuma entrega com este filtro."
+          itens={daLista.map((e) => ({
+            chave: e.pedidoId,
+            href: `/pedidos/${e.pedidoId}`,
+            titulo: (
+              <>
+                <span className="numerico text-tinta-3">#{e.numero}</span> {e.cliente}
+              </>
+            ),
+            destaque: (
+              <span className={`text-mini font-semibold ${TOM[e.situacao]}`}>{ROTULO[e.situacao]}</span>
+            ),
+            detalhe: `entrega prometida para ${base.rotulos[e.competencia]?.curto ?? e.competencia}`,
+          }))}
+        />
+      ) : (
+        <Grafico
+          opcao={opcao}
+          altura={240}
+          rotulo="Entregas no prazo, adiantadas e atrasadas"
+          aoClicar={(e) => {
+            if (visao === "rosca") {
+              abrirLista({ mes: null, situacao: SITUACOES[e.dataIndex] ?? null });
+              return;
+            }
+            abrirLista({ mes: meses[e.dataIndex] ?? null, situacao: SITUACOES[e.seriesIndex ?? -1] ?? null });
+          }}
+          aoClicarCategoria={
+            visao === "meses" ? (i) => abrirLista({ mes: meses[i] ?? null, situacao: null }) : undefined
+          }
+        />
+      )}
     </CartaoGrafico>
   );
 }

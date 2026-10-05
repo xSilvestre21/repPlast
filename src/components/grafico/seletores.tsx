@@ -66,14 +66,17 @@ export function SeletorVisao<T extends string>({
   opcoes,
   atual,
   aoEscolher,
+  nome = "Visão",
 }: {
   opcoes: { valor: T; rotulo: string; icone: LucideIcon }[];
   atual: T;
   aoEscolher: (v: T) => void;
+  /** Para leitor de tela — um cartão com dois grupos de ícones precisa de dois nomes. */
+  nome?: string;
 }) {
   return (
     <Segmentado
-      nome="Visão"
+      nome={nome}
       atual={atual}
       aoEscolher={aoEscolher}
       opcoes={opcoes.map(({ valor, rotulo, icone: Icone }) => ({

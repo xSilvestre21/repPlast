@@ -124,8 +124,19 @@ export function CartaoGrafico({
 
         {controles && <div className="flex flex-wrap items-center gap-2 mt-4">{controles}</div>}
 
-        <div ref={corpo} className="flex-1 mt-5 min-w-0">
-          {vazio ? <EstadoVazio discreto>{vazio}</EstadoVazio> : children}
+        {/*
+          Coluna flex que passa a sobra adiante: ao lado de um cartão mais
+          alto, o grid estica este, e o gráfico (`flex-1` em `Grafico`) cresce
+          junto — em vez de deixar um vão vazio no pé do cartão.
+        */}
+        <div ref={corpo} className="flex-1 flex flex-col mt-5 min-w-0">
+          {vazio ? (
+            <div className="flex-1 grid place-items-center">
+              <EstadoVazio discreto>{vazio}</EstadoVazio>
+            </div>
+          ) : (
+            children
+          )}
         </div>
 
         {rodape && !vazio && <div className="mt-4">{rodape}</div>}

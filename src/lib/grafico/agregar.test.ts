@@ -10,6 +10,7 @@ import { resumirComissao, type PedidoDaComissao } from "@/lib/comissao-consulta"
 import {
   acumular,
   doPreposto,
+  fluxoIndustriaCliente,
   gradeClienteMes,
   industriaCliente,
   kpisDoMes,
@@ -164,11 +165,84 @@ describe("rankings e hierarquia", () => {
     expect(ranking.find((f) => f.rotulo === "ALBRAS")?.valor).toBe(0);
   });
 
-  it("o sunburst soma nos anéis de fora o mesmo que no de dentro", () => {
+  it("a árvore soma nos clientes o mesmo que na indústria", () => {
     for (const industria of industriaCliente(itens, "previsto")) {
       const filhos = industria.children!.reduce((acc, c) => acc + c.value, 0);
       expect(filhos).toBe(industria.value);
     }
+  });
+});
+
+describe("fluxo indústria → cliente", () => {
+  // Duas indústrias; ANA compra das duas, e há uma cauda de clientes pequenos.
+  const arvore = [
+    {
+      id: "qualy",
+      name: "QUALYPLAST",
+      value: 1000,
+      children: [
+        { id: "qualy:ana", name: "ANA", value: 600 },
+        { id: "qualy:bia", name: "BIA", value: 300 },
+        { id: "qualy:caio", name: "CAIO", value: 60 },
+        { id: "qualy:davi", name: "DAVI", value: 40 },
+      ],
+    },
+    {
+      id: "eri",
+      name: "ERIPACK",
+      value: 250,
+      children: [
+        { id: "eri:ana", name: "ANA", value: 200 },
+        { id: "eri:eva", name: "EVA", value: 50 },
+      ],
+    },
+  ];
+
+  it("o cliente que compra de duas indústrias é um nó só, com as duas faixas", () => {
+    const { nos, ligacoes } = fluxoIndustriaCliente(arvore, 10);
+    expect(nos.filter((n) => n.nome === "ANA")).toHaveLength(1);
+    expect(ligacoes.filter((l) => l.destino === "c:ana").map((l) => l.origem).sort()).toEqual([
+      "i:eri",
+      "i:qualy",
+    ]);
+    expect(nos.find((n) => n.id === "c:ana")!.valor).toBe(800);
+  });
+
+  it("o que sai de cada indústria soma o valor dela — nenhum centavo some no agrupamento", () => {
+    const { ligacoes } = fluxoIndustriaCliente(arvore, 2);
+    for (const industria of arvore) {
+      const saida = ligacoes
+        .filter((l) => l.origem === `i:${industria.id}`)
+        .reduce((acc, l) => acc + l.valor, 0);
+      expect(saida).toBe(industria.value);
+    }
+  });
+
+  it("a cauda vira um nó 'Outros', no fim, com a soma dela", () => {
+    const { nos } = fluxoIndustriaCliente(arvore, 2);
+    const clientes = nos.filter((n) => n.lado === "cliente");
+    expect(clientes.map((n) => n.id)).toEqual(["c:ana", "c:bia", "c:outros"]);
+    expect(clientes.at(-1)).toMatchObject({ nome: "Outros (3)", valor: 150, outros: true });
+  });
+
+  it("um único cliente de sobra fica com o próprio nome, sem 'Outros (1)'", () => {
+    const { nos } = fluxoIndustriaCliente(arvore, 4);
+    expect(nos.some((n) => n.outros)).toBe(false);
+    expect(nos.filter((n) => n.lado === "cliente")).toHaveLength(5);
+  });
+
+  it("indústria e cliente de mesmo nome não colidem: os ids têm o lado", () => {
+    const mesmoNome = [
+      { id: "x", name: "PLAST", value: 10, children: [{ id: "x:x", name: "PLAST", value: 10 }] },
+    ];
+    const { nos, ligacoes } = fluxoIndustriaCliente(mesmoNome);
+    expect(new Set(nos.map((n) => n.id)).size).toBe(nos.length);
+    expect(ligacoes).toEqual([{ origem: "i:x", destino: "c:x", valor: 10 }]);
+  });
+
+  it("as indústrias vêm da maior para a menor — é a ordem de leitura do diagrama", () => {
+    const { nos } = fluxoIndustriaCliente([...arvore].reverse());
+    expect(nos.filter((n) => n.lado === "industria").map((n) => n.id)).toEqual(["i:qualy", "i:eri"]);
   });
 });
 

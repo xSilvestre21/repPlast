@@ -90,9 +90,14 @@ export async function orcamentosDoIntervalo(
     },
     select: {
       id: true,
+      numero: true,
       criadoEm: true,
       status: true,
+      clienteAvulsoNome: true,
+      cliente: { select: { apelido: true } },
       _count: { select: { pedidos: true } },
+      // O primeiro pedido em que ela virou: é para lá que o clique leva.
+      pedidos: { select: { id: true }, orderBy: { criadoEm: "asc" }, take: 1 },
     },
   });
 }

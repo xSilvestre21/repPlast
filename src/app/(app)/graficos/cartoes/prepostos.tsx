@@ -13,9 +13,11 @@
  */
 
 import { BarChart3, ListOrdered, Table2, UserRound } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useMemo } from "react";
 
 import { CartaoGrafico } from "@/components/grafico/cartao-grafico";
+import { ALTURA_DA_LINHA, opcaoRanking } from "@/components/grafico/opcao-ranking";
 import { Grafico, type OpcaoGrafico } from "@/components/grafico/echarts";
 import {
   SeletorMetrica,
@@ -37,7 +39,7 @@ import {
   type Metrica,
 } from "@/lib/grafico/agregar";
 import type { BaseDosGraficos } from "@/lib/grafico/base";
-import { escapar, moedaCompactaDe, moedaDe } from "@/lib/grafico/formato";
+import { moedaCompactaDe, moedaDe, porcento } from "@/lib/grafico/formato";
 import { resolverCor } from "@/lib/grafico/tema-echarts";
 
 import { descreverPeriodo } from "./periodo";
@@ -48,6 +50,7 @@ const METRICAS = ["previsto", "recebido"] as const;
 const MEDIDAS = ["fatia", "gerada"] as const;
 
 export function CartaoPrepostos({ base }: { base: BaseDosGraficos }) {
+  const router = useRouter();
   const cores = useTemaGrafico();
 
   const [visao, setVisao] = useParametro("pre_visao", "meses", VISOES);
@@ -86,49 +89,23 @@ export function CartaoPrepostos({ base }: { base: BaseDosGraficos }) {
 
   const opcao = useMemo<OpcaoGrafico>(() => {
     if (visao === "ranking") {
-      const linhas = [...ranking].reverse();
-      return {
-        tooltip: {
-          trigger: "item",
-          formatter: (p: { name: string; value: number }) => `<b>${escapar(p.name)}</b><br/>${moedaDe(p.value)}`,
-        },
-        grid: { left: 4, right: 96, top: 4, bottom: 4 },
-        xAxis: { type: "value", show: false },
-        yAxis: {
-          type: "category",
-          data: linhas.map((f) => f.rotulo),
-          axisLine: { show: false },
-          axisLabel: { color: cores.tinta2, fontSize: 12 },
-        },
-        series: [
-          {
-            type: "bar",
-            barMaxWidth: 16,
-            showBackground: true,
-            backgroundStyle: { color: cores.folha2, borderRadius: [0, 4, 4, 0] },
-            label: {
-              show: true,
-              position: "right",
-              color: cores.tinta,
-              fontSize: 11,
-              formatter: (p: { value: number }) => moedaDe(p.value),
-            },
-            universalTransition: true,
-            data: linhas.map((f) => ({
-              name: f.rotulo,
-              value: f.valor,
-              itemStyle: { color: corDe(f.chave), borderRadius: [0, 4, 4, 0] },
-            })),
-          },
-        ],
-      };
+      // O ranking em lista, cada preposto na cor dele, com a fatia do total.
+      return opcaoRanking({
+        linhas: ranking.map((f) => ({ chave: f.chave, rotulo: f.rotulo, valor: f.valor, cor: corDe(f.chave) })),
+        cores,
+        valorDe: moedaDe,
+        detalheDe: (l) => (total ? porcento(l.valor / total) : ""),
+      });
     }
 
     // Mês a mês, empilhado: a altura é o total dos prepostos, cada fatia é um.
     return {
       legend: {
+        // Um preposto por item: com vários, rola em vez de quebrar por cima do eixo.
+        type: "scroll",
         top: 0,
         left: 0,
+        right: 0,
         icon: "roundRect",
         itemWidth: 10,
         itemHeight: 10,
@@ -151,7 +128,6 @@ export function CartaoPrepostos({ base }: { base: BaseDosGraficos }) {
           borderWidth: 1,
           borderRadius: i === ranking.length - 1 ? [4, 4, 0, 0] : 0,
         },
-        universalTransition: true,
         data: somaPorMes(
           doPeriodo.filter((it) => it.prepostoId === f.chave),
           meses,
@@ -159,7 +135,7 @@ export function CartaoPrepostos({ base }: { base: BaseDosGraficos }) {
         ),
       })),
     };
-  }, [visao, ranking, doPeriodo, meses, base.rotulos, metrica, medida, cores, corDe]);
+  }, [visao, ranking, total, doPeriodo, meses, base.rotulos, metrica, medida, cores, corDe]);
 
   return (
     <CartaoGrafico
@@ -184,6 +160,7 @@ export function CartaoPrepostos({ base }: { base: BaseDosGraficos }) {
           <SeletorPeriodo opcoes={PERIODOS} atual={periodo} aoEscolher={setPeriodo} />
           <SeletorMetrica atual={metrica} aoEscolher={setMetrica} />
           <SeletorVisao
+            nome="O que contar"
             atual={medida}
             aoEscolher={setMedida}
             opcoes={[
@@ -202,8 +179,19 @@ export function CartaoPrepostos({ base }: { base: BaseDosGraficos }) {
       ) : (
         <Grafico
           opcao={opcao}
-          altura={visao === "ranking" ? Math.max(140, ranking.length * 40) : 320}
+          altura={visao === "ranking" ? Math.max(140, ranking.length * ALTURA_DA_LINHA + 26) : 320}
           rotulo="Comissão por preposto"
+          // O repasse de cada preposto mora na apuração do mês, em Comissões:
+          // a barra do mês abre aquele mês; o ranking, o mês desta página.
+          aoClicar={(e) =>
+            router.push(
+              `/comissoes?mes=${visao === "ranking" ? base.competencia : (meses[e.dataIndex] ?? base.competencia)}`,
+            )
+          }
+          aoClicarCategoria={(i) =>
+            router.push(`/comissoes?mes=${visao === "ranking" ? base.competencia : (meses[i] ?? base.competencia)}`)
+          }
+          eixoDaCategoria={visao === "ranking" ? "y" : "x"}
         />
       )}
     </CartaoGrafico>
