@@ -445,11 +445,16 @@ body {
  * O conteúdo rola por baixo e aparece desfocado através dela. É o que dá
  * profundidade à página inteira com um único elemento — e a razão de o fundo
  * ser translúcido e não sólido.
+ *
+ * O prefixo vem ANTES do padrão, e a ordem importa: com o padrão primeiro, o
+ * Lightning CSS fundia as duas declarações e ficava só a `-webkit-`, que o
+ * Chrome não aplica — a barra perdia o desfoque e os gráficos apareciam nítidos
+ * por baixo dela ao rolar.
  */
 .barra-topo {
   background: color-mix(in srgb, var(--papel) 72%, transparent);
-  backdrop-filter: blur(14px) saturate(1.6);
   -webkit-backdrop-filter: blur(14px) saturate(1.6);
+  backdrop-filter: blur(14px) saturate(1.6);
   border-bottom: 1px solid var(--filete);
 }
 
