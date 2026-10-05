@@ -39,6 +39,7 @@ import { competenciaDe, metaVigente, progressoDaMeta } from "@/lib/comissao";
 import { metasDoUsuario, pedidosDaCompetencia, resumirComissao } from "@/lib/comissao-consulta";
 import { clientesSumidos } from "@/lib/positivacao";
 import { escopoAtual, sessaoAtual } from "@/lib/sessao";
+import { nomeCompleto } from "@/lib/nome-usuario";
 
 import { AvisoCompromissos, type CompromissoAvisado } from "./aviso-compromissos";
 import { agendaDoIntervalo } from "./calendario/consulta";
@@ -163,7 +164,7 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
         importancia: true,
         autorId: true,
         clienteId: true,
-        autor: { select: { nome: true } },
+        autor: { select: { nome: true, sobrenome: true } },
       },
     }),
     db.avisoAdiado.findMany({ where: { usuarioId }, select: { compromissoId: true, ate: true } }),
@@ -254,7 +255,7 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
     hora: c.hora,
     importancia: c.importancia,
     meu: c.autorId === usuarioId,
-    autor: c.autor.nome,
+    autor: nomeCompleto(c.autor),
     cliente: c.clienteId ? (nomesDeClientes.get(c.clienteId) ?? null) : null,
   }));
 

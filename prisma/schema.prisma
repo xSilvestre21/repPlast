@@ -149,8 +149,15 @@ model Organizacao {
 model Usuario {
   id            String   @id @default(uuid()) @db.Uuid
   organizacaoId String   @db.Uuid
+  /// O primeiro nome — "Maria". O nome inteiro, como aparece no sistema e sai
+  /// impresso, é `nomeCompleto()` (`lib/nome-usuario.ts`): nome + sobrenome.
   nome          String
+  /// "Augusta Ferraz". Nulo em quem nunca teve sobrenome cadastrado.
+  sobrenome     String?
   email         String   @unique
+  /// Telefone de contato — o preposto é gente que se liga. Guardado como
+  /// digitado e pontuado pelo campo de telefone, igual ao do cliente.
+  telefone      String?
   senhaHash     String
   criadoEm      DateTime @default(now())
 

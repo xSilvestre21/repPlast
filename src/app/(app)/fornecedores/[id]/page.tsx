@@ -27,6 +27,7 @@ import { BotaoExcluir } from "@/components/botao-excluir";
 import { SecaoLogo } from "./logo-industria";
 import { Check, CircleCheck, CircleOff, Factory, Pencil } from "lucide-react";
 import { Pagina } from "@/components/pagina";
+import { nomeCompleto } from "@/lib/nome-usuario";
 
 export default async function PaginaFornecedor({
   params,
@@ -73,8 +74,8 @@ export default async function PaginaFornecedor({
       ? await db.usuario.findMany({
           where: { organizacaoId, papel: "REPRESENTANTE", ativo: true },
           orderBy: { nome: "asc" },
-          select: { id: true, nome: true },
-        })
+          select: { id: true, nome: true, sobrenome: true },
+        }).then((lista) => lista.map((u) => ({ ...u, nome: nomeCompleto(u) })))
       : [];
 
   return (

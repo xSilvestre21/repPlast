@@ -12,6 +12,7 @@ import { SecaoCodigos } from "./codigos";
 import { SecaoCompromissos } from "./compromissos";
 import { Building2, Pencil, UserRoundCheck, UserRoundX } from "lucide-react";
 import { Pagina } from "@/components/pagina";
+import { nomeCompleto } from "@/lib/nome-usuario";
 
 export default async function PaginaCliente({
   params,
@@ -51,7 +52,7 @@ export default async function PaginaCliente({
         importancia: true,
         compartilhado: true,
         autorId: true,
-        autor: { select: { nome: true } },
+        autor: { select: { nome: true, sobrenome: true } },
       },
     }),
   ]);
@@ -152,7 +153,7 @@ export default async function PaginaCliente({
             importancia: c.importancia,
             compartilhado: c.compartilhado,
             meu: c.autorId === usuarioId,
-            autor: c.autor.nome,
+            autor: nomeCompleto(c.autor),
           }))}
         />
       </div>

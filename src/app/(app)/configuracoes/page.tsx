@@ -6,6 +6,7 @@ import { CAMPOS_PUBLICOS_CONTA } from "@/lib/conta-email";
 import { criptoConfigurada } from "@/lib/cripto";
 import { MODELOS_DE_EMAIL } from "@/lib/tipos-de-email";
 import { escopoAtual, sessaoAtual } from "@/lib/sessao";
+import { nomeCompleto } from "@/lib/nome-usuario";
 
 import {
   alternarReduzirAnimacoes,
@@ -32,6 +33,7 @@ export default async function PaginaConfiguracoes() {
       where: { id: usuarioId },
       select: {
         nome: true,
+        sobrenome: true,
         email: true,
         observacoesPadrao: true,
         municipio: true,
@@ -58,7 +60,7 @@ export default async function PaginaConfiguracoes() {
 
       <div className="space-y-5 palco">
         <SecaoContasEmail
-          nomeUsuario={usuario?.nome ?? ""}
+          nomeUsuario={usuario ? nomeCompleto(usuario) : ""}
           emailUsuario={usuario?.email ?? ""}
           criptoConfigurada={criptoConfigurada()}
           adicionar={salvarContaEmail.bind(null, null)}

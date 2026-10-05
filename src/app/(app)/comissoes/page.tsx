@@ -60,6 +60,7 @@ import { PainelMeta } from "./painel-meta";
 import { LinhaRepasse, ResumoRepasse, type DadosRepasse } from "./repasse";
 import { Pagina } from "@/components/pagina";
 import { NavegadorMes, nomeDoMes } from "@/components/navegador-mes";
+import { nomeCompleto } from "@/lib/nome-usuario";
 
 /** "1 pedido", "8 pedidos" — no lugar do "pedido(s)" de formulário. */
 function plural(n: number, palavra: string): string {
@@ -86,8 +87,8 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
       ? db.usuario.findMany({
           where: { organizacaoId, papel: "REPRESENTANTE" },
           orderBy: [{ criadoEm: "asc" }, { id: "asc" }],
-          select: { id: true, nome: true },
-        })
+          select: { id: true, nome: true, sobrenome: true },
+        }).then((lista) => lista.map((u) => ({ ...u, nome: nomeCompleto(u) })))
       : Promise.resolve([]),
   ]);
 

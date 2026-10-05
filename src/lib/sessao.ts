@@ -17,6 +17,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 
 import { type Ator, dbAdministrativo, dbParaOrganizacao } from "./db";
+import { nomeCompleto } from "./nome-usuario";
 
 const COOKIE = "repplast_sessao";
 const DURACAO_DIAS = 30;
@@ -102,6 +103,7 @@ export const sessaoAtual = cache(async (): Promise<Sessao | null> => {
     select: {
       id: true,
       nome: true,
+      sobrenome: true,
       email: true,
       organizacaoId: true,
       papel: true,
@@ -119,7 +121,8 @@ export const sessaoAtual = cache(async (): Promise<Sessao | null> => {
   return {
     usuarioId: usuario.id,
     organizacaoId: usuario.organizacaoId,
-    nome: usuario.nome,
+    // O nome inteiro: é o que o menu mostra e o que as telas assinam.
+    nome: nomeCompleto(usuario),
     email: usuario.email,
     papel: usuario.papel,
     plano: usuario.organizacao.plano,

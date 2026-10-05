@@ -38,6 +38,7 @@ import {
 import { carregarOrcamentoParaPdf, gerarPdfOrcamento } from "@/lib/pdf/gerar-orcamento";
 import { escopoAtual } from "@/lib/sessao";
 import { calcularTotaisPedido } from "@/lib/totais";
+import { nomeCompleto } from "@/lib/nome-usuario";
 
 import {
   contaDoFormulario,
@@ -205,7 +206,7 @@ export async function criarOrcamento(
       }),
       db.usuario.findUnique({
         where: { id: usuarioId },
-        select: { nome: true, observacoesPadrao: true, municipio: true },
+        select: { nome: true, sobrenome: true, observacoesPadrao: true, municipio: true },
       }),
     ]);
 
@@ -240,7 +241,7 @@ export async function criarOrcamento(
         // com o padrão de quem está criando, não do escritório.
         observacoes: usuario?.observacoesPadrao ?? cliente?.observacoes ?? null,
         // Quem assina embaixo é quem está criando — dá para trocar na ficha.
-        vendedor: usuario?.nome ?? null,
+        vendedor: usuario ? nomeCompleto(usuario) : null,
         // E de onde ele escreve, que abre o cabeçalho. Congelada aqui pelo mesmo
         // motivo que o nome: reimprimir a proposta de março tem de sair igual ao
         // papel que o cliente recebeu.

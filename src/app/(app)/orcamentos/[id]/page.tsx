@@ -20,6 +20,7 @@ import { escreverNumeroBr } from "@/lib/numero-br";
 import { unidadeDoRotulo } from "@/lib/produto-preco";
 import { nomeArquivoOrcamento } from "@/lib/pdf/nome-arquivo";
 import { escopoAtual } from "@/lib/sessao";
+import { nomeCompleto } from "@/lib/nome-usuario";
 
 import { SeloOrcamento, destinatario } from "../selo";
 import {
@@ -65,7 +66,7 @@ export default async function PaginaOrcamento({
       pedidos: { select: { id: true, numero: true }, orderBy: { numero: "asc" } },
       edicoes: {
         orderBy: { editadoEm: "desc" },
-        select: { id: true, editadoEm: true, usuario: { select: { nome: true } } },
+        select: { id: true, editadoEm: true, usuario: { select: { nome: true, sobrenome: true } } },
       },
       envios: {
         orderBy: { enviadoEm: "desc" },
@@ -424,7 +425,7 @@ export default async function PaginaOrcamento({
           }}
           edicoes={orcamento.edicoes.map((edicao) => ({
             id: edicao.id,
-            quem: edicao.usuario?.nome ?? "usuário removido",
+            quem: edicao.usuario ? nomeCompleto(edicao.usuario) : "usuário removido",
             quando: DATA_HORA.format(edicao.editadoEm),
           }))}
           salvar={atualizarOrcamento.bind(null, orcamento.id)}

@@ -24,6 +24,7 @@ import {
   type SaldoRepasse,
 } from "./comissao";
 import type { DbOrganizacao } from "./db";
+import { nomeCompleto } from "./nome-usuario";
 
 export interface PedidoDaComissao {
   id: string;
@@ -247,11 +248,14 @@ async function comRepresentante<T extends { representanteId: string | null }>(
   const representantes = ids.length
     ? await db.usuario.findMany({
         where: { id: { in: ids } },
-        select: { id: true, nome: true, papel: true },
+        select: { id: true, nome: true, sobrenome: true, papel: true },
       })
     : [];
 
-  const porId = new Map(representantes.map((r) => [r.id, r]));
+  // O nome inteiro: é o que Comissões e os gráficos mostram na linha dele.
+  const porId = new Map(
+    representantes.map((r) => [r.id, { id: r.id, nome: nomeCompleto(r), papel: r.papel }]),
+  );
 
   return pedidos.map(({ representanteId, ...pedido }) => ({
     ...pedido,

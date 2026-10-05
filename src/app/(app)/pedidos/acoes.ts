@@ -26,6 +26,7 @@ import {
 } from "@/lib/produto-preco";
 import { escopoAtual } from "@/lib/sessao";
 import { calcularTotaisPedido } from "@/lib/totais";
+import { nomeCompleto } from "@/lib/nome-usuario";
 
 export type EstadoFormulario = { erro?: string };
 
@@ -226,7 +227,7 @@ export async function criarPedido(
         where: { id: fornecedorId, organizacaoId },
         select: { id: true, ipiPercentual: true, comissaoPercentual: true },
       }),
-      db.usuario.findUnique({ where: { id: usuarioId }, select: { nome: true } }),
+      db.usuario.findUnique({ where: { id: usuarioId }, select: { nome: true, sobrenome: true } }),
     ]);
 
     if (!cliente || !fornecedor) return { erro: "Cliente ou indústria não encontrado." };
@@ -266,7 +267,7 @@ export async function criarPedido(
         // O prazo de costume do cliente, que dá para trocar neste pedido.
         prazoPagamento: cliente.prazoPagamento,
         // Quem assina embaixo é quem está lançando, como no orçamento.
-        vendedor: usuario?.nome ?? null,
+        vendedor: usuario ? nomeCompleto(usuario) : null,
         // O pedido credita o dono da CARTEIRA, não quem digitou: a
         // administradora lança pedido para o cliente do preposto o tempo todo,
         // e a comissão continua sendo dele. Congelado aqui — reatribuir a

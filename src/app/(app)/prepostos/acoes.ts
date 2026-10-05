@@ -10,14 +10,47 @@
  */
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { dbAdministrativo } from "@/lib/db";
+import { normalizarTelefone } from "@/lib/mascara";
 import { lerNumeroBr } from "@/lib/numero-br";
 import { gerarHashSenha } from "@/lib/senha";
 import { TAMANHO_MINIMO_SENHA } from "@/lib/senha-regras";
 import { escopoAtual } from "@/lib/sessao";
 
-export type EstadoFormulario = { erro?: string; aviso?: string };
+export type EstadoFormulario = {
+  erro?: string;
+  aviso?: string;
+  /**
+   * O que a pessoa digitou, devolvido quando o envio é recusado. O React limpa
+   * o formulário a cada envio; sem isto, um e-mail repetido apagava o cadastro
+   * inteiro junto. A senha não volta — nunca se devolve senha ao navegador.
+   */
+  valores?: {
+    nome: string;
+    sobrenome: string;
+    email: string;
+    telefone: string;
+    comissaoPercentual: string;
+  };
+};
+
+function digitado(formData: FormData): NonNullable<EstadoFormulario["valores"]> {
+  return {
+    nome: lerTexto(formData.get("nome")),
+    sobrenome: lerTexto(formData.get("sobrenome")),
+    email: lerTexto(formData.get("email")),
+    telefone: lerTexto(formData.get("telefone")),
+    comissaoPercentual: lerTexto(formData.get("comissaoPercentualPadrao")),
+  };
+}
+
+/** A lista e a ficha do preposto — as duas mostram o que acabou de mudar. */
+function revalidarPreposto(id: string) {
+  revalidatePath("/prepostos");
+  revalidatePath(`/prepostos/${id}`);
+}
 
 async function contextoAdmin() {
   const escopo = await escopoAtual();
@@ -30,6 +63,19 @@ async function contextoAdmin() {
 
 function lerTexto(valor: FormDataEntryValue | null): string {
   return typeof valor === "string" ? valor.trim() : "";
+}
+
+/** Opcional: vazio vira `null`, e não string vazia no banco. */
+function lerOpcional(valor: FormDataEntryValue | null): string | null {
+  return lerTexto(valor) || null;
+}
+
+/**
+ * Telefone normalizado aqui, e não só pela máscara do campo: o formulário
+ * continua enviando por POST comum quando o JavaScript não roda.
+ */
+function lerTelefone(valor: FormDataEntryValue | null): string | null {
+  return normalizarTelefone(lerTexto(valor));
 }
 
 /** Fatia da comissão, em percentual DELA. Vazio vale zero — preposto sem acordo ainda. */
@@ -48,6 +94,8 @@ export async function inscreverPreposto(
   _estado: EstadoFormulario,
   formData: FormData,
 ): Promise<EstadoFormulario> {
+  let destino: string;
+
   try {
     const { organizacaoId, db } = await contextoAdmin();
 
@@ -55,10 +103,10 @@ export async function inscreverPreposto(
     const email = lerTexto(formData.get("email")).toLowerCase();
     const senha = lerTexto(formData.get("senha"));
 
-    if (!nome) return { erro: "Informe o nome do preposto." };
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { erro: "E-mail inválido." };
+    if (!nome) return { erro: "Informe o nome do preposto.", valores: digitado(formData) };
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { erro: "E-mail inválido.", valores: digitado(formData) };
     if (senha.length < TAMANHO_MINIMO_SENHA) {
-      return { erro: `A senha precisa ter pelo menos ${TAMANHO_MINIMO_SENHA} caracteres.` };
+      return { erro: `A senha precisa ter pelo menos ${TAMANHO_MINIMO_SENHA} caracteres.`, valores: digitado(formData) };
     }
 
     const comissaoPercentualPadrao = lerPercentual(formData.get("comissaoPercentualPadrao"));
@@ -72,24 +120,30 @@ export async function inscreverPreposto(
       where: { email },
       select: { id: true },
     });
-    if (jaExiste) return { erro: "Já existe uma conta com este e-mail." };
+    if (jaExiste) return { erro: "Já existe uma conta com este e-mail.", valores: digitado(formData) };
 
-    await db.usuario.create({
+    const preposto = await db.usuario.create({
       data: {
         organizacaoId,
         nome,
+        sobrenome: lerOpcional(formData.get("sobrenome")),
         email,
+        telefone: lerTelefone(formData.get("telefone")),
         senhaHash: await gerarHashSenha(senha),
         papel: "REPRESENTANTE",
         comissaoPercentualPadrao,
       },
+      select: { id: true },
     });
+
+    destino = `/prepostos/${preposto.id}`;
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível inscrever." };
+    return { erro: erro instanceof Error ? erro.message : "Não foi possível inscrever.", valores: digitado(formData) };
   }
 
+  // Como o cadastro de cliente: gravou, abre a ficha do que acabou de nascer.
   revalidatePath("/prepostos");
-  return { aviso: "Preposto inscrito. Passe a senha a ele por um canal seguro." };
+  redirect(destino);
 }
 
 export async function atualizarPreposto(
@@ -101,23 +155,26 @@ export async function atualizarPreposto(
     const { organizacaoId, db } = await contextoAdmin();
 
     const nome = lerTexto(formData.get("nome"));
-    if (!nome) return { erro: "Informe o nome do preposto." };
+    if (!nome) return { erro: "Informe o nome do preposto.", valores: digitado(formData) };
 
     const { count } = await db.usuario.updateMany({
       where: { id, organizacaoId, papel: "REPRESENTANTE" },
       data: {
         nome,
+        sobrenome: lerOpcional(formData.get("sobrenome")),
+        telefone: lerTelefone(formData.get("telefone")),
         comissaoPercentualPadrao: lerPercentual(formData.get("comissaoPercentualPadrao")),
       },
     });
 
-    if (count === 0) return { erro: "Preposto não encontrado." };
+    if (count === 0) return { erro: "Preposto não encontrado.", valores: digitado(formData) };
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
+    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar.", valores: digitado(formData) };
   }
 
-  revalidatePath("/prepostos");
-  return {};
+  revalidarPreposto(id);
+  // "Salvar e voltar": gravou, a ficha volta a ser leitura.
+  redirect(`/prepostos/${id}`);
 }
 
 /**
@@ -143,7 +200,7 @@ export async function alternarAtivoPreposto(id: string, _formData: FormData): Pr
     data: { ativo: !preposto.ativo },
   });
 
-  revalidatePath("/prepostos");
+  revalidarPreposto(id);
 }
 
 export async function redefinirSenhaPreposto(
@@ -169,6 +226,6 @@ export async function redefinirSenhaPreposto(
     return { erro: erro instanceof Error ? erro.message : "Não foi possível trocar a senha." };
   }
 
-  revalidatePath("/prepostos");
+  revalidarPreposto(id);
   return { aviso: "Senha trocada." };
 }

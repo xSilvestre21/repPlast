@@ -9,6 +9,7 @@ import {
   type Importancia,
 } from "@/lib/agenda";
 import type { DbOrganizacao } from "@/lib/db";
+import { nomeCompleto } from "@/lib/nome-usuario";
 
 import { clientesComUltimaCompra } from "../graficos/consultas";
 
@@ -89,7 +90,7 @@ export async function agendaDoIntervalo(
         clienteId: true,
         concluidoEm: true,
         autorId: true,
-        autor: { select: { nome: true } },
+        autor: { select: { nome: true, sobrenome: true } },
       },
     }),
     /*
@@ -156,7 +157,7 @@ export async function agendaDoIntervalo(
       importancia: c.importancia,
       situacao: c.concluidoEm ? "concluido" : undefined,
       meu: c.autorId === quem.usuarioId,
-      autor: c.autor.nome,
+      autor: nomeCompleto(c.autor),
       compartilhado: c.compartilhado,
       clienteId: c.clienteId,
       cliente: c.clienteId ? (nomes.get(c.clienteId) ?? null) : null,

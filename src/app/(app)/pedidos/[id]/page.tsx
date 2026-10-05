@@ -30,6 +30,7 @@ import { SecaoCabecalho } from "./cabecalho";
 import { BotaoEnviarEmail } from "./envio";
 import { SecaoItens } from "@/components/itens-documento";
 import { Pagina } from "@/components/pagina";
+import { nomeCompleto } from "@/lib/nome-usuario";
 
 const DATA_HORA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
 
@@ -66,7 +67,7 @@ export default async function PaginaPedido({
         select: {
           id: true,
           editadoEm: true,
-          usuario: { select: { nome: true, papel: true } },
+          usuario: { select: { nome: true, sobrenome: true, papel: true } },
         },
       },
     },
@@ -409,7 +410,7 @@ export default async function PaginaPedido({
             <ul className="space-y-1">
               {pedido.edicoes.map((edicao) => (
                 <li key={edicao.id} className="text-mini text-tinta-2">
-                  {edicao.usuario?.nome ?? "usuário removido"}
+                  {edicao.usuario ? nomeCompleto(edicao.usuario) : "usuário removido"}
                   {edicao.usuario && edicao.usuario.papel !== "ADMIN" && (
                     <span className="text-tinta-3"> (preposto)</span>
                   )}{" "}
