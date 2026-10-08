@@ -30,6 +30,7 @@ import {
   Segmentado,
   ValorLinha,
 } from "@/components/ui";
+import { BolinhaPreposto } from "@/components/bolinha-preposto";
 
 import type { FatiaDePedidos, FiltroStatusPedido, PedidoDaLista } from "./consulta";
 
@@ -261,6 +262,13 @@ export function ListaPedidos({
                             className="shrink-0 mt-[3px]"
                           />
                           {pedido.motivoCancelamento}
+                        </span>
+                      )}
+                      {/* De quem é — só o administrador recebe, e só quando é de preposto. */}
+                      {pedido.preposto && (
+                        <span className="flex items-center gap-1.5 text-mini text-tinta-3 mt-0.5 min-w-0">
+                          <BolinhaPreposto cor={pedido.preposto.cor} />
+                          <span className="truncate">{pedido.preposto.nome}</span>
                         </span>
                       )}
                     </>

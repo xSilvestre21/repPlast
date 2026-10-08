@@ -299,6 +299,7 @@ export function PendenciasDoPedido({
   itens,
   itensSemProduto,
   cadastrarTodos,
+  podeCadastrar,
 }: {
   cadastrarClienteEm: string;
   /** Apelido do cliente vinculado; nulo enquanto a proposta é avulsa. */
@@ -306,6 +307,8 @@ export function PendenciasDoPedido({
   itens: number;
   itensSemProduto: number;
   cadastrarTodos: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
+  /** Cadastro é do administrador: o preposto vê o que falta, sem os botões. */
+  podeCadastrar: boolean;
 }) {
   const [estado, enviar, cadastrando] = useActionState(cadastrarTodos, {});
 
@@ -332,7 +335,7 @@ export function PendenciasDoPedido({
               <>1. Cadastrar o cliente, com razão social, CNPJ e endereço</>
             )}
           </span>
-          {!cliente && (
+          {podeCadastrar && !cliente && (
             <BotaoLink href={cadastrarClienteEm} variante="secundaria" icone={UserRoundPlus}>
               Cadastrar cliente
             </BotaoLink>
@@ -350,7 +353,7 @@ export function PendenciasDoPedido({
               </span>
             </span>
           </span>
-          {cliente && itensSemProduto > 0 && (
+          {podeCadastrar && cliente && itensSemProduto > 0 && (
             <form action={enviar}>
               <Botao type="submit" variante="secundaria" icone={PackagePlus} carregando={cadastrando}>
                 {cadastrando ? "Cadastrando…" : "Cadastrar todos os produtos"}
@@ -360,12 +363,19 @@ export function PendenciasDoPedido({
         </li>
       </ol>
 
-      {cliente && itensSemProduto > 0 && (
-        <p className="mt-3 text-mini text-tinta-3 leading-relaxed">
-          Para completar código da indústria ou do cliente, use “cadastrar como produto” na linha
-          do item — abre o Novo produto com a conta já preenchida.
-        </p>
-      )}
+      {podeCadastrar
+        ? cliente &&
+          itensSemProduto > 0 && (
+            <p className="mt-3 text-mini text-tinta-3 leading-relaxed">
+              Para completar código da indústria ou do cliente, use “cadastrar como produto” na
+              linha do item — abre o Novo produto com a conta já preenchida.
+            </p>
+          )
+        : (
+            <p className="mt-3 text-mini text-tinta-3 leading-relaxed">
+              Cliente e produtos quem cadastra é o escritório — peça ao administrador.
+            </p>
+          )}
     </SecaoCartao>
   );
 }

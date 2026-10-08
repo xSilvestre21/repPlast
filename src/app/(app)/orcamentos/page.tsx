@@ -8,7 +8,7 @@ import { buscarOrcamentos, statusDoParametro } from "./consulta";
 import { ListaOrcamentos } from "./lista";
 
 export default async function PaginaOrcamentos({ searchParams }: PageProps<"/orcamentos">) {
-  const { organizacaoId, db } = await escopoAtual();
+  const { organizacaoId, ehAdmin, db } = await escopoAtual();
   const parametros = await searchParams;
 
   /*
@@ -24,7 +24,7 @@ export default async function PaginaOrcamentos({ searchParams }: PageProps<"/orc
    * cascata de entrada: as linhas já chegam no HTML, e a animação é da página
    * abrindo — não de uma lista que trocou de conteúdo.
    */
-  const inicial = await buscarOrcamentos(db, organizacaoId, { busca, status, pagina: 0 });
+  const inicial = await buscarOrcamentos(db, organizacaoId, ehAdmin, { busca, status, pagina: 0 });
 
   return (
     <Pagina>

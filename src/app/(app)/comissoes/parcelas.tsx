@@ -23,6 +23,7 @@ import { Plus, Scissors, X } from "lucide-react";
 import Decimal from "decimal.js";
 import { useActionState, useId, useState } from "react";
 
+import { CampoData } from "@/components/campo-data";
 import { CampoMoeda } from "@/components/campo-mascarado";
 import {
   Botao,
@@ -216,23 +217,19 @@ export function EditorParcelas({
               return (
                 <li
                   key={`${geracao}-${i}`}
-                  className="grid grid-cols-[2.5rem_minmax(9rem,11rem)_minmax(9rem,1fr)_minmax(7rem,auto)_2rem] items-center gap-3"
+                  className="grid grid-cols-[2.5rem_minmax(15rem,17rem)_minmax(9rem,1fr)_minmax(7rem,auto)_2rem] items-center gap-3"
                 >
                   <span className="text-mini text-tinta-3 numerico">
                     {i + 1}/{linhas.length}
                   </span>
 
-                  <label>
-                    <span className="sr-only">Vencimento da parcela {i + 1}</span>
-                    <input
-                      type="date"
-                      name="vencimento"
-                      required
-                      defaultValue={linha.vencimento}
-                      onChange={(e) => mudar(i, "vencimento", e.currentTarget.value)}
-                      className={CLASSE_CONTROLE}
-                    />
-                  </label>
+                  <CampoData
+                    name="vencimento"
+                    rotulo={`Vencimento da parcela ${i + 1}`}
+                    rotuloOculto
+                    defaultValue={linha.vencimento}
+                    onChange={(valor) => mudar(i, "vencimento", valor)}
+                  />
 
                   {ultima ? (
                     /*

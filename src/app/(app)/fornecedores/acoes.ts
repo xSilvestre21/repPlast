@@ -6,11 +6,18 @@ import { redirect } from "next/navigation";
 import { emailValido } from "@/lib/envio-pedido";
 import { normalizarCep, normalizarDocumento, normalizarTelefone } from "@/lib/mascara";
 import { lerNumeroBr } from "@/lib/numero-br";
-import { escopoAtual } from "@/lib/sessao";
+import { escopoAtual, exigirAdmin } from "@/lib/sessao";
 
 export type EstadoFormulario = { erro?: string };
 
+/**
+ * Cadastro de indústria — dados, logo, materiais, aditivos e contatos — é do
+ * administrador: o preposto consulta, mas não cria, altera nem exclui. O banco
+ * recusa de todo jeito (migration `cadastros_so_do_admin`); a checagem aqui é
+ * para a mensagem ser legível.
+ */
 async function contexto() {
+  await exigirAdmin();
   return escopoAtual();
 }
 
@@ -393,16 +400,13 @@ export async function removerMaterial(fornecedorId: string, formData: FormData):
 /**
  * Define quais prepostos atendem esta indústria.
  *
- * Mora AQUI, e não no cadastro do preposto, porque a permissão é da indústria:
- * marcar a Ana em uma indústria é o mesmo ato que tirar o Bruno dela. Editando
- * pelo lado do preposto, esse segundo efeito aconteceria em silêncio, numa tela
- * onde o Bruno nem aparece.
+ * Grava exatamente o que foi marcado: o preposto desmarcado deixa de ver a
+ * indústria, e nenhum marcado quer dizer nenhum (ver `FornecedorPreposto` no
+ * schema). O mesmo vínculo se edita pela ficha do preposto.
  *
- * NENHUM marcado significa TODOS, e não ninguém — é a leitura permissiva da
- * tabela (ver `FornecedorPreposto` no schema). Marcar todos grava o mesmo que
- * não marcar nenhum, de propósito: as duas coisas querem dizer "é do escritório
- * inteiro", e guardar linha para isso só criaria trabalho ao inscrever o
- * próximo preposto.
+ * Só os prepostos ATIVOS aparecem na tela, e por isso só os deles se regravam:
+ * apagar tudo levaria junto o vínculo de quem está sem acesso, e ele voltaria
+ * sem indústria nenhuma no dia em que o acesso fosse devolvido.
  */
 export async function definirPrepostosDaIndustria(
   fornecedorId: string,
@@ -428,9 +432,11 @@ export async function definirPrepostosDaIndustria(
       .map((v) => String(v))
       .filter((id) => prepostos.some((p) => p.id === id));
 
-    await db.fornecedorPreposto.deleteMany({ where: { fornecedorId } });
+    await db.fornecedorPreposto.deleteMany({
+      where: { fornecedorId, usuarioId: { in: prepostos.map((p) => p.id) } },
+    });
 
-    if (marcados.length > 0 && marcados.length < prepostos.length) {
+    if (marcados.length > 0) {
       await db.fornecedorPreposto.createMany({
         data: marcados.map((usuarioId) => ({ fornecedorId, usuarioId })),
       });

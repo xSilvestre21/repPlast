@@ -8,7 +8,7 @@ import { buscarClientes, situacaoDoParametro } from "./consulta";
 import { ListaClientes } from "./lista";
 
 export default async function PaginaClientes({ searchParams }: PageProps<"/clientes">) {
-  const { organizacaoId, db } = await escopoAtual();
+  const { organizacaoId, ehAdmin, db } = await escopoAtual();
   const parametros = await searchParams;
 
   /*
@@ -32,9 +32,12 @@ export default async function PaginaClientes({ searchParams }: PageProps<"/clien
         titulo="Clientes"
         descricao="Os dados fiscais daqui saem impressos no cabeçalho de todo pedido."
         acao={
-          <BotaoLink href="/clientes/novo" icone={Plus}>
-            Novo cliente
-          </BotaoLink>
+          // Cadastro é do administrador; o preposto consulta.
+          ehAdmin && (
+            <BotaoLink href="/clientes/novo" icone={Plus}>
+              Novo cliente
+            </BotaoLink>
+          )
         }
       />
 

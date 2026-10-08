@@ -1,7 +1,10 @@
+import { redirect } from "next/navigation";
+
 import { Cabecalho } from "@/components/ui";
 import { escopoAtual } from "@/lib/sessao";
 
 import { criarCliente, criarClienteDaProposta } from "../acoes";
+import { opcoesDeCarteira } from "../carteira";
 import { FormularioCliente } from "../formulario";
 import { VALORES_VAZIOS } from "../valores";
 import { UserRoundPlus } from "lucide-react";
@@ -15,7 +18,10 @@ export default async function PaginaNovoCliente({ searchParams }: PageProps<"/cl
    * a cidade que a proposta já sabia, e ao salvar volta para ela vinculado.
    * Proposta que já tem cliente (ou não existe) cai no cadastro comum.
    */
-  const { organizacaoId, db } = await escopoAtual();
+  const escopo = await escopoAtual();
+  const { organizacaoId, db } = escopo;
+  // Cadastro é do administrador; o preposto que chega por link volta à lista.
+  if (!escopo.ehAdmin) redirect("/clientes");
   const proposta =
     typeof orcamentoId === "string"
       ? await db.orcamento.findFirst({
@@ -25,9 +31,15 @@ export default async function PaginaNovoCliente({ searchParams }: PageProps<"/cl
             numero: true,
             clienteAvulsoNome: true,
             clienteAvulsoMunicipio: true,
+            representanteId: true,
           },
         })
       : null;
+
+  const prepostos = await opcoesDeCarteira(
+    escopo,
+    proposta?.representanteId ? [proposta.representanteId] : [],
+  );
 
   if (proposta) {
     const nome = proposta.clienteAvulsoNome ?? "";
@@ -47,7 +59,10 @@ export default async function PaginaNovoCliente({ searchParams }: PageProps<"/cl
             apelido: nome,
             razaoSocial: nome,
             municipio: proposta.clienteAvulsoMunicipio ?? "",
+            // A proposta de um preposto traz o cliente para a carteira dele.
+            prepostoIds: proposta.representanteId ? [proposta.representanteId] : [],
           }}
+          prepostos={prepostos}
           rotuloEnvio="Cadastrar e voltar à proposta"
         />
       </Pagina>
@@ -65,6 +80,7 @@ export default async function PaginaNovoCliente({ searchParams }: PageProps<"/cl
       <FormularioCliente
         acao={criarCliente}
         valores={VALORES_VAZIOS}
+        prepostos={prepostos}
         rotuloEnvio="Cadastrar cliente"
       />
     </Pagina>

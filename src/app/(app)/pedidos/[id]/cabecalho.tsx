@@ -19,6 +19,8 @@ export type ValoresCabecalho = {
   observacoes: string;
   ipiPercentual: string;
   comissaoPercentual: string;
+  /** Com quem a comissão se divide; vazio é do escritório. */
+  representanteId: string;
 };
 
 export function SecaoCabecalho({
@@ -26,8 +28,15 @@ export function SecaoCabecalho({
   editavel,
   emLeitura = false,
   acao,
+  prepostos,
 }: {
   valores: ValoresCabecalho;
+  /**
+   * Os prepostos que atendem o cliente. Sem eles o campo não aparece: para o
+   * preposto, o pedido que ele lança é dele, e fora do plano Plus não há com
+   * quem dividir.
+   */
+  prepostos?: { id: string; nome: string }[];
   editavel: boolean;
   /** Pedido aberto, mas pronto: dá para editar, só que clicando em Editar. */
   emLeitura?: boolean;
@@ -127,6 +136,22 @@ export function SecaoCabecalho({
             dica="Não sai no PDF. Vazio usa o percentual da indústria."
             defaultValue={valores.comissaoPercentual}
           />
+
+          {prepostos && (
+            <Selecao
+              name="representanteId"
+              rotulo="Dividir a comissão com"
+              dica="Só os prepostos que atendem este cliente. Não sai no PDF."
+              defaultValue={valores.representanteId}
+            >
+              <option value="">Ninguém — fica com o escritório</option>
+              {prepostos.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nome}
+                </option>
+              ))}
+            </Selecao>
+          )}
         </fieldset>
       </SecaoCartao>
 

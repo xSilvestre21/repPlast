@@ -28,6 +28,7 @@ import { SecaoLogo } from "./logo-industria";
 import { Check, CircleCheck, CircleOff, Factory, Pencil } from "lucide-react";
 import { Pagina } from "@/components/pagina";
 import { nomeCompleto } from "@/lib/nome-usuario";
+import { soIndustriasMarcadas } from "@/lib/industrias-do-ator";
 
 export default async function PaginaFornecedor({
   params,
@@ -35,10 +36,12 @@ export default async function PaginaFornecedor({
 }: PageProps<"/fornecedores/[id]">) {
   const { id } = await params;
 
-  const { organizacaoId, db, ehAdmin, plano } = await escopoAtual();
+  const { organizacaoId, usuarioId, db, ehAdmin, plano } = await escopoAtual();
 
   const fornecedor = await db.fornecedor.findFirst({
-    where: { id, organizacaoId },
+    // A indústria só legível por um pedido (ver `soIndustriasMarcadas`) não
+    // abre a ficha: o preposto vê o nome no pedido, não o cadastro dela.
+    where: { id, organizacaoId, ...soIndustriasMarcadas({ ehAdmin, usuarioId }) },
     // `omit` do logo: são bytes que não têm uso nesta página, e trazê-los a
     // cada carregamento seria desperdício. A imagem vem pela rota própria.
     omit: { logo: true },
@@ -60,9 +63,10 @@ export default async function PaginaFornecedor({
    * A ficha abre para LEITURA, como a do cliente e a do produto: IPI, comissão
    * e preço de material entram na conta de todo pedido, e uma tela que já chega
    * editável convida a mexer sem querer. Editável só quando se clicou em Editar
-   * (`?editar=1`).
+   * (`?editar=1`) — e só para o administrador: o preposto consulta o
+   * cadastro, não mexe nele.
    */
-  const editavel = parametros.editar === "1";
+  const editavel = ehAdmin && parametros.editar === "1";
 
   /*
    * A seção de quem atende só faz sentido para o administrador de um escritório
@@ -87,6 +91,7 @@ export default async function PaginaFornecedor({
         descricao="Condições comerciais, logo e aditivos desta indústria."
         selo={!fornecedor.ativo ? <Selo tom="cancelado">Inativa</Selo> : undefined}
         acao={
+          ehAdmin && (
           <div className="flex flex-wrap gap-2">
             {/* Cada seção desta ficha salva sozinha, então editar não termina
                 necessariamente no botão do formulário de cima: "Concluir" é a
@@ -123,6 +128,7 @@ export default async function PaginaFornecedor({
               acao={excluirFornecedor.bind(null, fornecedor.id)}
             />
           </div>
+          )
         }
       />
 

@@ -41,7 +41,7 @@ import {
   type RepasseLancado,
 } from "@/lib/comissao-consulta";
 import { ratearComissao } from "@/lib/comissao";
-import { corDoPreposto } from "@/lib/cor-preposto";
+import { prepostosComCor } from "@/lib/cores-prepostos";
 import { escreverNumeroBr } from "@/lib/numero-br";
 import { escopoAtual } from "@/lib/sessao";
 
@@ -60,7 +60,6 @@ import { PainelMeta } from "./painel-meta";
 import { LinhaRepasse, ResumoRepasse, type DadosRepasse } from "./repasse";
 import { Pagina } from "@/components/pagina";
 import { NavegadorMes, nomeDoMes } from "@/components/navegador-mes";
-import { nomeCompleto } from "@/lib/nome-usuario";
 
 /** "1 pedido", "8 pedidos" — no lugar do "pedido(s)" de formulário. */
 function plural(n: number, palavra: string): string {
@@ -83,13 +82,7 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
     repassesLancados(db, organizacaoId, ehAdmin ? null : usuarioId),
     // Os nomes de quem tem saldo sem ter vendido nada no mês, e a ordem de
     // cadastro, que decide a cor de cada um. Só o admin lista.
-    ehAdmin
-      ? db.usuario.findMany({
-          where: { organizacaoId, papel: "REPRESENTANTE" },
-          orderBy: [{ criadoEm: "asc" }, { id: "asc" }],
-          select: { id: true, nome: true, sobrenome: true },
-        }).then((lista) => lista.map((u) => ({ ...u, nome: nomeCompleto(u) })))
-      : Promise.resolve([]),
+    ehAdmin ? prepostosComCor(db, organizacaoId) : Promise.resolve([]),
   ]);
 
   /*
@@ -163,8 +156,7 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
    * Entra também quem não vendeu no mês mas tem saldo de repasse: dívida de
    * agosto não pode sumir da tela em setembro só porque setembro foi fraco.
    */
-  // Inativos entram na conta de propósito: tirá-los mudaria a cor de quem veio depois.
-  const cores = new Map(prepostos.map((u, i) => [u.id, corDoPreposto(i)]));
+  const cores = new Map(prepostos.map((u) => [u.id, u.cor]));
 
   const pedidosPorPreposto = Map.groupBy(
     pedidos.filter((p) => prepostoDoPedido(p)),

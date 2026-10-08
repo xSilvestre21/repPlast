@@ -13,6 +13,7 @@ import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { type Ator, dbAdministrativo, dbParaOrganizacao } from "./db";
+import { soIndustriasMarcadas } from "./industrias-do-ator";
 
 /**
  * No PostgreSQL, superusuário (e qualquer papel com BYPASSRLS) ignora as
@@ -180,13 +181,14 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     ana = await criarUsuario("Ana", "REPRESENTANTE");
     bruno = await criarUsuario("Bruno", "REPRESENTANTE");
 
-    const criarCliente = async (apelido: string, representanteId: string | null) => {
+    // Quem atende o cliente é a tabela `cliente_preposto`; nenhum é do escritório.
+    const criarCliente = async (apelido: string, prepostoId: string | null) => {
       const c = await admin.cliente.create({
         data: {
           organizacaoId: escritorio,
           apelido,
           razaoSocial: `${apelido} LTDA`,
-          representanteId,
+          ...(prepostoId ? { prepostos: { create: { usuarioId: prepostoId } } } : {}),
         },
       });
       return c.id;
@@ -199,6 +201,10 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
 
     const fornecedor = await admin.fornecedor.create({
       data: { organizacaoId: escritorio, nome: "Indústria Plus" },
+    });
+    // Os dois trabalham com ela: o preposto só vê a indústria marcada para ele.
+    await admin.fornecedorPreposto.createMany({
+      data: [ana, bruno].map((a) => ({ fornecedorId: fornecedor.id, usuarioId: a.usuarioId })),
     });
 
     const p = await admin.pedido.create({
@@ -217,12 +223,12 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     await admin.organizacao.deleteMany({ where: { id: escritorio } });
   });
 
-  it("o preposto vê a própria carteira e a do escritório, não a do colega", async () => {
+  it("o preposto vê só a própria carteira — nem a do escritório, nem a do colega", async () => {
     const apelidos = (
       await dbParaOrganizacao(escritorio, ana).cliente.findMany({ orderBy: { apelido: "asc" } })
     ).map((c) => c.apelido);
 
-    expect(apelidos).toEqual(["DA-ANA", "DA-CASA"]);
+    expect(apelidos).toEqual(["DA-ANA"]);
   });
 
   it("o administrador vê a carteira inteira", async () => {
@@ -251,17 +257,147 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     expect(intacto?.apelido).toBe("DO-BRUNO");
   });
 
-  it("não deixa carimbar um cliente novo com o nome do colega", async () => {
+  it("não deixa cadastrar cliente em nome do colega", async () => {
     await expect(
-      dbParaOrganizacao(escritorio, ana).cliente.create({
+      dbParaOrganizacao(escritorio, ana).cliente.createMany({
+        data: [
+          {
+            organizacaoId: escritorio,
+            apelido: "INVASOR",
+            razaoSocial: "Invasor LTDA",
+            criadoPorId: bruno.usuarioId,
+          },
+        ],
+      }),
+    ).rejects.toThrow();
+  });
+
+  /*
+   * Cadastro é do escritório: o preposto consulta cliente, produto e indústria,
+   * e lança pedido em cima deles, mas não cria, altera nem exclui. A única
+   * coisa que ele move na indústria é o contador de número de pedido — é ele
+   * lançando pedido que o empurra.
+   */
+  it("cadastro é só do administrador — o preposto só move o contador da indústria", async () => {
+    const comoAna = dbParaOrganizacao(escritorio, ana);
+    const industria = await admin.fornecedor.findFirstOrThrow({
+      where: { organizacaoId: escritorio },
+      select: { id: true, nome: true, proximoNumeroPedido: true },
+    });
+
+    // Cliente: nem cadastrar em nome próprio, nem se vincular, nem alterar o
+    // que ela atende, nem inativar.
+    await expect(
+      comoAna.cliente.createMany({
+        data: [{ organizacaoId: escritorio, apelido: "NOVO", razaoSocial: "Novo LTDA", criadoPorId: ana.usuarioId }],
+      }),
+    ).rejects.toThrow();
+    const casa = await admin.cliente.findFirstOrThrow({
+      where: { organizacaoId: escritorio, apelido: "DA-CASA" },
+    });
+    await expect(
+      comoAna.clientePreposto.create({ data: { clienteId: casa.id, usuarioId: ana.usuarioId } }),
+    ).rejects.toThrow();
+    for (const data of [{ apelido: "EDITADO" }, { ativo: false }]) {
+      const { count } = await comoAna.cliente.updateMany({ where: { id: clienteDaAna }, data });
+      expect(count).toBe(0);
+    }
+    expect((await comoAna.cliente.deleteMany({ where: { id: clienteDaAna } })).count).toBe(0);
+    expect((await admin.cliente.findUniqueOrThrow({ where: { id: clienteDaAna } })).apelido).toBe(
+      "DA-ANA",
+    );
+
+    // Produto, nem para o cliente que ela atende.
+    await expect(
+      comoAna.produto.create({
         data: {
           organizacaoId: escritorio,
-          apelido: "INVASOR",
-          razaoSocial: "Invasor LTDA",
-          representanteId: bruno.usuarioId,
+          fornecedorId: industria.id,
+          clienteId: clienteDaAna,
+          familia: "STRETCH",
+          descricao: "dela",
+          precoKg: "10",
         },
       }),
     ).rejects.toThrow();
+    const produto = await admin.produto.create({
+      data: {
+        organizacaoId: escritorio,
+        fornecedorId: industria.id,
+        clienteId: clienteDaAna,
+        familia: "STRETCH",
+        descricao: "do escritório",
+        precoKg: "10",
+      },
+    });
+    expect(
+      (await comoAna.produto.updateMany({ where: { id: produto.id }, data: { precoKg: "1" } }))
+        .count,
+    ).toBe(0);
+
+    // Indústria: nem cadastrar, nem mexer no cadastro, nem marcar-se em outra,
+    // nem lançar contato ou aditivo.
+    await expect(
+      comoAna.fornecedor.create({ data: { organizacaoId: escritorio, nome: "Dela" } }),
+    ).rejects.toThrow();
+    await expect(
+      comoAna.fornecedor.update({ where: { id: industria.id }, data: { comissaoPercentual: "99" } }),
+    ).rejects.toThrow();
+    await expect(
+      comoAna.contatoFornecedor.create({
+        data: { fornecedorId: industria.id, email: "x@industria.test", ordem: 0 },
+      }),
+    ).rejects.toThrow();
+    await expect(
+      comoAna.aditivo.create({
+        data: { fornecedorId: industria.id, nome: "UV", sufixoDescricao: "UV", tipo: "POR_KG", valor: "5" },
+      }),
+    ).rejects.toThrow();
+
+    // O contador, sim: é o que lançar pedido faz.
+    const contador = await comoAna.fornecedor.update({
+      where: { id: industria.id },
+      data: { proximoNumeroPedido: { increment: 1 } },
+      select: { proximoNumeroPedido: true },
+    });
+    expect(contador.proximoNumeroPedido).toBe(industria.proximoNumeroPedido + 1);
+
+    // E o administrador faz tudo isso.
+    const comoDono = dbParaOrganizacao(escritorio, dono);
+    await comoDono.fornecedor.update({ where: { id: industria.id }, data: { telefone: "1" } });
+    await comoDono.produto.update({ where: { id: produto.id }, data: { precoKg: "11" } });
+
+    await admin.produto.delete({ where: { id: produto.id } });
+    await admin.fornecedor.update({
+      where: { id: industria.id },
+      data: { proximoNumeroPedido: industria.proximoNumeroPedido, telefone: null },
+    });
+  });
+
+  it("um cliente pode ser atendido por mais de um preposto", async () => {
+    const id = (
+      await admin.cliente.create({
+        data: {
+          organizacaoId: escritorio,
+          apelido: "DOS-DOIS",
+          razaoSocial: "Dos Dois LTDA",
+          prepostos: { create: [{ usuarioId: ana.usuarioId }, { usuarioId: bruno.usuarioId }] },
+        },
+      })
+    ).id;
+
+    for (const ator of [ana, bruno]) {
+      expect(await dbParaOrganizacao(escritorio, ator).cliente.findUnique({ where: { id } })).not.toBeNull();
+    }
+    // Cada um lê só o próprio vínculo; quem mais atende é assunto do escritório.
+    expect(
+      await dbParaOrganizacao(escritorio, ana).clientePreposto.findMany({ where: { clienteId: id } }),
+    ).toHaveLength(1);
+    expect(
+      await dbParaOrganizacao(escritorio, dono).clientePreposto.findMany({ where: { clienteId: id } }),
+    ).toHaveLength(2);
+
+    await admin.cliente.delete({ where: { id } });
   });
 
   it("o pedido segue o mesmo corte", async () => {
@@ -339,6 +475,41 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     ).rejects.toThrow();
   });
 
+  /*
+   * A comissão do preposto é de leitura: o pedido é dele, mas o acerto (o que
+   * a indústria pagou, a entrega, as parcelas) é do escritório.
+   */
+  it("o preposto lê o acerto do próprio pedido, mas não o lança", async () => {
+    const comoAna = dbParaOrganizacao(escritorio, ana);
+
+    expect(await comoAna.parcelaRecebimento.findMany({ where: { pedidoId: pedidoDaAna } })).toHaveLength(1);
+
+    await expect(
+      comoAna.pedido.update({ where: { id: pedidoDaAna }, data: { valorRecebido: "10" } }),
+    ).rejects.toThrow();
+    await expect(
+      comoAna.pedido.update({
+        where: { id: pedidoDaAna },
+        data: { entregueEm: new Date("2026-10-05T00:00:00Z") },
+      }),
+    ).rejects.toThrow();
+    const { count } = await comoAna.parcelaRecebimento.updateMany({
+      where: { pedidoId: pedidoDaAna },
+      data: { valorRecebido: "1" },
+    });
+    expect(count).toBe(0);
+
+    // O resto do pedido continua dela para editar.
+    await comoAna.pedido.update({ where: { id: pedidoDaAna }, data: { transportadora: "TESTE" } });
+
+    // E o administrador acerta normalmente.
+    await dbParaOrganizacao(escritorio, dono).pedido.update({
+      where: { id: pedidoDaAna },
+      data: { valorRecebido: "10" },
+    });
+    await admin.pedido.update({ where: { id: pedidoDaAna }, data: { valorRecebido: null, transportadora: null } });
+  });
+
   it("o histórico de envios da proposta herda o corte do orçamento", async () => {
     const { fornecedorId } = await admin.pedido.findUniqueOrThrow({ where: { id: pedidoDaAna } });
     const proposta = await admin.orcamento.create({
@@ -348,6 +519,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
         clienteId: clienteDaAna,
         numero: 1,
         representanteId: ana.usuarioId,
+        criadoPorId: ana.usuarioId,
       },
     });
     await admin.envioOrcamento.create({
@@ -372,6 +544,147 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     expect(await dbParaOrganizacao(escritorio, bruno).pedidoEdicao.findMany()).toHaveLength(0);
     expect(await dbParaOrganizacao(escritorio, ana).pedidoEdicao.findMany()).toHaveLength(1);
     expect(await dbParaOrganizacao(escritorio, dono).pedidoEdicao.findMany()).toHaveLength(1);
+  });
+
+  /*
+   * O preposto vê o pedido que digitou e o que lhe paga comissão — e não o do
+   * escritório. A proposta, só a que ele digitou: a que o escritório monta para
+   * um cliente dele não aparece.
+   */
+  it("pedido: o que ele digitou e o que lhe paga, nunca o do escritório", async () => {
+    const { fornecedorId } = await admin.pedido.findUniqueOrThrow({ where: { id: pedidoDaAna } });
+    const casa = await admin.cliente.findFirstOrThrow({
+      where: { organizacaoId: escritorio, apelido: "DA-CASA" },
+    });
+    const criar = (
+      numero: number,
+      dados: { representanteId?: string; criadoPorId?: string; clienteId: string },
+    ) => admin.pedido.create({ data: { organizacaoId: escritorio, fornecedorId, numero, ...dados } });
+
+    const doEscritorio = await criar(101, { clienteId: casa.id });
+    const digitadoPelaAna = await criar(102, { clienteId: clienteDaAna, criadoPorId: ana.usuarioId });
+
+    const daAna = (await dbParaOrganizacao(escritorio, ana).pedido.findMany()).map((p) => p.id);
+    // `pedidoDaAna` paga a Ana: lançado para a carteira dela, sem autor.
+    expect(daAna.sort()).toEqual([pedidoDaAna, digitadoPelaAna.id].sort());
+    expect(await dbParaOrganizacao(escritorio, bruno).pedido.findMany()).toHaveLength(0);
+    expect(await dbParaOrganizacao(escritorio, dono).pedido.findMany()).toHaveLength(3);
+
+    await admin.pedido.deleteMany({ where: { id: { in: [doEscritorio.id, digitadoPelaAna.id] } } });
+  });
+
+  it("orçamento: só o que ele digitou", async () => {
+    const { fornecedorId } = await admin.pedido.findUniqueOrThrow({ where: { id: pedidoDaAna } });
+    const criar = (numero: number, criadoPorId: string) =>
+      admin.orcamento.create({
+        data: {
+          organizacaoId: escritorio,
+          fornecedorId,
+          clienteId: clienteDaAna,
+          numero,
+          representanteId: ana.usuarioId,
+          criadoPorId,
+        },
+      });
+
+    const doEscritorioParaAna = await criar(201, dono.usuarioId);
+    const daAna = await criar(202, ana.usuarioId);
+
+    const vistos = (await dbParaOrganizacao(escritorio, ana).orcamento.findMany()).map((o) => o.id);
+    expect(vistos).toContain(daAna.id);
+    expect(vistos).not.toContain(doEscritorioParaAna.id);
+
+    // O item segue o orçamento.
+    await admin.orcamentoItem.create({
+      data: {
+        orcamentoId: doEscritorioParaAna.id,
+        ordem: 1,
+        familia: "SACO",
+        descricao: "item do escritório",
+        unidade: "MIL",
+        quantidade: "1",
+        precoUnitario: "1",
+        totalSemIpi: "1",
+        valorIpi: "0",
+        total: "1",
+      },
+    });
+    expect(
+      await dbParaOrganizacao(escritorio, ana).orcamentoItem.findMany({
+        where: { orcamentoId: doEscritorioParaAna.id },
+      }),
+    ).toHaveLength(0);
+
+    await admin.orcamento.deleteMany({ where: { id: { in: [doEscritorioParaAna.id, daAna.id] } } });
+  });
+
+  it("ninguém cria pedido ou orçamento em nome de outro", async () => {
+    const { fornecedorId } = await admin.pedido.findUniqueOrThrow({ where: { id: pedidoDaAna } });
+    const comoAna = dbParaOrganizacao(escritorio, ana);
+
+    await expect(
+      comoAna.pedido.create({
+        data: {
+          organizacaoId: escritorio,
+          fornecedorId,
+          clienteId: clienteDaAna,
+          numero: 301,
+          representanteId: ana.usuarioId,
+          criadoPorId: dono.usuarioId,
+        },
+      }),
+    ).rejects.toThrow();
+    await expect(
+      comoAna.orcamento.create({
+        data: { organizacaoId: escritorio, fornecedorId, numero: 301, criadoPorId: bruno.usuarioId },
+      }),
+    ).rejects.toThrow();
+  });
+
+  /*
+   * O cliente que mudou de carteira continua com nome no pedido antigo de quem
+   * o digitou — mas o cadastro já não é dele para alterar.
+   */
+  it("cliente de pedido que ele vê continua legível, mas não alterável", async () => {
+    const { fornecedorId } = await admin.pedido.findUniqueOrThrow({ where: { id: pedidoDaAna } });
+    const cliente = await admin.cliente.create({
+      data: {
+        organizacaoId: escritorio,
+        apelido: "MUDOU",
+        razaoSocial: "Mudou LTDA",
+        prepostos: { create: { usuarioId: ana.usuarioId } },
+      },
+    });
+    const pedido = await admin.pedido.create({
+      data: {
+        organizacaoId: escritorio,
+        fornecedorId,
+        clienteId: cliente.id,
+        numero: 401,
+        representanteId: ana.usuarioId,
+        criadoPorId: ana.usuarioId,
+      },
+    });
+    // Passa da Ana para o Bruno.
+    await admin.clientePreposto.deleteMany({ where: { clienteId: cliente.id } });
+    await admin.clientePreposto.create({ data: { clienteId: cliente.id, usuarioId: bruno.usuarioId } });
+
+    const comoAna = dbParaOrganizacao(escritorio, ana);
+    const lido = await comoAna.pedido.findUniqueOrThrow({
+      where: { id: pedido.id },
+      select: { cliente: { select: { apelido: true } } },
+    });
+    expect(lido.cliente?.apelido).toBe("MUDOU");
+
+    // Ler pela exceção não deixa editar o cadastro.
+    const { count } = await comoAna.cliente.updateMany({
+      where: { id: cliente.id },
+      data: { apelido: "EDITADO" },
+    });
+    expect(count).toBe(0);
+
+    await admin.pedido.delete({ where: { id: pedido.id } });
+    await admin.cliente.delete({ where: { id: cliente.id } });
   });
 
   /*
@@ -593,7 +906,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     ).rejects.toThrow();
   });
 
-  it("indústria sem permissão cadastrada é de todos", async () => {
+  it("o preposto vê a indústria marcada para ele", async () => {
     const nomes = (await dbParaOrganizacao(escritorio, bruno).fornecedor.findMany()).map(
       (f) => f.nome,
     );
@@ -601,28 +914,138 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     expect(nomes).toEqual(["Indústria Plus"]);
   });
 
-  it("cadastrar permissão fecha a indústria para quem ficou de fora", async () => {
-    const industria = await admin.fornecedor.findFirst({
+  it("indústria sem marca para o preposto não aparece para ele — nem sem marca nenhuma", async () => {
+    const industria = await admin.fornecedor.findFirstOrThrow({
       where: { organizacaoId: escritorio },
       select: { id: true },
     });
 
-    await admin.fornecedorPreposto.create({
-      data: { fornecedorId: industria!.id, usuarioId: ana.usuarioId },
+    await admin.fornecedorPreposto.delete({
+      where: { fornecedorId_usuarioId: { fornecedorId: industria.id, usuarioId: bruno.usuarioId } },
     });
 
     expect(await dbParaOrganizacao(escritorio, ana).fornecedor.findMany()).toHaveLength(1);
     expect(await dbParaOrganizacao(escritorio, bruno).fornecedor.findMany()).toHaveLength(0);
-    // O administrador não depende de permissão nenhuma.
-    expect(await dbParaOrganizacao(escritorio, dono).fornecedor.findMany()).toHaveLength(1);
 
-    await admin.fornecedorPreposto.deleteMany({ where: { fornecedorId: industria!.id } });
+    // Sem linha nenhuma, ninguém vê — a ausência não abre para o escritório.
+    // (Uma indústria nova: a desta suíte tem pedido da Ana, e isso a deixa legível.)
+    const outra = await admin.fornecedor.create({
+      data: { organizacaoId: escritorio, nome: "Indústria sem marca" },
+    });
+    const nomesDe = async (ator: Ator) =>
+      (await dbParaOrganizacao(escritorio, ator).fornecedor.findMany()).map((f) => f.nome);
+    expect(await nomesDe(ana)).not.toContain("Indústria sem marca");
+    // O administrador não depende de marca nenhuma.
+    expect(await nomesDe(dono)).toContain("Indústria sem marca");
+
+    await admin.fornecedor.delete({ where: { id: outra.id } });
+    await admin.fornecedorPreposto.create({
+      data: { fornecedorId: industria.id, usuarioId: bruno.usuarioId },
+    });
+  });
+
+  /*
+   * Desmarcar uma indústria não pode deixar o pedido do preposto sem nome:
+   * ele continua lendo a indústria dos pedidos que vê — mas não o catálogo
+   * dela, não a recebe para escolher, e não lança pedido novo nela.
+   */
+  it("a indústria desmarcada continua legível no pedido do preposto, e só nele", async () => {
+    const industria = await admin.fornecedor.findFirstOrThrow({
+      where: { organizacaoId: escritorio },
+      select: { id: true },
+    });
+    await admin.produto.create({
+      data: {
+        organizacaoId: escritorio,
+        fornecedorId: industria.id,
+        familia: "STRETCH",
+        descricao: "do catálogo",
+        precoKg: "10",
+      },
+    });
+    await admin.fornecedorPreposto.delete({
+      where: { fornecedorId_usuarioId: { fornecedorId: industria.id, usuarioId: ana.usuarioId } },
+    });
+
+    const comoAna = dbParaOrganizacao(escritorio, ana);
+
+    const pedido = await comoAna.pedido.findUniqueOrThrow({
+      where: { id: pedidoDaAna },
+      select: { fornecedor: { select: { nome: true } } },
+    });
+    expect(pedido.fornecedor?.nome).toBe("Indústria Plus");
+
+    expect(await comoAna.produto.findMany()).toHaveLength(0);
+    expect(
+      await comoAna.fornecedor.findMany({
+        where: soIndustriasMarcadas({ ehAdmin: false, usuarioId: ana.usuarioId }),
+      }),
+    ).toHaveLength(0);
+    await expect(
+      comoAna.pedido.create({
+        data: {
+          organizacaoId: escritorio,
+          fornecedorId: industria.id,
+          clienteId: clienteDaAna,
+          numero: 2,
+          representanteId: ana.usuarioId,
+          criadoPorId: ana.usuarioId,
+        },
+      }),
+    ).rejects.toThrow();
+    await expect(
+      comoAna.orcamento.create({
+        data: {
+          organizacaoId: escritorio,
+          fornecedorId: industria.id,
+          numero: 1,
+          representanteId: ana.usuarioId,
+          criadoPorId: ana.usuarioId,
+        },
+      }),
+    ).rejects.toThrow();
+
+    // Bruno não vê o pedido da Ana — e por ele, continua lendo só pela marca.
+    expect(
+      await dbParaOrganizacao(escritorio, bruno).fornecedor.findMany({
+        where: soIndustriasMarcadas({ ehAdmin: false, usuarioId: bruno.usuarioId }),
+      }),
+    ).toHaveLength(1);
+
+    await admin.fornecedorPreposto.create({
+      data: { fornecedorId: industria.id, usuarioId: ana.usuarioId },
+    });
+    await admin.produto.deleteMany({ where: { organizacaoId: escritorio } });
+  });
+
+  it("com a indústria marcada, o preposto lança pedido nela", async () => {
+    const industria = await admin.fornecedor.findFirstOrThrow({
+      where: { organizacaoId: escritorio },
+      select: { id: true },
+    });
+
+    const novo = await dbParaOrganizacao(escritorio, ana).pedido.create({
+      data: {
+        organizacaoId: escritorio,
+        fornecedorId: industria.id,
+        clienteId: clienteDaAna,
+        numero: 3,
+        representanteId: ana.usuarioId,
+        criadoPorId: ana.usuarioId,
+      },
+    });
+
+    await admin.pedido.delete({ where: { id: novo.id } });
   });
 
   it("o produto segue a permissão da indústria", async () => {
     const industria = await admin.fornecedor.findFirst({
       where: { organizacaoId: escritorio },
       select: { id: true },
+    });
+
+    await admin.fornecedorPreposto.delete({
+      where: { fornecedorId_usuarioId: { fornecedorId: industria!.id, usuarioId: bruno.usuarioId } },
     });
 
     await admin.produto.create({
@@ -635,14 +1058,12 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
       },
     });
 
-    await admin.fornecedorPreposto.create({
-      data: { fornecedorId: industria!.id, usuarioId: ana.usuarioId },
-    });
-
     expect(await dbParaOrganizacao(escritorio, ana).produto.findMany()).toHaveLength(1);
     expect(await dbParaOrganizacao(escritorio, bruno).produto.findMany()).toHaveLength(0);
 
-    await admin.fornecedorPreposto.deleteMany({ where: { fornecedorId: industria!.id } });
+    await admin.fornecedorPreposto.create({
+      data: { fornecedorId: industria!.id, usuarioId: bruno.usuarioId },
+    });
     await admin.produto.deleteMany({ where: { organizacaoId: escritorio } });
   });
 

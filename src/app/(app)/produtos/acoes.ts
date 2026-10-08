@@ -3,13 +3,19 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { escopoAtual } from "@/lib/sessao";
+import { escopoAtual, exigirAdmin } from "@/lib/sessao";
 
 import { dadosDoFormulario, lerAditivos } from "./leitura";
 
 export type EstadoFormulario = { erro?: string };
 
+/**
+ * Cadastro de produto é do administrador: o preposto consulta,
+ * mas não cria, altera nem exclui. O banco recusa de todo jeito (migration
+ * `cadastros_so_do_admin`); a checagem aqui é para a mensagem ser legível.
+ */
 async function contexto() {
+  await exigirAdmin();
   return escopoAtual();
 }
 

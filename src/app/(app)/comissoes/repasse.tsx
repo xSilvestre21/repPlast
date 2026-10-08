@@ -16,6 +16,7 @@ import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useActionState, useId, useState } from "react";
 
+import { CampoData } from "@/components/campo-data";
 import { CampoMoeda } from "@/components/campo-mascarado";
 import {
   Botao,
@@ -31,7 +32,7 @@ import {
 } from "@/components/ui";
 
 import type { EstadoFormulario } from "./acoes";
-import { BolinhaPreposto } from "./bolinha-preposto";
+import { BolinhaPreposto } from "@/components/bolinha-preposto";
 
 const DATA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "UTC" });
 
@@ -283,11 +284,12 @@ export function LinhaRepasse({
               defaultValue={sugestao}
               className="basis-36 grow"
             />
-            <Campo
-              type="date"
+            <CampoData
               name="pagoEm"
               rotulo="Pago em"
               defaultValue={hoje}
+              atalhos={[]}
+              atalhosUteis={[]}
               className="basis-40 grow"
             />
             <Campo name="observacao" rotulo="Observação" className="basis-48 grow-[2]" />

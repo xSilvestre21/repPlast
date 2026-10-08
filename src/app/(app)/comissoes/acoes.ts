@@ -124,6 +124,8 @@ export async function salvarAcerto(
   formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
+    // Acertar é do escritório: o preposto lê a comissão, não a lança.
+    await exigirAdmin();
     const { organizacaoId, db } = await escopoAtual();
 
     const acerto = lerAcerto(formData);
@@ -167,6 +169,8 @@ export async function salvarAcertoParcela(
   let pedidoId = "";
 
   try {
+    // Acertar é do escritório: o preposto lê a comissão, não a lança.
+    await exigirAdmin();
     const { organizacaoId, db } = await escopoAtual();
 
     const acerto = lerAcerto(formData);
@@ -221,6 +225,8 @@ export async function salvarParcelas(
   formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
+    // Acertar é do escritório: o preposto lê a comissão, não a lança.
+    await exigirAdmin();
     const { organizacaoId, db } = await escopoAtual();
 
     const vencimentos = formData.getAll("vencimento").map((v) => String(v).trim());
@@ -300,6 +306,8 @@ export async function desfazerParcelas(
   _formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
+    // Acertar é do escritório: o preposto lê a comissão, não a lança.
+    await exigirAdmin();
     const { organizacaoId, db } = await escopoAtual();
 
     const acertada = await db.parcelaRecebimento.findFirst({

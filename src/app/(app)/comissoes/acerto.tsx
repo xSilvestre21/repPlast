@@ -25,6 +25,7 @@ import {
 import Link from "next/link";
 import { useActionState, useId, useState } from "react";
 
+import { CampoData } from "@/components/campo-data";
 import { CampoMoeda } from "@/components/campo-mascarado";
 import { SeloStatus } from "@/components/selo-status";
 import {
@@ -39,7 +40,7 @@ import {
 import { pontualidadeEntrega } from "@/lib/comissao";
 
 import type { EstadoFormulario } from "./acoes";
-import { BolinhaPreposto } from "./bolinha-preposto";
+import { BolinhaPreposto } from "@/components/bolinha-preposto";
 import { colunasDaComissao } from "./colunas";
 import { EditorParcelas } from "./parcelas";
 
@@ -408,15 +409,14 @@ export function LinhaComissao({
                   />
                 </label>
 
-                <label className="basis-40 grow">
-                  <span className="rotulo block mb-1.5 text-tinta-2">Entregue em</span>
-                  <input
-                    type="date"
-                    name="entregueEm"
-                    defaultValue={pedido.entregueEm ?? ""}
-                    className={CLASSE_CONTROLE}
-                  />
-                </label>
+                <CampoData
+                  name="entregueEm"
+                  rotulo="Entregue em"
+                  defaultValue={pedido.entregueEm ?? ""}
+                  atalhos={[]}
+                  atalhosUteis={[]}
+                  className="basis-40 grow"
+                />
 
                 <Botao type="submit" variante="secundaria" carregando={salvando} className="px-4 py-2">
                   {salvando ? "Salvando…" : "Salvar"}

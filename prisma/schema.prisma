@@ -209,9 +209,12 @@ model Usuario {
   mensagemOrcamentoPadrao String?
 
   organizacao Organizacao          @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
-  clientes     Cliente[]
-  pedidos      Pedido[]
-  orcamentos   Orcamento[]
+  clientes     ClientePreposto[]
+  clientesCriados Cliente[] @relation("ClienteCriadoPor")
+  pedidos      Pedido[]    @relation("PedidoDoRepresentante")
+  orcamentos   Orcamento[] @relation("OrcamentoDoRepresentante")
+  pedidosCriados    Pedido[]    @relation("PedidoCriadoPor")
+  orcamentosCriados Orcamento[] @relation("OrcamentoCriadoPor")
   edicoes      OrcamentoEdicao[]
   edicoesPedido PedidoEdicao[]
   enviosOrcamento EnvioOrcamento[]
@@ -339,10 +342,16 @@ model AvisoAdiado {
 
 /// Quais indústrias cada preposto atende.
 ///
-/// A ausência é permissiva de propósito: indústria SEM nenhuma linha aqui é
-/// visível a todos do escritório. O contrário — exigir cadastro para cada
-/// preposto ver cada indústria — transformaria o primeiro dia de todo preposto
-/// numa lista de cliques, e um esquecimento viraria "sumiu a indústria".
+/// A regra é estrita: o preposto vê só as indústrias marcadas para ele (e os
+/// produtos, materiais e contatos delas), e sem nenhuma marca não vê nenhuma.
+/// Assim a marca de um preposto não mexe no que os colegas veem, e dá para
+/// editar tanto pela ficha da indústria quanto pela do preposto. Quem garante
+/// é o banco (`app_ve_fornecedor`, migration `industria_so_do_preposto_marcado`).
+///
+/// Uma exceção de leitura: a indústria de um pedido ou orçamento que o preposto
+/// vê continua legível, para o pedido não chegar sem nome — mas não aparece
+/// para escolher (`soIndustriasMarcadas`) e não aceita pedido novo
+/// (migration `industria_dos_pedidos_visiveis`).
 model FornecedorPreposto {
   fornecedorId String @db.Uuid
   usuarioId    String @db.Uuid
@@ -387,15 +396,19 @@ model Cliente {
   observacoes String?
   ativo       Boolean @default(true)
 
-  /// Preposto dono da carteira. NULO significa "é do escritório" — e é o que
-  /// vale em todo escritório do plano PADRAO, onde não há preposto nenhum.
-  representanteId String? @db.Uuid
+  /// Quem cadastrou. Não dá acesso a nada — quem vê o cliente são os prepostos
+  /// de `prepostos`. Hoje é sempre o administrador: cadastro é só dele
+  /// (migration `cadastros_so_do_admin`); antes, o preposto que cadastrava se
+  /// vinculava ao cliente por aqui.
+  criadoPorId String? @db.Uuid
 
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
   organizacao    Organizacao            @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
-  representante  Usuario?               @relation(fields: [representanteId], references: [id], onDelete: SetNull)
+  criadoPor      Usuario?               @relation("ClienteCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  /// Os prepostos que atendem este cliente — nenhum é do escritório.
+  prepostos      ClientePreposto[]
   pedidos        Pedido[]
   orcamentos     Orcamento[]
   produtos       Produto[]
@@ -403,8 +416,25 @@ model Cliente {
 
   @@index([organizacaoId])
   @@index([organizacaoId, apelido])
-  @@index([representanteId])
   @@map("cliente")
+}
+
+/// Quais prepostos atendem cada cliente — pode ser mais de um.
+///
+/// Atender é VER: o preposto vê o cliente, os produtos (e preços) dele e lança
+/// pedido para ele. Não decide comissão: cada pedido escolhe, entre os
+/// prepostos do cliente, no máximo um com quem a comissão é dividida
+/// (`Pedido.representanteId`) — nem todo pedido da mesma empresa é dividido.
+model ClientePreposto {
+  clienteId String @db.Uuid
+  usuarioId String @db.Uuid
+
+  cliente Cliente @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([clienteId, usuarioId])
+  @@index([usuarioId])
+  @@map("cliente_preposto")
 }
 
 model Fornecedor {
@@ -781,6 +811,12 @@ model Pedido {
   /// vendido.
   representanteId String? @db.Uuid
 
+  /// Quem DIGITOU o pedido — o que `representanteId` (de quem é a comissão)
+  /// não diz. O preposto vê o que digitou e o que lhe paga comissão; NULO é
+  /// do escritório (pedidos de antes deste campo sem preposto, e o importado
+  /// do SICOV), e só o administrador vê.
+  criadoPorId String? @db.Uuid
+
   /// Por que o pedido foi cancelado — cliente desistiu, indústria não entregou,
   /// erro de lançamento.
   ///
@@ -815,7 +851,8 @@ model Pedido {
   organizacao   Organizacao  @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   fornecedor    Fornecedor   @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
   cliente       Cliente      @relation(fields: [clienteId], references: [id], onDelete: Restrict)
-  representante Usuario?     @relation(fields: [representanteId], references: [id], onDelete: SetNull)
+  representante Usuario?     @relation("PedidoDoRepresentante", fields: [representanteId], references: [id], onDelete: SetNull)
+  criadoPor     Usuario?     @relation("PedidoCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
   orcamento     Orcamento?   @relation(fields: [orcamentoId], references: [id], onDelete: SetNull)
   itens         PedidoItem[]
   envios        EnvioPedido[]
@@ -831,6 +868,7 @@ model Pedido {
   // apuração do mês filtra, e sem o índice ela varre a tabela inteira.
   @@index([organizacaoId, prazoEntrega])
   @@index([representanteId])
+  @@index([criadoPorId])
   @@index([orcamentoId])
   @@map("pedido")
 }
@@ -986,8 +1024,14 @@ model Orcamento {
   valorIpi       Decimal @default(0) @db.Decimal(14, 2)
   totalGeral     Decimal @default(0) @db.Decimal(14, 2)
 
-  /// Mesmo corte do pedido: segue o dono da carteira do cliente.
+  /// O dono da carteira do cliente: é para quem vai a comissão quando a
+  /// proposta vira pedido.
   representanteId String? @db.Uuid
+
+  /// Quem DIGITOU a proposta. É o que decide quem a vê: o preposto vê só as
+  /// que ele fez — não as que o escritório montou para um cliente dele. NULO
+  /// é do escritório, e só o administrador vê.
+  criadoPorId String? @db.Uuid
 
   /// A proposta ainda está sendo montada — nasceu agora e nunca foi gravada.
   ///
@@ -1003,7 +1047,8 @@ model Orcamento {
   organizacao   Organizacao     @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   fornecedor    Fornecedor      @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
   cliente       Cliente?        @relation(fields: [clienteId], references: [id], onDelete: Restrict)
-  representante Usuario?        @relation(fields: [representanteId], references: [id], onDelete: SetNull)
+  representante Usuario?        @relation("OrcamentoDoRepresentante", fields: [representanteId], references: [id], onDelete: SetNull)
+  criadoPor     Usuario?        @relation("OrcamentoCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
   itens         OrcamentoItem[]
   edicoes       OrcamentoEdicao[]
   envios        EnvioOrcamento[]
@@ -1014,6 +1059,8 @@ model Orcamento {
   @@index([organizacaoId, status])
   @@index([clienteId])
   @@index([representanteId])
+  @@index([criadoPorId])
+  @@index([fornecedorId])
   @@map("orcamento")
 }
 

@@ -8,7 +8,7 @@ import { buscarProdutos, filtrosDosParametros } from "./consulta";
 import { ListaProdutos } from "./lista";
 
 export default async function PaginaProdutos({ searchParams }: PageProps<"/produtos">) {
-  const { organizacaoId, db } = await escopoAtual();
+  const { organizacaoId, ehAdmin, db } = await escopoAtual();
   const parametros = await searchParams;
 
   /*
@@ -35,9 +35,12 @@ export default async function PaginaProdutos({ searchParams }: PageProps<"/produ
         titulo="Produtos"
         descricao="Cada produto é de um cliente e de uma indústria — o mesmo saco cotado para dois clientes são dois produtos, com preço próprio."
         acao={
-          <BotaoLink href="/produtos/novo" icone={Plus}>
-            Novo produto
-          </BotaoLink>
+          // Cadastro é do administrador; o preposto consulta.
+          ehAdmin && (
+            <BotaoLink href="/produtos/novo" icone={Plus}>
+              Novo produto
+            </BotaoLink>
+          )
         }
       />
 

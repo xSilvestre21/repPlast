@@ -15,6 +15,7 @@
  */
 
 import type { StatusPedido } from "@/generated/prisma/enums";
+import { prepostosComCor } from "@/lib/cores-prepostos";
 import type { DbOrganizacao } from "@/lib/db";
 import { numeroProcurado } from "@/lib/numero-procurado";
 import { formatarMoeda } from "@/components/ui";
@@ -61,6 +62,11 @@ export type PedidoDaLista = {
   pedidoDoCliente: string;
   /** Vazio quando o pedido não foi cancelado, ou quando ninguém escreveu. */
   motivoCancelamento: string;
+  /**
+   * O preposto do documento, com a cor dele — só para o administrador, que vê
+   * os de todos. Nulo quando é do escritório.
+   */
+  preposto: { nome: string; cor: string } | null;
 };
 
 export type FatiaDePedidos = {
@@ -74,6 +80,7 @@ const DATA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" });
 export async function buscarPedidos(
   db: DbOrganizacao,
   organizacaoId: string,
+  ehAdmin: boolean,
   { busca, status, pagina }: { busca: string; status: FiltroStatusPedido; pagina: number },
 ): Promise<FatiaDePedidos> {
   const procurado = busca.trim();
@@ -108,7 +115,8 @@ export async function buscarPedidos(
    * sem um `count` — que, com o mesmo `OR` de `ILIKE`, custaria uma segunda
    * varredura a cada tecla digitada.
    */
-  const encontrados = await db.pedido.findMany({
+  const [encontrados, prepostos] = await Promise.all([
+    db.pedido.findMany({
     where: onde,
     orderBy: [{ criadoEm: "desc" }, { numero: "desc" }],
     take: POR_PAGINA + 1,
@@ -118,7 +126,11 @@ export async function buscarPedidos(
       fornecedor: { select: { nome: true } },
       _count: { select: { itens: true } },
     },
-  });
+    }),
+    // O preposto só vê os dele: marcar de quem é seria repetir o óbvio.
+    ehAdmin ? prepostosComCor(db, organizacaoId) : Promise.resolve([]),
+  ]);
+  const porId = new Map(prepostos.map((p) => [p.id, p]));
 
   const temMais = encontrados.length > POR_PAGINA;
 
@@ -136,6 +148,9 @@ export async function buscarPedidos(
     // voltou a valer seria contar uma história que deixou de ser verdade.
     motivoCancelamento:
       pedido.status === "CANCELADO" ? (pedido.motivoCancelamento ?? "") : "",
+    // No pedido, o preposto da COMISSÃO — o mesmo que Comissões mostra. Quem
+    // digitou só aparece quando o pedido não paga preposto nenhum.
+    preposto: porId.get(pedido.representanteId ?? pedido.criadoPorId ?? "") ?? null,
   }));
 
   return { linhas, temMais };

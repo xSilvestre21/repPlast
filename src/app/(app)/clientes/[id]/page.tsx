@@ -6,6 +6,7 @@ import { hojeIso } from "@/lib/calendario";
 import { escopoAtual } from "@/lib/sessao";
 
 import { alternarAtivoCliente, atualizarCliente, excluirCliente } from "../acoes";
+import { opcoesDeCarteira } from "../carteira";
 import { FormularioCliente } from "../formulario";
 import { BotaoExcluir } from "@/components/botao-excluir";
 import { SecaoCodigos } from "./codigos";
@@ -20,11 +21,15 @@ export default async function PaginaCliente({
 }: PageProps<"/clientes/[id]">) {
   const { id } = await params;
 
-  const { organizacaoId, db, usuarioId } = await escopoAtual();
+  const escopo = await escopoAtual();
+  const { organizacaoId, db, usuarioId, ehAdmin } = escopo;
   const hoje = hojeIso();
 
   const [cliente, produtos, compromissos] = await Promise.all([
-    db.cliente.findFirst({ where: { id, organizacaoId } }),
+    db.cliente.findFirst({
+      where: { id, organizacaoId },
+      include: { prepostos: { select: { usuarioId: true } } },
+    }),
     // Os produtos DELE. O dono é campo do produto, então a consulta é direta —
     // não há mais tabela de vínculo a atravessar.
     db.produto.findMany({
@@ -59,13 +64,17 @@ export default async function PaginaCliente({
 
   if (!cliente) notFound();
 
+  const atendem = cliente.prepostos.map((v) => v.usuarioId);
+  const prepostos = await opcoesDeCarteira(escopo, atendem);
+
   const parametros = await searchParams;
   /*
    * A ficha abre para LEITURA, como pedido e proposta gravados: uma tela que
    * já chega editável convida a mexer sem querer num cadastro que sai impresso
-   * nos pedidos. Editável só quando se clicou em Editar (`?editar=1`).
+   * nos pedidos. Editável só quando se clicou em Editar (`?editar=1`) — e
+   * só para o administrador: o preposto consulta o cadastro, não mexe nele.
    */
-  const editavel = parametros.editar === "1";
+  const editavel = ehAdmin && parametros.editar === "1";
 
   return (
     <Pagina>
@@ -76,6 +85,7 @@ export default async function PaginaCliente({
         descricao={cliente.razaoSocial}
         selo={!cliente.ativo ? <Selo tom="cancelado">Inativo</Selo> : undefined}
         acao={
+          ehAdmin && (
           <div className="flex flex-wrap gap-2">
             {!editavel && (
               <BotaoLink href={`/clientes/${cliente.id}?editar=1`} icone={Pencil}>
@@ -99,6 +109,7 @@ export default async function PaginaCliente({
               acao={excluirCliente.bind(null, cliente.id)}
             />
           </div>
+          )
         }
       />
 
@@ -115,6 +126,7 @@ export default async function PaginaCliente({
           acao={atualizarCliente.bind(null, cliente.id)}
           rotuloEnvio="Salvar e voltar"
           editavel={editavel}
+          prepostos={prepostos}
           valores={{
             apelido: cliente.apelido,
             razaoSocial: cliente.razaoSocial,
@@ -130,6 +142,7 @@ export default async function PaginaCliente({
             emailNfe: cliente.emailNfe ?? "",
             prazoPagamento: cliente.prazoPagamento ?? "",
             observacoes: cliente.observacoes ?? "",
+            prepostoIds: atendem,
           }}
         />
 

@@ -1,5 +1,6 @@
 import { escreverNumeroBr } from "@/lib/numero-br";
 import { escopoAtual } from "@/lib/sessao";
+import { soIndustriasMarcadas } from "@/lib/industrias-do-ator";
 
 import type { ClienteOpcao, FornecedorOpcao } from "./formulario";
 
@@ -12,7 +13,7 @@ import type { ClienteOpcao, FornecedorOpcao } from "./formulario";
  * mesmo motivo: escolher "PEAD" precisa sugerir o fator kg na hora.
  */
 export async function carregarFornecedores(produtoId?: string): Promise<FornecedorOpcao[]> {
-  const { organizacaoId, db } = await escopoAtual();
+  const { organizacaoId, usuarioId, ehAdmin, db } = await escopoAtual();
 
   /*
    * Na edição, a indústria do produto e os aditivos que ele já usa entram
@@ -23,7 +24,11 @@ export async function carregarFornecedores(produtoId?: string): Promise<Forneced
   const doProduto = produtoId ? [{ produtos: { some: { id: produtoId } } }] : [];
 
   const fornecedores = await db.fornecedor.findMany({
-    where: { organizacaoId, OR: [{ ativo: true }, ...doProduto] },
+    where: {
+      organizacaoId,
+      OR: [{ ativo: true }, ...doProduto],
+      ...soIndustriasMarcadas({ ehAdmin, usuarioId }),
+    },
     orderBy: { nome: "asc" },
     include: {
       aditivos: {

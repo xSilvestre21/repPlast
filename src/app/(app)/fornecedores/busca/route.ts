@@ -23,7 +23,8 @@ export async function GET(requisicao: Request) {
   const parametros = new URL(requisicao.url).searchParams;
   const pagina = Math.max(0, Number(parametros.get("pagina")) || 0);
 
-  const fatia = await buscarFornecedores(db, sessao.organizacaoId, {
+  const ator = { ehAdmin: sessao.papel === "ADMIN", usuarioId: sessao.usuarioId };
+  const fatia = await buscarFornecedores(db, sessao.organizacaoId, ator, {
     busca: parametros.get("busca") ?? "",
     situacao: situacaoDoParametro(parametros.get("situacao")),
     pagina,

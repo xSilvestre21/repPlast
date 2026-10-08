@@ -12,6 +12,7 @@
  */
 
 import type { StatusOrcamento } from "@/generated/prisma/enums";
+import { prepostosComCor } from "@/lib/cores-prepostos";
 import type { DbOrganizacao } from "@/lib/db";
 import { numeroProcurado } from "@/lib/numero-procurado";
 import { formatarMoeda } from "@/components/ui";
@@ -53,6 +54,11 @@ export type OrcamentoDaLista = {
   valor: string;
   /** Vazio quando a proposta não foi recusada, ou quando ninguém escreveu. */
   motivoRecusa: string;
+  /**
+   * O preposto do documento, com a cor dele — só para o administrador, que vê
+   * os de todos. Nulo quando é do escritório.
+   */
+  preposto: { nome: string; cor: string } | null;
 };
 
 export type FatiaDeOrcamentos = {
@@ -66,6 +72,7 @@ const DATA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "U
 export async function buscarOrcamentos(
   db: DbOrganizacao,
   organizacaoId: string,
+  ehAdmin: boolean,
   { busca, status, pagina }: { busca: string; status: FiltroStatusOrcamento; pagina: number },
 ): Promise<FatiaDeOrcamentos> {
   const procurado = busca.trim();
@@ -94,7 +101,8 @@ export async function buscarOrcamentos(
    * sem um `count` — que, com o mesmo `OR` de `ILIKE`, custaria uma segunda
    * varredura a cada tecla digitada.
    */
-  const encontrados = await db.orcamento.findMany({
+  const [encontrados, prepostos] = await Promise.all([
+    db.orcamento.findMany({
     where: onde,
     orderBy: [{ criadoEm: "desc" }, { numero: "desc" }],
     take: POR_PAGINA + 1,
@@ -104,7 +112,11 @@ export async function buscarOrcamentos(
       fornecedor: { select: { nome: true } },
       _count: { select: { itens: true, pedidos: true } },
     },
-  });
+    }),
+    // O preposto só vê os dele: marcar quem fez seria repetir o óbvio.
+    ehAdmin ? prepostosComCor(db, organizacaoId) : Promise.resolve([]),
+  ]);
+  const porId = new Map(prepostos.map((p) => [p.id, p]));
 
   const temMais = encontrados.length > POR_PAGINA;
 
@@ -124,6 +136,8 @@ export async function buscarOrcamentos(
       valor: formatarMoeda(orcamento.totalGeral.toString()),
       motivoRecusa:
         orcamento.status === "RECUSADO" ? (orcamento.motivoRecusa ?? "") : "",
+      // Na proposta, quem a FEZ — é o que decide quem a vê.
+      preposto: porId.get(orcamento.criadoPorId ?? "") ?? null,
     };
   });
 

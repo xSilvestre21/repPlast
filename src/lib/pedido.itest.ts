@@ -201,7 +201,7 @@ describe("numeração do pedido", () => {
  * aqui.
  */
 async function procurar(texto: string, status: "todos" | "aberto" | "enviado" | "cancelado" = "todos") {
-  const fatia = await buscarPedidos(admin as unknown as DbOrganizacao, buscaOrganizacaoId, {
+  const fatia = await buscarPedidos(admin as unknown as DbOrganizacao, buscaOrganizacaoId, false, {
     busca: texto,
     status,
     pagina: 0,

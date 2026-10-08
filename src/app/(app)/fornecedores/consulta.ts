@@ -7,6 +7,7 @@
  */
 
 import type { DbOrganizacao } from "@/lib/db";
+import { soIndustriasMarcadas } from "@/lib/industrias-do-ator";
 
 // O CNPJ da indústria é guardado do mesmo jeito que o do cliente, então quem
 // digita só os números precisa da mesma máscara para achar.
@@ -44,6 +45,7 @@ export type FatiaDeFornecedores = {
 export async function buscarFornecedores(
   db: DbOrganizacao,
   organizacaoId: string,
+  ator: { ehAdmin: boolean; usuarioId: string },
   {
     busca,
     situacao,
@@ -56,6 +58,7 @@ export async function buscarFornecedores(
 
   const onde = {
     organizacaoId,
+    ...soIndustriasMarcadas(ator),
     ...(situacao === "ativos" ? { ativo: true } : situacao === "inativos" ? { ativo: false } : {}),
     ...(procurado
       ? {

@@ -31,6 +31,7 @@ export function BotaoEnviarEmail({
   contas,
   contatos,
   fornecedor,
+  editaIndustria = false,
   cliente,
   textoPadrao,
   nomeArquivoPdf,
@@ -42,6 +43,8 @@ export function BotaoEnviarEmail({
   contas: ContaEnvio[];
   contatos: ContatoEnvio[];
   fornecedor: { id: string; nome: string };
+  /** Só o administrador mexe no cadastro da indústria, contatos inclusive. */
+  editaIndustria?: boolean;
   cliente: { apelido: string; email: string | null };
   textoPadrao: { assunto: string; corpo: string };
   nomeArquivoPdf: string;
@@ -59,7 +62,7 @@ export function BotaoEnviarEmail({
         titulo: jaEnviado ? "Reenviar pedido por e-mail" : "Enviar pedido por e-mail",
         descricao: `Para a ${fornecedor.nome}. Dando certo, o pedido fica marcado como enviado.`,
         rotuloPara: `Para — ${fornecedor.nome}`,
-        semContatos: (
+        semContatos: editaIndustria ? (
           <>
             Nenhum contato cadastrado nesta indústria. Digite o e-mail abaixo, ou{" "}
             <Link
@@ -70,9 +73,11 @@ export function BotaoEnviarEmail({
             </Link>
             .
           </>
+        ) : (
+          <>Nenhum contato cadastrado nesta indústria. Digite o e-mail abaixo.</>
         ),
         placeholderAvulsos: "alguem@industria.com.br",
-        guardarAvulsosEm: fornecedor.nome,
+        guardarAvulsosEm: editaIndustria ? fornecedor.nome : undefined,
         copiaCliente: cliente,
         faltaDestinatario: "Escolha pelo menos um destinatário na indústria",
         tituloEntrega: `Pedido enviado para a ${fornecedor.nome}`,

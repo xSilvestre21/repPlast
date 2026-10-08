@@ -24,6 +24,8 @@ export type ValoresCliente = {
   emailNfe: string;
   prazoPagamento: string;
   observacoes: string;
+  /** Os prepostos que atendem; nenhum é do escritório. */
+  prepostoIds: string[];
 };
 
 export const VALORES_VAZIOS: ValoresCliente = {
@@ -41,4 +43,5 @@ export const VALORES_VAZIOS: ValoresCliente = {
   emailNfe: "",
   prazoPagamento: "",
   observacoes: "",
+  prepostoIds: [],
 };

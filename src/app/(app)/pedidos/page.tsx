@@ -8,7 +8,7 @@ import { buscarPedidos, statusDoParametro } from "./consulta";
 import { ListaPedidos } from "./lista";
 
 export default async function PaginaPedidos({ searchParams }: PageProps<"/pedidos">) {
-  const { organizacaoId, db } = await escopoAtual();
+  const { organizacaoId, ehAdmin, db } = await escopoAtual();
   const parametros = await searchParams;
 
   /*
@@ -24,7 +24,7 @@ export default async function PaginaPedidos({ searchParams }: PageProps<"/pedido
    * cascata de entrada: as linhas já chegam no HTML, e a animação é da página
    * abrindo — não de uma lista que trocou de conteúdo.
    */
-  const inicial = await buscarPedidos(db, organizacaoId, { busca, status, pagina: 0 });
+  const inicial = await buscarPedidos(db, organizacaoId, ehAdmin, { busca, status, pagina: 0 });
 
   return (
     <Pagina>

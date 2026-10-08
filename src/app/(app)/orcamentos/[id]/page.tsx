@@ -55,7 +55,7 @@ export default async function PaginaOrcamento({
 }: PageProps<"/orcamentos/[id]">) {
   const { id } = await params;
   const parametros = await searchParams;
-  const { organizacaoId, usuarioId, db } = await escopoAtual();
+  const { organizacaoId, usuarioId, ehAdmin, db } = await escopoAtual();
 
   const orcamento = await db.orcamento.findFirst({
     where: { id, organizacaoId },
@@ -315,6 +315,7 @@ export default async function PaginaOrcamento({
             itens={orcamento.itens.length}
             itensSemProduto={itensSemProduto}
             cadastrarTodos={cadastrarProdutosDaProposta.bind(null, orcamento.id)}
+            podeCadastrar={ehAdmin}
           />
         )}
 
@@ -326,7 +327,13 @@ export default async function PaginaOrcamento({
               : "Proposta fechada: os itens são os que o cliente recebeu."
           }
           semProdutos={
-            orcamento.cliente && (
+            orcamento.cliente &&
+            (!ehAdmin ? (
+              <p className="text-corpo text-tinta-2 leading-relaxed">
+                Nenhum produto da {orcamento.fornecedor.nome} é da {orcamento.cliente.apelido}.
+                Quem cadastra produto é o escritório — peça ao administrador.
+              </p>
+            ) : (
               <p className="text-corpo text-tinta-2 leading-relaxed">
                 Nenhum produto da {orcamento.fornecedor.nome} é da{" "}
                 {orcamento.cliente.apelido}. Na{" "}
@@ -336,7 +343,7 @@ export default async function PaginaOrcamento({
                 escolha-a no campo Cliente — é lá que mora o preço dela, e é por isso que o
                 produto é de um cliente só.
               </p>
-            )
+            ))
           }
           itens={orcamento.itens.map((item) => ({
             id: item.id,
@@ -352,7 +359,7 @@ export default async function PaginaOrcamento({
             valorIpi: item.valorIpi.toString(),
             total: item.total.toString(),
             cadastrarEm:
-              orcamento.cliente && item.produtoId === null
+              ehAdmin && orcamento.cliente && item.produtoId === null
                 ? `/produtos/novo?orcamentoItem=${item.id}`
                 : undefined,
           }))}

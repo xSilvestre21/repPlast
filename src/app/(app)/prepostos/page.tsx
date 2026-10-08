@@ -93,7 +93,7 @@ export default async function PaginaPrepostos() {
                     <Factory size={13} strokeWidth={2} aria-hidden="true" className="shrink-0" />
                     <span className="truncate">
                       {p.fornecedores.length === 0
-                        ? "Atende todas as indústrias"
+                        ? "Nenhuma indústria marcada"
                         : p.fornecedores
                             .map((f) => f.fornecedor.nome)
                             .sort()

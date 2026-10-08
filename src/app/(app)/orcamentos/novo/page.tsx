@@ -3,12 +3,13 @@ import { FileText, UserRoundPlus } from "lucide-react";
 import { Pagina } from "@/components/pagina";
 import { BotaoLink, Cabecalho, EstadoVazio } from "@/components/ui";
 import { escopoAtual } from "@/lib/sessao";
+import { soIndustriasMarcadas } from "@/lib/industrias-do-ator";
 
 import { criarOrcamento } from "../acoes";
 import { FormularioNovoOrcamento } from "./formulario";
 
 export default async function PaginaNovoOrcamento() {
-  const { organizacaoId, db } = await escopoAtual();
+  const { organizacaoId, usuarioId, ehAdmin, db } = await escopoAtual();
 
   const [clientes, fornecedores] = await Promise.all([
     db.cliente.findMany({
@@ -17,7 +18,7 @@ export default async function PaginaNovoOrcamento() {
       select: { id: true, apelido: true, municipio: true, uf: true },
     }),
     db.fornecedor.findMany({
-      where: { organizacaoId, ativo: true },
+      where: { organizacaoId, ativo: true, ...soIndustriasMarcadas({ ehAdmin, usuarioId }) },
       orderBy: { nome: "asc" },
       select: { id: true, nome: true, ipiPercentual: true },
     }),
@@ -32,14 +33,17 @@ export default async function PaginaNovoOrcamento() {
           icone={FileText}
           titulo="Novo orçamento"
           acao={
-            <BotaoLink href="/fornecedores/novo" icone={UserRoundPlus}>
-              Cadastrar indústria
-            </BotaoLink>
+            ehAdmin && (
+              <BotaoLink href="/fornecedores/novo" icone={UserRoundPlus}>
+                Cadastrar indústria
+              </BotaoLink>
+            )
           }
         />
         <EstadoVazio>
-          Falta cadastrar uma indústria antes de montar uma proposta — é dela que vem o IPI e
-          são dela os produtos.
+          {ehAdmin
+            ? "Falta cadastrar uma indústria antes de montar uma proposta — é dela que vem o IPI e são dela os produtos."
+            : "Nenhuma indústria marcada para você ainda. Quem cadastra e marca é o escritório — peça ao administrador."}
         </EstadoVazio>
       </Pagina>
     );

@@ -12,7 +12,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { dbAdministrativo } from "@/lib/db";
+import { dbAdministrativo, type DbOrganizacao } from "@/lib/db";
 import { normalizarTelefone } from "@/lib/mascara";
 import { lerNumeroBr } from "@/lib/numero-br";
 import { gerarHashSenha } from "@/lib/senha";
@@ -33,6 +33,7 @@ export type EstadoFormulario = {
     email: string;
     telefone: string;
     comissaoPercentual: string;
+    fornecedorIds: string[];
   };
 };
 
@@ -43,6 +44,7 @@ function digitado(formData: FormData): NonNullable<EstadoFormulario["valores"]> 
     email: lerTexto(formData.get("email")),
     telefone: lerTexto(formData.get("telefone")),
     comissaoPercentual: lerTexto(formData.get("comissaoPercentualPadrao")),
+    fornecedorIds: formData.getAll("fornecedorId").map(String),
   };
 }
 
@@ -88,6 +90,37 @@ function lerPercentual(valor: FormDataEntryValue | null): string | null {
   if (numero < 0 || numero > 100) throw new Error("O percentual precisa ficar entre 0 e 100.");
 
   return String(numero);
+}
+
+/**
+ * Regrava as indústrias que o preposto vê: exatamente as marcadas.
+ *
+ * O id que não é de uma indústria deste escritório é descartado em silêncio —
+ * só chega assim um formulário adulterado, e o RLS recusaria a gravação de
+ * todo jeito.
+ */
+async function gravarIndustrias(
+  db: DbOrganizacao,
+  organizacaoId: string,
+  usuarioId: string,
+  formData: FormData,
+) {
+  const marcadas = formData.getAll("fornecedorId").map(String);
+  const validas =
+    marcadas.length === 0
+      ? []
+      : await db.fornecedor.findMany({
+          where: { organizacaoId, id: { in: marcadas } },
+          select: { id: true },
+        });
+
+  await db.fornecedorPreposto.deleteMany({ where: { usuarioId } });
+
+  if (validas.length > 0) {
+    await db.fornecedorPreposto.createMany({
+      data: validas.map((f) => ({ fornecedorId: f.id, usuarioId })),
+    });
+  }
 }
 
 export async function inscreverPreposto(
@@ -136,6 +169,8 @@ export async function inscreverPreposto(
       select: { id: true },
     });
 
+    await gravarIndustrias(db, organizacaoId, preposto.id, formData);
+
     destino = `/prepostos/${preposto.id}`;
   } catch (erro) {
     return { erro: erro instanceof Error ? erro.message : "Não foi possível inscrever.", valores: digitado(formData) };
@@ -168,6 +203,8 @@ export async function atualizarPreposto(
     });
 
     if (count === 0) return { erro: "Preposto não encontrado.", valores: digitado(formData) };
+
+    await gravarIndustrias(db, organizacaoId, id, formData);
   } catch (erro) {
     return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar.", valores: digitado(formData) };
   }
@@ -228,4 +265,49 @@ export async function redefinirSenhaPreposto(
 
   revalidarPreposto(id);
   return { aviso: "Senha trocada." };
+}
+
+/**
+ * Regrava os clientes que o preposto atende: exatamente os marcados.
+ *
+ * Mexe só nos vínculos DESTE preposto — um cliente pode ser de vários, e
+ * marcar aqui não tira o cliente de ninguém. O id que não é de cliente deste
+ * escritório é descartado; o RLS recusaria o vínculo de todo jeito.
+ */
+export async function definirClientesDoPreposto(
+  id: string,
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    const { organizacaoId, db } = await contextoAdmin();
+
+    const preposto = await db.usuario.count({
+      where: { id, organizacaoId, papel: "REPRESENTANTE" },
+    });
+    if (preposto === 0) return { erro: "Preposto não encontrado." };
+
+    const marcados = formData.getAll("clienteId").map(String);
+    const validos =
+      marcados.length === 0
+        ? []
+        : await db.cliente.findMany({
+            where: { organizacaoId, id: { in: marcados } },
+            select: { id: true },
+          });
+
+    await db.clientePreposto.deleteMany({ where: { usuarioId: id } });
+
+    if (validos.length > 0) {
+      await db.clientePreposto.createMany({
+        data: validos.map((c) => ({ clienteId: c.id, usuarioId: id })),
+      });
+    }
+  } catch (erro) {
+    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
+  }
+
+  revalidarPreposto(id);
+  revalidatePath("/clientes");
+  redirect(`/prepostos/${id}`);
 }

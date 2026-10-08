@@ -107,7 +107,7 @@ afterAll(async () => {
  * testes próprios em `db.itest.ts` e não é o que se mede aqui.
  */
 async function procurar(texto: string) {
-  const fatia = await buscarOrcamentos(admin as unknown as DbOrganizacao, buscaOrganizacaoId, {
+  const fatia = await buscarOrcamentos(admin as unknown as DbOrganizacao, buscaOrganizacaoId, false, {
     busca: texto,
     status: "todos",
     pagina: 0,

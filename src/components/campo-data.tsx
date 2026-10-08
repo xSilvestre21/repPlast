@@ -58,6 +58,9 @@ export function CampoData({
   disabled = false,
   atalhos = [7, 15, 30, 45],
   atalhosUteis = [5, 10, 15, 20],
+  rotuloOculto = false,
+  className,
+  onChange,
 }: {
   name: string;
   rotulo: string;
@@ -68,8 +71,22 @@ export function CampoData({
   atalhos?: number[];
   /** Os mesmos botões quando a pessoa conta em dias úteis. */
   atalhosUteis?: number[];
+  /**
+   * Rótulo só para leitor de tela — numa linha de tabela, o cabeçalho da
+   * coluna já diz o que é.
+   */
+  rotuloOculto?: boolean;
+  className?: string;
+  /** Avisa a cada data escolhida (ou tirada), para quem faz conta com ela. */
+  onChange?: (valor: string) => void;
 }) {
-  const [valor, setValor] = useState(dataValida(defaultValue) ? defaultValue : "");
+  const [valor, setValorInterno] = useState(dataValida(defaultValue) ? defaultValue : "");
+  const setValor = (novo: string) => {
+    setValorInterno(novo);
+    onChange?.(novo);
+  };
+  /** Data que já passou (entrega, pagamento) não tem prazo a contar. */
+  const comAtalhos = atalhos.length > 0 || atalhosUteis.length > 0;
   const [aberto, setAberto] = useState(false);
   /** Onde o calendário se desenha, em coordenadas da PÁGINA (ver `medir`). */
   const [lugar, setLugar] = useState({ paraCima: false, esquerda: 0, topo: 0 });
@@ -196,7 +213,7 @@ export function CampoData({
   return (
     <div
       ref={raizRef}
-      className="relative"
+      className={`relative ${className ?? ""}`}
       onKeyDown={(evento) => {
         if (evento.key === "Escape" && aberto) {
           evento.preventDefault();
@@ -204,7 +221,7 @@ export function CampoData({
         }
       }}
     >
-      <Rotulo>{rotulo}</Rotulo>
+      {rotuloOculto ? <span className="sr-only">{rotulo}</span> : <Rotulo>{rotulo}</Rotulo>}
       {/* Desabilitado como o nativo: campo travado não vai no formulário. */}
       <input type="hidden" name={name} value={valor} disabled={disabled} />
 
@@ -361,6 +378,8 @@ export function CampoData({
             )}
 
             <div className="mt-3 border-t border-filete pt-3">
+              {comAtalhos && (
+              <>
               <div
                 role="group"
                 aria-label="Contar prazo em"
@@ -409,8 +428,10 @@ export function CampoData({
                   );
                 })}
               </div>
+              </>
+              )}
 
-              <div className="mt-2.5 flex items-center justify-between text-mini">
+              <div className={`${comAtalhos ? "mt-2.5 " : ""}flex items-center justify-between text-mini`}>
                 <button
                   type="button"
                   onClick={() => escolher(hoje)}

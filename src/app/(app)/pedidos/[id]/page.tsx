@@ -41,7 +41,7 @@ export default async function PaginaPedido({
   const { id } = await params;
   const parametros = await searchParams;
 
-  const { organizacaoId, usuarioId, ehAdmin, db } = await escopoAtual();
+  const { organizacaoId, usuarioId, ehAdmin, plano, db } = await escopoAtual();
 
   const pedido = await db.pedido.findFirst({
     where: { id, organizacaoId },
@@ -77,7 +77,7 @@ export default async function PaginaPedido({
 
   // As caixas de QUEM ESTÁ OLHANDO, não do dono do pedido: a administradora que
   // manda o pedido do preposto manda do e-mail dela.
-  const [contas, modeloEnvio] = await Promise.all([
+  const [contas, modeloEnvio, prepostosDoCliente] = await Promise.all([
     db.contaEmail.findMany({
       where: { usuarioId },
       orderBy: [{ padrao: "desc" }, { criadoEm: "asc" }],
@@ -88,6 +88,26 @@ export default async function PaginaPedido({
       where: { id: usuarioId },
       select: { assuntoEnvioPadrao: true, mensagemEnvioPadrao: true },
     }),
+    // Com quem a comissão pode ser dividida: os prepostos que atendem o
+    // cliente, e o que o pedido já tem (mesmo que tenha deixado de atender).
+    ehAdmin && plano === "PLUS"
+      ? db.usuario
+          .findMany({
+            where: {
+              organizacaoId,
+              papel: "REPRESENTANTE",
+              OR: [
+                { clientes: { some: { clienteId: pedido.clienteId } } },
+                ...(pedido.representanteId ? [{ id: pedido.representanteId }] : []),
+              ],
+            },
+            orderBy: [{ nome: "asc" }, { sobrenome: "asc" }],
+            select: { id: true, nome: true, sobrenome: true },
+          })
+          .then((lista) =>
+            lista.length > 0 ? lista.map((u) => ({ id: u.id, nome: nomeCompleto(u) })) : undefined,
+          )
+      : Promise.resolve(undefined),
   ]);
 
   /*
@@ -175,6 +195,7 @@ export default async function PaginaPedido({
                   contas={contas}
                   contatos={pedido.fornecedor.contatos}
                   fornecedor={{ id: pedido.fornecedor.id, nome: pedido.fornecedor.nome }}
+                  editaIndustria={ehAdmin}
                   cliente={{
                     apelido: pedido.cliente.apelido,
                     email: pedido.cliente.email ?? pedido.cliente.emailNfe,
@@ -384,6 +405,7 @@ export default async function PaginaPedido({
           editavel={editavel}
           emLeitura={aberto && !editavel}
           acao={atualizarCabecalho.bind(null, pedido.id)}
+          prepostos={prepostosDoCliente}
           valores={{
             pedidoDoCliente: pedido.pedidoDoCliente ?? "",
             prazoPagamento: pedido.prazoPagamento ?? "",
@@ -398,6 +420,7 @@ export default async function PaginaPedido({
             comissaoPercentual: pedido.comissaoPercentual
               ? escreverNumeroBr(pedido.comissaoPercentual.toString())
               : "",
+            representanteId: pedido.representanteId ?? "",
           }}
         />
 

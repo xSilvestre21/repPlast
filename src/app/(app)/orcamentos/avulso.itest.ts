@@ -18,17 +18,20 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { dbAdministrativo } from "@/lib/db";
 
 const admin = dbAdministrativo();
-const sessao = { organizacaoId: "" };
+// O usuário é de verdade: o pedido e a proposta gravam quem os criou, e a
+// chave estrangeira recusaria um id inventado.
+const sessao = { organizacaoId: "", usuarioId: "" };
 
 vi.mock("@/lib/sessao", () => ({
   escopoAtual: async () => ({
     organizacaoId: sessao.organizacaoId,
-    usuarioId: "00000000-0000-0000-0000-000000000000",
+    usuarioId: sessao.usuarioId,
     papel: "ADMIN",
     ehAdmin: true,
     plano: "PRO",
     db: admin,
   }),
+  exigirAdmin: async () => {},
 }));
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
@@ -80,6 +83,16 @@ beforeAll(async () => {
     data: { nome: "Teste proposta avulsa" },
   });
   sessao.organizacaoId = organizacao.id;
+  const dono = await admin.usuario.create({
+    data: {
+      organizacaoId: organizacao.id,
+      nome: "Dono",
+      email: `dono-${organizacao.id}@teste.local`,
+      senhaHash: "x",
+      papel: "ADMIN",
+    },
+  });
+  sessao.usuarioId = dono.id;
 
   const fornecedor = await admin.fornecedor.create({
     data: { organizacaoId: organizacao.id, nome: "QUALYPLAST" },

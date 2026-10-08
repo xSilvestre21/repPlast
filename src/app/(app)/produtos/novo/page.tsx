@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 import { BotaoLink, Cabecalho, EstadoVazio } from "@/components/ui";
 import { escopoAtual } from "@/lib/sessao";
 
@@ -11,6 +13,9 @@ import { Pagina } from "@/components/pagina";
 
 export default async function PaginaNovoProduto({ searchParams }: PageProps<"/produtos/novo">) {
   const { orcamentoItem } = await searchParams;
+
+  // Cadastro é do administrador; o preposto que chega por link volta à lista.
+  if (!(await escopoAtual()).ehAdmin) redirect("/produtos");
 
   const [fornecedores, clientes] = await Promise.all([
     carregarFornecedores(),

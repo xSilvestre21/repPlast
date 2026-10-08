@@ -16,7 +16,7 @@ export default async function PaginaProduto({
 }: PageProps<"/produtos/[id]">) {
   const { id } = await params;
 
-  const { organizacaoId, db } = await escopoAtual();
+  const { organizacaoId, ehAdmin, db } = await escopoAtual();
 
   const [produto, fornecedores, clientes] = await Promise.all([
     db.produto.findFirst({
@@ -33,9 +33,10 @@ export default async function PaginaProduto({
   /*
    * A ficha abre para LEITURA, como pedido e proposta gravados: uma tela que
    * já chega editável convida a mexer sem querer num cadastro que sai impresso
-   * nos pedidos. Editável só quando se clicou em Editar (`?editar=1`).
+   * nos pedidos. Editável só quando se clicou em Editar (`?editar=1`) — e
+   * só para o administrador: o preposto consulta o cadastro, não mexe nele.
    */
-  const editavel = parametros.editar === "1";
+  const editavel = ehAdmin && parametros.editar === "1";
 
   return (
     <Pagina>
@@ -46,6 +47,7 @@ export default async function PaginaProduto({
         descricao={produto.descricao}
         selo={!produto.ativo ? <Selo tom="cancelado">Inativo</Selo> : undefined}
         acao={
+          ehAdmin && (
           <div className="flex flex-wrap gap-2">
             {!editavel && (
               <BotaoLink href={`/produtos/${produto.id}?editar=1`} icone={Pencil}>
@@ -70,6 +72,7 @@ export default async function PaginaProduto({
               acao={excluirProduto.bind(null, produto.id)}
             />
           </div>
+          )
         }
       />
 

@@ -1,15 +1,70 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { normalizarCep, normalizarDocumento, normalizarTelefone } from "@/lib/mascara";
-import { escopoAtual } from "@/lib/sessao";
+import { escopoAtual, exigirAdmin } from "@/lib/sessao";
 
 export type EstadoFormulario = { erro?: string };
 
+/**
+ * Cadastro de cliente é do administrador: o preposto consulta os clientes que
+ * atende, mas não cria, altera nem exclui. O banco recusa de todo jeito
+ * (migration `cadastros_so_do_admin`); a checagem aqui é para a mensagem ser
+ * legível em vez de um erro do RLS.
+ */
 async function contexto() {
+  await exigirAdmin();
   return escopoAtual();
+}
+
+/**
+ * Os prepostos marcados no formulário — só o administrador marca.
+ *
+ * Devolve `undefined` quando a lista não veio (preposto, ou escritório sem
+ * plano Plus): aí a edição não mexe em quem atende. Id que não é de preposto
+ * deste escritório é descartado; o RLS recusaria o vínculo de todo jeito.
+ */
+async function prepostosMarcados(
+  formData: FormData,
+  { ehAdmin, organizacaoId, db }: Awaited<ReturnType<typeof contexto>>,
+): Promise<string[] | undefined> {
+  if (!ehAdmin || !formData.has("prepostosNoFormulario")) return undefined;
+
+  const marcados = formData.getAll("prepostoId").map(String);
+  if (marcados.length === 0) return [];
+
+  const validos = await db.usuario.findMany({
+    where: { id: { in: marcados }, organizacaoId, papel: "REPRESENTANTE" },
+    select: { id: true },
+  });
+  return validos.map((u) => u.id);
+}
+
+/** Cadastra o cliente e grava quem o atende — os marcados, ou o padrão. */
+async function cadastrar(
+  escopo: Awaited<ReturnType<typeof contexto>>,
+  formData: FormData,
+  padrao: string[] = [],
+): Promise<string> {
+  const { organizacaoId, usuarioId, db } = escopo;
+  const id = randomUUID();
+
+  await db.cliente.createMany({
+    data: [{ id, organizacaoId, criadoPorId: usuarioId, ...dadosDoFormulario(formData) }],
+  });
+
+  const prepostos = (await prepostosMarcados(formData, escopo)) ?? padrao;
+  if (prepostos.length > 0) {
+    await db.clientePreposto.createMany({
+      data: prepostos.map((usuarioId) => ({ clienteId: id, usuarioId })),
+    });
+  }
+
+  return id;
 }
 
 function lerTexto(valor: FormDataEntryValue | null): string | null {
@@ -70,22 +125,7 @@ export async function criarCliente(
   let destino: string;
 
   try {
-    const { organizacaoId, usuarioId, ehAdmin, db } = await contexto();
-
-    /*
-     * Preposto só cadastra na própria carteira; administrador cadastra para o
-     * escritório. Não é escolha de tela: o RLS recusaria de todo jeito um
-     * cliente carimbado com o nome de outro preposto.
-     */
-    const cliente = await db.cliente.create({
-      data: {
-        organizacaoId,
-        representanteId: ehAdmin ? null : usuarioId,
-        ...dadosDoFormulario(formData),
-      },
-    });
-
-    destino = `/clientes/${cliente.id}`;
+    destino = `/clientes/${await cadastrar(await contexto(), formData)}`;
   } catch (erro) {
     return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
   }
@@ -108,34 +148,29 @@ export async function criarClienteDaProposta(
   formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
-    const { organizacaoId, usuarioId, ehAdmin, db } = await contexto();
+    const escopo = await contexto();
+    const { organizacaoId, db } = escopo;
 
     const orcamento = await db.orcamento.findFirst({
       where: { id: orcamentoId, organizacaoId },
-      select: { clienteId: true },
+      select: { clienteId: true, representanteId: true },
     });
 
     if (!orcamento) return { erro: "Orçamento não encontrado." };
     if (orcamento.clienteId) return { erro: "Esta proposta já tem cliente cadastrado." };
 
-    const cliente = await db.cliente.create({
-      data: {
-        organizacaoId,
-        representanteId: ehAdmin ? null : usuarioId,
-        ...dadosDoFormulario(formData),
-      },
-      select: { id: true, representanteId: true },
-    });
+    // Sem lista no formulário, o cliente fica com o preposto da proposta —
+    // senão ele perderia de vista o cliente que ele mesmo cotou.
+    const clienteId = await cadastrar(
+      escopo,
+      formData,
+      orcamento.representanteId ? [orcamento.representanteId] : [],
+    );
 
+    // A proposta continua de quem já era: é dele a comissão se virar pedido.
     await db.orcamento.updateMany({
       where: { id: orcamentoId, organizacaoId },
-      data: {
-        clienteId: cliente.id,
-        clienteAvulsoNome: null,
-        clienteAvulsoMunicipio: null,
-        // A proposta passa a seguir a carteira de quem ficou com o cliente.
-        representanteId: cliente.representanteId,
-      },
+      data: { clienteId, clienteAvulsoNome: null, clienteAvulsoMunicipio: null },
     });
   } catch (erro) {
     return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
@@ -152,7 +187,8 @@ export async function atualizarCliente(
   formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
-    const { organizacaoId, db } = await contexto();
+    const escopo = await contexto();
+    const { organizacaoId, db } = escopo;
 
     const { count } = await db.cliente.updateMany({
       where: { id, organizacaoId },
@@ -160,6 +196,18 @@ export async function atualizarCliente(
     });
 
     if (count === 0) return { erro: "Cliente não encontrado." };
+
+    // Trocar quem atende não reescreve o passado: cada pedido guardou o
+    // preposto com quem foi dividido (`Pedido.representanteId`).
+    const prepostos = await prepostosMarcados(formData, escopo);
+    if (prepostos !== undefined) {
+      await db.clientePreposto.deleteMany({ where: { clienteId: id } });
+      if (prepostos.length > 0) {
+        await db.clientePreposto.createMany({
+          data: prepostos.map((usuarioId) => ({ clienteId: id, usuarioId })),
+        });
+      }
+    }
   } catch (erro) {
     return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
   }

@@ -24,6 +24,8 @@ import {
   pesoDoItem,
   precoUnitario,
 } from "@/lib/produto-preco";
+import { soIndustriasMarcadas } from "@/lib/industrias-do-ator";
+import { prepostoDoNovoPedido } from "@/lib/preposto-do-pedido";
 import { escopoAtual } from "@/lib/sessao";
 import { calcularTotaisPedido } from "@/lib/totais";
 import { nomeCompleto } from "@/lib/nome-usuario";
@@ -50,7 +52,14 @@ function lerTexto(valor: FormDataEntryValue | null): string | null {
 async function exigirAberto(db: DbOrganizacao, pedidoId: string, organizacaoId: string) {
   const pedido = await db.pedido.findFirst({
     where: { id: pedidoId, organizacaoId },
-    select: { id: true, status: true, fornecedorId: true, clienteId: true, emElaboracao: true },
+    select: {
+      id: true,
+      status: true,
+      fornecedorId: true,
+      clienteId: true,
+      emElaboracao: true,
+      representanteId: true,
+    },
   });
 
   if (!pedido) throw new Error("Pedido não encontrado.");
@@ -64,6 +73,43 @@ async function exigirAberto(db: DbOrganizacao, pedidoId: string, organizacaoId: 
   }
 
   return pedido;
+}
+
+/**
+ * Com quem a comissão do pedido se divide, como escolhido no cabeçalho.
+ *
+ * Só o administrador escolhe, e só entre os prepostos que atendem o cliente
+ * (ou o que o pedido já tinha — senão salvar o desligaria sem ninguém ter
+ * mexido). Devolve `undefined` quando o campo não veio ou não mudou: aí a
+ * fatia congelada fica como está. Trocar de preposto congela a fatia do novo.
+ */
+async function prepostoEscolhido(
+  db: DbOrganizacao,
+  organizacaoId: string,
+  pedido: { clienteId: string; representanteId: string | null },
+  formData: FormData,
+) {
+  if (!formData.has("representanteId")) return undefined;
+
+  const escolhido = lerTexto(formData.get("representanteId"));
+  if (escolhido === pedido.representanteId) return undefined;
+  if (escolhido === null) return { representanteId: null, comissaoPercentualPreposto: null };
+
+  const preposto = await db.usuario.findFirst({
+    where: {
+      id: escolhido,
+      organizacaoId,
+      papel: "REPRESENTANTE",
+      clientes: { some: { clienteId: pedido.clienteId } },
+    },
+    select: { id: true, comissaoPercentualPadrao: true },
+  });
+  if (!preposto) throw new Error("Este preposto não atende o cliente do pedido.");
+
+  return {
+    representanteId: preposto.id,
+    comissaoPercentualPreposto: preposto.comissaoPercentualPadrao,
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -204,7 +250,7 @@ export async function criarPedido(
   let destino: string;
 
   try {
-    const { organizacaoId, usuarioId, db } = await contexto();
+    const { organizacaoId, usuarioId, ehAdmin, db } = await contexto();
 
     const clienteId = lerTexto(formData.get("clienteId"));
     const fornecedorId = lerTexto(formData.get("fornecedorId"));
@@ -219,18 +265,21 @@ export async function criarPedido(
           id: true,
           observacoes: true,
           prazoPagamento: true,
-          representanteId: true,
-          representante: { select: { comissaoPercentualPadrao: true } },
         },
       }),
       db.fornecedor.findFirst({
-        where: { id: fornecedorId, organizacaoId },
+        where: { id: fornecedorId, organizacaoId, ...soIndustriasMarcadas({ ehAdmin, usuarioId }) },
         select: { id: true, ipiPercentual: true, comissaoPercentual: true },
       }),
-      db.usuario.findUnique({ where: { id: usuarioId }, select: { nome: true, sobrenome: true } }),
+      db.usuario.findUnique({
+        where: { id: usuarioId },
+        select: { nome: true, sobrenome: true },
+      }),
     ]);
 
     if (!cliente || !fornecedor) return { erro: "Cliente ou indústria não encontrado." };
+
+    const preposto = await prepostoDoNovoPedido(db, { organizacaoId, clienteId, usuarioId, ehAdmin });
 
     // Numeração sequencial POR FORNECEDOR. O `increment` do Prisma vira um
     // UPDATE ... RETURNING atômico, então dois pedidos simultâneos nunca pegam
@@ -268,14 +317,12 @@ export async function criarPedido(
         prazoPagamento: cliente.prazoPagamento,
         // Quem assina embaixo é quem está lançando, como no orçamento.
         vendedor: usuario ? nomeCompleto(usuario) : null,
-        // O pedido credita o dono da CARTEIRA, não quem digitou: a
-        // administradora lança pedido para o cliente do preposto o tempo todo,
-        // e a comissão continua sendo dele. Congelado aqui — reatribuir a
-        // carteira depois não reescreve o que já foi vendido.
-        representanteId: cliente.representanteId,
-        // A fatia dele também é congelada. Cliente sem dono é do escritório, e
-        // aí não há fatia nenhuma: a comissão inteira fica na casa.
-        comissaoPercentualPreposto: cliente.representante?.comissaoPercentualPadrao ?? null,
+        // Com quem a comissão DESTE pedido se divide, com a fatia congelada
+        // aqui como o percentual da indústria. Dá para trocar no cabeçalho
+        // enquanto o pedido estiver aberto.
+        ...preposto,
+        // Quem digitou: junto com a carteira, é o que decide quem vê o pedido.
+        criadoPorId: usuarioId,
       },
       select: { id: true },
     });
@@ -295,8 +342,10 @@ export async function atualizarCabecalho(
   formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
-    const { organizacaoId, usuarioId, db } = await contexto();
+    const { organizacaoId, usuarioId, ehAdmin, db } = await contexto();
     const pedido = await exigirAberto(db, pedidoId, organizacaoId);
+
+    const preposto = ehAdmin ? await prepostoEscolhido(db, organizacaoId, pedido, formData) : undefined;
 
     const comissao = lerNumeroBr(formData.get("comissaoPercentual"));
     if (comissao !== null && (comissao < 0 || comissao > 100)) {
@@ -323,6 +372,7 @@ export async function atualizarCabecalho(
         vendedor: lerTexto(formData.get("vendedor")),
         ipiPercentual: ipi === null ? undefined : String(ipi),
         comissaoPercentual: comissao === null ? null : String(comissao),
+        ...preposto,
         emElaboracao: false,
       },
     });
@@ -795,7 +845,8 @@ export async function enviarPedidoPorEmail(
 
     // Quem foi digitado à mão entra na lista, mas fora do grupo padrão: o
     // próximo pedido o oferece, sem passar a mandar para ele sem ninguém pedir.
-    if (formData.get("salvarAvulsos") === "on" && avulsos.length > 0) {
+    // Só o administrador: a lista é cadastro da indústria.
+    if (ehAdmin && formData.get("salvarAvulsos") === "on" && avulsos.length > 0) {
       const ordem = await db.contatoFornecedor.count({ where: { fornecedorId: pedido.fornecedorId } });
       await db.contatoFornecedor.createMany({
         data: avulsos
@@ -840,7 +891,7 @@ export async function enviarPedidoPorEmail(
 
 /** Atalho de recompra: copia o pedido inteiro como um novo, aberto. */
 export async function duplicarPedido(pedidoId: string, _formData: FormData): Promise<void> {
-  const { organizacaoId, db } = await contexto();
+  const { organizacaoId, usuarioId, ehAdmin, db } = await contexto();
 
   const origem = await db.pedido.findFirst({
     where: { id: pedidoId, organizacaoId },
@@ -848,6 +899,20 @@ export async function duplicarPedido(pedidoId: string, _formData: FormData): Pro
   });
 
   if (!origem) throw new Error("Pedido não encontrado.");
+
+  // A recompra é dividida com o mesmo preposto, na mesma fatia. A de um pedido
+  // sem preposto (o importado do SICOV) segue a regra do pedido novo.
+  const preposto = origem.representanteId
+    ? {
+        representanteId: origem.representanteId,
+        comissaoPercentualPreposto: origem.comissaoPercentualPreposto,
+      }
+    : await prepostoDoNovoPedido(db, {
+        organizacaoId,
+        clienteId: origem.clienteId,
+        usuarioId,
+        ehAdmin,
+      });
 
   const contador = await db.fornecedor.update({
     where: { id: origem.fornecedorId },
@@ -866,6 +931,8 @@ export async function duplicarPedido(pedidoId: string, _formData: FormData): Pro
       transportadora: origem.transportadora,
       observacoes: origem.observacoes,
       vendedor: origem.vendedor,
+      criadoPorId: usuarioId,
+      ...preposto,
       ipiPercentual: origem.ipiPercentual,
       comissaoPercentual: origem.comissaoPercentual,
       // Não copiamos: número da ordem de compra do cliente e prazo de entrega,

@@ -24,7 +24,7 @@ export async function GET(requisicao: Request) {
   const parametros = new URL(requisicao.url).searchParams;
   const pagina = Math.max(0, Number(parametros.get("pagina")) || 0);
 
-  const fatia = await buscarPedidos(db, sessao.organizacaoId, {
+  const fatia = await buscarPedidos(db, sessao.organizacaoId, sessao.papel === "ADMIN", {
     busca: parametros.get("busca") ?? "",
     status: statusDoParametro(parametros.get("status")),
     pagina,

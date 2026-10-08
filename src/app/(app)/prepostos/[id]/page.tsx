@@ -3,6 +3,7 @@ import {
   CalendarDays,
   Factory,
   Inbox,
+  Link2,
   Mail,
   Percent,
   Phone,
@@ -74,7 +75,7 @@ export default async function PaginaPreposto({
   const ficha = await fichaDoPreposto(db, organizacaoId, id);
   if (!ficha) notFound();
 
-  const { preposto, competencia, recentes, clientes } = ficha;
+  const { preposto, competencia, recentes, totalDePedidos, clientes } = ficha;
   const { comissao } = preposto;
   const mes = nomeDoMes(competencia);
   const ticket = comissao.pedidos ? Number(comissao.venda) / comissao.pedidos : null;
@@ -87,6 +88,17 @@ export default async function PaginaPreposto({
   const selo = preposto.ativo ? <Selo tom="verde">com acesso</Selo> : <Selo tom="cancelado">sem acesso</Selo>;
 
   if (editavel) {
+    // As ativas, e as inativas que ainda estão marcadas para ele: escondê-las
+    // faria o vínculo sumir no primeiro "Salvar", sem ninguém ter desmarcado.
+    const opcoes = await db.fornecedor.findMany({
+      where: {
+        organizacaoId,
+        OR: [{ ativo: true }, { prepostos: { some: { usuarioId: preposto.id } } }],
+      },
+      orderBy: { nome: "asc" },
+      select: { id: true, nome: true },
+    });
+
     return (
       <Pagina>
         <Cabecalho
@@ -106,7 +118,9 @@ export default async function PaginaPreposto({
               email: preposto.email,
               telefone: preposto.telefone ?? "",
               comissaoPercentual: percentual,
+              fornecedorIds: preposto.fornecedores.map((f) => f.fornecedor.id),
             }}
+            industrias={opcoes}
           />
           <TrocarSenha acao={redefinirSenhaPreposto.bind(null, preposto.id)} />
         </div>
@@ -183,7 +197,13 @@ export default async function PaginaPreposto({
                 )}
               </Dado>
               <Dado icone={Factory} rotulo="Indústrias">
-                {industrias.length === 0 ? "Atende todas" : industrias.join(", ")}
+                {industrias.length === 0 ? (
+                  <a href={`/prepostos/${preposto.id}?editar=1`} className="text-tinta-3 hover:text-carimbo transition-colors">
+                    nenhuma — ele não vê indústria; marcar
+                  </a>
+                ) : (
+                  industrias.join(", ")
+                )}
               </Dado>
               <Dado icone={CalendarDays} rotulo="Inscrito em">
                 {MES_ANO.format(preposto.criadoEm)}
@@ -218,7 +238,8 @@ export default async function PaginaPreposto({
               />
             </FaixaMetricas>
 
-            <Cartao className="p-5 sm:p-6">
+            {/* Estica até o fim do cartão ao lado: as duas colunas terminam juntas. */}
+            <Cartao className="p-5 sm:p-6 flex-1 flex flex-col justify-center">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
                 <div className="titulo-regra">
                   <Placa icone={Wallet} tom="menta" pequena />
@@ -247,14 +268,19 @@ export default async function PaginaPreposto({
           </div>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-2 items-start">
+        {/* Lista vazia estica até a altura da vizinha; duas listas ficam no tamanho delas. */}
+        <div className="grid gap-5 lg:grid-cols-2">
           {/* Pedidos recentes — o mesmo desenho do Painel. */}
-          <section>
+          <section className="flex flex-col">
             <Titulo icone={ScrollText} tom="lilas">
               Pedidos recentes
             </Titulo>
             {recentes.length === 0 ? (
-              <EstadoVazio icone={Inbox}>Nenhum pedido lançado por ele ainda.</EstadoVazio>
+              <Cartao className="flex-1 flex items-center justify-center">
+                <EstadoVazio icone={Inbox} discreto>
+                  Nenhum pedido lançado por ele ainda.
+                </EstadoVazio>
+              </Cartao>
             ) : (
               <Cartao className="divide-y divide-filete overflow-hidden">
                 {recentes.map((pedido) => (
@@ -276,17 +302,41 @@ export default async function PaginaPreposto({
                     </FimDaLinha>
                   </LinhaLista>
                 ))}
+                <p className="px-4 py-3 text-mini text-tinta-3">
+                  {totalDePedidos === recentes.length
+                    ? totalDePedidos === 1
+                      ? "É o único pedido dele."
+                      : `São todos os ${totalDePedidos} pedidos dele.`
+                    : `Os ${recentes.length} mais recentes de ${totalDePedidos} pedidos.`}
+                </p>
               </Cartao>
             )}
           </section>
 
           {/* A carteira dele. */}
-          <section>
-            <Titulo icone={Users} tom="mar">
+          <section className="flex flex-col">
+            <Titulo
+              icone={Users}
+              tom="mar"
+              acao={
+                <BotaoLink
+                  href={`/prepostos/${preposto.id}/clientes`}
+                  variante="secundaria"
+                  tamanho="compacto"
+                  icone={Link2}
+                >
+                  Vincular clientes
+                </BotaoLink>
+              }
+            >
               Clientes
             </Titulo>
             {clientes.length === 0 ? (
-              <EstadoVazio icone={Users}>Nenhum cliente na carteira dele.</EstadoVazio>
+              <Cartao className="flex-1 flex items-center justify-center">
+                <EstadoVazio icone={Users} discreto>
+                  Nenhum cliente vinculado a ele ainda.
+                </EstadoVazio>
+              </Cartao>
             ) : (
               <Cartao className="divide-y divide-filete overflow-hidden">
                 {clientes.slice(0, 10).map((cliente) => (
@@ -362,15 +412,18 @@ function Titulo({
   icone,
   tom,
   children,
+  acao,
 }: {
   icone: typeof Mail;
   tom: "lilas" | "mar";
   children: React.ReactNode;
+  acao?: React.ReactNode;
 }) {
   return (
     <div className="flex items-center gap-3 mb-4 px-1">
       <Placa icone={icone} tom={tom} pequena />
       <h2 className="text-realce font-semibold">{children}</h2>
+      {acao && <div className="ml-auto">{acao}</div>}
     </div>
   );
 }

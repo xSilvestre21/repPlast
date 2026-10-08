@@ -2,13 +2,15 @@ import { Factory, Plus } from "lucide-react";
 
 import { BotaoLink, Cabecalho } from "@/components/ui";
 import { escopoAtual } from "@/lib/sessao";
+import { soIndustriasMarcadas } from "@/lib/industrias-do-ator";
 import { Pagina } from "@/components/pagina";
 
 import { buscarFornecedores, situacaoDoParametro } from "./consulta";
 import { ListaFornecedores } from "./lista";
 
 export default async function PaginaFornecedores({ searchParams }: PageProps<"/fornecedores">) {
-  const { organizacaoId, db } = await escopoAtual();
+  const { organizacaoId, usuarioId, ehAdmin, db } = await escopoAtual();
+  const ator = { ehAdmin, usuarioId };
   const parametros = await searchParams;
 
   /*
@@ -20,9 +22,12 @@ export default async function PaginaFornecedores({ searchParams }: PageProps<"/f
   const situacao = situacaoDoParametro(parametros.situacao);
 
   const [inicial, algum] = await Promise.all([
-    buscarFornecedores(db, organizacaoId, { busca, situacao, pagina: 0 }),
+    buscarFornecedores(db, organizacaoId, ator, { busca, situacao, pagina: 0 }),
     // Distingue "não achei" de "ainda não há indústria nenhuma", que pede outro recado.
-    db.fornecedor.findFirst({ where: { organizacaoId }, select: { id: true } }),
+    db.fornecedor.findFirst({
+      where: { organizacaoId, ...soIndustriasMarcadas(ator) },
+      select: { id: true },
+    }),
   ]);
 
   return (
@@ -32,9 +37,12 @@ export default async function PaginaFornecedores({ searchParams }: PageProps<"/f
         titulo="Fornecedores"
         descricao="As indústrias que você representa. É aqui que ficam o IPI, a comissão e os aditivos."
         acao={
-          <BotaoLink href="/fornecedores/novo" icone={Plus}>
-            Nova indústria
-          </BotaoLink>
+          // Cadastro é do administrador; o preposto consulta.
+          ehAdmin && (
+            <BotaoLink href="/fornecedores/novo" icone={Plus}>
+              Nova indústria
+            </BotaoLink>
+          )
         }
       />
 

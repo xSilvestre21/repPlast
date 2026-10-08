@@ -9,12 +9,18 @@ import { inscreverPreposto } from "../acoes";
 import { FormularioPreposto, PREPOSTO_VAZIO } from "../formulario";
 
 export default async function PaginaNovoPreposto() {
-  const { ehAdmin, plano } = await escopoAtual();
+  const { ehAdmin, plano, db, organizacaoId } = await escopoAtual();
 
   // O mesmo porteiro da lista: preposto não inscreve preposto, e fora do Plus
   // a lista é que explica o que falta.
   if (!ehAdmin) notFound();
   if (plano !== "PLUS") redirect("/prepostos");
+
+  const industrias = await db.fornecedor.findMany({
+    where: { organizacaoId, ativo: true },
+    orderBy: { nome: "asc" },
+    select: { id: true, nome: true },
+  });
 
   return (
     <Pagina>
@@ -27,6 +33,7 @@ export default async function PaginaNovoPreposto() {
       <FormularioPreposto
         acao={inscreverPreposto}
         valores={PREPOSTO_VAZIO}
+        industrias={industrias}
         rotuloEnvio="Inscrever preposto"
         novo
       />

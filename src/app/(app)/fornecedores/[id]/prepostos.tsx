@@ -3,10 +3,9 @@
 /**
  * Quem atende esta indústria.
  *
- * Vive na página da indústria, e não na do preposto, porque a permissão é da
- * indústria: marcar um é o mesmo ato que desmarcar os outros. Do lado do
- * preposto esse segundo efeito seria invisível — aconteceria numa tela onde os
- * outros nem aparecem.
+ * O mesmo vínculo da ficha do preposto, visto pelo outro lado: aqui se marca
+ * uma indústria para vários prepostos de uma vez; lá, várias indústrias para
+ * um preposto. Quem fica desmarcado não vê esta indústria.
  */
 
 import { Users } from "lucide-react";
@@ -37,9 +36,6 @@ export function SecaoPrepostos({
     () => new Set(prepostos.filter((p) => p.atende).map((p) => p.id)),
   );
 
-  // Nenhum e todos querem dizer a mesma coisa — e o rodapé diz isso em voz alta,
-  // porque "desmarquei tudo" não parece "liberei para todos".
-  const paraTodos = marcados.size === 0 || marcados.size === prepostos.length;
 
   return (
     <SecaoCartao
@@ -81,9 +77,11 @@ export function SecaoPrepostos({
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-mini text-tinta-3 leading-relaxed">
-            {paraTodos
-              ? "Como está, esta indústria é do escritório inteiro."
-              : `Só ${marcados.size} de ${prepostos.length} prepostos verão esta indústria.`}
+            {marcados.size === 0
+              ? "Nenhum preposto vê esta indústria — só o administrador."
+              : marcados.size === prepostos.length
+                ? "Todos os prepostos veem esta indústria."
+                : `Só ${marcados.size} de ${prepostos.length} prepostos veem esta indústria.`}
           </p>
 
           {editavel && (

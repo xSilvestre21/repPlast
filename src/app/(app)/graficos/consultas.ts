@@ -121,7 +121,8 @@ export async function clientesComUltimaCompra(
       organizacaoId,
       ativo: true,
       pedidos: { some: { status: "ENVIADO" } },
-      ...(apenasDoPreposto ? { representanteId: apenasDoPreposto } : {}),
+      // Os clientes que ele atende — um cliente pode ser de vários prepostos.
+      ...(apenasDoPreposto ? { prepostos: { some: { usuarioId: apenasDoPreposto } } } : {}),
     },
     select: {
       id: true,

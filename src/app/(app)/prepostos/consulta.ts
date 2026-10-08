@@ -96,7 +96,7 @@ export async function prepostosComComissao(db: DbOrganizacao, organizacaoId: str
 export async function fichaDoPreposto(db: DbOrganizacao, organizacaoId: string, id: string) {
   const competencia = competenciaDe(new Date());
 
-  const [todos, recentes, clientes] = await Promise.all([
+  const [todos, recentes, totalDePedidos, clientes] = await Promise.all([
     prepostosComComissao(db, organizacaoId, competencia),
     // Os últimos que ele lançou, em qualquer situação — a pergunta é "o que
     // ele anda fazendo", e um cancelado de ontem responde tanto quanto um enviado.
@@ -114,9 +114,12 @@ export async function fichaDoPreposto(db: DbOrganizacao, organizacaoId: string, 
         fornecedor: { select: { nome: true } },
       },
     }),
-    // A carteira dele: o cliente é do preposto pelo campo do cliente, não pelos pedidos.
+    // Para a lista dizer se aqueles são todos ou só os últimos.
+    db.pedido.count({ where: { organizacaoId, representanteId: id } }),
+    // A carteira dele: os clientes que ele atende (`cliente_preposto`), não os
+    // dos pedidos — um cliente pode ser de vários prepostos.
     db.cliente.findMany({
-      where: { organizacaoId, representanteId: id },
+      where: { organizacaoId, prepostos: { some: { usuarioId: id } } },
       orderBy: [{ ativo: "desc" }, { apelido: "asc" }],
       select: { id: true, apelido: true, municipio: true, uf: true, ativo: true },
     }),
@@ -125,5 +128,5 @@ export async function fichaDoPreposto(db: DbOrganizacao, organizacaoId: string, 
   const preposto = todos.find((p) => p.id === id);
   if (!preposto) return null;
 
-  return { preposto, competencia, recentes, clientes };
+  return { preposto, competencia, recentes, totalDePedidos, clientes };
 }

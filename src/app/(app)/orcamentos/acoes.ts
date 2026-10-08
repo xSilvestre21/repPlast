@@ -18,6 +18,7 @@ import { ipiDoFormulario, ipiParaGravar } from "@/lib/ipi-do-formulario";
 import { motivoDoFormulario } from "@/lib/motivo";
 import { lerNumeroBr } from "@/lib/numero-br";
 import { arredondarDinheiro } from "@/lib/precificacao";
+import { prepostoDoNovoPedido } from "@/lib/preposto-do-pedido";
 import {
   type ProdutoPrecificavel,
   type UnidadeVenda,
@@ -36,7 +37,8 @@ import {
   problemaNoEnvio,
 } from "@/lib/envio-pedido";
 import { carregarOrcamentoParaPdf, gerarPdfOrcamento } from "@/lib/pdf/gerar-orcamento";
-import { escopoAtual } from "@/lib/sessao";
+import { soIndustriasMarcadas } from "@/lib/industrias-do-ator";
+import { escopoAtual, exigirAdmin } from "@/lib/sessao";
 import { calcularTotaisPedido } from "@/lib/totais";
 import { nomeCompleto } from "@/lib/nome-usuario";
 
@@ -175,7 +177,7 @@ export async function criarOrcamento(
   let destino: string;
 
   try {
-    const { organizacaoId, usuarioId, db } = await contexto();
+    const { organizacaoId, usuarioId, ehAdmin, db } = await contexto();
 
     const clienteId = lerTexto(formData.get("clienteId"));
     const avulsoNome = lerTexto(formData.get("clienteAvulsoNome"));
@@ -197,11 +199,11 @@ export async function criarOrcamento(
       clienteId
         ? db.cliente.findFirst({
             where: { id: clienteId, organizacaoId },
-            select: { id: true, representanteId: true, observacoes: true },
+            select: { id: true, observacoes: true },
           })
         : Promise.resolve(null),
       db.fornecedor.findFirst({
-        where: { id: fornecedorId, organizacaoId },
+        where: { id: fornecedorId, organizacaoId, ...soIndustriasMarcadas({ ehAdmin, usuarioId }) },
         select: { id: true, ipiPercentual: true },
       }),
       db.usuario.findUnique({
@@ -246,9 +248,12 @@ export async function criarOrcamento(
         // motivo que o nome: reimprimir a proposta de março tem de sair igual ao
         // papel que o cliente recebeu.
         cidade: usuario?.municipio ?? null,
-        // Mesmo corte do pedido: a proposta é da carteira, não de quem digitou.
-        // Sem cliente ainda não há carteira — a proposta nasce do escritório.
-        representanteId: cliente?.representanteId ?? null,
+        // Com quem a comissão se divide se virar pedido. O preposto que cota é
+        // o dono da proposta; a do administrador nasce do escritório, e o
+        // preposto se escolhe no pedido — nem todo pedido é dividido.
+        representanteId: ehAdmin ? null : usuarioId,
+        // Quem digitou — é o que decide quem vê a proposta.
+        criadoPorId: usuarioId,
       },
       select: { id: true },
     });
@@ -731,7 +736,7 @@ export async function converterEmPedido(
   orcamentoId: string,
   _formData: FormData,
 ): Promise<void> {
-  const { organizacaoId, db } = await contexto();
+  const { organizacaoId, usuarioId, ehAdmin, db } = await contexto();
 
   const orcamento = await db.orcamento.findFirst({
     where: { id: orcamentoId, organizacaoId },
@@ -780,6 +785,16 @@ export async function converterEmPedido(
     );
   }
 
+  // A proposta do preposto credita ele; a do escritório vai para o preposto
+  // do cliente, como no pedido lançado direto.
+  const preposto = await prepostoDoNovoPedido(db, {
+    organizacaoId,
+    clienteId: orcamento.clienteId,
+    usuarioId,
+    ehAdmin,
+    representanteId: orcamento.representanteId,
+  });
+
   const contador = await db.fornecedor.update({
     where: { id: orcamento.fornecedorId },
     data: { proximoNumeroPedido: { increment: 1 } },
@@ -815,7 +830,8 @@ export async function converterEmPedido(
        */
       observacoes: orcamento.cliente?.observacoes ?? null,
       vendedor: orcamento.vendedor,
-      representanteId: orcamento.representanteId,
+      ...preposto,
+      criadoPorId: usuarioId,
       subtotalSemIpi: orcamento.subtotalSemIpi,
       valorIpi: orcamento.valorIpi,
       totalGeral: orcamento.totalGeral,
@@ -879,6 +895,8 @@ export async function cadastrarProdutosDaProposta(
   _formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
+    // Produto é cadastro, e cadastro é do administrador.
+    await exigirAdmin();
     const { organizacaoId, db } = await contexto();
 
     const orcamento = await db.orcamento.findFirst({

@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, HandCoins, MapPin, MessageSquareText, Phone } from "lucide-react";
+import { BadgeCheck, HandCoins, MapPin, MessageSquareText, Phone, Users } from "lucide-react";
 import { useActionState } from "react";
 
 import { CampoCep, CampoDocumento, CampoTelefone } from "@/components/campo-mascarado";
@@ -14,10 +14,16 @@ export function FormularioCliente({
   valores,
   rotuloEnvio,
   editavel = true,
+  prepostos,
 }: {
   acao: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   valores: ValoresCliente;
   rotuloEnvio: string;
+  /**
+   * Os prepostos para escolher o dono da carteira. Sem eles, o campo não
+   * aparece — é o caso do preposto e de escritório sem plano Plus.
+   */
+  prepostos?: { id: string; nome: string }[];
   /** Ficha já gravada, aberta para leitura: tudo travado até clicar em Editar. */
   editavel?: boolean;
 }) {
@@ -67,6 +73,38 @@ export function FormularioCliente({
             />
           </div>
         </SecaoCartao>
+
+        {prepostos && (
+          <SecaoCartao
+            icone={Users}
+            tom="lilas"
+            titulo="Prepostos"
+            descricao="Quem atende este cliente: vê o cadastro, os produtos e lança pedido para ele. A comissão de cada pedido se divide só com o preposto escolhido no próprio pedido. Nenhum marcado é do escritório."
+          >
+            {/* Sem caixa marcada o navegador não envia nada; este campo diz à
+                ação que a lista veio — e que vazia quer dizer "nenhum". */}
+            <input type="hidden" name="prepostosNoFormulario" value="1" />
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {prepostos.map((p) => (
+                <label
+                  key={p.id}
+                  className="flex items-center gap-3 rounded-suave border border-filete
+                    bg-folha-2 px-3 py-2.5 text-corpo cursor-pointer transition-colors
+                    hover:border-filete-forte min-w-0"
+                >
+                  <input
+                    type="checkbox"
+                    name="prepostoId"
+                    value={p.id}
+                    defaultChecked={valores.prepostoIds.includes(p.id)}
+                    className="size-4 shrink-0 accent-carimbo cursor-pointer"
+                  />
+                  <span className="truncate">{p.nome}</span>
+                </label>
+              ))}
+            </div>
+          </SecaoCartao>
+        )}
 
         <SecaoCartao icone={MapPin} titulo="Endereço">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

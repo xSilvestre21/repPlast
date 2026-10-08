@@ -38,6 +38,7 @@ import {
   Segmentado,
   ValorLinha,
 } from "@/components/ui";
+import { BolinhaPreposto } from "@/components/bolinha-preposto";
 
 import type { FatiaDeOrcamentos, FiltroStatusOrcamento, OrcamentoDaLista } from "./consulta";
 import { SeloOrcamento } from "./selo";
@@ -291,6 +292,13 @@ export function ListaOrcamentos({
                             className="shrink-0 mt-[3px]"
                           />
                           {orcamento.motivoRecusa}
+                        </span>
+                      )}
+                      {/* De quem é — só o administrador recebe, e só quando é de preposto. */}
+                      {orcamento.preposto && (
+                        <span className="flex items-center gap-1.5 text-mini text-tinta-3 mt-0.5 min-w-0">
+                          <BolinhaPreposto cor={orcamento.preposto.cor} />
+                          <span className="truncate">{orcamento.preposto.nome}</span>
                         </span>
                       )}
                     </>

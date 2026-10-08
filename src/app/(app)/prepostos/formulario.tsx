@@ -10,7 +10,7 @@
  * senha se troca à parte, na ficha.
  */
 
-import { BadgeCheck, HandCoins, KeyRound, Phone } from "lucide-react";
+import { BadgeCheck, Factory, HandCoins, KeyRound, Phone } from "lucide-react";
 import { useActionState } from "react";
 
 import { CampoTelefone } from "@/components/campo-mascarado";
@@ -25,6 +25,13 @@ export interface ValoresPreposto {
   telefone: string;
   /** Já no padrão brasileiro ("42,5"); vazio quando não há acordo. */
   comissaoPercentual: string;
+  /** As indústrias marcadas para ele — as únicas que ele vê. */
+  fornecedorIds: string[];
+}
+
+export interface IndustriaDoFormulario {
+  id: string;
+  nome: string;
 }
 
 export const PREPOSTO_VAZIO: ValoresPreposto = {
@@ -33,17 +40,21 @@ export const PREPOSTO_VAZIO: ValoresPreposto = {
   email: "",
   telefone: "",
   comissaoPercentual: "",
+  fornecedorIds: [],
 };
 
 export function FormularioPreposto({
   acao,
   valores,
+  industrias,
   rotuloEnvio,
   novo = false,
   editavel = true,
 }: {
   acao: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   valores: ValoresPreposto;
+  /** Todas as indústrias que se podem marcar para ele. */
+  industrias: IndustriaDoFormulario[];
   rotuloEnvio: string;
   /** Inscrição: o e-mail se escolhe aqui, e a senha provisória também. */
   novo?: boolean;
@@ -115,6 +126,37 @@ export function FormularioPreposto({
               defaultValue={atuais.comissaoPercentual}
             />
           </div>
+        </SecaoCartao>
+
+        <SecaoCartao
+          icone={Factory}
+          tom="lilas"
+          titulo="Indústrias"
+          descricao="Marque as indústrias com que ele trabalha. Ele só vê as marcadas, com os produtos delas; sem nenhuma marcada, não vê indústria nenhuma."
+        >
+          {industrias.length === 0 ? (
+            <p className="text-corpo text-tinta-3">Nenhuma indústria cadastrada ainda.</p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {industrias.map((industria) => (
+                <label
+                  key={industria.id}
+                  className="flex items-center gap-3 rounded-suave border border-filete
+                    bg-folha-2 px-3 py-2.5 text-corpo cursor-pointer transition-colors
+                    hover:border-filete-forte min-w-0"
+                >
+                  <input
+                    type="checkbox"
+                    name="fornecedorId"
+                    value={industria.id}
+                    defaultChecked={atuais.fornecedorIds.includes(industria.id)}
+                    className="size-4 shrink-0 accent-carimbo cursor-pointer"
+                  />
+                  <span className="truncate">{industria.nome}</span>
+                </label>
+              ))}
+            </div>
+          )}
         </SecaoCartao>
 
         {novo && (
