@@ -21,19 +21,26 @@ import {
 } from "lucide-react";
 import { useActionState, useState } from "react";
 
+import { AcaoComRecusa } from "@/components/acao-com-recusa";
 import { CampoData } from "@/components/campo-data";
+import { ErroGeral, Formulario } from "@/components/formulario";
 import {
   AreaTexto,
   Botao,
   BotaoLink,
   BotaoTexto,
   Campo,
-  MensagemErro,
   SecaoCartao,
 } from "@/components/ui";
 import { LIMITE_DO_MOTIVO } from "@/lib/motivo";
 
 import type { EstadoFormulario } from "../acoes";
+
+/**
+ * Uma ação de desfecho que pode ser recusada — "a proposta ainda não tem
+ * itens". A recusa aparece embaixo do botão (`AcaoComRecusa`).
+ */
+type AcaoDeStatus = (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
 
 export type ValoresProposta = {
   attn: string;
@@ -77,9 +84,7 @@ export function FichaProposta({
             : "Em leitura. Para mexer em qualquer coisa, use Editar no alto da página."
       }
     >
-      <form action={enviar} className="space-y-4">
-        <MensagemErro>{estado.erro}</MensagemErro>
-
+      <Formulario estado={estado} action={enviar} className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Campo
             name="attn"
@@ -132,13 +137,16 @@ export function FichaProposta({
         </label>
 
         {editavel && (
-          <div className="flex justify-end">
-            <Botao type="submit" variante="secundaria" carregando={salvando}>
-              {salvando ? "Salvando…" : "Salvar e voltar"}
-            </Botao>
+          <div className="space-y-3">
+            <ErroGeral />
+            <div className="flex justify-end">
+              <Botao type="submit" variante="secundaria" carregando={salvando}>
+                {salvando ? "Salvando…" : "Salvar e voltar"}
+              </Botao>
+            </div>
           </div>
         )}
-      </form>
+      </Formulario>
 
       {edicoes.length > 0 && (
         <div className="mt-5 pt-4 border-t border-filete">
@@ -182,11 +190,11 @@ export function DesfechoProposta({
   viraPedido: boolean;
   jaVirouPedido: boolean;
   motivoRecusa: string;
-  aceitar: (formData: FormData) => void | Promise<void>;
-  recusar: (formData: FormData) => void | Promise<void>;
-  vencer: (formData: FormData) => void | Promise<void>;
-  reabrir: (formData: FormData) => void | Promise<void>;
-  virarPedido: (formData: FormData) => void | Promise<void>;
+  aceitar: AcaoDeStatus;
+  recusar: AcaoDeStatus;
+  vencer: AcaoDeStatus;
+  reabrir: AcaoDeStatus;
+  virarPedido: AcaoDeStatus;
   salvarMotivo: (formData: FormData) => void | Promise<void>;
 }) {
   const aberto = status === "ABERTO";
@@ -200,10 +208,10 @@ export function DesfechoProposta({
   const [recusando, setRecusando] = useState(false);
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-wrap items-start gap-3">
       {aberto ? (
         recusando ? (
-          <form action={recusar} className="w-full max-w-xl space-y-3">
+          <AcaoComRecusa acao={recusar} alinhamento="inicio" className="w-full max-w-xl space-y-3">
             <Campo
               name="motivoRecusa"
               rotulo="Por que o cliente recusou?"
@@ -220,14 +228,14 @@ export function DesfechoProposta({
                 voltar
               </BotaoTexto>
             </div>
-          </form>
+          </AcaoComRecusa>
         ) : (
           <>
-            <form action={aceitar}>
+            <AcaoComRecusa acao={aceitar} alinhamento="inicio">
               <Botao type="submit" icone={Check} disabled={!temItens}>
                 Cliente aceitou
               </Botao>
-            </form>
+            </AcaoComRecusa>
             <Botao
               type="button"
               variante="secundaria"
@@ -236,18 +244,18 @@ export function DesfechoProposta({
             >
               Recusou
             </Botao>
-            <form action={vencer}>
+            <AcaoComRecusa acao={vencer} alinhamento="inicio" className="self-center">
               <BotaoTexto type="submit">
                 <Timer size={12} className="inline mr-1" aria-hidden="true" />
                 marcar como vencida
               </BotaoTexto>
-            </form>
+            </AcaoComRecusa>
           </>
         )
       ) : (
-        <form action={reabrir}>
+        <AcaoComRecusa acao={reabrir} alinhamento="inicio">
           <BotaoTexto type="submit">reabrir a proposta</BotaoTexto>
-        </form>
+        </AcaoComRecusa>
       )}
 
       {status === "RECUSADO" && (
@@ -268,11 +276,11 @@ export function DesfechoProposta({
 
       {status === "ACEITO" &&
         (viraPedido ? (
-          <form action={virarPedido}>
+          <AcaoComRecusa acao={virarPedido} alinhamento="inicio">
             <Botao type="submit" icone={ScrollText} disabled={!temItens}>
               {jaVirouPedido ? "Gerar outro pedido" : "Virar pedido"}
             </Botao>
-          </form>
+          </AcaoComRecusa>
         ) : (
           <p className="text-corpo text-tinta-2 max-w-sm leading-relaxed">
             Aceita, mas não vira pedido: falta cadastrar o cliente e os produtos dele — veja
@@ -323,8 +331,6 @@ export function PendenciasDoPedido({
           : "Ela é para quem ainda não é cliente, e os itens são conta, sem produto. Vale normalmente como proposta — número, itens e PDF —, mas só vira pedido depois de cadastrar o cliente e os produtos dele."
       }
     >
-      <MensagemErro>{estado.erro}</MensagemErro>
-
       <ol className="space-y-3 text-corpo">
         <li className="flex flex-wrap items-center justify-between gap-3">
           <span className="flex items-center gap-2">
@@ -354,10 +360,17 @@ export function PendenciasDoPedido({
             </span>
           </span>
           {podeCadastrar && cliente && itensSemProduto > 0 && (
-            <form action={enviar}>
+            // A recusa ("na linha X falta a largura") fica embaixo do botão
+            // que a provocou, e não no alto do cartão.
+            <form action={enviar} className="flex flex-col items-end text-right">
               <Botao type="submit" variante="secundaria" icone={PackagePlus} carregando={cadastrando}>
                 {cadastrando ? "Cadastrando…" : "Cadastrar todos os produtos"}
               </Botao>
+              {estado.erro && (
+                <p role="alert" className="surgir mt-1.5 max-w-sm text-mini text-perigo">
+                  {estado.erro}
+                </p>
+              )}
             </form>
           )}
         </li>

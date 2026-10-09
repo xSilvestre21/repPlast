@@ -9,10 +9,11 @@ import {
   Botao,
   BotaoTexto,
   Cartao,
-  MensagemErro,
+  EspacoDoRotulo,
   Placa,
   formatarMoeda,
 } from "@/components/ui";
+import { ErroGeral, Formulario } from "@/components/formulario";
 import { escreverNumeroBr } from "@/lib/numero-br";
 
 import type { EstadoFormulario } from "./acoes";
@@ -161,17 +162,19 @@ export function PainelMeta({
         )}
 
         {comFormulario && (
-          <form action={enviar} className="mt-5 space-y-4">
-            <MensagemErro>{estado.erro}</MensagemErro>
-
+          <Formulario estado={estado} action={enviar} className="mt-5 space-y-4">
             {/*
               A dica mora FORA da linha. Dentro do campo, ela alongava o bloco
               para baixo e o `items-end` alinhava os botões pela base dela — o
               "Salvar meta" ficava abaixo da caixa e o "cancelar" solto no meio.
               Sem ela, a base da linha é a base da caixa.
+
+              Alinhada pelo TOPO, com o espaço de um rótulo sobre os botões: o
+              erro aparece embaixo da caixa, e pela base os botões desceriam
+              junto com ele.
             */}
             <div>
-              <div className="flex flex-wrap items-end gap-3">
+              <div className="flex flex-wrap items-start gap-3">
                 <CampoMoeda
                   name="meta"
                   rotulo={`Sua meta a partir de ${nomeDoMes}`}
@@ -184,16 +187,19 @@ export function PainelMeta({
 
                 {/* O par de sempre: a ação e, ao lado, o "voltar atrás" em texto
                     — como em recusar orçamento e cancelar pedido. */}
-                <div className="flex items-center gap-3 h-11">
-                  <Botao type="submit" variante="secundaria" carregando={salvando}>
-                    {salvando ? "Salvando…" : "Salvar meta"}
-                  </Botao>
+                <div>
+                  <EspacoDoRotulo />
+                  <div className="flex items-center gap-3 h-11">
+                    <Botao type="submit" variante="secundaria" carregando={salvando}>
+                      {salvando ? "Salvando…" : "Salvar meta"}
+                    </Botao>
 
-                  {meta !== null && (
-                    <BotaoTexto type="button" onClick={() => setEditando(false)}>
-                      cancelar
-                    </BotaoTexto>
-                  )}
+                    {meta !== null && (
+                      <BotaoTexto type="button" onClick={() => setEditando(false)}>
+                        cancelar
+                      </BotaoTexto>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -202,7 +208,9 @@ export function PainelMeta({
                 anteriores guardam a meta que tinham. Deixe vazio para não acompanhar meta.
               </p>
             </div>
-          </form>
+
+            <ErroGeral />
+          </Formulario>
         )}
       </Cartao>
     </>

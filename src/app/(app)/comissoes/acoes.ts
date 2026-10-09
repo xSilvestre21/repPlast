@@ -2,11 +2,39 @@
 
 import { revalidatePath } from "next/cache";
 
-import { lerNumeroBr } from "@/lib/numero-br";
+import {
+  ErroDeCampo,
+  ErroParaUsuario,
+  campoDaLinha,
+  falhou,
+  type EstadoFormulario,
+} from "@/lib/erro-formulario";
+import { exigirNumero, exigirNumeroDe } from "@/lib/numero-br";
 import { problemaNasParcelas } from "@/lib/parcelas";
 import { escopoAtual, exigirAdmin } from "@/lib/sessao";
 
-export type EstadoFormulario = { erro?: string };
+export type { EstadoFormulario };
+
+/** O mês chega pela URL da tela; fora do formato, alguém mexeu no endereço. */
+const MES_INVALIDO =
+  "Não deu para saber de qual mês é isto. Volte a Comissões pelo menu e tente de novo.";
+
+const PEDIDO_SUMIU =
+  "Este pedido não foi encontrado — ele pode ter sido excluído em outra tela. Recarregue a página.";
+
+/**
+ * Data de coluna `date`, montada em UTC para o dia não escorregar pelo fuso.
+ * Recusa a data que não existe ("2026-02-31"), que antes ia ao banco e voltava
+ * como erro em inglês.
+ */
+function dataDoCampo(texto: string, campo: string, mensagem: string): Date {
+  const [ano, mes, dia] = texto.split("-").map(Number);
+  const data = new Date(Date.UTC(ano, mes - 1, dia));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(texto) || data.toISOString().slice(0, 10) !== texto) {
+    throw new ErroDeCampo(campo, mensagem);
+  }
+  return data;
+}
 
 /**
  * Define a meta de comissão de quem está logado, do mês da tela em diante.
@@ -25,18 +53,14 @@ export async function definirMeta(
   formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
-    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(competencia)) return { erro: "Mês inválido." };
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(competencia)) throw new ErroParaUsuario(MES_INVALIDO);
 
     const { organizacaoId, usuarioId, db } = await escopoAtual();
-    const bruto = formData.get("meta");
-    const texto = typeof bruto === "string" ? bruto.trim() : "";
 
     // Campo vazio significa "não quero meta" — é uma opção legítima, e não
     // erro. Grava a linha vazia mesmo assim: ela interrompe a meta herdada.
-    const valor = texto === "" ? 0 : lerNumeroBr(texto);
-
-    if (valor === null) return { erro: "Não entendi esse valor." };
-    if (valor < 0) return { erro: "A meta não pode ser negativa." };
+    const valor =
+      exigirNumero(formData, "meta", "a meta", { min: 0, exemplo: "4.000,00" }) ?? 0;
 
     const gravado = valor === 0 ? null : String(valor);
 
@@ -46,7 +70,7 @@ export async function definirMeta(
       update: { valor: gravado },
     });
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar a meta." };
+    return falhou(erro, formData);
   }
 
   revalidatePath("/comissoes");
@@ -65,43 +89,41 @@ export async function definirMeta(
  * O mesmo formulário serve ao pedido inteiro e a cada parcela, então a leitura
  * é uma só — as duas formas de acertar não podem aceitar coisas diferentes.
  */
-function lerAcerto(
-  formData: FormData,
-):
-  | { erro: string }
-  | { valor: string | null; percentual: string | null; entregueEm: Date | null } {
-  const texto = (campo: string) => {
-    const bruto = formData.get(campo);
-    return typeof bruto === "string" ? bruto.trim() : "";
-  };
+function lerAcerto(formData: FormData): {
+  valor: string | null;
+  percentual: string | null;
+  entregueEm: Date | null;
+} {
+  const valor = exigirNumero(formData, "valorRecebido", "o valor recebido", {
+    min: 0,
+    exemplo: "1.250,00",
+  });
+  const percentual = exigirNumero(formData, "comissaoPercentualRecebido", "o percentual", {
+    min: 0,
+    max: 100,
+    exemplo: "5",
+  });
 
-  const valorBruto = texto("valorRecebido");
-  const percentualBruto = texto("comissaoPercentualRecebido");
-  const entregaBruta = texto("entregueEm");
-
-  const valor = valorBruto === "" ? null : lerNumeroBr(valorBruto);
-  const percentual = percentualBruto === "" ? null : lerNumeroBr(percentualBruto);
-
-  if (valorBruto !== "" && valor === null) return { erro: "Não entendi o valor recebido." };
-  if (percentualBruto !== "" && percentual === null) return { erro: "Não entendi o percentual." };
-
-  if (valor !== null && valor < 0) return { erro: "O valor recebido não pode ser negativo." };
-  if (percentual !== null && (percentual < 0 || percentual > 100)) {
-    return { erro: "O percentual precisa ficar entre 0 e 100." };
-  }
-
-  // Meio acerto não é acerto: sem os dois, a comissão recebida não existe.
+  // Meio acerto não é acerto: sem os dois, a comissão recebida não existe. A
+  // frase vai para o campo que ficou vazio.
   if ((valor === null) !== (percentual === null)) {
-    return { erro: "Informe o valor recebido e o percentual — ou deixe os dois em branco." };
+    throw new ErroDeCampo(
+      valor === null ? "valorRecebido" : "comissaoPercentualRecebido",
+      valor === null
+        ? "Informe também o valor recebido — o acerto precisa dos dois. Para desfazer o acerto, apague os dois."
+        : "Informe também o percentual — o acerto precisa dos dois. Para desfazer o acerto, apague os dois.",
+    );
   }
 
-  let entregueEm: Date | null = null;
-  if (entregaBruta !== "") {
-    // `date` sem hora: monta em UTC para o dia não escorregar pelo fuso.
-    const [ano, mes, dia] = entregaBruta.split("-").map(Number);
-    if (!ano || !mes || !dia) return { erro: "Data de entrega inválida." };
-    entregueEm = new Date(Date.UTC(ano, mes - 1, dia));
-  }
+  const entregaBruta = String(formData.get("entregueEm") ?? "").trim();
+  const entregueEm =
+    entregaBruta === ""
+      ? null
+      : dataDoCampo(
+          entregaBruta,
+          "entregueEm",
+          "Esta data de entrega não é válida. Escolha a data de novo no calendário.",
+        );
 
   return {
     valor: valor === null ? null : String(valor),
@@ -129,10 +151,12 @@ export async function salvarAcerto(
     const { organizacaoId, db } = await escopoAtual();
 
     const acerto = lerAcerto(formData);
-    if ("erro" in acerto) return acerto;
 
     if ((await db.parcelaRecebimento.count({ where: { pedidoId } })) > 0) {
-      return { erro: "Este pedido é parcelado: lance o acerto em cada parcela." };
+      throw new ErroParaUsuario(
+        "Este pedido foi parcelado: o acerto se lança em cada parcela, nas linhas logo abaixo. " +
+          "Recarregue a página se elas não aparecerem.",
+      );
     }
 
     const { count } = await db.pedido.updateMany({
@@ -144,9 +168,9 @@ export async function salvarAcerto(
       },
     });
 
-    if (count === 0) return { erro: "Pedido não encontrado." };
+    if (count === 0) throw new ErroParaUsuario(PEDIDO_SUMIU);
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar o acerto." };
+    return falhou(erro, formData);
   }
 
   revalidatePath("/comissoes");
@@ -174,13 +198,17 @@ export async function salvarAcertoParcela(
     const { organizacaoId, db } = await escopoAtual();
 
     const acerto = lerAcerto(formData);
-    if ("erro" in acerto) return acerto;
 
     const parcela = await db.parcelaRecebimento.findFirst({
       where: { id: parcelaId, pedido: { organizacaoId } },
       select: { pedidoId: true },
     });
-    if (!parcela) return { erro: "Parcela não encontrada." };
+    if (!parcela) {
+      throw new ErroParaUsuario(
+        "Esta parcela não foi encontrada — o parcelamento pode ter sido refeito em outra tela. " +
+          "Recarregue a página.",
+      );
+    }
     pedidoId = parcela.pedidoId;
 
     await db.parcelaRecebimento.update({
@@ -196,7 +224,7 @@ export async function salvarAcertoParcela(
       data: { entregueEm: acerto.entregueEm },
     });
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar o acerto." };
+    return falhou(erro, formData);
   }
 
   revalidatePath("/comissoes");
@@ -230,15 +258,29 @@ export async function salvarParcelas(
     const { organizacaoId, db } = await escopoAtual();
 
     const vencimentos = formData.getAll("vencimento").map((v) => String(v).trim());
-    const bases = formData.getAll("base").map((v) => lerNumeroBr(String(v)));
+    const brutas = formData.getAll("base").map(String);
 
-    if (bases.some((b) => b === null)) return { erro: "Não entendi o valor de uma das parcelas." };
-
-    const parcelas = vencimentos.map((vencimento, i) => ({
-      numero: i + 1,
-      vencimento,
-      base: (bases[i] as number).toFixed(2),
-    }));
+    /*
+     * Linha por linha antes da soma: o erro de UMA parcela vai para a linha
+     * dela. Antes, "não entendi o valor de uma das parcelas" não dizia qual —
+     * e aparecia também para o campo em branco, que não é "não entendi".
+     */
+    const parcelas = vencimentos.map((vencimento, i) => {
+      if (!vencimento) {
+        throw new ErroDeCampo(campoDaLinha("vencimento", i), `Escolha a data da parcela ${i + 1}.`);
+      }
+      dataDoCampo(
+        vencimento,
+        campoDaLinha("vencimento", i),
+        `A data da parcela ${i + 1} não é válida. Escolha de novo no calendário.`,
+      );
+      const base = exigirNumeroDe(brutas[i], campoDaLinha("base", i), `o valor da parcela ${i + 1}`, {
+        obrigatorio: true,
+        min: 0,
+        exemplo: "1.250,00",
+      });
+      return { numero: i + 1, vencimento, base: base.toFixed(2) };
+    });
 
     const pedido = await db.pedido.findFirst({
       where: { id: pedidoId, organizacaoId },
@@ -249,24 +291,30 @@ export async function salvarParcelas(
         comissaoPercentualRecebido: true,
       },
     });
-    if (!pedido) return { erro: "Pedido não encontrado." };
-    if (pedido.status === "CANCELADO") return { erro: "Pedido cancelado não se parcela." };
+    if (!pedido) throw new ErroParaUsuario(PEDIDO_SUMIU);
+    if (pedido.status === "CANCELADO") {
+      throw new ErroParaUsuario("Pedido cancelado não tem comissão a receber, e por isso não se parcela.");
+    }
 
     if (pedido.valorRecebido !== null || pedido.comissaoPercentualRecebido !== null) {
-      return { erro: "Este pedido já tem acerto lançado. Desfaça o acerto antes de parcelar." };
+      throw new ErroParaUsuario(
+        "Este pedido já tem acerto lançado no valor inteiro. Para parcelar, apague antes o valor " +
+          "recebido e o percentual do acerto e salve.",
+      );
     }
 
     const problema = problemaNasParcelas(pedido.subtotalSemIpi.toString(), parcelas);
-    if (problema) return { erro: problema };
+    if (problema) throw new ErroParaUsuario(problema);
 
     const acertadas = await db.parcelaRecebimento.findMany({
       where: { pedidoId, numero: { gt: parcelas.length }, valorRecebido: { not: null } },
       select: { numero: true },
     });
     if (acertadas.length > 0) {
-      return {
-        erro: `A parcela ${acertadas[0].numero} já tem acerto e não pode sair. Desfaça o acerto dela antes.`,
-      };
+      throw new ErroParaUsuario(
+        `A parcela ${acertadas[0].numero} já tem acerto e não pode sair do parcelamento. ` +
+          "Apague antes o acerto dela, ou mantenha a quantidade de parcelas.",
+      );
     }
 
     const data = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
@@ -287,7 +335,7 @@ export async function salvarParcelas(
       },
     });
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar as parcelas." };
+    return falhou(erro, formData);
   }
 
   revalidatePath("/comissoes");
@@ -315,16 +363,15 @@ export async function desfazerParcelas(
       select: { numero: true },
     });
     if (acertada) {
-      return {
-        erro: `A parcela ${acertada.numero} já tem acerto. Desfaça os acertos antes de desfazer o parcelamento.`,
-      };
+      throw new ErroParaUsuario(
+        `A parcela ${acertada.numero} já tem acerto lançado. Apague os acertos das parcelas ` +
+          "antes de desfazer o parcelamento — senão o que a indústria pagou se perderia.",
+      );
     }
 
     await db.parcelaRecebimento.deleteMany({ where: { pedidoId, pedido: { organizacaoId } } });
   } catch (erro) {
-    return {
-      erro: erro instanceof Error ? erro.message : "Não foi possível desfazer o parcelamento.",
-    };
+    return falhou(erro);
   }
 
   revalidatePath("/comissoes");
@@ -348,7 +395,7 @@ export async function registrarRepasse(
   formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
-    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(competencia)) return { erro: "Mês inválido." };
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(competencia)) throw new ErroParaUsuario(MES_INVALIDO);
 
     await exigirAdmin();
     const { organizacaoId, db } = await escopoAtual();
@@ -358,19 +405,29 @@ export async function registrarRepasse(
       return typeof bruto === "string" ? bruto.trim() : "";
     };
 
-    const valor = lerNumeroBr(texto("valor"));
-    if (valor === null) return { erro: "Não entendi o valor pago." };
-    if (valor <= 0) return { erro: "O valor pago precisa ser maior que zero." };
+    const valor = exigirNumero(formData, "valor", "o valor pago", {
+      obrigatorio: true,
+      min: 0,
+      exemplo: "1.250,00",
+    });
+    if (valor === 0) throw new ErroDeCampo("valor", "O valor pago precisa ser maior que zero.");
 
-    // `date` sem hora: monta em UTC para o dia não escorregar pelo fuso.
-    const [ano, mes, dia] = texto("pagoEm").split("-").map(Number);
-    if (!ano || !mes || !dia) return { erro: "Informe a data do pagamento." };
+    if (!texto("pagoEm")) throw new ErroDeCampo("pagoEm", "Escolha a data em que o pagamento foi feito.");
+    const pagoEm = dataDoCampo(
+      texto("pagoEm"),
+      "pagoEm",
+      "Esta data de pagamento não é válida. Escolha a data de novo no calendário.",
+    );
 
     const preposto = await db.usuario.findFirst({
       where: { id: prepostoId, organizacaoId, papel: "REPRESENTANTE" },
       select: { id: true },
     });
-    if (!preposto) return { erro: "Preposto não encontrado." };
+    if (!preposto) {
+      throw new ErroParaUsuario(
+        "Este preposto não foi encontrado — ele pode ter sido removido. Recarregue a página.",
+      );
+    }
 
     await db.repassePreposto.create({
       data: {
@@ -378,12 +435,12 @@ export async function registrarRepasse(
         prepostoId,
         competencia,
         valor: valor.toFixed(2),
-        pagoEm: new Date(Date.UTC(ano, mes - 1, dia)),
+        pagoEm,
         observacao: texto("observacao") || null,
       },
     });
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível registrar o pagamento." };
+    return falhou(erro, formData);
   }
 
   revalidatePath("/comissoes");
@@ -403,9 +460,13 @@ export async function excluirRepasse(
     const { count } = await db.repassePreposto.deleteMany({
       where: { id: repasseId, organizacaoId },
     });
-    if (count === 0) return { erro: "Pagamento não encontrado." };
+    if (count === 0) {
+      throw new ErroParaUsuario(
+        "Este pagamento não foi encontrado — ele pode já ter sido excluído. Recarregue a página.",
+      );
+    }
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível excluir o pagamento." };
+    return falhou(erro);
   }
 
   revalidatePath("/comissoes");

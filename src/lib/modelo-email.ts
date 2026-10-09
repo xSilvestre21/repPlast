@@ -64,17 +64,22 @@ export function problemaNoModelo(
   const desconhecidas = variaveisDesconhecidas(modelo, tabela);
   if (desconhecidas.length > 0) {
     const lista = desconhecidas.map((v) => `{${v}}`).join(", ");
+    // Quase sempre é digitação ("{clinte}"): a saída é escolher da lista.
     return desconhecidas.length === 1
-      ? `${lista} não é um dado ${doDocumento}.`
-      : `${lista} não são dados ${doDocumento}.`;
+      ? `${lista} não é um dado ${doDocumento}. Apague-o e digite { para escolher um dado da lista.`
+      : `${lista} não são dados ${doDocumento}. Apague-os e digite { para escolher da lista.`;
   }
 
   let resto = modelo;
   while (BLOCO_INTERNO.test(resto)) resto = resto.replace(BLOCO_INTERNO, "");
 
   const aberto = new RegExp(ABRE_BLOCO.source).exec(resto);
-  if (aberto) return `Falta o {fim} do trecho que começa em {se ${aberto[1]}}.`;
-  if (resto.includes(FIM_BLOCO)) return "Tem um {fim} sobrando, sem o {se …} que ele fecha.";
+  if (aberto) {
+    return `Falta o {fim} do trecho que começa em {se ${aberto[1]}}. Escreva {fim} onde esse trecho termina.`;
+  }
+  if (resto.includes(FIM_BLOCO)) {
+    return "Tem um {fim} sobrando, sem o {se …} que ele fecha. Apague esse {fim}.";
+  }
 
   return null;
 }

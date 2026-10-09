@@ -14,7 +14,8 @@ import { FileText, Mail } from "lucide-react";
 import { useActionState, useState } from "react";
 
 import { TextoComVariaveis, type VariavelSugerida } from "@/components/texto-com-variaveis";
-import { Botao, MensagemErro, SecaoCartao } from "@/components/ui";
+import { ErroGeral, Formulario } from "@/components/formulario";
+import { Botao, SecaoCartao } from "@/components/ui";
 import {
   condicoesDoModelo,
   preencherModelo,
@@ -101,9 +102,11 @@ export function FormMensagemEnvio({
 
   const [completo, setCompleto] = useState(true);
 
-  const problema =
-    problemaNoModelo(assunto, modelo.tabela, modelo.doDocumento) ??
-    problemaNoModelo(mensagem, modelo.tabela, modelo.doDocumento);
+  // Cada caixa com o seu problema, enquanto se digita: a frase aparece
+  // embaixo do campo que tem a chave aberta ou o dado que não existe.
+  const problemaNoAssunto = problemaNoModelo(assunto, modelo.tabela, modelo.doDocumento) ?? undefined;
+  const problemaNaMensagem =
+    problemaNoModelo(mensagem, modelo.tabela, modelo.doDocumento) ?? undefined;
 
   /*
    * O segundo exemplo tira SÓ os dados que o texto usa em "Só se tiver…" — é
@@ -123,8 +126,7 @@ export function FormMensagemEnvio({
 
   return (
     <SecaoCartao icone={textos.icone} titulo={textos.titulo} descricao={textos.descricao}>
-      <form action={enviar} className="space-y-4">
-        <MensagemErro>{estado.erro}</MensagemErro>
+      <Formulario estado={estado} action={enviar} className="space-y-4">
 
         <p className="text-corpo text-tinta-2">
           Digite{" "}
@@ -140,6 +142,7 @@ export function FormMensagemEnvio({
           variaveis={variaveis}
           valor={assunto}
           aoMudar={setAssunto}
+          erro={problemaNoAssunto}
         />
 
         <TextoComVariaveis
@@ -149,9 +152,8 @@ export function FormMensagemEnvio({
           valor={mensagem}
           aoMudar={setMensagem}
           linhas={8}
+          erro={problemaNaMensagem}
         />
-
-        {problema && <p className="text-mini text-perigo">{problema}</p>}
 
         <div>
           <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
@@ -185,13 +187,15 @@ export function FormMensagemEnvio({
           </div>
         </div>
 
+        <ErroGeral />
+
         <div className="flex items-center justify-between gap-3">
           <span className="text-mini text-tinta-3">Apagar tudo volta ao texto original.</span>
           <Botao type="submit" variante="secundaria" carregando={salvando}>
             {salvando ? "Salvando…" : "Salvar mensagem"}
           </Botao>
         </div>
-      </form>
+      </Formulario>
     </SecaoCartao>
   );
 }

@@ -4,8 +4,16 @@ import { Ban, Copy, RotateCcw, Send, Trash2, Undo2, type LucideIcon } from "luci
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
 
+import { AcaoComRecusa } from "@/components/acao-com-recusa";
 import { Botao, BotaoTexto, Campo } from "@/components/ui";
+import type { EstadoFormulario } from "@/lib/erro-formulario";
 import { LIMITE_DO_MOTIVO } from "@/lib/motivo";
+
+/**
+ * Uma ação de status que pode ser recusada — "o pedido ainda não tem itens",
+ * "já foi enviado". A recusa aparece embaixo do botão (`AcaoComRecusa`).
+ */
+type AcaoDeStatus = (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
 
 type Variante = "primaria" | "secundaria" | "perigo";
 
@@ -72,11 +80,12 @@ export function AcaoPedido({
   variante?: Variante;
   confirmacao?: string;
   icone?: NomeDeIcone;
-  acao: (formData: FormData) => void | Promise<void>;
+  acao: AcaoDeStatus;
 }) {
   return (
-    <form
-      action={acao}
+    <AcaoComRecusa
+      acao={acao}
+      alinhamento="inicio"
       onSubmit={(evento) => {
         if (confirmacao && !confirm(confirmacao)) evento.preventDefault();
       }}
@@ -87,7 +96,7 @@ export function AcaoPedido({
         variante={variante}
         icone={icone}
       />
-    </form>
+    </AcaoComRecusa>
   );
 }
 
@@ -105,11 +114,7 @@ export function AcaoPedido({
  *
  * Mesma forma do "Recusou" da proposta (`orcamentos/[id]/ficha.tsx`).
  */
-export function CancelarPedido({
-  acao,
-}: {
-  acao: (formData: FormData) => void | Promise<void>;
-}) {
+export function CancelarPedido({ acao }: { acao: AcaoDeStatus }) {
   const [escrevendo, setEscrevendo] = useState(false);
 
   if (!escrevendo) {
@@ -133,7 +138,7 @@ export function CancelarPedido({
       base cheia sem teto manda a form para uma linha só dela; o teto do campo
       mora na div de dentro.
     */
-    <form action={acao} className="basis-full space-y-3">
+    <AcaoComRecusa acao={acao} alinhamento="inicio" className="basis-full space-y-3">
       <div className="max-w-xl space-y-3">
       <Campo
         name="motivoCancelamento"
@@ -155,7 +160,7 @@ export function CancelarPedido({
         </BotaoTexto>
         </div>
       </div>
-    </form>
+    </AcaoComRecusa>
   );
 }
 

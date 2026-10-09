@@ -24,16 +24,18 @@ import {
 
 import { Dialogo } from "./dialogo";
 import { EntregaEnviado } from "./entrega-enviado";
+import { ErroGeral, Formulario } from "./formulario";
 import {
   AreaTexto,
   Botao,
   BotaoLink,
   Campo,
   CLASSE_CONTROLE,
-  MensagemErro,
+  RodapeCampo,
   Rotulo,
   Selecao,
 } from "./ui";
+import { erroDoCampo } from "@/lib/erro-formulario";
 import {
   type EstadoEnvio,
   LIMITE_ANEXOS_BYTES,
@@ -268,7 +270,8 @@ function FormEnvio({
   }
 
   return (
-    <form
+    <Formulario
+      estado={estado}
       // Submissão à mão, dentro de uma transição: com `action={...}` o React
       // limparia o formulário depois de cada envio — inclusive do que falhou,
       // levando junto o texto que a pessoa escreveu e os arquivos escolhidos.
@@ -278,8 +281,6 @@ function FormEnvio({
       }}
       className="space-y-5"
     >
-      <MensagemErro>{estado.erro}</MensagemErro>
-
       {/*
         Documento mexido por preposto: o administrador vê quem e quando antes de
         mandar, e só manda depois de dizer que conferiu. O servidor cobra a
@@ -300,7 +301,10 @@ function FormEnvio({
               </li>
             ))}
           </ul>
-          <label className="mt-2.5 flex cursor-pointer items-center gap-2 font-medium text-tinta">
+          <label
+            className="mt-2.5 flex cursor-pointer items-center gap-2 font-medium text-tinta"
+            data-invalido={erroDoCampo(estado, "conferido") ? "" : undefined}
+          >
             <input
               type="checkbox"
               name="conferido"
@@ -310,6 +314,7 @@ function FormEnvio({
             />
             Conferi as alterações
           </label>
+          <RodapeCampo erro={erroDoCampo(estado, "conferido")} />
         </div>
       )}
 
@@ -363,6 +368,12 @@ function FormEnvio({
                 </span>
               </label>
             ))}
+          </div>
+        )}
+        {/* Nenhum destinatário: a frase fica embaixo da lista que resolve. */}
+        {erroDoCampo(estado, "contatoId") && (
+          <div data-invalido="">
+            <RodapeCampo erro={erroDoCampo(estado, "contatoId")} />
           </div>
         )}
 
@@ -469,6 +480,8 @@ function FormEnvio({
         <input ref={campoAnexos} type="file" name="anexo" multiple hidden tabIndex={-1} />
       </div>
 
+      <ErroGeral />
+
       <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
         <Botao type="button" variante="secundaria" onClick={cancelar} disabled={enviando}>
           Cancelar
@@ -491,6 +504,6 @@ function FormEnvio({
             : `Enviar${para.length + cc.length > 0 ? ` (${para.length + cc.length})` : ""}`}
         </Botao>
       </div>
-    </form>
+    </Formulario>
   );
 }

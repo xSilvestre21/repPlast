@@ -60,21 +60,32 @@ describe("problemas no envio", () => {
   });
 
   it("exige alguém da indústria — só cópia não basta", () => {
-    expect(problemaNoEnvio({ ...base, para: [], cc: ["eu@x.com"] })).toMatch(/destinatário/);
+    expect(problemaNoEnvio({ ...base, para: [], cc: ["eu@x.com"] })).toEqual({
+      erro: expect.stringMatching(/destinatário/),
+      campo: "contatoId",
+    });
   });
 
   it("aponta o e-mail inválido, inclusive nas cópias", () => {
-    expect(problemaNoEnvio({ ...base, para: ["pcp@qualy"] })).toBe("E-mail inválido: pcp@qualy");
-    expect(problemaNoEnvio({ ...base, cc: ["sem-arroba"] })).toBe("E-mail inválido: sem-arroba");
+    // Digitado à mão: o erro é do campo "Outros e-mails".
+    expect(problemaNoEnvio({ ...base, para: ["pcp@qualy"], avulsos: ["pcp@qualy"] })).toEqual({
+      erro: expect.stringContaining("“pcp@qualy”"),
+      campo: "emailsAvulsos",
+    });
+    // Vindo do cadastro (a cópia do cliente): não há campo a apontar.
+    expect(problemaNoEnvio({ ...base, cc: ["sem-arroba"] })).toEqual({
+      erro: expect.stringContaining("“sem-arroba”"),
+      campo: undefined,
+    });
   });
 
   it("exige assunto", () => {
-    expect(problemaNoEnvio({ ...base, assunto: "   " })).toMatch(/assunto/);
+    expect(problemaNoEnvio({ ...base, assunto: "   " })?.erro).toMatch(/assunto/);
   });
 
   it("recusa anexo executável", () => {
     expect(
-      problemaNoEnvio({ ...base, anexos: [PDF, { nome: "boleto.PDF.exe", tamanho: 10 }] }),
+      problemaNoEnvio({ ...base, anexos: [PDF, { nome: "boleto.PDF.exe", tamanho: 10 }] })?.erro,
     ).toMatch(/boleto\.PDF\.exe/);
   });
 
@@ -83,7 +94,7 @@ describe("problemas no envio", () => {
 
     expect(problemaNoEnvio({ ...base, anexos: [PDF, { nome: "pc.pdf", tamanho: resto }] })).toBeNull();
     expect(
-      problemaNoEnvio({ ...base, anexos: [PDF, { nome: "pc.pdf", tamanho: resto + 1 }] }),
+      problemaNoEnvio({ ...base, anexos: [PDF, { nome: "pc.pdf", tamanho: resto + 1 }] })?.erro,
     ).toMatch(/limite é 20 MB/);
   });
 });

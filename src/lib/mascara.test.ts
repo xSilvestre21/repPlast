@@ -170,7 +170,7 @@ describe("normalizarCep", () => {
   });
 
   it("recusa contagem que não fecha", () => {
-    expect(() => normalizarCep("1478116")).toThrow(/8 dígitos/);
+    expect(() => normalizarCep("1478116")).toThrow(/8 números/);
   });
 });
 

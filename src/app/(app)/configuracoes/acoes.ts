@@ -13,9 +13,19 @@ import { emailValido } from "@/lib/envio-pedido";
 import { problemaNoModelo } from "@/lib/modelo-email";
 import { MODELOS_DE_EMAIL, type TipoDeEmail, ehTipoDeEmail } from "@/lib/tipos-de-email";
 import { ehProvedor } from "@/lib/provedores-email";
+import {
+  ErroDeCampo,
+  ErroParaUsuario,
+  falhou,
+  type EstadoFormulario,
+} from "@/lib/erro-formulario";
 import { escopoAtual } from "@/lib/sessao";
 
-export type EstadoFormulario = { erro?: string };
+export type { EstadoFormulario };
+
+const CONTA_SUMIU =
+  "Esta conta de e-mail não foi encontrada — ela pode ter sido excluída em outra tela. " +
+  "Recarregue a página.";
 
 /**
  * Liga e desliga a animação da conta.
@@ -33,7 +43,9 @@ export async function alternarReduzirAnimacoes(): Promise<void> {
     select: { reduzirAnimacoes: true },
   });
 
-  if (!usuario) throw new Error("Usuário não encontrado.");
+  if (!usuario) {
+    throw new ErroParaUsuario("Não encontramos o seu usuário. Saia e entre de novo no sistema.");
+  }
 
   await db.usuario.updateMany({
     where: { id: usuarioId, organizacaoId },
@@ -64,7 +76,7 @@ export async function salvarObservacoesPadrao(
       data: { observacoesPadrao: texto },
     });
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
+    return falhou(erro, formData);
   }
 
   revalidatePath("/configuracoes");
@@ -94,7 +106,7 @@ export async function salvarCidade(
       data: { municipio: texto },
     });
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
+    return falhou(erro, formData);
   }
 
   revalidatePath("/configuracoes");
@@ -118,7 +130,9 @@ export async function salvarMensagemEnvioPadrao(
   formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
-    if (!ehTipoDeEmail(tipo)) return { erro: "Tipo de e-mail desconhecido." };
+    if (!ehTipoDeEmail(tipo)) {
+      throw new ErroParaUsuario("Não deu para saber qual mensagem salvar. Recarregue a página e tente de novo.");
+    }
     const modelo = MODELOS_DE_EMAIL[tipo];
     const { usuarioId, organizacaoId, db } = await escopoAtual();
 
@@ -132,18 +146,23 @@ export async function salvarMensagemEnvioPadrao(
     const assunto = ler(modelo.colunas.assunto, modelo.assuntoPadrao);
     const mensagem = ler(modelo.colunas.mensagem, modelo.mensagemPadrao);
 
-    // Cada campo por si: um `{se}` no assunto não se fecha com o `{fim}` da mensagem.
-    const problema = [assunto, mensagem]
-      .map((texto) => texto && problemaNoModelo(texto, modelo.tabela, modelo.doDocumento))
-      .find(Boolean);
-    if (problema) return { erro: problema };
+    // Cada campo por si: um `{se}` no assunto não se fecha com o `{fim}` da
+    // mensagem. E o erro vai para o campo onde o problema está — antes a
+    // frase não dizia se era no assunto ou na mensagem.
+    for (const [campo, texto] of [
+      [modelo.colunas.assunto, assunto],
+      [modelo.colunas.mensagem, mensagem],
+    ] as const) {
+      const problema = texto && problemaNoModelo(texto, modelo.tabela, modelo.doDocumento);
+      if (problema) throw new ErroDeCampo(campo, problema);
+    }
 
     await db.usuario.updateMany({
       where: { id: usuarioId, organizacaoId },
       data: { [modelo.colunas.assunto]: assunto, [modelo.colunas.mensagem]: mensagem },
     });
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
+    return falhou(erro, formData);
   }
 
   revalidatePath("/configuracoes");
@@ -154,7 +173,24 @@ export async function salvarMensagemEnvioPadrao(
 /* Contas de e-mail                                                           */
 /* -------------------------------------------------------------------------- */
 
-export type EstadoConta = { erro?: string; ok?: string };
+export type EstadoConta = EstadoFormulario & { ok?: string };
+
+/**
+ * A senha já salva, para testar a conta sem pedi-la de novo. Se ela não puder
+ * ser lida (a chave do servidor mudou), o caminho é digitá-la outra vez — e a
+ * frase diz isso, em vez do erro de criptografia.
+ */
+function senhaGuardada(cifrada: string): string {
+  try {
+    return decifrar(cifrada);
+  } catch (erro) {
+    console.error(erro);
+    throw new ErroDeCampo(
+      "senha",
+      "Não conseguimos ler a senha guardada desta conta. Digite a senha de novo e salve.",
+    );
+  }
+}
 
 function lerCampo(formData: FormData, nome: string): string {
   const valor = formData.get(nome);
@@ -180,20 +216,37 @@ export async function salvarContaEmail(
     const { usuarioId, organizacaoId, db } = await escopoAtual();
 
     const provedor = lerCampo(formData, "provedor");
-    if (!ehProvedor(provedor)) return { erro: "Escolha o serviço de e-mail." };
+    if (!ehProvedor(provedor)) {
+      throw new ErroDeCampo("provedor", "Escolha o seu serviço de e-mail: Gmail, Outlook ou outro.");
+    }
 
     const email = lerCampo(formData, "email").toLowerCase();
-    if (!emailValido(email)) return { erro: "O e-mail não parece um e-mail válido." };
+    if (!emailValido(email)) {
+      throw new ErroDeCampo(
+        "email",
+        "Este e-mail parece incompleto. Confira se tem o @ e o final, como voce@escritorio.com.br.",
+      );
+    }
 
     const nomeExibicao = lerCampo(formData, "nomeExibicao");
-    if (!nomeExibicao) return { erro: "Informe o nome que aparece para quem recebe." };
+    if (!nomeExibicao) {
+      throw new ErroDeCampo(
+        "nomeExibicao",
+        "Informe o nome que aparece para quem recebe — por exemplo, o nome do seu escritório.",
+      );
+    }
 
     const host = lerCampo(formData, "host");
-    if (!host) return { erro: "Informe o servidor SMTP." };
+    if (!host) {
+      throw new ErroDeCampo(
+        "host",
+        "Informe o servidor de envio, como smtp.seudominio.com.br. Quem fornece o seu e-mail sabe qual é.",
+      );
+    }
 
     const porta = Number(lerCampo(formData, "porta"));
     if (!Number.isInteger(porta) || porta < 1 || porta > 65535) {
-      return { erro: "A porta precisa ser um número, como 465 ou 587." };
+      throw new ErroDeCampo("porta", "A porta é um número, quase sempre 465 ou 587.");
     }
 
     const tlsDireto = lerCampo(formData, "seguranca") !== "starttls";
@@ -205,20 +258,30 @@ export async function salvarContaEmail(
     const existente = contaId
       ? await db.contaEmail.findFirst({ where: { id: contaId, usuarioId } })
       : null;
-    if (contaId && !existente) return { erro: "Conta não encontrada." };
+    if (contaId && !existente) throw new ErroParaUsuario(CONTA_SUMIU);
 
-    if (!senhaDigitada && !existente) return { erro: "Informe a senha." };
+    if (!senhaDigitada && !existente) {
+      throw new ErroDeCampo("senha", "Informe a senha da conta de e-mail.");
+    }
 
-    const senha = senhaDigitada || decifrar(existente!.senhaCifrada);
+    const senha = senhaDigitada || senhaGuardada(existente!.senhaCifrada);
 
     const teste = await testarConta({ email, nomeExibicao, host, porta, tlsDireto, usuarioSmtp, senha });
-    if (!teste.ok) return { erro: teste.motivo };
+    if (!teste.ok) {
+      // O servidor recusou: a frase já vem explicada, e o campo diz onde mexer.
+      throw teste.campo ? new ErroDeCampo(teste.campo, teste.motivo) : new ErroParaUsuario(teste.motivo);
+    }
 
     const repetida = await db.contaEmail.findFirst({
       where: { usuarioId, email, NOT: contaId ? { id: contaId } : undefined },
       select: { id: true },
     });
-    if (repetida) return { erro: "Você já tem uma conta com este e-mail." };
+    if (repetida) {
+      throw new ErroDeCampo(
+        "email",
+        "Você já cadastrou uma conta com este e-mail. Para mudar algo nela, use “Editar”, ao lado dela.",
+      );
+    }
 
     // A primeira conta é a padrão sem perguntar: com uma só, não há escolha.
     const quantas = await db.contaEmail.count({ where: { usuarioId } });
@@ -247,7 +310,8 @@ export async function salvarContaEmail(
       await db.contaEmail.create({ data: { organizacaoId, usuarioId, ...dados } });
     }
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
+    // A senha nunca volta para o navegador (`valoresDigitados` a tira).
+    return falhou(erro, formData);
   }
 
   revalidatePath("/configuracoes");
@@ -264,28 +328,34 @@ export async function testarContaEmail(
     const { usuarioId, db } = await escopoAtual();
 
     const conta = await contaParaEnvio(db, usuarioId, contaId);
-    if (!conta) return { erro: "Conta não encontrada." };
+    if (!conta) throw new ErroParaUsuario(CONTA_SUMIU);
 
     const teste = await testarConta(conta);
-    if (!teste.ok) return { erro: teste.motivo };
+    if (!teste.ok) {
+      throw new ErroParaUsuario(
+        teste.campo === "senha"
+          ? `${teste.motivo} Use “Editar”, ao lado da conta, para trocar a senha.`
+          : teste.motivo,
+      );
+    }
 
     await db.contaEmail.updateMany({
       where: { id: contaId, usuarioId },
       data: { testadaEm: new Date() },
     });
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível testar." };
+    return falhou(erro);
   }
 
   revalidatePath("/configuracoes");
   return { ok: "Conexão funcionando." };
 }
 
-export async function definirContaPadrao(contaId: string, _formData: FormData): Promise<void> {
+async function gravarDefinirContaPadrao(contaId: string, _formData: FormData): Promise<void> {
   const { usuarioId, db } = await escopoAtual();
 
   const conta = await db.contaEmail.findFirst({ where: { id: contaId, usuarioId } });
-  if (!conta) throw new Error("Conta não encontrada.");
+  if (!conta) throw new ErroParaUsuario(CONTA_SUMIU);
 
   await db.contaEmail.updateMany({ where: { usuarioId }, data: { padrao: false } });
   await db.contaEmail.updateMany({ where: { id: contaId, usuarioId }, data: { padrao: true } });
@@ -297,7 +367,7 @@ export async function definirContaPadrao(contaId: string, _formData: FormData): 
  * Tira a conta. Se era a padrão, a mais antiga das que sobram assume — sem
  * padrão, o diálogo de envio abriria sem remetente escolhido.
  */
-export async function excluirContaEmail(contaId: string, _formData: FormData): Promise<void> {
+async function gravarExcluirContaEmail(contaId: string, _formData: FormData): Promise<void> {
   const { usuarioId, db } = await escopoAtual();
 
   const conta = await db.contaEmail.findFirst({ where: { id: contaId, usuarioId } });
@@ -317,4 +387,32 @@ export async function excluirContaEmail(contaId: string, _formData: FormData): P
   }
 
   revalidatePath("/configuracoes");
+}
+
+/** `gravarDefinirContaPadrao`, devolvendo a recusa para aparecer embaixo do botão clicado. */
+export async function definirContaPadrao(
+  contaId: string,
+  _estado: EstadoFormulario,
+  _formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    await gravarDefinirContaPadrao(contaId, _formData);
+  } catch (erro) {
+    return falhou(erro);
+  }
+  return {};
+}
+
+/** `gravarExcluirContaEmail`, devolvendo a recusa para aparecer embaixo do botão clicado. */
+export async function excluirContaEmail(
+  contaId: string,
+  _estado: EstadoFormulario,
+  _formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    await gravarExcluirContaEmail(contaId, _formData);
+  } catch (erro) {
+    return falhou(erro);
+  }
+  return {};
 }

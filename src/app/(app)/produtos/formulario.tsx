@@ -19,11 +19,11 @@ import {
   CLASSE_CONTROLE,
   Campo,
   Cartao,
-  MensagemErro,
   SecaoCartao,
   Selecao,
   formatarMoeda,
 } from "@/components/ui";
+import { ErroGeral, Formulario } from "@/components/formulario";
 import { SelecaoBuscavel, achatar } from "@/components/selecao-buscavel";
 import { descricaoFita, descricaoRolo, descricaoSaco, formatarNumero } from "@/lib/descricao";
 import { lerNumeroBr } from "@/lib/numero-br";
@@ -507,8 +507,7 @@ export function FormularioProduto({
   }
 
   return (
-    <form action={enviar} className="space-y-5">
-      <MensagemErro>{estado.erro}</MensagemErro>
+    <Formulario estado={estado} action={enviar} className="space-y-5">
 
       {/*
         Em leitura, o formulário inteiro trava de uma vez — mesmo recurso do
@@ -1153,12 +1152,15 @@ export function FormularioProduto({
       </fieldset>
 
       {editavel && (
-        <div className="flex justify-end">
-          <Botao type="submit" carregando={enviando}>
-            {enviando ? "Salvando…" : rotuloEnvio}
-          </Botao>
+        <div className="space-y-3">
+          <ErroGeral />
+          <div className="flex justify-end">
+            <Botao type="submit" carregando={enviando}>
+              {enviando ? "Salvando…" : rotuloEnvio}
+            </Botao>
+          </div>
         </div>
       )}
-    </form>
+    </Formulario>
   );
 }

@@ -1,5 +1,6 @@
 import { carregarPedidoParaPdf, gerarPdfPedido } from "@/lib/pdf/gerar-pedido";
-import { sessaoAtual } from "@/lib/sessao";
+import { sessaoAtual } from "@/lib/sessao";
+import { respostaDeErro, sessaoExpiradaNoArquivo } from "@/lib/resposta-de-erro";
 
 /**
  * Gera o PDF do pedido sob demanda.
@@ -19,14 +20,20 @@ export async function GET(
   // Responde 401 em vez de deixar `organizacaoAtual()` lançar: sem sessão não
   // é erro do servidor, e um 500 poluiria o log de problemas de verdade.
   const sessao = await sessaoAtual();
-  if (!sessao) return new Response("Não autenticado", { status: 401 });
+  if (!sessao) return sessaoExpiradaNoArquivo();
 
   const pedido = await carregarPedidoParaPdf(id, sessao.organizacaoId, {
     usuarioId: sessao.usuarioId,
     papel: sessao.papel,
   });
 
-  if (!pedido) return new Response("Pedido não encontrado", { status: 404 });
+  if (!pedido) {
+    return respostaDeErro(
+      404,
+      "Pedido não encontrado",
+      "Este pedido pode ter sido excluído, ou o link está incompleto. Volte à lista de pedidos e abra o PDF por lá.",
+    );
+  }
 
   const arquivo = await gerarPdfPedido(pedido.dados);
 

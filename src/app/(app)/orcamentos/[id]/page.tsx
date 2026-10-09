@@ -185,7 +185,7 @@ export default async function PaginaOrcamento({
           (ultimoEnvio ? ` · enviada em ${DATA_HORA.format(ultimoEnvio)}` : "")
         }
         acao={
-          <div className="flex items-center gap-3">
+          <div className="flex items-start gap-3">
             <SeloOrcamento status={orcamento.status} />
             <BotaoLink
               href={`/orcamentos/${orcamento.id}/pdf`}

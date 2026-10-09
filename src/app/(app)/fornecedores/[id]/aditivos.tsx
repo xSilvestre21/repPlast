@@ -4,6 +4,8 @@ import { useActionState } from "react";
 
 import { FlaskConical } from "lucide-react";
 
+import { AcaoComRecusa } from "@/components/acao-com-recusa";
+import { ErroGeral, Formulario } from "@/components/formulario";
 import {
   Botao,
   BotaoTexto,
@@ -11,7 +13,6 @@ import {
   CorpoLinha,
   EstadoVazio,
   LinhaDado,
-  MensagemErro,
   Painel,
   SecaoCartao,
   Selecao,
@@ -44,7 +45,7 @@ export function SecaoAditivos({
 }: {
   aditivos: Aditivo[];
   adicionar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
-  remover: (formData: FormData) => void | Promise<void>;
+  remover: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   /** Ficha aberta para leitura: a lista aparece, cadastrar e remover exigem Editar. */
   editavel: boolean;
 }) {
@@ -73,12 +74,12 @@ export function SecaoAditivos({
                   nota={ROTULO_TIPO[aditivo.tipo]}
                 />
                 {editavel && (
-                  <form action={remover}>
+                  <AcaoComRecusa acao={remover}>
                     <input type="hidden" name="aditivoId" value={aditivo.id} />
                     <BotaoTexto type="submit" perigoso aria-label={`Remover aditivo ${aditivo.nome}`}>
                       remover
                     </BotaoTexto>
-                  </form>
+                  </AcaoComRecusa>
                 )}
               </div>
             </LinhaDado>
@@ -87,8 +88,7 @@ export function SecaoAditivos({
       </Painel>
 
       {editavel && (
-        <form action={enviar} className="space-y-4">
-          <MensagemErro>{estado.erro}</MensagemErro>
+        <Formulario estado={estado} action={enviar} className="space-y-4">
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Campo name="nome" rotulo="Nome" required placeholder="Deslizante" />
@@ -117,12 +117,13 @@ export function SecaoAditivos({
             </Selecao>
           </div>
 
+          <ErroGeral />
           <div className="flex justify-end">
             <Botao type="submit" variante="secundaria" carregando={enviando}>
               {enviando ? "Adicionando…" : "Adicionar aditivo"}
             </Botao>
           </div>
-        </form>
+        </Formulario>
       )}
     </SecaoCartao>
   );

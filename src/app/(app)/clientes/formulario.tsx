@@ -4,7 +4,9 @@ import { BadgeCheck, HandCoins, MapPin, MessageSquareText, Phone, Users } from "
 import { useActionState } from "react";
 
 import { CampoCep, CampoDocumento, CampoTelefone } from "@/components/campo-mascarado";
-import { AreaTexto, Botao, Campo, MensagemErro, SecaoCartao } from "@/components/ui";
+import { ErroGeral, Formulario } from "@/components/formulario";
+import { AreaTexto, Botao, Campo, SecaoCartao } from "@/components/ui";
+import { valoresDaLista } from "@/lib/erro-formulario";
 
 import type { EstadoFormulario } from "./acoes";
 import type { ValoresCliente } from "./valores";
@@ -28,10 +30,11 @@ export function FormularioCliente({
   editavel?: boolean;
 }) {
   const [estado, enviar, enviando] = useActionState(acao, {});
+  // Depois de um erro, as caixas voltam como a pessoa tinha deixado.
+  const prepostosMarcados = valoresDaLista(estado, "prepostoId") ?? valores.prepostoIds;
 
   return (
-    <form action={enviar} className="space-y-5">
-      <MensagemErro>{estado.erro}</MensagemErro>
+    <Formulario estado={estado} action={enviar} className="space-y-5">
 
       {/*
         Em leitura, o formulário inteiro trava de uma vez — mesmo recurso do
@@ -96,7 +99,7 @@ export function FormularioCliente({
                     type="checkbox"
                     name="prepostoId"
                     value={p.id}
-                    defaultChecked={valores.prepostoIds.includes(p.id)}
+                    defaultChecked={prepostosMarcados.includes(p.id)}
                     className="size-4 shrink-0 accent-carimbo cursor-pointer"
                   />
                   <span className="truncate">{p.nome}</span>
@@ -179,12 +182,15 @@ export function FormularioCliente({
       </fieldset>
 
       {editavel && (
-        <div className="flex justify-end">
-          <Botao type="submit" carregando={enviando}>
-            {enviando ? "Salvando…" : rotuloEnvio}
-          </Botao>
+        <div className="space-y-3">
+          <ErroGeral />
+          <div className="flex justify-end">
+            <Botao type="submit" carregando={enviando}>
+              {enviando ? "Salvando…" : rotuloEnvio}
+            </Botao>
+          </div>
         </div>
       )}
-    </form>
+    </Formulario>
   );
 }

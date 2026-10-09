@@ -16,6 +16,7 @@ import {
   Wallet,
 } from "lucide-react";
 
+import { AcaoComRecusa } from "@/components/acao-com-recusa";
 import { nomeDoMes } from "@/components/navegador-mes";
 import { Pagina } from "@/components/pagina";
 import { SeloStatus } from "@/components/selo-status";
@@ -135,13 +136,13 @@ export default async function PaginaPreposto({
         voltar={{ href: "/prepostos", rotulo: "Prepostos" }}
         selo={selo}
         acao={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-start gap-2">
             <BotaoLink href={`/prepostos/${preposto.id}?editar=1`} icone={Pencil}>
               Editar
             </BotaoLink>
             {/* Tirar o acesso, e não excluir: ele aparece em pedido e comissão
                 de meses fechados, e o cadastro precisa continuar existindo. */}
-            <form action={alternarAtivoPreposto.bind(null, preposto.id)}>
+            <AcaoComRecusa acao={alternarAtivoPreposto.bind(null, preposto.id)} alinhamento="inicio">
               <Botao
                 type="submit"
                 variante="secundaria"
@@ -149,7 +150,7 @@ export default async function PaginaPreposto({
               >
                 {preposto.ativo ? "Tirar o acesso" : "Devolver o acesso"}
               </Botao>
-            </form>
+            </AcaoComRecusa>
           </div>
         }
       />

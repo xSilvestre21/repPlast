@@ -81,24 +81,55 @@ export function explicarErro(erro: unknown, conta: Pick<ContaSmtp, "host" | "por
       );
     case "ETLS":
       return "A conexão segura falhou. Confira a segurança da conta: 465 costuma ser SSL, 587 STARTTLS.";
+    /*
+     * Daqui para baixo, o texto do próprio servidor vai só para o log: ele vem
+     * em inglês e em jargão ("553 5.7.1 Sender address rejected"), e o que a
+     * pessoa precisa é do próximo passo.
+     */
     case "EENVELOPE":
-      return `O servidor recusou os destinatários: ${mensagem}`;
+      console.error(mensagem);
+      return (
+        "O servidor de e-mail recusou algum destinatário. Confira se os endereços estão " +
+        "certos — um caractere a mais ou a menos já basta para a recusa."
+      );
     case "EMESSAGE":
-      return `O servidor recusou a mensagem: ${mensagem}`;
+      console.error(mensagem);
+      return (
+        "O servidor de e-mail recusou a mensagem. Costuma ser anexo grande demais ou de tipo " +
+        "bloqueado: tente enviar sem os anexos extras."
+      );
     default:
-      return mensagem || "Falha ao enviar o e-mail.";
+      console.error(erro);
+      return (
+        "O e-mail não saiu. Tente de novo em instantes; se continuar, clique em “Testar” na " +
+        "sua conta de e-mail, em Configurações, para ver o que há com ela."
+      );
   }
 }
 
 /** Entra na caixa sem mandar nada. É o "Testar conexão" das configurações. */
+/**
+ * Qual campo da conta de e-mail o erro do servidor aponta — para a frase de
+ * `explicarErro` aparecer embaixo dele, e não solta no formulário.
+ */
+function campoDoErro(erro: unknown): "senha" | "host" | "seguranca" | undefined {
+  const codigo =
+    typeof erro === "object" && erro && "code" in erro ? String((erro as { code: unknown }).code) : "";
+
+  if (codigo === "EAUTH") return "senha";
+  if (["ECONNECTION", "ESOCKET", "ETIMEDOUT", "EDNS"].includes(codigo)) return "host";
+  if (codigo === "ETLS") return "seguranca";
+  return undefined;
+}
+
 export async function testarConta(
   conta: ContaSmtp,
-): Promise<{ ok: true } | { ok: false; motivo: string }> {
+): Promise<{ ok: true } | { ok: false; motivo: string; campo?: string }> {
   try {
     await transporte(conta).verify();
     return { ok: true };
   } catch (erro) {
-    return { ok: false, motivo: explicarErro(erro, conta) };
+    return { ok: false, motivo: explicarErro(erro, conta), campo: campoDoErro(erro) };
   }
 }
 

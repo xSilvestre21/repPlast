@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { AcaoComRecusa } from "@/components/acao-com-recusa";
 import { Botao, BotaoLink, Cabecalho, Selo } from "@/components/ui";
 import { escreverNumeroBr } from "@/lib/numero-br";
 import { escopoAtual } from "@/lib/sessao";
@@ -92,7 +93,7 @@ export default async function PaginaFornecedor({
         selo={!fornecedor.ativo ? <Selo tom="cancelado">Inativa</Selo> : undefined}
         acao={
           ehAdmin && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-start gap-2">
             {/* Cada seção desta ficha salva sozinha, então editar não termina
                 necessariamente no botão do formulário de cima: "Concluir" é a
                 saída de quem só mexeu num contato ou num preço de material. */}
@@ -112,7 +113,7 @@ export default async function PaginaFornecedor({
             {/* Inativar é o caminho da representação que acabou: some das
                 escolhas sem apagar nada. Excluir fica para o cadastro feito por
                 engano — e nem é possível depois que há produto. */}
-            <form action={alternarAtivoFornecedor.bind(null, fornecedor.id)}>
+            <AcaoComRecusa acao={alternarAtivoFornecedor.bind(null, fornecedor.id)} alinhamento="inicio">
               <Botao
                 type="submit"
                 variante="secundaria"
@@ -120,7 +121,7 @@ export default async function PaginaFornecedor({
               >
                 {fornecedor.ativo ? "Marcar como inativa" : "Reativar"}
               </Botao>
-            </form>
+            </AcaoComRecusa>
             <BotaoExcluir
               rotulo="Excluir indústria"
               nome={fornecedor.nome}
@@ -167,6 +168,7 @@ export default async function PaginaFornecedor({
             fatorKgPadrao: fornecedor.fatorKgPadrao
               ? escreverNumeroBr(fornecedor.fatorKgPadrao.toString(), 2)
               : "",
+            ultimoNumeroPedido: String(fornecedor.proximoNumeroPedido - 1),
           }}
         />
 

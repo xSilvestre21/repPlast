@@ -24,12 +24,13 @@ import {
   Campo,
   CorpoLinha,
   FimDaLinha,
+  EspacoDoRotulo,
   LinhaDado,
-  MensagemErro,
   Painel,
   ValorLinha,
   formatarMoeda,
 } from "@/components/ui";
+import { ErroGeral, Formulario } from "@/components/formulario";
 
 import type { EstadoFormulario } from "./acoes";
 import { BolinhaPreposto } from "@/components/bolinha-preposto";
@@ -146,7 +147,13 @@ function ExcluirPagamento({ valor, excluir }: { valor: number; excluir: Acao }) 
       <BotaoTexto type="submit" perigoso disabled={excluindo}>
         {excluindo ? "excluindo…" : "excluir"}
       </BotaoTexto>
-      {estado.erro && <MensagemErro>{estado.erro}</MensagemErro>}
+      {/* A recusa em texto miúdo, embaixo do "excluir" — um alerta inteiro
+          dentro da linha do pagamento empurrava a lista toda. */}
+      {estado.erro && (
+        <p role="alert" className="surgir mt-1 ml-auto max-w-xs text-mini text-perigo">
+          {estado.erro}
+        </p>
+      )}
     </form>
   );
 }
@@ -276,8 +283,10 @@ export function LinhaRepasse({
           <NotaAnterior anterior={dados.anterior} quem="escritorio" />
         </section>
 
-        <form key={versao} action={enviar} className="space-y-3">
-          <div className="flex flex-wrap items-end gap-3">
+        <Formulario key={versao} estado={estado} action={enviar} className="space-y-3">
+          {/* Pelo topo: o erro de um campo aparece embaixo dele, e pela base
+              os vizinhos desceriam junto. */}
+          <div className="flex flex-wrap items-start gap-3">
             <CampoMoeda
               name="valor"
               rotulo="Valor pago"
@@ -293,12 +302,15 @@ export function LinhaRepasse({
               className="basis-40 grow"
             />
             <Campo name="observacao" rotulo="Observação" className="basis-48 grow-[2]" />
-            <Botao type="submit" variante="secundaria" carregando={salvando} className="px-4 py-2">
-              {salvando ? "Salvando…" : "Registrar pagamento"}
-            </Botao>
+            <div>
+              <EspacoDoRotulo />
+              <Botao type="submit" variante="secundaria" carregando={salvando} className="px-4 py-2">
+                {salvando ? "Salvando…" : "Registrar pagamento"}
+              </Botao>
+            </div>
           </div>
-          <MensagemErro>{estado.erro}</MensagemErro>
-        </form>
+          <ErroGeral />
+        </Formulario>
       </div>
     </div>
   );

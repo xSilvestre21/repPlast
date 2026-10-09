@@ -18,6 +18,8 @@
  * clientes cadastrados — "(17) 3321-5900" e "09.507.378/0001-50".
  */
 
+import { ErroDeCampo } from "@/lib/erro-formulario";
+
 export const DIGITOS_CPF = 11;
 export const DIGITOS_CNPJ = 14;
 export const DIGITOS_CEP = 8;
@@ -133,17 +135,20 @@ export function mascararMoeda(valor: string): string {
  * Documento pronto para gravar, ou `null` quando o campo veio vazio.
  *
  * LANÇA quando a contagem não fecha. É como o resto das ações trata dado de
- * formulário inválido: a exceção vira a mensagem vermelha no topo do
- * formulário, sem meio-termo silencioso. Guardar um CNPJ pela metade seria pior
+ * formulário inválido: a exceção vira a mensagem vermelha embaixo do campo
+ * `campo`, sem meio-termo silencioso. Guardar um CNPJ pela metade seria pior
  * do que recusar — ele sai impresso no pedido que a indústria recebe.
  */
-export function normalizarDocumento(valor: string): string | null {
+export function normalizarDocumento(valor: string, campo = "cnpj"): string | null {
   const digitos = somenteDigitos(valor);
   if (digitos === "") return null;
 
   if (digitos.length !== DIGITOS_CPF && digitos.length !== DIGITOS_CNPJ) {
-    throw new Error(
-      `Informe um CNPJ (${DIGITOS_CNPJ} dígitos) ou um CPF (${DIGITOS_CPF} dígitos).`,
+    throw new ErroDeCampo(
+      campo,
+      `Faltam ou sobram números: ${digitos.length === 1 ? "foi digitado 1" : `foram digitados ${digitos.length}`}. ` +
+        `O CNPJ tem ${DIGITOS_CNPJ} números (como 09.507.378/0001-50) e o CPF tem ${DIGITOS_CPF} ` +
+        `(como 123.456.789-09).`,
     );
   }
 
@@ -156,12 +161,15 @@ export function normalizarDocumento(valor: string): string | null {
  * LANÇA quando a contagem não fecha, pelo mesmo motivo do documento: o CEP sai
  * impresso no pedido, e endereço pela metade é entrega errada.
  */
-export function normalizarCep(valor: string): string | null {
+export function normalizarCep(valor: string, campo = "cep"): string | null {
   const digitos = somenteDigitos(valor);
   if (digitos === "") return null;
 
   if (digitos.length !== DIGITOS_CEP) {
-    throw new Error(`O CEP precisa ter ${DIGITOS_CEP} dígitos.`);
+    throw new ErroDeCampo(
+      campo,
+      `O CEP tem ${DIGITOS_CEP} números, como 14781-160 — ${digitos.length === 1 ? "foi digitado 1" : `foram digitados ${digitos.length}`}.`,
+    );
   }
 
   return mascararCep(digitos);

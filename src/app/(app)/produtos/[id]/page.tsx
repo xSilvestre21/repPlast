@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { AcaoComRecusa } from "@/components/acao-com-recusa";
 import { Botao, BotaoLink, Cabecalho, Selo } from "@/components/ui";
 import { escopoAtual } from "@/lib/sessao";
 
@@ -48,7 +49,7 @@ export default async function PaginaProduto({
         selo={!produto.ativo ? <Selo tom="cancelado">Inativo</Selo> : undefined}
         acao={
           ehAdmin && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-start gap-2">
             {!editavel && (
               <BotaoLink href={`/produtos/${produto.id}?editar=1`} icone={Pencil}>
                 Editar
@@ -57,7 +58,7 @@ export default async function PaginaProduto({
             {/* Inativar é o caminho do produto que o cliente deixou de comprar:
                 some das escolhas sem apagar nada. Excluir fica para o cadastro
                 feito por engano. */}
-            <form action={alternarAtivoProduto.bind(null, produto.id)}>
+            <AcaoComRecusa acao={alternarAtivoProduto.bind(null, produto.id)} alinhamento="inicio">
               <Botao
                 type="submit"
                 variante="secundaria"
@@ -65,7 +66,7 @@ export default async function PaginaProduto({
               >
                 {produto.ativo ? "Marcar como inativo" : "Reativar"}
               </Botao>
-            </form>
+            </AcaoComRecusa>
             <BotaoExcluir
               rotulo="Excluir produto"
               nome={produto.descricao}

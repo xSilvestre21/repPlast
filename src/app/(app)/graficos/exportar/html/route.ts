@@ -5,6 +5,7 @@ import { sessaoAtual } from "@/lib/sessao";
 
 import { carregarDadosDosGraficos } from "../../dados";
 import { parametrosDoRelatorio } from "../parametros";
+import { sessaoExpiradaNoArquivo } from "@/lib/resposta-de-erro";
 
 /**
  * O relatório como um arquivo HTML que abre sozinho.
@@ -18,7 +19,7 @@ export async function GET(requisicao: Request) {
   // Rota de arquivo não passa por layout, então o guarda de sessão é aqui.
   // Responde 401 em vez de lançar: sem sessão não é erro do servidor.
   const sessao = await sessaoAtual();
-  if (!sessao) return new Response("Não autenticado", { status: 401 });
+  if (!sessao) return sessaoExpiradaNoArquivo();
 
   const url = new URL(requisicao.url);
   const { competencia, meses, dias } = parametrosDoRelatorio(url);

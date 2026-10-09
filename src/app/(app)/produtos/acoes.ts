@@ -3,11 +3,21 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import {
+  ErroDeCampo,
+  ErroParaUsuario,
+  falhou,
+  type EstadoFormulario,
+} from "@/lib/erro-formulario";
 import { escopoAtual, exigirAdmin } from "@/lib/sessao";
 
 import { dadosDoFormulario, lerAditivos } from "./leitura";
 
-export type EstadoFormulario = { erro?: string };
+export type { EstadoFormulario };
+
+const PRODUTO_SUMIU =
+  "Este produto não foi encontrado — ele pode ter sido excluído em outra tela. " +
+  "Volte à lista de produtos e confira.";
 
 /**
  * Cadastro de produto é do administrador: o preposto consulta,
@@ -28,7 +38,12 @@ async function validarVinculos(
   clienteId: string | null,
 ) {
   const fornecedor = await db.fornecedor.count({ where: { id: fornecedorId, organizacaoId } });
-  if (fornecedor === 0) throw new Error("Indústria não encontrada.");
+  if (fornecedor === 0) {
+    throw new ErroDeCampo(
+      "fornecedorId",
+      "Esta indústria não foi encontrada — ela pode ter sido excluída. Escolha outra na lista.",
+    );
+  }
 
   /*
    * O cliente é conferido pelo mesmo caminho da indústria, e não só pelo RLS.
@@ -37,7 +52,12 @@ async function validarVinculos(
    */
   if (clienteId) {
     const cliente = await db.cliente.count({ where: { id: clienteId, organizacaoId } });
-    if (cliente === 0) throw new Error("Cliente não encontrado.");
+    if (cliente === 0) {
+      throw new ErroDeCampo(
+        "clienteId",
+        "Este cliente não foi encontrado — ele pode ter sido excluído. Escolha outro na lista.",
+      );
+    }
   }
 
   if (aditivos.length > 0) {
@@ -46,7 +66,11 @@ async function validarVinculos(
     });
 
     if (validos !== aditivos.length) {
-      throw new Error("Algum aditivo selecionado não pertence a esta indústria.");
+      throw new ErroDeCampo(
+        "aditivos",
+        "Um dos aditivos marcados não é desta indústria — isso acontece ao trocar a indústria " +
+          "depois de marcar. Desmarque os aditivos e marque de novo.",
+      );
     }
   }
 }
@@ -74,7 +98,7 @@ export async function criarProduto(
 
     destino = `/produtos/${produto.id}`;
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
+    return falhou(erro, formData);
   }
 
   revalidatePath("/produtos");
@@ -110,18 +134,34 @@ export async function criarProdutoDoItem(
       },
     });
 
-    if (!item) return { erro: "Item da proposta não encontrado." };
-    if (item.produtoId) return { erro: "Este item já é um produto cadastrado." };
-    if (!item.orcamento.clienteId) return { erro: "Cadastre o cliente da proposta antes." };
+    if (!item) {
+      throw new ErroParaUsuario(
+        "Este item da proposta não foi encontrado — ele pode ter sido removido. Volte à proposta e confira.",
+      );
+    }
+    if (item.produtoId) {
+      throw new ErroParaUsuario("Este item já virou produto cadastrado. Volte à proposta para vê-lo.");
+    }
+    if (!item.orcamento.clienteId) {
+      throw new ErroParaUsuario(
+        "Antes de cadastrar o produto, cadastre o cliente da proposta — o produto é dele.",
+      );
+    }
 
     const dados = dadosDoFormulario(formData);
     const aditivos = lerAditivos(formData);
 
     if (dados.fornecedorId !== item.orcamento.fornecedorId) {
-      return { erro: "O produto tem de ser da indústria da proposta." };
+      throw new ErroDeCampo(
+        "fornecedorId",
+        "O produto precisa ser da mesma indústria da proposta. Volte a indústria para a da proposta.",
+      );
     }
     if (dados.clienteId !== item.orcamento.clienteId) {
-      return { erro: "O produto tem de ser do cliente da proposta." };
+      throw new ErroDeCampo(
+        "clienteId",
+        "O produto precisa ser do mesmo cliente da proposta. Volte o cliente para o da proposta.",
+      );
     }
 
     await validarVinculos(db, organizacaoId, dados.fornecedorId, aditivos, dados.clienteId);
@@ -146,7 +186,7 @@ export async function criarProdutoDoItem(
 
     destino = `/orcamentos/${item.orcamento.id}`;
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
+    return falhou(erro, formData);
   }
 
   revalidatePath("/produtos");
@@ -171,7 +211,7 @@ export async function atualizarProduto(
       data: dados,
     });
 
-    if (count === 0) return { erro: "Produto não encontrado." };
+    if (count === 0) throw new ErroParaUsuario(PRODUTO_SUMIU);
 
     // A lista de aditivos é substituída inteira — mais simples e sem risco de
     // sobrar vínculo órfão de uma troca de indústria.
@@ -182,7 +222,7 @@ export async function atualizarProduto(
       });
     }
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
+    return falhou(erro, formData);
   }
 
   revalidatePath("/produtos");
@@ -191,17 +231,27 @@ export async function atualizarProduto(
   redirect("/produtos");
 }
 
-export async function excluirProduto(id: string, _formData: FormData): Promise<void> {
-  const { organizacaoId, db } = await contexto();
+export async function excluirProduto(
+  id: string,
+  _estado: EstadoFormulario,
+  _formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    const { organizacaoId, db } = await contexto();
 
-  const emPedidos = await db.pedidoItem.count({ where: { produtoId: id } });
-  if (emPedidos > 0) {
-    throw new Error(
-      `Este produto está em ${emPedidos} item(ns) de pedido e não pode ser excluído.`,
-    );
+    const emPedidos = await db.pedidoItem.count({ where: { produtoId: id } });
+    if (emPedidos > 0) {
+      const onde = emPedidos === 1 ? "1 pedido" : `${emPedidos} itens de pedido`;
+      throw new ErroParaUsuario(
+        `Este produto está em ${onde} e não pode ser excluído. Se não é mais vendido, use ` +
+          `“Marcar como inativo”: sai das listas e continua nos pedidos antigos.`,
+      );
+    }
+
+    await db.produto.deleteMany({ where: { id, organizacaoId } });
+  } catch (erro) {
+    return falhou(erro);
   }
-
-  await db.produto.deleteMany({ where: { id, organizacaoId } });
 
   revalidatePath("/produtos");
   redirect("/produtos");
@@ -216,14 +266,14 @@ export async function excluirProduto(id: string, _formData: FormData): Promise<v
  * já filtram `ativo`), da ficha do cliente e da lista padrão — e volta com um
  * clique, quando o cliente voltar a comprar.
  */
-export async function alternarAtivoProduto(id: string, _formData: FormData): Promise<void> {
+async function gravarAlternarAtivoProduto(id: string, _formData: FormData): Promise<void> {
   const { organizacaoId, db } = await contexto();
 
   const produto = await db.produto.findFirst({
     where: { id, organizacaoId },
     select: { ativo: true },
   });
-  if (!produto) throw new Error("Produto não encontrado.");
+  if (!produto) throw new ErroParaUsuario(PRODUTO_SUMIU);
 
   await db.produto.updateMany({
     where: { id, organizacaoId },
@@ -232,4 +282,18 @@ export async function alternarAtivoProduto(id: string, _formData: FormData): Pro
 
   revalidatePath("/produtos");
   revalidatePath(`/produtos/${id}`);
+}
+
+/** `gravarAlternarAtivoProduto`, devolvendo a recusa para aparecer embaixo do botão clicado. */
+export async function alternarAtivoProduto(
+  id: string,
+  _estado: EstadoFormulario,
+  _formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    await gravarAlternarAtivoProduto(id, _formData);
+  } catch (erro) {
+    return falhou(erro);
+  }
+  return {};
 }

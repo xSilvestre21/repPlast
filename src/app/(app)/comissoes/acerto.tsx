@@ -31,12 +31,13 @@ import { SeloStatus } from "@/components/selo-status";
 import {
   Botao,
   BotaoTexto,
-  CLASSE_CONTROLE,
+  Campo,
   Celula,
-  MensagemErro,
+  EspacoDoRotulo,
   formatarMoeda,
   formatarPercentual,
 } from "@/components/ui";
+import { ErroGeral, Formulario } from "@/components/formulario";
 import { pontualidadeEntrega } from "@/lib/comissao";
 
 import type { EstadoFormulario } from "./acoes";
@@ -385,8 +386,10 @@ export function LinhaComissao({
                 aoFechar={() => setParcelando(false)}
               />
             ) : (
-            <form action={enviar} className="space-y-4">
-              <div className="flex flex-wrap items-end gap-3">
+            <Formulario estado={estado} action={enviar} className="space-y-4">
+              {/* Pelo topo: o erro de um campo aparece embaixo dele, e pela
+                  base os vizinhos desceriam junto. */}
+              <div className="flex flex-wrap items-start gap-3">
                 <CampoMoeda
                   name="valorRecebido"
                   rotulo="Valor recebido"
@@ -395,19 +398,17 @@ export function LinhaComissao({
                   className="basis-36 grow"
                 />
 
-                <label className="basis-24 grow-0">
-                  <span className="rotulo block mb-1.5 text-tinta-2">%</span>
-                  <input
-                    name="comissaoPercentualRecebido"
-                    inputMode="decimal"
-                    /*
-                      Nasce com o percentual do pedido, como o usuário pediu: no caso
-                      comum a indústria paga o combinado, e quem precisa mudar muda.
-                    */
-                    defaultValue={pedido.percentualRecebido || pedido.percentual}
-                    className={`${CLASSE_CONTROLE} numerico`}
-                  />
-                </label>
+                <Campo
+                  name="comissaoPercentualRecebido"
+                  rotulo="%"
+                  inputMode="decimal"
+                  /*
+                    Nasce com o percentual do pedido, como o usuário pediu: no caso
+                    comum a indústria paga o combinado, e quem precisa mudar muda.
+                  */
+                  defaultValue={pedido.percentualRecebido || pedido.percentual}
+                  className="basis-24 grow-0"
+                />
 
                 <CampoData
                   name="entregueEm"
@@ -418,9 +419,12 @@ export function LinhaComissao({
                   className="basis-40 grow"
                 />
 
-                <Botao type="submit" variante="secundaria" carregando={salvando} className="px-4 py-2">
-                  {salvando ? "Salvando…" : "Salvar"}
-                </Botao>
+                <div>
+                  <EspacoDoRotulo />
+                  <Botao type="submit" variante="secundaria" carregando={salvando} className="px-4 py-2">
+                    {salvando ? "Salvando…" : "Salvar"}
+                  </Botao>
+                </div>
               </div>
 
               <p className="text-mini text-tinta-3 leading-relaxed">
@@ -433,7 +437,7 @@ export function LinhaComissao({
                 {" "}Deixe os dois primeiros campos em branco para desfazer o acerto.
               </p>
 
-              <MensagemErro>{estado.erro}</MensagemErro>
+              <ErroGeral />
 
               {/*
                 Parcelar mora aqui, no acerto: é conferindo com a indústria que
@@ -472,7 +476,7 @@ export function LinhaComissao({
                   )}
                 </div>
               )}
-            </form>
+            </Formulario>
             )}
           </div>
         </td>

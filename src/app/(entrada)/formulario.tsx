@@ -2,7 +2,8 @@
 
 import { useActionState } from "react";
 
-import { Botao, Campo, MensagemErro } from "@/components/ui";
+import { ErroGeral, Formulario } from "@/components/formulario";
+import { Botao, Campo } from "@/components/ui";
 import { TAMANHO_MINIMO_SENHA } from "@/lib/senha-regras";
 
 import type { EstadoFormulario } from "./acoes";
@@ -13,8 +14,7 @@ export function FormularioEntrada({ acao, rotulo }: { acao: Acao; rotulo: string
   const [estado, enviar, enviando] = useActionState(acao, {});
 
   return (
-    <form action={enviar} className="space-y-4">
-      <MensagemErro>{estado.erro}</MensagemErro>
+    <Formulario estado={estado} action={enviar} className="space-y-4">
 
       <Campo
         name="email"
@@ -32,10 +32,12 @@ export function FormularioEntrada({ acao, rotulo }: { acao: Acao; rotulo: string
         required
       />
 
+      <ErroGeral />
+
       <Botao type="submit" carregando={enviando} className="w-full">
         {enviando ? "Entrando…" : rotulo}
       </Botao>
-    </form>
+    </Formulario>
   );
 }
 
@@ -43,8 +45,7 @@ export function FormularioCadastro({ acao }: { acao: Acao }) {
   const [estado, enviar, enviando] = useActionState(acao, {});
 
   return (
-    <form action={enviar} className="space-y-4">
-      <MensagemErro>{estado.erro}</MensagemErro>
+    <Formulario estado={estado} action={enviar} className="space-y-4">
 
       <Campo
         name="escritorio"
@@ -80,9 +81,11 @@ export function FormularioCadastro({ acao }: { acao: Acao }) {
         required
       />
 
+      <ErroGeral />
+
       <Botao type="submit" carregando={enviando} className="w-full">
         {enviando ? "Criando…" : "Criar meu escritório"}
       </Botao>
-    </form>
+    </Formulario>
   );
 }

@@ -11,7 +11,8 @@
 import { Search } from "lucide-react";
 import { useActionState, useState } from "react";
 
-import { Botao, Cartao, MensagemErro } from "@/components/ui";
+import { ErroGeral, Formulario } from "@/components/formulario";
+import { Botao, Cartao } from "@/components/ui";
 
 import type { EstadoFormulario } from "../../acoes";
 
@@ -59,9 +60,7 @@ export function ListaClientesDoPreposto({
     });
 
   return (
-    <form action={enviar} className="space-y-5">
-      <MensagemErro>{estado.erro}</MensagemErro>
-
+    <Formulario estado={estado} action={enviar} className="space-y-5">
       <Cartao className="p-4 sm:p-5 flex flex-wrap items-center gap-3">
         <label className="relative flex-1 min-w-56">
           <span className="sr-only">Buscar cliente</span>
@@ -135,6 +134,9 @@ export function ListaClientesDoPreposto({
         )}
       </Cartao>
 
+      {/* Logo antes da barra do botão: o `Formulario` rola até aqui. */}
+      <ErroGeral />
+
       <div className="sticky bottom-4 flex flex-wrap items-center justify-end gap-3">
         <p className="text-mini text-tinta-3 rounded-full bg-folha px-3 py-1.5 border border-filete">
           {marcados.size === 0
@@ -145,6 +147,6 @@ export function ListaClientesDoPreposto({
           {salvando ? "Salvando…" : "Salvar e voltar"}
         </Botao>
       </div>
-    </form>
+    </Formulario>
   );
 }

@@ -7,7 +7,8 @@
 
 import { describe, expect, it } from "vitest";
 
-import { escreverNumeroBr, lerNumeroBr } from "./numero-br";
+import { ErroDeCampo } from "./erro-formulario";
+import { escreverNumeroBr, exigirNumero, exigirNumeroDe, lerNumeroBr } from "./numero-br";
 
 describe("lerNumeroBr", () => {
   it("lê vírgula como separador decimal", () => {
@@ -87,5 +88,49 @@ describe("escreverNumeroBr", () => {
     for (const valor of [13.5, 9.75, 50000, 0.08, 1774.872]) {
       expect(lerNumeroBr(escreverNumeroBr(valor))).toBe(valor);
     }
+  });
+});
+
+describe("exigirNumero", () => {
+  const dados = (valor: string) => {
+    const formData = new FormData();
+    formData.set("ipi", valor);
+    return formData;
+  };
+
+  /** O erro lançado, para conferir campo e frase de uma vez. */
+  function recusa(valor: string, opcoes: Parameters<typeof exigirNumeroDe>[3] = {}) {
+    try {
+      exigirNumeroDe(valor, "ipi", "o IPI", opcoes);
+    } catch (erro) {
+      if (erro instanceof ErroDeCampo) return erro;
+      throw erro;
+    }
+    throw new Error("devia ter recusado");
+  }
+
+  it("lê o número no padrão brasileiro", () => {
+    expect(exigirNumero(dados("12,5"), "ipi", "o IPI")).toBe(12.5);
+  });
+
+  it("vazio é null quando o campo é opcional, e recusa quando é obrigatório", () => {
+    expect(exigirNumero(dados("  "), "ipi", "o IPI")).toBeNull();
+    expect(recusa("", { obrigatorio: true }).message).toBe("Informe o IPI.");
+  });
+
+  it("texto que não é número é recusado — antes virava 0 sem aviso", () => {
+    const erro = recusa("abc", { min: 0, max: 100 });
+
+    expect(erro.campo).toBe("ipi");
+    expect(erro.message).toMatch(/Não reconheci "abc"/);
+  });
+
+  it("fora da faixa diz qual é a faixa", () => {
+    expect(recusa("150", { min: 0, max: 100 }).message).toBe("O IPI precisa ficar entre 0 e 100.");
+    expect(recusa("-1", { min: 0 }).message).toMatch(/^O IPI não pode ficar abaixo de zero/);
+  });
+
+  it("inteiro recusa vírgula", () => {
+    expect(recusa("10,5", { inteiro: true }).message).toMatch(/número inteiro/);
   });
 });

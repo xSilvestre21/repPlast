@@ -5,10 +5,21 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import {
+  ErroDeCampo,
+  ErroParaUsuario,
+  falhou,
+  type EstadoFormulario,
+} from "@/lib/erro-formulario";
 import { normalizarCep, normalizarDocumento, normalizarTelefone } from "@/lib/mascara";
 import { escopoAtual, exigirAdmin } from "@/lib/sessao";
 
-export type EstadoFormulario = { erro?: string };
+export type { EstadoFormulario };
+
+/** O cliente sumiu entre abrir a ficha e salvar — excluído em outra tela. */
+const CLIENTE_SUMIU =
+  "Este cliente não foi encontrado — ele pode ter sido excluído em outra tela. " +
+  "Volte à lista de clientes e confira.";
 
 /**
  * Cadastro de cliente é do administrador: o preposto consulta os clientes que
@@ -72,24 +83,37 @@ function lerTexto(valor: FormDataEntryValue | null): string | null {
   return texto === "" ? null : texto;
 }
 
-function validarEmail(valor: string | null, rotulo: string): string | null {
+function validarEmail(valor: string | null, campo: string): string | null {
   if (valor === null) return null;
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valor)) {
-    throw new Error(`${rotulo} não parece um e-mail válido.`);
+    throw new ErroDeCampo(
+      campo,
+      "Este e-mail parece incompleto. Confira se tem o @ e o final, como compras@cliente.com.br.",
+    );
   }
   return valor;
 }
 
 function dadosDoFormulario(formData: FormData) {
   const apelido = lerTexto(formData.get("apelido"));
-  if (!apelido) throw new Error("O nome curto é obrigatório.");
+  if (!apelido) {
+    throw new ErroDeCampo(
+      "apelido",
+      "Informe o nome curto — é como o cliente aparece nas listas, como MARIOL.",
+    );
+  }
 
   const razaoSocial = lerTexto(formData.get("razaoSocial"));
-  if (!razaoSocial) throw new Error("A razão social é obrigatória — ela sai impressa no pedido.");
+  if (!razaoSocial) {
+    throw new ErroDeCampo(
+      "razaoSocial",
+      "Informe a razão social — ela sai impressa no pedido que vai para a indústria.",
+    );
+  }
 
   const uf = lerTexto(formData.get("uf"));
-  if (uf && uf.length !== 2) throw new Error("A UF precisa ter duas letras.");
+  if (uf && uf.length !== 2) throw new ErroDeCampo("uf", "A UF tem duas letras, como SP ou MG.");
 
   /*
    * Documento, CEP e telefone são normalizados aqui, e não só pela máscara do
@@ -111,8 +135,8 @@ function dadosDoFormulario(formData: FormData) {
     municipio: lerTexto(formData.get("municipio")),
     uf: uf ? uf.toUpperCase() : null,
     telefone: telefone === null ? null : normalizarTelefone(telefone),
-    email: validarEmail(lerTexto(formData.get("email")), "O e-mail"),
-    emailNfe: validarEmail(lerTexto(formData.get("emailNfe")), "O e-mail para NF-e"),
+    email: validarEmail(lerTexto(formData.get("email")), "email"),
+    emailNfe: validarEmail(lerTexto(formData.get("emailNfe")), "emailNfe"),
     prazoPagamento: lerTexto(formData.get("prazoPagamento")),
     observacoes: lerTexto(formData.get("observacoes")),
   };
@@ -127,7 +151,7 @@ export async function criarCliente(
   try {
     destino = `/clientes/${await cadastrar(await contexto(), formData)}`;
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
+    return falhou(erro, formData);
   }
 
   revalidatePath("/clientes");
@@ -156,8 +180,16 @@ export async function criarClienteDaProposta(
       select: { clienteId: true, representanteId: true },
     });
 
-    if (!orcamento) return { erro: "Orçamento não encontrado." };
-    if (orcamento.clienteId) return { erro: "Esta proposta já tem cliente cadastrado." };
+    if (!orcamento) {
+      throw new ErroParaUsuario(
+        "A proposta deste cadastro não foi encontrada — ela pode ter sido excluída em outra tela.",
+      );
+    }
+    if (orcamento.clienteId) {
+      throw new ErroParaUsuario(
+        "Esta proposta já tem cliente cadastrado. Volte à proposta para ver qual é.",
+      );
+    }
 
     // Sem lista no formulário, o cliente fica com o preposto da proposta —
     // senão ele perderia de vista o cliente que ele mesmo cotou.
@@ -173,7 +205,7 @@ export async function criarClienteDaProposta(
       data: { clienteId, clienteAvulsoNome: null, clienteAvulsoMunicipio: null },
     });
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
+    return falhou(erro, formData);
   }
 
   revalidatePath("/clientes");
@@ -195,7 +227,7 @@ export async function atualizarCliente(
       data: dadosDoFormulario(formData),
     });
 
-    if (count === 0) return { erro: "Cliente não encontrado." };
+    if (count === 0) throw new ErroParaUsuario(CLIENTE_SUMIU);
 
     // Trocar quem atende não reescreve o passado: cada pedido guardou o
     // preposto com quem foi dividido (`Pedido.representanteId`).
@@ -209,7 +241,7 @@ export async function atualizarCliente(
       }
     }
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
+    return falhou(erro, formData);
   }
 
   revalidatePath("/clientes");
@@ -218,15 +250,27 @@ export async function atualizarCliente(
   redirect("/clientes");
 }
 
-export async function excluirCliente(id: string, _formData: FormData): Promise<void> {
-  const { organizacaoId, db } = await contexto();
+export async function excluirCliente(
+  id: string,
+  _estado: EstadoFormulario,
+  _formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    const { organizacaoId, db } = await contexto();
 
-  const pedidos = await db.pedido.count({ where: { clienteId: id, organizacaoId } });
-  if (pedidos > 0) {
-    throw new Error(`Este cliente tem ${pedidos} pedido(s) e não pode ser excluído.`);
+    const pedidos = await db.pedido.count({ where: { clienteId: id, organizacaoId } });
+    if (pedidos > 0) {
+      const quantos = pedidos === 1 ? "1 pedido" : `${pedidos} pedidos`;
+      throw new ErroParaUsuario(
+        `Este cliente tem ${quantos} e não pode ser excluído. Se ele parou de comprar, use ` +
+          `“Marcar como inativo”: sai das listas e continua nos pedidos antigos.`,
+      );
+    }
+
+    await db.cliente.deleteMany({ where: { id, organizacaoId } });
+  } catch (erro) {
+    return falhou(erro);
   }
-
-  await db.cliente.deleteMany({ where: { id, organizacaoId } });
 
   revalidatePath("/clientes");
   redirect("/clientes");
@@ -240,14 +284,14 @@ export async function excluirCliente(id: string, _formData: FormData): Promise<v
  * novo pedido e de nova proposta (que já filtram `ativo`) e da lista padrão —
  * e volta com um clique, quando voltar a comprar.
  */
-export async function alternarAtivoCliente(id: string, _formData: FormData): Promise<void> {
+async function gravarAlternarAtivoCliente(id: string, _formData: FormData): Promise<void> {
   const { organizacaoId, db } = await contexto();
 
   const cliente = await db.cliente.findFirst({
     where: { id, organizacaoId },
     select: { ativo: true },
   });
-  if (!cliente) throw new Error("Cliente não encontrado.");
+  if (!cliente) throw new ErroParaUsuario(CLIENTE_SUMIU);
 
   await db.cliente.updateMany({
     where: { id, organizacaoId },
@@ -256,4 +300,18 @@ export async function alternarAtivoCliente(id: string, _formData: FormData): Pro
 
   revalidatePath("/clientes");
   revalidatePath(`/clientes/${id}`);
+}
+
+/** `gravarAlternarAtivoCliente`, devolvendo a recusa para aparecer embaixo do botão clicado. */
+export async function alternarAtivoCliente(
+  id: string,
+  _estado: EstadoFormulario,
+  _formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    await gravarAlternarAtivoCliente(id, _formData);
+  } catch (erro) {
+    return falhou(erro);
+  }
+  return {};
 }

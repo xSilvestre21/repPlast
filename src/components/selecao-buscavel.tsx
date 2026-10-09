@@ -20,6 +20,7 @@
 import { ChevronDown } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
+import { useCampoDoFormulario } from "./contexto-formulario";
 import { CLASSE_CONTROLE, CLASSE_ERRO, RodapeCampo, Rotulo } from "./ui";
 
 export type OpcaoBuscavel = {
@@ -105,7 +106,7 @@ export function SelecaoBuscavel({
   aoEscolher,
   required,
   dica,
-  erro,
+  erro: erroExplicito,
   placeholder = "Escolha…",
   vazio = "Nada encontrado.",
   lado = "auto",
@@ -129,6 +130,9 @@ export function SelecaoBuscavel({
   className?: string;
 }) {
   const controlado = value !== undefined;
+  // Dentro de um `Formulario`, o erro do servidor chega pelo `name`.
+  const doFormulario = useCampoDoFormulario(name);
+  const erro = erroExplicito ?? doFormulario.erro;
   const [interno, setInterno] = useState(defaultValue);
   const idSelecionado = controlado ? value : interno;
 
@@ -181,7 +185,9 @@ export function SelecaoBuscavel({
    */
   useEffect(() => {
     campoRef.current?.setCustomValidity(
-      required && !idSelecionado ? "Escolha uma opção da lista." : "",
+      required && !idSelecionado
+        ? "Escolha uma opção da lista: clique no campo e selecione, ou digite parte do nome para buscar."
+        : "",
     );
   }, [required, idSelecionado]);
 
@@ -288,6 +294,10 @@ export function SelecaoBuscavel({
           aria-autocomplete="list"
           aria-activedescendant={aberto && filtradas[destaque] ? `${idLista}-${destaque}` : undefined}
           aria-invalid={erro ? true : undefined}
+          aria-describedby={erro || dica ? `${idCampo}-rodape` : undefined}
+          // O nome de verdade está no input escondido; este diz ao
+          // `Formulario` de qual campo é o erro que o navegador achou aqui.
+          data-campo={name}
           placeholder={placeholder}
           value={filtro ?? rotuloSelecionado}
           onChange={(evento) => {
@@ -350,7 +360,7 @@ export function SelecaoBuscavel({
         )}
       </div>
 
-      <RodapeCampo erro={erro} dica={dica} />
+      <RodapeCampo erro={erro} dica={dica} id={`${idCampo}-rodape`} />
     </div>
   );
 }

@@ -41,7 +41,8 @@ import {
   type DataIso,
 } from "@/lib/calendario";
 
-import { CLASSE_CONTROLE, RodapeCampo, Rotulo } from "./ui";
+import { useCampoDoFormulario } from "./contexto-formulario";
+import { CLASSE_CONTROLE, CLASSE_ERRO, RodapeCampo, Rotulo } from "./ui";
 
 const DIAS_DA_SEMANA = ["D", "S", "T", "Q", "Q", "S", "S"];
 const NOMES_DOS_DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
@@ -55,6 +56,7 @@ export function CampoData({
   rotulo,
   defaultValue = "",
   dica,
+  erro: erroExplicito,
   disabled = false,
   atalhos = [7, 15, 30, 45],
   atalhosUteis = [5, 10, 15, 20],
@@ -66,6 +68,8 @@ export function CampoData({
   rotulo: string;
   defaultValue?: string;
   dica?: string;
+  /** Sem ele, o erro vem do `Formulario` pelo `name`. */
+  erro?: string;
   disabled?: boolean;
   /** Prazos em dias corridos a partir de hoje, oferecidos como botões. */
   atalhos?: number[];
@@ -80,6 +84,8 @@ export function CampoData({
   /** Avisa a cada data escolhida (ou tirada), para quem faz conta com ela. */
   onChange?: (valor: string) => void;
 }) {
+  const doFormulario = useCampoDoFormulario(name);
+  const erro = erroExplicito ?? doFormulario.erro;
   const [valor, setValorInterno] = useState(dataValida(defaultValue) ? defaultValue : "");
   const setValor = (novo: string) => {
     setValorInterno(novo);
@@ -232,9 +238,12 @@ export function CampoData({
         aria-expanded={aberto}
         aria-controls={idCalendario}
         aria-label={`${rotulo}: ${valor ? dataPorExtenso(valor) : "sem data"}`}
+        // Botão não aceita `aria-invalid`; o `Formulario` acha o campo por aqui.
+        data-invalido={erro ? "" : undefined}
+        aria-describedby={erro || dica ? `${idCalendario}-rodape` : undefined}
         disabled={disabled}
         onClick={() => (aberto ? fechar() : abrir())}
-        className={`${CLASSE_CONTROLE} flex items-center gap-2.5 text-left`}
+        className={`${CLASSE_CONTROLE} ${erro ? CLASSE_ERRO : ""} flex items-center gap-2.5 text-left`}
       >
         <CalendarDays
           size={16}
@@ -254,7 +263,7 @@ export function CampoData({
         )}
       </button>
 
-      <RodapeCampo dica={dica} />
+      <RodapeCampo erro={erro} dica={dica} id={`${idCalendario}-rodape`} />
 
       {/*
         No <body>, e não ao lado do campo: cada bloco da página entra com uma

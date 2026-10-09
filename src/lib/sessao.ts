@@ -17,7 +17,16 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 
 import { type Ator, dbAdministrativo, dbParaOrganizacao } from "./db";
+import { ErroParaUsuario } from "./erro-formulario";
 import { nomeCompleto } from "./nome-usuario";
+
+/**
+ * Sem sessão no meio de uma ação: o cookie venceu com a tela aberta. Entrar
+ * de novo em OUTRA aba preserva o formulário desta, que ainda está preenchido.
+ */
+const SESSAO_EXPIRADA =
+  "Sua sessão expirou. Abra o sistema em outra aba, entre de novo e volte aqui para salvar — " +
+  "assim o que você digitou não se perde.";
 
 const COOKIE = "repplast_sessao";
 const DURACAO_DIAS = 30;
@@ -142,7 +151,7 @@ export const sessaoAtual = cache(async (): Promise<Sessao | null> => {
 export async function organizacaoAtual(): Promise<string> {
   const sessao = await sessaoAtual();
 
-  if (!sessao) throw new Error("Sem sessão. Faça login para continuar.");
+  if (!sessao) throw new ErroParaUsuario(SESSAO_EXPIRADA);
   return sessao.organizacaoId;
 }
 
@@ -163,7 +172,7 @@ export async function escopoAtual(): Promise<{
   db: ReturnType<typeof dbParaOrganizacao>;
 }> {
   const sessao = await sessaoAtual();
-  if (!sessao) throw new Error("Sem sessão. Faça login para continuar.");
+  if (!sessao) throw new ErroParaUsuario(SESSAO_EXPIRADA);
 
   return {
     organizacaoId: sessao.organizacaoId,
@@ -182,9 +191,11 @@ export async function escopoAtual(): Promise<{
 export async function exigirAdmin(): Promise<void> {
   const sessao = await sessaoAtual();
 
-  if (!sessao) throw new Error("Sem sessão. Faça login para continuar.");
+  if (!sessao) throw new ErroParaUsuario(SESSAO_EXPIRADA);
   if (sessao.papel !== "ADMIN") {
-    throw new Error("Esta ação é do administrador do escritório.");
+    throw new ErroParaUsuario(
+      "Só quem administra o escritório pode fazer isso. Peça a essa pessoa, ou entre com a conta de administrador.",
+    );
   }
 }
 

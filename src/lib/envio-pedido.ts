@@ -7,10 +7,17 @@
  * servidor nem banco.
  */
 
+import type { EstadoFormulario } from "./erro-formulario";
 import * as nucleo from "./modelo-email";
 
-/** O envio fecha o diálogo quando dá certo, e pode voltar com um aviso. */
-export type EstadoEnvio = { erro?: string; enviado?: boolean; aviso?: string };
+/**
+ * O envio fecha o diálogo quando dá certo, e pode voltar com um aviso. Na
+ * recusa, é o estado de todo formulário: o erro diz de qual campo é.
+ */
+export type EstadoEnvio = EstadoFormulario & { enviado?: boolean; aviso?: string };
+
+/** O que impede o envio, e — quando é de um campo do diálogo — qual. */
+export type ProblemaDeEnvio = { erro: string; campo?: string };
 
 /** Soma dos anexos, o PDF incluído. O Gmail aceita 25 MB; o resto é folga. */
 export const LIMITE_ANEXOS_BYTES = 20 * 1024 * 1024;
@@ -72,26 +79,56 @@ export function problemaNoEnvio(entrada: {
   cc: string[];
   assunto: string;
   anexos: { nome: string; tamanho: number }[];
+  /** Os digitados à mão: um inválido entre eles é erro do campo "Outros e-mails". */
+  avulsos?: string[];
   /** A frase quando não há destinatário; a proposta vai para o cliente, não para a indústria. */
   faltaDestinatario?: string;
-}): string | null {
+}): ProblemaDeEnvio | null {
   if (entrada.para.length === 0) {
-    return entrada.faltaDestinatario ?? "Escolha pelo menos um destinatário na indústria.";
+    return {
+      erro:
+        entrada.faltaDestinatario ??
+        "Escolha pelo menos um destinatário na indústria: marque um contato da lista ou " +
+          "digite um e-mail em “Outros e-mails”.",
+      campo: "contatoId",
+    };
   }
 
   const invalido = [...entrada.para, ...entrada.cc].find((e) => !emailValido(e));
-  if (invalido) return `E-mail inválido: ${invalido}`;
+  if (invalido) {
+    const digitado = entrada.avulsos?.includes(invalido) ?? false;
+    return {
+      erro: digitado
+        ? `“${invalido}” não parece um e-mail completo. Confira se tem o @ e o final, como ` +
+          `compras@empresa.com.br, e separe os e-mails por vírgula.`
+        : `O e-mail “${invalido}” guardado no cadastro está incompleto. Corrija-o no cadastro ` +
+          `e envie de novo, ou desmarque essa cópia.`,
+      campo: digitado ? "emailsAvulsos" : undefined,
+    };
+  }
 
-  if (!entrada.assunto.trim()) return "O assunto não pode ficar vazio.";
+  if (!entrada.assunto.trim()) {
+    return { erro: "Escreva o assunto do e-mail — é a primeira coisa que quem recebe lê.", campo: "assunto" };
+  }
 
   const bloqueado = entrada.anexos.find((a) =>
     BLOQUEADAS.includes(a.nome.split(".").pop()?.toLowerCase() ?? ""),
   );
-  if (bloqueado) return `"${bloqueado.nome}" não pode ir anexado — servidores de e-mail recusam esse tipo de arquivo.`;
+  if (bloqueado) {
+    return {
+      erro:
+        `O arquivo “${bloqueado.nome}” não pode ir anexado — servidores de e-mail recusam esse ` +
+        `tipo de arquivo. Tire-o da lista de anexos.`,
+    };
+  }
 
   const total = entrada.anexos.reduce((soma, a) => soma + a.tamanho, 0);
   if (total > LIMITE_ANEXOS_BYTES) {
-    return `Os anexos somam ${formatarTamanho(total)}. O limite é ${formatarTamanho(LIMITE_ANEXOS_BYTES)}.`;
+    return {
+      erro:
+        `Os anexos somam ${formatarTamanho(total)}, e o limite é ` +
+        `${formatarTamanho(LIMITE_ANEXOS_BYTES)}. Tire algum anexo ou diminua o tamanho dos arquivos.`,
+    };
   }
 
   return null;

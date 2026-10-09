@@ -16,12 +16,15 @@
  */
 
 import { Check, ChevronDown, Layers, Loader2 } from "lucide-react";
-import { useActionState, useEffect, useId, useRef, useState } from "react";
+import { Fragment, useActionState, useEffect, useId, useRef, useState } from "react";
 
+import { AcaoComRecusa } from "@/components/acao-com-recusa";
+import { ErroGeral, Formulario } from "@/components/formulario";
 import {
   Botao,
   BotaoTexto,
   CLASSE_CONTROLE_CELULA,
+  CLASSE_ERRO,
   Campo,
   Celula,
   EstadoVazio,
@@ -29,6 +32,7 @@ import {
   SecaoCartao,
   Tabela,
 } from "@/components/ui";
+import { campoDaLinha } from "@/lib/erro-formulario";
 
 import type { EstadoFormulario } from "../acoes";
 
@@ -51,11 +55,30 @@ export type Material = {
 /** Linhas em branco para a pessoa preencher sem precisar pedir "mais uma". */
 const FAIXAS_EM_BRANCO = 4;
 
+/** A caixa de número de uma linha de material. */
+const CLASSE_CELULA = `${CLASSE_CONTROLE_CELULA} w-24 text-right numerico`;
+
 /** Quanto tempo o "Salvo" fica na linha depois de gravar. */
 const AVISO_SALVO_MS = 2000;
 
 
 type AcaoSalvar = (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
+
+/**
+ * O que uma caixa de tabela precisa do estado da gravação: se o erro é dela,
+ * e o que a pessoa tinha digitado — sem isto, o React devolve a caixa ao
+ * valor antigo depois do envio, e a frase de erro fala de um número que já
+ * não está lá.
+ */
+function caixaDaGravacao(estado: EstadoFormulario, nome: string, valorSalvo: string) {
+  const comErro = estado.erro !== undefined && estado.campo === nome;
+  return {
+    "aria-invalid": comErro ? true : undefined,
+    defaultValue: estado.erro ? (estado.valores?.[nome] ?? valorSalvo) : valorSalvo,
+    // Não vai para o input: é a classe que a tela soma à da caixa.
+    classeErro: comErro ? CLASSE_ERRO : "",
+  };
+}
 
 /** O retorno da ação, carimbado com o momento em que gravou sem erro. */
 type EstadoGravacao = EstadoFormulario & { salvoEm?: number };
@@ -127,7 +150,7 @@ function LinhaMaterial({
   material: Material;
   salvar: AcaoSalvar;
   salvarFaixas: AcaoSalvar;
-  remover: (formData: FormData) => void | Promise<void>;
+  remover: AcaoSalvar;
   editavel: boolean;
 }) {
   const linha = useGravacao(salvar);
@@ -167,8 +190,24 @@ function LinhaMaterial({
       evento.preventDefault();
       gravar(evento.currentTarget);
     },
-    className: `${CLASSE_CONTROLE_CELULA} w-24 text-right numerico`,
+    className: CLASSE_CELULA,
   };
+
+  const { classeErro: erroPrecoKg, ...precoKg } = caixaDaGravacao(
+    linha.estado,
+    "precoKg",
+    material.precoKg,
+  );
+  const { classeErro: erroPrecoMinimoKg, ...precoMinimoKg } = caixaDaGravacao(
+    linha.estado,
+    "precoMinimoKg",
+    material.precoMinimoKg,
+  );
+  const { classeErro: erroDensidade, ...densidade } = caixaDaGravacao(
+    linha.estado,
+    "densidade",
+    material.densidade,
+  );
 
   // As linhas de faixa e de erro atravessam a tabela inteira. Em leitura não há
   // a coluna de ações.
@@ -198,27 +237,30 @@ function LinhaMaterial({
             <Celula alinhamento="numero">
               <input
                 {...gravaSozinho}
+                {...precoKg}
+                className={`${CLASSE_CELULA} ${erroPrecoKg}`}
                 name="precoKg"
                 required
-                defaultValue={material.precoKg}
                 aria-label={`Valor do quilo de ${material.nome}`}
               />
             </Celula>
             <Celula alinhamento="numero">
               <input
                 {...gravaSozinho}
+                {...precoMinimoKg}
+                className={`${CLASSE_CELULA} ${erroPrecoMinimoKg}`}
                 name="precoMinimoKg"
                 placeholder="—"
-                defaultValue={material.precoMinimoKg}
                 aria-label={`Valor mínimo do quilo de ${material.nome}`}
               />
             </Celula>
             <Celula alinhamento="numero">
               <input
                 {...gravaSozinho}
+                {...densidade}
+                className={`${CLASSE_CELULA} ${erroDensidade}`}
                 name="densidade"
                 placeholder="—"
-                defaultValue={material.densidade}
                 aria-label={`Densidade de ${material.nome}`}
               />
             </Celula>
@@ -266,12 +308,12 @@ function LinhaMaterial({
           <Celula alinhamento="acao">
             <div className="flex items-center justify-end gap-3">
               <Situacao gravando={linha.gravando} salvo={linha.salvo} />
-              <form action={remover}>
+              <AcaoComRecusa acao={remover}>
                 <input type="hidden" name="materialId" value={material.id} />
                 <BotaoTexto type="submit" perigoso aria-label={`Remover material ${material.nome}`}>
                   remover
                 </BotaoTexto>
-              </form>
+              </AcaoComRecusa>
             </div>
           </Celula>
         )}
@@ -299,7 +341,7 @@ function LinhaMaterial({
               enviar={faixas.enviar}
               gravando={faixas.gravando}
               salvo={faixas.salvo}
-              erro={faixas.estado.erro}
+              estado={faixas.estado}
             />
           </td>
         </tr>
@@ -322,14 +364,14 @@ function PainelFaixas({
   enviar,
   gravando,
   salvo,
-  erro,
+  estado,
 }: {
   material: Material;
   editavel: boolean;
   enviar: (formData: FormData) => void;
   gravando: boolean;
   salvo: boolean;
-  erro?: string;
+  estado: EstadoFormulario;
 }) {
   const formulario = useRef<HTMLFormElement>(null);
   const aoEntrar = useRef<string | null>(null);
@@ -352,6 +394,11 @@ function PainelFaixas({
   ];
 
   const celula = `${CLASSE_CONTROLE_CELULA} w-24 text-right numerico`;
+
+  /** A faixa com erro, para a frase ir logo embaixo dela. */
+  const faixaComErro = linhas.findIndex((_, i) =>
+    ["pesoDeKg", "pesoAteKg", "precoKg"].some((nome) => estado.campo === campoDaLinha(nome, i)),
+  );
 
   return (
     // Sem fundo próprio: as caixas de digitar já são `folha-2`, e um painel da
@@ -403,40 +450,47 @@ function PainelFaixas({
           <tbody>
             {linhas.map((f, i) =>
               editavel ? (
-                <tr key={i}>
-                  <td className="pr-2 py-1">
-                    <input
-                      name="pesoDeKg"
-                      inputMode="decimal"
-                      placeholder="—"
-                      defaultValue={f.pesoDeKg}
-                      aria-label={`Peso inicial da faixa ${i + 1}`}
-                      className={celula}
-                    />
-                  </td>
-                  <td className="pr-2 py-1">
-                    <input
-                      name="pesoAteKg"
-                      inputMode="decimal"
-                      placeholder="—"
-                      defaultValue={f.pesoAteKg}
-                      aria-label={`Peso final da faixa ${i + 1}`}
-                      className={celula}
-                    />
-                  </td>
-                  <td className="py-1">
-                    <input
-                      name="precoKg"
-                      inputMode="decimal"
-                      // Exemplo só na primeira linha em branco: repetido em
-                      // todas, parecia preço já gravado.
-                      placeholder={i === material.faixas.length ? "35,20" : ""}
-                      defaultValue={f.precoKg}
-                      aria-label={`Preço da faixa ${i + 1}`}
-                      className={celula}
-                    />
-                  </td>
-                </tr>
+                <Fragment key={i}>
+                  <tr>
+                    {(
+                      [
+                        ["pesoDeKg", f.pesoDeKg, `Peso inicial da faixa ${i + 1}`, "—"],
+                        ["pesoAteKg", f.pesoAteKg, `Peso final da faixa ${i + 1}`, "—"],
+                        // Exemplo só na primeira linha em branco: repetido em
+                        // todas, parecia preço já gravado.
+                        ["precoKg", f.precoKg, `Preço da faixa ${i + 1}`, i === material.faixas.length ? "35,20" : ""],
+                      ] as const
+                    ).map(([nome, valorSalvo, rotulo, placeholder]) => {
+                      const { classeErro, ...caixa } = caixaDaGravacao(
+                        estado,
+                        campoDaLinha(nome, i),
+                        valorSalvo,
+                      );
+                      return (
+                        <td key={nome} className={nome === "precoKg" ? "py-1" : "pr-2 py-1"}>
+                          <input
+                            {...caixa}
+                            name={nome}
+                            data-campo={campoDaLinha(nome, i)}
+                            inputMode="decimal"
+                            placeholder={placeholder}
+                            aria-label={rotulo}
+                            className={`${celula} ${classeErro}`}
+                          />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                  {i === faixaComErro && (
+                    <tr>
+                      <td colSpan={3} className="pb-1.5">
+                        <p role="alert" className="text-mini text-perigo max-w-sm">
+                          {estado.erro}
+                        </p>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ) : (
                 <tr key={i} className="numerico">
                   <td className="pr-6 py-1 text-right">{f.pesoDeKg || "—"}</td>
@@ -456,7 +510,8 @@ function PainelFaixas({
         </div>
       )}
 
-      <MensagemErro>{erro}</MensagemErro>
+      {/* Erro que não é de uma faixa só — o material sumiu, por exemplo. */}
+      {faixaComErro === -1 && <MensagemErro>{estado.erro}</MensagemErro>}
     </div>
   );
 }
@@ -471,7 +526,7 @@ export function SecaoMateriais({
   materiais: Material[];
   salvar: AcaoSalvar;
   salvarFaixas: AcaoSalvar;
-  remover: (formData: FormData) => void | Promise<void>;
+  remover: AcaoSalvar;
   /** Ficha aberta para leitura: a tabela aparece, reajustar exige Editar. */
   editavel: boolean;
 }) {
@@ -524,8 +579,11 @@ export function SecaoMateriais({
       )}
 
       {editavel && (
-        <form action={enviar} className="space-y-4 pt-5 border-t border-filete">
-          <MensagemErro>{estado.erro}</MensagemErro>
+        <Formulario
+          estado={estado}
+          action={enviar}
+          className="space-y-4 pt-5 border-t border-filete"
+        >
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Campo
@@ -561,12 +619,13 @@ export function SecaoMateriais({
             />
           </div>
 
+          <ErroGeral />
           <div className="flex justify-end">
             <Botao type="submit" variante="secundaria" carregando={enviando}>
               {enviando ? "Salvando…" : "Adicionar material"}
             </Botao>
           </div>
-        </form>
+        </Formulario>
       )}
     </SecaoCartao>
   );

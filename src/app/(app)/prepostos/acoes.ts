@@ -13,40 +13,31 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { dbAdministrativo, type DbOrganizacao } from "@/lib/db";
+import {
+  ErroDeCampo,
+  ErroParaUsuario,
+  falhou,
+  type EstadoFormulario as EstadoBase,
+} from "@/lib/erro-formulario";
 import { normalizarTelefone } from "@/lib/mascara";
-import { lerNumeroBr } from "@/lib/numero-br";
+import { exigirNumero } from "@/lib/numero-br";
 import { gerarHashSenha } from "@/lib/senha";
 import { TAMANHO_MINIMO_SENHA } from "@/lib/senha-regras";
 import { escopoAtual } from "@/lib/sessao";
 
-export type EstadoFormulario = {
-  erro?: string;
-  aviso?: string;
-  /**
-   * O que a pessoa digitou, devolvido quando o envio é recusado. O React limpa
-   * o formulário a cada envio; sem isto, um e-mail repetido apagava o cadastro
-   * inteiro junto. A senha não volta — nunca se devolve senha ao navegador.
-   */
-  valores?: {
-    nome: string;
-    sobrenome: string;
-    email: string;
-    telefone: string;
-    comissaoPercentual: string;
-    fornecedorIds: string[];
-  };
-};
+/**
+ * O estado de sempre (erro preso ao campo, o que foi digitado de volta — a
+ * senha nunca volta) mais o recado verde da troca de senha.
+ */
+export type EstadoFormulario = EstadoBase & { aviso?: string };
 
-function digitado(formData: FormData): NonNullable<EstadoFormulario["valores"]> {
-  return {
-    nome: lerTexto(formData.get("nome")),
-    sobrenome: lerTexto(formData.get("sobrenome")),
-    email: lerTexto(formData.get("email")),
-    telefone: lerTexto(formData.get("telefone")),
-    comissaoPercentual: lerTexto(formData.get("comissaoPercentualPadrao")),
-    fornecedorIds: formData.getAll("fornecedorId").map(String),
-  };
-}
+const PREPOSTO_SUMIU =
+  "Este preposto não foi encontrado — ele pode ter sido removido em outra tela. " +
+  "Volte à lista de prepostos e confira.";
+
+const SENHA_CURTA =
+  `A senha precisa ter pelo menos ${TAMANHO_MINIMO_SENHA} caracteres. ` +
+  "Misture letras e números para ficar mais difícil de adivinhar.";
 
 /** A lista e a ficha do preposto — as duas mostram o que acabou de mudar. */
 function revalidarPreposto(id: string) {
@@ -57,8 +48,12 @@ function revalidarPreposto(id: string) {
 async function contextoAdmin() {
   const escopo = await escopoAtual();
 
-  if (!escopo.ehAdmin) throw new Error("Esta seção é do administrador do escritório.");
-  if (escopo.plano !== "PLUS") throw new Error("Prepostos fazem parte do plano Plus.");
+  if (!escopo.ehAdmin) {
+    throw new ErroParaUsuario(
+      "Só quem administra o escritório cuida dos prepostos. Peça a essa pessoa.",
+    );
+  }
+  if (escopo.plano !== "PLUS") throw new ErroParaUsuario("Prepostos fazem parte do plano Plus.");
 
   return escopo;
 }
@@ -81,15 +76,22 @@ function lerTelefone(valor: FormDataEntryValue | null): string | null {
 }
 
 /** Fatia da comissão, em percentual DELA. Vazio vale zero — preposto sem acordo ainda. */
-function lerPercentual(valor: FormDataEntryValue | null): string | null {
-  const texto = lerTexto(valor);
-  if (texto === "") return null;
+function lerPercentual(formData: FormData): string | null {
+  const numero = exigirNumero(formData, "comissaoPercentualPadrao", "o percentual da comissão", {
+    min: 0,
+    max: 100,
+    exemplo: "50",
+  });
+  return numero === null ? null : String(numero);
+}
 
-  const numero = lerNumeroBr(texto);
-  if (numero === null) throw new Error("Não entendi o percentual.");
-  if (numero < 0 || numero > 100) throw new Error("O percentual precisa ficar entre 0 e 100.");
-
-  return String(numero);
+/** O nome é o único campo obrigatório da ficha. */
+function exigirNome(formData: FormData): string {
+  const nome = lerTexto(formData.get("nome"));
+  if (!nome) {
+    throw new ErroDeCampo("nome", "Informe o nome do preposto — ele assina as propostas dele.");
+  }
+  return nome;
 }
 
 /**
@@ -132,17 +134,23 @@ export async function inscreverPreposto(
   try {
     const { organizacaoId, db } = await contextoAdmin();
 
-    const nome = lerTexto(formData.get("nome"));
+    const nome = exigirNome(formData);
     const email = lerTexto(formData.get("email")).toLowerCase();
     const senha = lerTexto(formData.get("senha"));
 
-    if (!nome) return { erro: "Informe o nome do preposto.", valores: digitado(formData) };
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { erro: "E-mail inválido.", valores: digitado(formData) };
-    if (senha.length < TAMANHO_MINIMO_SENHA) {
-      return { erro: `A senha precisa ter pelo menos ${TAMANHO_MINIMO_SENHA} caracteres.`, valores: digitado(formData) };
+    if (!email) {
+      throw new ErroDeCampo("email", "Informe o e-mail do preposto — é o login dele no sistema.");
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new ErroDeCampo(
+        "email",
+        "Este e-mail parece incompleto. Confira se tem o @ e o final, como maria@exemplo.com.br.",
+      );
     }
 
-    const comissaoPercentualPadrao = lerPercentual(formData.get("comissaoPercentualPadrao"));
+    const comissaoPercentualPadrao = lerPercentual(formData);
+
+    if (senha.length < TAMANHO_MINIMO_SENHA) throw new ErroDeCampo("senha", SENHA_CURTA);
 
     /*
      * O e-mail é único no sistema inteiro, não por escritório — é a chave do
@@ -153,7 +161,12 @@ export async function inscreverPreposto(
       where: { email },
       select: { id: true },
     });
-    if (jaExiste) return { erro: "Já existe uma conta com este e-mail.", valores: digitado(formData) };
+    if (jaExiste) {
+      throw new ErroDeCampo(
+        "email",
+        "Este e-mail já é o login de outra pessoa no sistema. Use outro e-mail para o preposto.",
+      );
+    }
 
     const preposto = await db.usuario.create({
       data: {
@@ -173,7 +186,7 @@ export async function inscreverPreposto(
 
     destino = `/prepostos/${preposto.id}`;
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível inscrever.", valores: digitado(formData) };
+    return falhou(erro, formData);
   }
 
   // Como o cadastro de cliente: gravou, abre a ficha do que acabou de nascer.
@@ -189,8 +202,7 @@ export async function atualizarPreposto(
   try {
     const { organizacaoId, db } = await contextoAdmin();
 
-    const nome = lerTexto(formData.get("nome"));
-    if (!nome) return { erro: "Informe o nome do preposto.", valores: digitado(formData) };
+    const nome = exigirNome(formData);
 
     const { count } = await db.usuario.updateMany({
       where: { id, organizacaoId, papel: "REPRESENTANTE" },
@@ -198,15 +210,15 @@ export async function atualizarPreposto(
         nome,
         sobrenome: lerOpcional(formData.get("sobrenome")),
         telefone: lerTelefone(formData.get("telefone")),
-        comissaoPercentualPadrao: lerPercentual(formData.get("comissaoPercentualPadrao")),
+        comissaoPercentualPadrao: lerPercentual(formData),
       },
     });
 
-    if (count === 0) return { erro: "Preposto não encontrado.", valores: digitado(formData) };
+    if (count === 0) throw new ErroParaUsuario(PREPOSTO_SUMIU);
 
     await gravarIndustrias(db, organizacaoId, id, formData);
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar.", valores: digitado(formData) };
+    return falhou(erro, formData);
   }
 
   revalidarPreposto(id);
@@ -222,7 +234,7 @@ export async function atualizarPreposto(
  * `sessaoAtual()` relê `ativo` a cada requisição, então o corte é imediato —
  * não espera o cookie dele vencer.
  */
-export async function alternarAtivoPreposto(id: string, _formData: FormData): Promise<void> {
+async function gravarAlternarAtivoPreposto(id: string, _formData: FormData): Promise<void> {
   const { organizacaoId, db } = await contextoAdmin();
 
   const preposto = await db.usuario.findFirst({
@@ -230,7 +242,7 @@ export async function alternarAtivoPreposto(id: string, _formData: FormData): Pr
     select: { ativo: true },
   });
 
-  if (!preposto) throw new Error("Preposto não encontrado.");
+  if (!preposto) throw new ErroParaUsuario(PREPOSTO_SUMIU);
 
   await db.usuario.updateMany({
     where: { id, organizacaoId, papel: "REPRESENTANTE" },
@@ -249,18 +261,16 @@ export async function redefinirSenhaPreposto(
     const { organizacaoId, db } = await contextoAdmin();
 
     const senha = lerTexto(formData.get("senha"));
-    if (senha.length < TAMANHO_MINIMO_SENHA) {
-      return { erro: `A senha precisa ter pelo menos ${TAMANHO_MINIMO_SENHA} caracteres.` };
-    }
+    if (senha.length < TAMANHO_MINIMO_SENHA) throw new ErroDeCampo("senha", SENHA_CURTA);
 
     const { count } = await db.usuario.updateMany({
       where: { id, organizacaoId, papel: "REPRESENTANTE" },
       data: { senhaHash: await gerarHashSenha(senha) },
     });
 
-    if (count === 0) return { erro: "Preposto não encontrado." };
+    if (count === 0) throw new ErroParaUsuario(PREPOSTO_SUMIU);
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível trocar a senha." };
+    return falhou(erro);
   }
 
   revalidarPreposto(id);
@@ -285,7 +295,7 @@ export async function definirClientesDoPreposto(
     const preposto = await db.usuario.count({
       where: { id, organizacaoId, papel: "REPRESENTANTE" },
     });
-    if (preposto === 0) return { erro: "Preposto não encontrado." };
+    if (preposto === 0) throw new ErroParaUsuario(PREPOSTO_SUMIU);
 
     const marcados = formData.getAll("clienteId").map(String);
     const validos =
@@ -304,10 +314,24 @@ export async function definirClientesDoPreposto(
       });
     }
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
+    return falhou(erro, formData);
   }
 
   revalidarPreposto(id);
   revalidatePath("/clientes");
   redirect(`/prepostos/${id}`);
+}
+
+/** `gravarAlternarAtivoPreposto`, devolvendo a recusa para aparecer embaixo do botão clicado. */
+export async function alternarAtivoPreposto(
+  id: string,
+  _estado: EstadoFormulario,
+  _formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    await gravarAlternarAtivoPreposto(id, _formData);
+  } catch (erro) {
+    return falhou(erro);
+  }
+  return {};
 }

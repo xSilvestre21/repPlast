@@ -43,7 +43,7 @@ describe("texto padrão da proposta", () => {
       textoPadraoDoOrcamento(COMPLETA, { assunto: "Orçamento {numero}", corpo: "Oi, {aos_cuidados}!" }),
     ).toEqual({ assunto: "Orçamento 193", corpo: "Oi, Sr. Marcelo!" });
 
-    expect(problemaNoModeloDaProposta("{cnpj}")).toBe("{cnpj} não é um dado da proposta.");
+    expect(problemaNoModeloDaProposta("{cnpj}")).toMatch(/^\{cnpj\} não é um dado da proposta\./);
     expect(problemaNoModeloDaProposta("{se valido_ate}x{fim}")).toBeNull();
   });
 });

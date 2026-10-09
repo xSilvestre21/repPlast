@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useActionState, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { ListOrdered, Package } from "lucide-react";
 
@@ -9,16 +9,20 @@ import {
   Botao,
   BotaoTexto,
   CLASSE_CONTROLE_CELULA,
+  CLASSE_ERRO,
   Campo,
   Celula,
+  EspacoDoRotulo,
   EstadoVazio,
-  MensagemErro,
   SecaoCartao,
   Selecao,
   Tabela,
   formatarMoeda,
 } from "@/components/ui";
+import { AcaoComRecusa } from "@/components/acao-com-recusa";
+import { ErroGeral, Formulario } from "@/components/formulario";
 import { SelecaoBuscavel } from "@/components/selecao-buscavel";
+import type { EstadoFormulario } from "@/lib/erro-formulario";
 import { CAMPO_IPI, CAMPO_IPI_DEFINIDO } from "@/lib/ipi-do-formulario";
 import { escreverNumeroBr, lerNumeroBr } from "@/lib/numero-br";
 import type { Aditivo } from "@/lib/precificacao";
@@ -32,11 +36,14 @@ import {
 } from "@/lib/produto-preco";
 
 /**
- * O retorno de qualquer ação de item. Declarado aqui, e não importado de um
- * módulo de ações, porque este componente serve DOIS documentos — pedido e
- * orçamento — e amarrá-lo às ações de um deles seria escolher um dono.
+ * O retorno de qualquer ação de item — o mesmo de todo formulário do sistema
+ * (`lib/erro-formulario`), e não o das ações de um dos dois documentos que
+ * este componente serve, pedido e orçamento.
  */
-export type EstadoFormulario = { erro?: string };
+export type { EstadoFormulario };
+
+/** Colunas da tabela de itens — a linha de erro atravessa todas. */
+const COLUNAS_DA_TABELA = 9;
 
 /**
  * A tabela de itens, compartilhada pelo pedido e pelo orçamento.
@@ -129,8 +136,8 @@ export function SecaoItens({
   adicao?: ReactNode;
   adicionar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   atualizar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
-  remover: (formData: FormData) => void | Promise<void>;
-  definirIpiDeTodos: (formData: FormData) => void | Promise<void>;
+  remover: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
+  definirIpiDeTodos: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
 }) {
   const [estadoAdicao, enviarAdicao, adicionando] = useActionState(adicionar, {});
 
@@ -181,16 +188,16 @@ export function SecaoItens({
                     um clique, mas agora a decisão mora onde ela se lê.
                   */}
                   {editavel && itens.length > 0 && (
-                    <form action={definirIpiDeTodos} className="inline">
+                    <AcaoComRecusa acao={definirIpiDeTodos} className="ml-2 align-baseline">
                       <input
                         type="hidden"
                         name="ligado"
                         value={itens.every((i) => i.comIpi) ? "0" : "1"}
                       />
-                      <BotaoTexto type="submit" className="ml-2">
+                      <BotaoTexto type="submit">
                         {itens.every((i) => i.comIpi) ? "nenhum" : "todos"}
                       </BotaoTexto>
-                    </form>
+                    </AcaoComRecusa>
                   )}
                 </span>
               ),
@@ -204,6 +211,7 @@ export function SecaoItens({
               key={item.id}
               item={item}
               editavel={editavel}
+              colunas={COLUNAS_DA_TABELA + (editavel ? 1 : 0)}
               atualizar={atualizar}
               remover={remover}
             />
@@ -236,7 +244,6 @@ export function SecaoItens({
 
       {editavel && (
         <div className="mt-5 pt-5 border-t border-filete">
-          <MensagemErro>{estadoAdicao.erro}</MensagemErro>
           {/*
             Sem produto para escolher, o formulário viraria uma armadilha: três
             campos habilitados e uma lista vazia, sem dizer o que falta. O aviso
@@ -245,7 +252,12 @@ export function SecaoItens({
           {adicao ?? (!podeAdicionar ? (
             semProdutos
           ) : (
-            <FormularioAdicao produtos={produtos} enviar={enviarAdicao} enviando={adicionando} />
+            <FormularioAdicao
+              produtos={produtos}
+              estado={estadoAdicao}
+              enviar={enviarAdicao}
+              enviando={adicionando}
+            />
           ))}
         </div>
       )}
@@ -256,15 +268,27 @@ export function SecaoItens({
 function LinhaItem({
   item,
   editavel,
+  colunas,
   atualizar,
   remover,
 }: {
   item: ItemPedido;
   editavel: boolean;
+  colunas: number;
   atualizar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
-  remover: (formData: FormData) => void | Promise<void>;
+  remover: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
 }) {
   const [estado, enviar, salvando] = useActionState(atualizar, {});
+
+  /*
+   * A caixa recusada fica vermelha e volta com o que foi digitado. Sem o valor
+   * de volta, o React devolvia a caixa ao número antigo depois do envio — e a
+   * frase de erro falava de um número que já não estava na tela.
+   */
+  const comErro = (nome: string) => estado.erro !== undefined && estado.campo === nome;
+  const digitado = (nome: string, salvo: string) =>
+    estado.erro ? (estado.valores?.[nome] ?? salvo) : salvo;
+  const idErro = `item-${item.id}-erro`;
 
   /*
    * O que o campo valia quando a pessoa entrou nele.
@@ -306,6 +330,7 @@ function LinhaItem({
   };
 
   return (
+    <Fragment>
     <tr>
       <Celula className="numerico text-tinta-2">{item.codigoFornecedor ?? "—"}</Celula>
       <Celula className="numerico text-tinta-2">{item.codigoCliente ?? ""}</Celula>
@@ -336,10 +361,14 @@ function LinhaItem({
               <input
                 name="quantidade"
                 inputMode="decimal"
-                defaultValue={escreverNumeroBr(item.quantidade, 0)}
+                defaultValue={digitado("quantidade", escreverNumeroBr(item.quantidade, 0))}
                 {...gravaSozinho}
                 aria-label="Quantidade"
-                className={`${CLASSE_CONTROLE_CELULA} w-20 text-right numerico`}
+                aria-invalid={comErro("quantidade") ? true : undefined}
+                aria-describedby={estado.erro ? idErro : undefined}
+                className={`${CLASSE_CONTROLE_CELULA} w-20 text-right numerico ${
+                  comErro("quantidade") ? CLASSE_ERRO : ""
+                }`}
               />
             </form>
           </Celula>
@@ -351,10 +380,14 @@ function LinhaItem({
               inputMode="decimal"
               // Até 6 casas: é a precisão que o banco guarda, e cortá-la aqui
               // faria o total errar centavos ao salvar a linha.
-              defaultValue={escreverNumeroBr(item.precoUnitario, 2, 6)}
+              defaultValue={digitado("precoUnitario", escreverNumeroBr(item.precoUnitario, 2, 6))}
               {...gravaSozinho}
               aria-label="Preço unitário"
-              className={`${CLASSE_CONTROLE_CELULA} w-28 text-right numerico`}
+              aria-invalid={comErro("precoUnitario") ? true : undefined}
+              aria-describedby={estado.erro ? idErro : undefined}
+              className={`${CLASSE_CONTROLE_CELULA} w-28 text-right numerico ${
+                comErro("precoUnitario") ? CLASSE_ERRO : ""
+              }`}
             />
           </Celula>
         </>
@@ -416,16 +449,7 @@ function LinhaItem({
 
       {editavel && (
         <Celula alinhamento="acao">
-          {/*
-            O erro era descartado: `useActionState` devolvia o estado e ninguém
-            o lia. Com o botão "salvar" ali dava para clicar de novo e perceber;
-            gravando sozinho, uma falha muda seria a linha simplesmente não
-            mudando de valor, sem nada na tela explicando.
-          */}
-          {estado.erro && (
-            <span className="block text-mini text-perigo mb-1">{estado.erro}</span>
-          )}
-          <form action={remover} className="inline">
+          <AcaoComRecusa acao={remover}>
             <input type="hidden" name="itemId" value={item.id} />
             <BotaoTexto
               type="submit"
@@ -435,19 +459,37 @@ function LinhaItem({
             >
               remover
             </BotaoTexto>
-          </form>
+          </AcaoComRecusa>
         </Celula>
       )}
     </tr>
+    {/*
+      O erro da linha, logo embaixo dela. Já esteve no canto direito, longe da
+      quantidade e do preço que o causaram — e antes disso era descartado:
+      gravando sozinha, uma falha muda seria a linha simplesmente não mudando
+      de valor, sem nada na tela explicando.
+    */}
+    {estado.erro && (
+      <tr>
+        <td colSpan={colunas} className="px-3 pb-2.5">
+          <p id={idErro} role="alert" className="text-mini text-perigo max-w-2xl">
+            {estado.erro}
+          </p>
+        </td>
+      </tr>
+    )}
+    </Fragment>
   );
 }
 
 function FormularioAdicao({
   produtos,
+  estado,
   enviar,
   enviando,
 }: {
   produtos: ProdutoOpcao[];
+  estado: EstadoFormulario;
   enviar: (formData: FormData) => void;
   enviando: boolean;
 }) {
@@ -455,6 +497,24 @@ function FormularioAdicao({
   const [unidade, setUnidade] = useState<UnidadeVenda | "">("");
   const [quantidade, setQuantidade] = useState("");
   const [precoManual, setPrecoManual] = useState<string | null>(null);
+
+  /*
+   * A linha só se esvazia quando o item ENTROU.
+   *
+   * Antes ela era limpa no clique, antes de o servidor responder — e um item
+   * recusado ("informe a quantidade") sumia junto com o erro, obrigando a
+   * escolher o produto de novo para corrigir um número.
+   */
+  const [estadoVisto, setEstadoVisto] = useState(estado);
+  if (estado !== estadoVisto) {
+    setEstadoVisto(estado);
+    if (!estado.erro) {
+      setProdutoId("");
+      setUnidade("");
+      setQuantidade("");
+      setPrecoManual(null);
+    }
+  }
 
   const produto = produtos.find((p) => p.id === produtoId);
 
@@ -503,16 +563,7 @@ function FormularioAdicao({
   }, [quantidade, preco]);
 
   return (
-    <form
-      action={(formData) => {
-        enviar(formData);
-        setProdutoId("");
-        setUnidade("");
-        setQuantidade("");
-        setPrecoManual(null);
-      }}
-      className="space-y-3"
-    >
+    <Formulario estado={estado} action={enviar} className="space-y-3">
       {/*
         Colunas nomeadas e `items-start`.
 
@@ -615,9 +666,7 @@ function FormularioAdicao({
           ele é uma cópia do rótulo dos vizinhos, só que sem tinta.
         */}
         <div className="block">
-          <span className="rotulo block mb-1.5 invisible select-none" aria-hidden="true">
-            &nbsp;
-          </span>
+          <EspacoDoRotulo />
           <Botao
             type="submit"
             variante="secundaria"
@@ -634,6 +683,8 @@ function FormularioAdicao({
           Este item entra por {formatarMoeda(totalPrevisto)} antes do IPI.
         </p>
       )}
-    </form>
+
+      <ErroGeral />
+    </Formulario>
   );
 }

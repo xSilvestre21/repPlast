@@ -25,7 +25,13 @@ import {
 } from "@/components/ui";
 import { PRESETS, PROVEDORES, type Provedor } from "@/lib/provedores-email";
 
+import { AcaoComRecusa } from "@/components/acao-com-recusa";
+import { ErroGeral, Formulario } from "@/components/formulario";
+
 import type { EstadoConta } from "./acoes";
+
+/** Os campos que moram dentro do bloco recolhido "Servidor". */
+const CAMPOS_DO_SERVIDOR = ["host", "porta", "seguranca", "usuarioSmtp"];
 
 type AcaoConta = (estado: EstadoConta, formData: FormData) => Promise<EstadoConta>;
 
@@ -42,8 +48,8 @@ export type ContaVisivel = {
   testadaEm: string | null;
   salvar: AcaoConta;
   testar: AcaoConta;
-  tornarPadrao: (formData: FormData) => Promise<void>;
-  excluir: (formData: FormData) => Promise<void>;
+  tornarPadrao: AcaoConta;
+  excluir: AcaoConta;
 };
 
 const DATA_HORA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
@@ -165,15 +171,15 @@ function LinhaConta({ conta }: { conta: ContaVisivel }) {
             </BotaoTexto>
           </form>
           {!conta.padrao && (
-            <form action={conta.tornarPadrao}>
+            <AcaoComRecusa acao={conta.tornarPadrao}>
               <BotaoTexto type="submit">Tornar padrão</BotaoTexto>
-            </form>
+            </AcaoComRecusa>
           )}
           <BotaoTexto type="button" onClick={() => setEditando(true)}>
             Editar
           </BotaoTexto>
-          <form
-            action={conta.excluir}
+          <AcaoComRecusa
+            acao={conta.excluir}
             onSubmit={(evento) => {
               if (!confirm(`Excluir a conta ${conta.email}? A senha guardada vai junto.`)) {
                 evento.preventDefault();
@@ -183,7 +189,7 @@ function LinhaConta({ conta }: { conta: ContaVisivel }) {
             <BotaoTexto type="submit" perigoso>
               Excluir
             </BotaoTexto>
-          </form>
+          </AcaoComRecusa>
         </div>
       </div>
 
@@ -232,7 +238,8 @@ function FormConta({
   }
 
   return (
-    <form
+    <Formulario
+      estado={estado}
       // Submissão à mão: com `action={...}` o React limpa o formulário depois de
       // cada tentativa, inclusive da que falhou — e a pessoa perderia o que
       // digitou justo quando precisa só corrigir a senha.
@@ -243,8 +250,6 @@ function FormConta({
       }}
       className="space-y-4 rounded-suave border border-filete bg-folha p-4"
     >
-      <MensagemErro>{estado.erro}</MensagemErro>
-
       <div className="grid gap-4 sm:grid-cols-2">
         <Selecao
           name="provedor"
@@ -301,7 +306,12 @@ function FormConta({
         Servidor e porta ficam à vista mesmo com o preset: quando um provedor
         muda o endereço, a pessoa corrige aqui sem esperar uma versão nova.
       */}
-      <details open={provedor === "OUTRO"} className="group">
+      {/* Abre sozinho quando o erro é de um campo daqui de dentro — fechado, a
+          frase que diz o que corrigir ficaria escondida. */}
+      <details
+        open={provedor === "OUTRO" || CAMPOS_DO_SERVIDOR.includes(estado.campo ?? "")}
+        className="group"
+      >
         <summary className="text-mini text-tinta-3 cursor-pointer select-none">
           Servidor ({host || "a preencher"}:{porta})
         </summary>
@@ -340,6 +350,8 @@ function FormConta({
         </div>
       </details>
 
+      <ErroGeral />
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         {primeira || inicial.padrao ? (
           <span className="text-mini text-tinta-3">
@@ -361,6 +373,6 @@ function FormConta({
           </Botao>
         </div>
       </div>
-    </form>
+    </Formulario>
   );
 }

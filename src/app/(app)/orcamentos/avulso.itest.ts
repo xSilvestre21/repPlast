@@ -126,13 +126,18 @@ afterAll(async () => {
   await admin.organizacao.deleteMany({ where: { id: sessao.organizacaoId } });
 });
 
+/**
+ * A recusa volta como estado (a frase que a tela mostra embaixo do botão); o
+ * sucesso interrompe com o `redirect` para o pedido novo.
+ */
 async function pedirPedido() {
   try {
-    await converterEmPedido(orcamentoId, new FormData());
+    const estado = await converterEmPedido(orcamentoId, {}, new FormData());
+    if (estado.erro) return estado.erro;
   } catch (erro) {
     return erro;
   }
-  throw new Error("converterEmPedido deveria ter interrompido");
+  throw new Error("converterEmPedido deveria ter recusado ou redirecionado");
 }
 
 describe("proposta para quem ainda não é cliente", () => {
@@ -204,7 +209,7 @@ describe("depois de cadastrar o cliente", () => {
 
   it("ainda não vira pedido enquanto houver item sem produto", async () => {
     const erro = await pedirPedido();
-    expect(String(erro)).toMatch(/Faltam 2 item/);
+    expect(String(erro)).toMatch(/Falta cadastrar 2 itens/);
   });
 
   it("o Novo produto só aceita o cliente e a indústria da proposta", async () => {

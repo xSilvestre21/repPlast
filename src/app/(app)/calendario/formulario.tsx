@@ -14,7 +14,8 @@ import { useActionState, useState } from "react";
 
 import { CampoData } from "@/components/campo-data";
 import { SelecaoBuscavel, type OpcaoBuscavel } from "@/components/selecao-buscavel";
-import { Botao, BotaoTexto, CLASSE_CONTROLE, Campo, MensagemErro } from "@/components/ui";
+import { ErroGeral, Formulario } from "@/components/formulario";
+import { AreaTexto, Botao, BotaoTexto, Campo } from "@/components/ui";
 import type { Importancia } from "@/lib/agenda";
 import type { DataIso } from "@/lib/calendario";
 
@@ -86,7 +87,7 @@ export function FormularioCompromisso({
   const escolhida = IMPORTANCIAS.find((i) => i.valor === importancia)!;
 
   return (
-    <form action={enviar} className="space-y-4">
+    <Formulario estado={estado} action={enviar} className="space-y-4">
       <Campo
         name="titulo"
         rotulo="Título"
@@ -109,16 +110,15 @@ export function FormularioCompromisso({
           defaultValue={compromisso?.dia ?? dia}
           atalhos={[1, 7, 14, 30]}
         />
-        <label className="block">
-          <span className="rotulo block mb-1.5 text-tinta-2">Hora</span>
-          <input
-            type="time"
-            name="hora"
-            defaultValue={compromisso?.hora ?? ""}
-            className={`${CLASSE_CONTROLE} numerico`}
-          />
-          <span className="block text-mini text-tinta-3 mt-1">Vazio: o dia inteiro</span>
-        </label>
+        {/* `Campo`, e não um input montado à mão: é o que mostra o erro da
+            hora embaixo dela, como em todo o resto. */}
+        <Campo
+          type="time"
+          name="hora"
+          rotulo="Hora"
+          defaultValue={compromisso?.hora ?? ""}
+          dica="Vazio: o dia inteiro"
+        />
       </div>
 
       <fieldset>
@@ -166,22 +166,25 @@ export function FormularioCompromisso({
         dica="Vinculado, o compromisso aparece também na ficha do cliente."
       />
 
-      <label className="block">
-        <span className="rotulo block mb-1.5 text-tinta-2">Anotação</span>
-        <textarea
-          name="anotacao"
-          rows={3}
-          maxLength={2000}
-          defaultValue={compromisso?.anotacao ?? ""}
-          className={`${CLASSE_CONTROLE} resize-y`}
-        />
-      </label>
+      <AreaTexto
+        name="anotacao"
+        rotulo="Anotação"
+        rows={3}
+        maxLength={2000}
+        defaultValue={compromisso?.anotacao ?? ""}
+      />
 
       <label className="flex items-start gap-2.5 cursor-pointer">
         <input
           type="checkbox"
           name="compartilhado"
-          defaultChecked={compromisso?.compartilhado ?? false}
+          // Depois de um erro, como a pessoa tinha deixado: caixa marcada vai
+          // no envio como "on", desmarcada simplesmente não vai.
+          defaultChecked={
+            estado.erro
+              ? estado.valores?.compartilhado === "on"
+              : (compromisso?.compartilhado ?? false)
+          }
           className="mt-1 size-4 accent-[var(--carimbo)]"
         />
         <span>
@@ -192,7 +195,7 @@ export function FormularioCompromisso({
         </span>
       </label>
 
-      <MensagemErro>{estado.erro}</MensagemErro>
+      <ErroGeral />
 
       <div className="flex items-center gap-3">
         <Botao type="submit" carregando={salvando}>
@@ -202,6 +205,6 @@ export function FormularioCompromisso({
           cancelar
         </BotaoTexto>
       </div>
-    </form>
+    </Formulario>
   );
 }

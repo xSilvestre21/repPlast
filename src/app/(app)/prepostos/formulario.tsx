@@ -14,7 +14,9 @@ import { BadgeCheck, Factory, HandCoins, KeyRound, Phone } from "lucide-react";
 import { useActionState } from "react";
 
 import { CampoTelefone } from "@/components/campo-mascarado";
-import { Botao, Campo, MensagemErro, SecaoCartao } from "@/components/ui";
+import { ErroGeral, Formulario } from "@/components/formulario";
+import { Botao, Campo, SecaoCartao } from "@/components/ui";
+import { valoresDaLista } from "@/lib/erro-formulario";
 
 import type { EstadoFormulario } from "./acoes";
 
@@ -63,16 +65,16 @@ export function FormularioPreposto({
 }) {
   const [estado, enviar, enviando] = useActionState(acao, {});
 
-  // Recusado o envio, os campos voltam com o que foi digitado (o React limpa o
-  // formulário a cada envio). O e-mail travado da edição não vai no envio, e
-  // por isso vem do original.
-  const atuais: ValoresPreposto = estado.valores
-    ? { ...estado.valores, email: estado.valores.email || valores.email }
-    : valores;
+  // Recusado o envio, os campos voltam com o que foi digitado — cada `Campo`
+  // acha o seu pelo nome. As caixas das indústrias vêm daqui. O e-mail travado
+  // da edição não vai no envio, e por isso fica com o original.
+  const atuais: ValoresPreposto = {
+    ...valores,
+    fornecedorIds: valoresDaLista(estado, "fornecedorId") ?? valores.fornecedorIds,
+  };
 
   return (
-    <form action={enviar} className="space-y-5">
-      <MensagemErro>{estado.erro}</MensagemErro>
+    <Formulario estado={estado} action={enviar} className="space-y-5">
 
       <fieldset disabled={!editavel} className="space-y-5 min-w-0">
         <SecaoCartao
@@ -180,12 +182,15 @@ export function FormularioPreposto({
       </fieldset>
 
       {editavel && (
-        <div className="flex justify-end">
-          <Botao type="submit" carregando={enviando}>
-            {enviando ? "Salvando…" : rotuloEnvio}
-          </Botao>
+        <div className="space-y-3">
+          <ErroGeral />
+          <div className="flex justify-end">
+            <Botao type="submit" carregando={enviando}>
+              {enviando ? "Salvando…" : rotuloEnvio}
+            </Botao>
+          </div>
         </div>
       )}
-    </form>
+    </Formulario>
   );
 }

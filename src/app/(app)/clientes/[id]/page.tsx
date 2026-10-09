@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { AcaoComRecusa } from "@/components/acao-com-recusa";
 import { Botao, BotaoLink, Cabecalho, Selo } from "@/components/ui";
 import { diaDaColuna } from "@/lib/agenda";
 import { hojeIso } from "@/lib/calendario";
@@ -86,7 +87,7 @@ export default async function PaginaCliente({
         selo={!cliente.ativo ? <Selo tom="cancelado">Inativo</Selo> : undefined}
         acao={
           ehAdmin && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-start gap-2">
             {!editavel && (
               <BotaoLink href={`/clientes/${cliente.id}?editar=1`} icone={Pencil}>
                 Editar
@@ -94,7 +95,7 @@ export default async function PaginaCliente({
             )}
             {/* Inativar é o caminho de quem parou de comprar: some das escolhas
                 sem apagar nada. Excluir fica para o cadastro feito por engano. */}
-            <form action={alternarAtivoCliente.bind(null, cliente.id)}>
+            <AcaoComRecusa acao={alternarAtivoCliente.bind(null, cliente.id)} alinhamento="inicio">
               <Botao
                 type="submit"
                 variante="secundaria"
@@ -102,7 +103,7 @@ export default async function PaginaCliente({
               >
                 {cliente.ativo ? "Marcar como inativo" : "Reativar"}
               </Botao>
-            </form>
+            </AcaoComRecusa>
             <BotaoExcluir
               rotulo="Excluir cliente"
               nome={cliente.apelido}

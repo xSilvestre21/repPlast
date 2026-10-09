@@ -11,7 +11,9 @@
 import { Plus, Send, Trash2 } from "lucide-react";
 import { startTransition, useActionState, useState } from "react";
 
-import { Botao, CLASSE_CONTROLE, EstadoVazio, MensagemErro, SecaoCartao } from "@/components/ui";
+import { ErroGeral, Formulario, useCampoDoFormulario } from "@/components/formulario";
+import { Botao, CLASSE_CONTROLE, CLASSE_ERRO, EstadoVazio, SecaoCartao } from "@/components/ui";
+import { campoDaLinha } from "@/lib/erro-formulario";
 
 import type { EstadoFormulario } from "../acoes";
 
@@ -69,7 +71,8 @@ export function SecaoContatos({
       titulo="Contatos para pedidos"
       descricao="Para quem o pedido pode ir por e-mail. Os marcados como padrão já vêm escolhidos no envio; os outros ficam à mão."
     >
-      <form
+      <Formulario
+        estado={estado}
         // Submissão à mão, como no envio do pedido: o reset automático do React
         // desfaria as linhas digitadas quando o salvamento volta com erro.
         onSubmit={(evento) => {
@@ -79,8 +82,6 @@ export function SecaoContatos({
         }}
         className="space-y-3"
       >
-        <MensagemErro>{estado.erro}</MensagemErro>
-
         <fieldset disabled={!editavel} className="space-y-3 min-w-0">
           {linhas.length === 0 ? (
             <EstadoVazio discreto icone={Send}>
@@ -97,10 +98,7 @@ export function SecaoContatos({
               </div>
 
               {linhas.map((linha, i) => (
-                <div
-                  key={linha.chave}
-                  className={`grid grid-cols-2 gap-2 items-center ${colunas}`}
-                >
+                <LinhaContato key={linha.chave} indice={i} colunas={colunas}>
                   <input type="hidden" name="contatoId" value={linha.id} />
                   {/* Checkbox desmarcado não vai no FormData, e as listas paralelas
                       desalinhariam. O oculto manda "sim" ou "nao" para toda linha. */}
@@ -128,13 +126,10 @@ export function SecaoContatos({
                   </label>
                   <label className="col-span-2 sm:col-span-1">
                     <span className="sr-only">E-mail do contato {i + 1}</span>
-                    <input
-                      name="email"
-                      type="email"
+                    <CaixaEmail
+                      indice={i}
                       value={linha.email}
                       onChange={(e) => mudar(linha.chave, "email", e.target.value)}
-                      placeholder="pedidos@industria.com.br"
-                      className={CLASSE_CONTROLE}
                     />
                   </label>
                   <label className="flex items-center justify-center gap-2 sm:w-16 text-corpo">
@@ -156,11 +151,13 @@ export function SecaoContatos({
                       <Trash2 size={15} aria-hidden="true" />
                     </button>
                   )}
-                </div>
+                </LinhaContato>
               ))}
             </>
           )}
         </fieldset>
+
+        <ErroGeral />
 
         {editavel && (
           <div className="flex flex-wrap justify-between gap-2 pt-1">
@@ -178,7 +175,58 @@ export function SecaoContatos({
             </Botao>
           </div>
         )}
-      </form>
+      </Formulario>
     </SecaoCartao>
+  );
+}
+
+/**
+ * Uma linha da lista, com a frase de erro do e-mail dela logo embaixo.
+ *
+ * Componente à parte porque o erro vem do `Formulario` por hook, e hook não
+ * se chama dentro do `map`. O e-mail é o único campo da linha que recusa.
+ */
+function LinhaContato({
+  indice,
+  colunas,
+  children,
+}: {
+  indice: number;
+  colunas: string;
+  children: React.ReactNode;
+}) {
+  const { erro } = useCampoDoFormulario(campoDaLinha("email", indice));
+
+  return (
+    <div className={`grid grid-cols-2 gap-2 items-center ${colunas}`}>
+      {children}
+      {erro && (
+        <p role="alert" className="col-span-full -mt-1 text-mini text-perigo">
+          {erro}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** A caixa do e-mail, vermelha quando o erro é dela. */
+function CaixaEmail({
+  indice,
+  ...props
+}: { indice: number } & Pick<React.ComponentProps<"input">, "value" | "onChange">) {
+  const campo = campoDaLinha("email", indice);
+  const { erro } = useCampoDoFormulario(campo);
+
+  return (
+    <input
+      {...props}
+      name="email"
+      // O nome se repete em toda linha; é por este que o erro acha a caixa.
+      data-campo={campo}
+      type="email"
+      aria-invalid={erro ? true : undefined}
+      placeholder="pedidos@industria.com.br"
+      className={`${CLASSE_CONTROLE} ${erro ? CLASSE_ERRO : ""}`}
+    />
   );
 }

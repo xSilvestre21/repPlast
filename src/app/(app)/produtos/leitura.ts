@@ -11,30 +11,62 @@
  */
 
 import type { Familia } from "@/generated/prisma/enums";
-import { lerNumeroBr } from "@/lib/numero-br";
+import { ErroDeCampo } from "@/lib/erro-formulario";
+import { exigirNumero } from "@/lib/numero-br";
 
 export function lerTexto(valor: FormDataEntryValue | null): string | null {
   const texto = typeof valor === "string" ? valor.trim() : "";
   return texto === "" ? null : texto;
 }
 
-/** Lê um número opcional, recusando valores negativos. */
-function lerMedida(valor: FormDataEntryValue | null, rotulo: string): string | null {
-  const numero = lerNumeroBr(valor);
-  if (numero === null) return null;
+/**
+ * Como cada medida aparece na frase de erro — com artigo, para a concordância
+ * sair certa ("Informe a largura", "O fator kg precisa ser maior que zero") —
+ * e um exemplo do que se espera ali.
+ *
+ * Antes a frase era montada de um rótulo solto, e saía "A largura é
+ * obrigatório" e "A densidade não pode ser negativo". Além disso, texto que
+ * não era número ("abc") era lido como campo vazio: num campo opcional, o
+ * valor sumia sem aviso.
+ */
+const MEDIDAS = {
+  larguraCm: { rotulo: "a largura", exemplo: "30" },
+  comprimentoCm: { rotulo: "o comprimento", exemplo: "40" },
+  espessuraMm: { rotulo: "a espessura", exemplo: "0,08" },
+  fatorKg: { rotulo: "o fator kg", exemplo: "13,50" },
+  densidade: { rotulo: "a densidade", exemplo: "0,92" },
+  precoUnidade: { rotulo: "o preço por unidade", exemplo: "4,50" },
+  precoCaixa: { rotulo: "o preço da caixa", exemplo: "180,00" },
+  unidadesPorCaixa: { rotulo: "a quantidade de unidades por caixa", exemplo: "36" },
+  larguraMm: { rotulo: "a largura", exemplo: "48" },
+  metragemM: { rotulo: "a metragem", exemplo: "100" },
+  micragem: { rotulo: "a micragem", exemplo: "45" },
+  precoAvulso: { rotulo: "o preço", exemplo: "12,50" },
+  precoKg: { rotulo: "o preço por quilo", exemplo: "14,00" },
+} as const;
 
-  if (numero < 0) throw new Error(`${rotulo} não pode ser negativo.`);
-  return String(numero);
+type Medida = keyof typeof MEDIDAS;
+
+/** Lê uma medida opcional: vazia é `null`, abaixo de zero é recusada. */
+function lerMedida(formData: FormData, campo: Medida, inteiro = false): string | null {
+  const { rotulo, exemplo } = MEDIDAS[campo];
+  const numero = exigirNumero(formData, campo, rotulo, { min: 0, inteiro, exemplo });
+  return numero === null ? null : String(numero);
 }
 
-/** Lê um número obrigatório e maior que zero. */
-function lerMedidaObrigatoria(valor: FormDataEntryValue | null, rotulo: string): string {
-  const medida = lerMedida(valor, rotulo);
+/** Lê uma medida obrigatória e maior que zero. */
+function lerMedidaObrigatoria(formData: FormData, campo: Medida): string {
+  const { rotulo, exemplo } = MEDIDAS[campo];
+  const numero = exigirNumero(formData, campo, rotulo, { obrigatorio: true, min: 0, exemplo });
 
-  if (medida === null) throw new Error(`${rotulo} é obrigatório.`);
-  if (Number(medida) === 0) throw new Error(`${rotulo} precisa ser maior que zero.`);
-
-  return medida;
+  if (numero === 0) {
+    const Rotulo = rotulo.charAt(0).toUpperCase() + rotulo.slice(1);
+    throw new ErroDeCampo(
+      campo,
+      `${Rotulo} precisa ser maior que zero — como ${exemplo}. Confira se não faltou um número.`,
+    );
+  }
+  return String(numero);
 }
 
 const FAMILIAS: Familia[] = ["SACO", "FITA", "STRETCH", "BOBINA", "AVULSO"];
@@ -50,13 +82,22 @@ const UNIDADES = ["MIL", "KG", "UN", "CX"] as const;
 export function dadosDoFormulario(formData: FormData) {
   const familiaBruta = String(formData.get("familia") ?? "");
   const familia = FAMILIAS.find((f) => f === familiaBruta);
-  if (!familia) throw new Error("Escolha a família do produto.");
+  if (!familia) {
+    throw new ErroDeCampo("familia", "Escolha que tipo de produto é: saco, fita, stretch, bobina ou avulso.");
+  }
 
   const fornecedorId = lerTexto(formData.get("fornecedorId"));
-  if (!fornecedorId) throw new Error("Escolha a indústria.");
+  if (!fornecedorId) {
+    throw new ErroDeCampo("fornecedorId", "Escolha a indústria que fabrica este produto.");
+  }
 
   const descricao = lerTexto(formData.get("descricao"));
-  if (!descricao) throw new Error("A descrição é obrigatória.");
+  if (!descricao) {
+    throw new ErroDeCampo(
+      "descricao",
+      "Informe a descrição — é o texto que sai impresso no pedido para a indústria.",
+    );
+  }
 
   const comum = {
     familia,
@@ -82,13 +123,13 @@ export function dadosDoFormulario(formData: FormData) {
   if (familia === "SACO") {
     return {
       ...comum,
-      larguraCm: lerMedidaObrigatoria(formData.get("larguraCm"), "A largura"),
-      comprimentoCm: lerMedidaObrigatoria(formData.get("comprimentoCm"), "O comprimento"),
-      espessuraMm: lerMedidaObrigatoria(formData.get("espessuraMm"), "A espessura"),
-      fatorKg: lerMedidaObrigatoria(formData.get("fatorKg"), "O fator kg"),
+      larguraCm: lerMedidaObrigatoria(formData, "larguraCm"),
+      comprimentoCm: lerMedidaObrigatoria(formData, "comprimentoCm"),
+      espessuraMm: lerMedidaObrigatoria(formData, "espessuraMm"),
+      fatorKg: lerMedidaObrigatoria(formData, "fatorKg"),
       // Opcional: vazia, o motor usa DENSIDADE_PADRAO — que é o divisor 10 de
       // antes, e o que mantém produto antigo valendo o mesmo.
-      densidade: lerMedida(formData.get("densidade"), "A densidade"),
+      densidade: lerMedida(formData, "densidade"),
       sanfona: lerTexto(formData.get("sanfona")),
       // Campos das outras famílias ficam nulos.
       larguraMm: null,
@@ -104,20 +145,23 @@ export function dadosDoFormulario(formData: FormData) {
   }
 
   if (familia === "FITA") {
-    const precoUnidade = lerMedida(formData.get("precoUnidade"), "O preço por unidade");
-    const precoCaixa = lerMedida(formData.get("precoCaixa"), "O preço da caixa");
+    const precoUnidade = lerMedida(formData, "precoUnidade");
+    const precoCaixa = lerMedida(formData, "precoCaixa");
 
     if (precoUnidade === null && precoCaixa === null) {
-      throw new Error("Informe o preço por unidade, o preço da caixa, ou os dois.");
+      throw new ErroDeCampo(
+        "precoUnidade",
+        "Informe pelo menos um preço: o da unidade, o da caixa, ou os dois.",
+      );
     }
 
-    const unidades = lerMedida(formData.get("unidadesPorCaixa"), "As unidades por caixa");
+    const unidades = lerMedida(formData, "unidadesPorCaixa", true);
 
     return {
       ...comum,
-      larguraMm: lerMedida(formData.get("larguraMm"), "A largura"),
-      metragemM: lerMedida(formData.get("metragemM"), "A metragem"),
-      micragem: lerMedida(formData.get("micragem"), "A micragem"),
+      larguraMm: lerMedida(formData, "larguraMm"),
+      metragemM: lerMedida(formData, "metragemM"),
+      micragem: lerMedida(formData, "micragem"),
       unidadesPorCaixa: unidades === null ? null : Math.round(Number(unidades)),
       precoUnidade,
       precoCaixa,
@@ -136,13 +180,18 @@ export function dadosDoFormulario(formData: FormData) {
   if (familia === "AVULSO") {
     const bruta = String(formData.get("unidadeAvulsa") ?? "");
     const unidadeAvulsa = UNIDADES.find((u) => u === bruta);
-    if (!unidadeAvulsa) throw new Error("Escolha a unidade de venda.");
+    if (!unidadeAvulsa) {
+      throw new ErroDeCampo(
+        "unidadeAvulsa",
+        "Escolha como este produto é vendido: por milheiro, quilo, unidade ou caixa.",
+      );
+    }
 
     return {
       ...comum,
       unidadeAvulsa,
-      precoAvulso: lerMedidaObrigatoria(formData.get("precoAvulso"), "O preço"),
-      larguraMm: lerMedida(formData.get("larguraMm"), "A largura"),
+      precoAvulso: lerMedidaObrigatoria(formData, "precoAvulso"),
+      larguraMm: lerMedida(formData, "larguraMm"),
       larguraCm: null,
       comprimentoCm: null,
       espessuraMm: null,
@@ -161,9 +210,9 @@ export function dadosDoFormulario(formData: FormData) {
   // STRETCH e BOBINA: vendidos por quilo, sem cálculo dimensional.
   return {
     ...comum,
-    precoKg: lerMedidaObrigatoria(formData.get("precoKg"), "O preço por quilo"),
-    larguraMm: lerMedida(formData.get("larguraMm"), "A largura"),
-    micragem: lerMedida(formData.get("micragem"), "A micragem"),
+    precoKg: lerMedidaObrigatoria(formData, "precoKg"),
+    larguraMm: lerMedida(formData, "larguraMm"),
+    micragem: lerMedida(formData, "micragem"),
     larguraCm: null,
     comprimentoCm: null,
     espessuraMm: null,

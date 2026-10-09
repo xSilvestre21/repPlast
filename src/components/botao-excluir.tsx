@@ -9,13 +9,18 @@
  * exatamente como uma cópia vira três comportamentos diferentes sem ninguém
  * decidir isso.
  *
+ * A exclusão pode ser recusada ("tem pedidos", "já virou pedido"), e o motivo
+ * aparece logo embaixo do botão — ver `AcaoComRecusa`.
+ *
  * `useFormStatus` precisa estar DENTRO do `<form>`, e é por isso que a submissão
  * é um componente à parte em vez de uma linha aqui.
  */
 
 import { useFormStatus } from "react-dom";
 
+import { AcaoComRecusa } from "@/components/acao-com-recusa";
 import { Botao } from "@/components/ui";
+import type { EstadoFormulario } from "@/lib/erro-formulario";
 
 function Submissao({ rotulo }: { rotulo: string }) {
   const { pending } = useFormStatus();
@@ -39,17 +44,17 @@ export function BotaoExcluir({
   nome: string;
   /** O que mais vai junto. Só onde a exclusão leva outra coisa embora. */
   aviso?: string;
-  acao: (formData: FormData) => void | Promise<void>;
+  acao: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
 }) {
   return (
-    <form
-      action={acao}
+    <AcaoComRecusa
+      acao={acao}
       onSubmit={(evento) => {
         const pergunta = aviso ? `Excluir "${nome}"? ${aviso}` : `Excluir "${nome}"?`;
         if (!confirm(pergunta)) evento.preventDefault();
       }}
     >
       <Submissao rotulo={rotulo} />
-    </form>
+    </AcaoComRecusa>
   );
 }

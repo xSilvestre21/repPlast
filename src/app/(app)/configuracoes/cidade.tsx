@@ -12,7 +12,8 @@
 import { MapPin } from "lucide-react";
 import { useActionState } from "react";
 
-import { Botao, Campo, MensagemErro, SecaoCartao } from "@/components/ui";
+import { ErroGeral, Formulario } from "@/components/formulario";
+import { Botao, Campo, SecaoCartao } from "@/components/ui";
 
 import type { EstadoFormulario } from "./acoes";
 
@@ -31,9 +32,7 @@ export function FormCidade({
       titulo="Sua cidade"
       descricao="Abre o cabeçalho da proposta, antes da data: “Americana, 16 de Setembro de 2026”."
     >
-      <form action={enviar} className="space-y-4">
-        <MensagemErro>{estado.erro}</MensagemErro>
-
+      <Formulario estado={estado} action={enviar} className="space-y-4">
         <Campo
           name="municipio"
           rotulo="Cidade"
@@ -43,12 +42,14 @@ export function FormCidade({
           dica="Entra preenchida em todo orçamento novo. Dá para trocar em cada proposta — quem viaja muda ali, sem mexer neste padrão."
         />
 
+        <ErroGeral />
+
         <div className="flex justify-end">
           <Botao type="submit" variante="secundaria" carregando={salvando}>
             {salvando ? "Salvando…" : "Salvar cidade"}
           </Botao>
         </div>
-      </form>
+      </Formulario>
     </SecaoCartao>
   );
 }

@@ -11,7 +11,8 @@
 import { KeyRound } from "lucide-react";
 import { useActionState } from "react";
 
-import { Botao, Campo, Mensagem, MensagemErro, SecaoCartao } from "@/components/ui";
+import { ErroGeral, Formulario } from "@/components/formulario";
+import { Botao, Campo, EspacoDoRotulo, Mensagem, SecaoCartao } from "@/components/ui";
 
 import type { EstadoFormulario } from "../acoes";
 
@@ -28,10 +29,9 @@ export function TrocarSenha({
       titulo="Senha"
       descricao="Para quando ele esqueceu a dele. A nova também é provisória — passe por um canal seguro."
     >
-      <form action={enviar} className="space-y-4">
-        <MensagemErro>{estado.erro}</MensagemErro>
+      <Formulario estado={estado} action={enviar} className="space-y-4">
         <Mensagem tom="verde">{estado.aviso}</Mensagem>
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-wrap items-start gap-3">
           <Campo
             className="basis-64 grow sm:grow-0"
             type="password"
@@ -40,11 +40,15 @@ export function TrocarSenha({
             autoComplete="new-password"
             placeholder="mínimo 8 caracteres"
           />
-          <Botao type="submit" variante="secundaria" icone={KeyRound} carregando={trocando}>
-            {trocando ? "Trocando…" : "Trocar senha"}
-          </Botao>
+          <div>
+            <EspacoDoRotulo />
+            <Botao type="submit" variante="secundaria" icone={KeyRound} carregando={trocando}>
+              {trocando ? "Trocando…" : "Trocar senha"}
+            </Botao>
+          </div>
         </div>
-      </form>
+        <ErroGeral />
+      </Formulario>
     </SecaoCartao>
   );
 }

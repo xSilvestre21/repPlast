@@ -5,9 +5,19 @@ import { z } from "zod";
 
 import { ADIAMENTO_MS, colunaDoDia } from "@/lib/agenda";
 import { dataValida } from "@/lib/calendario";
+import {
+  ErroDeCampo,
+  ErroParaUsuario,
+  falhou,
+  type EstadoFormulario,
+} from "@/lib/erro-formulario";
 import { escopoAtual } from "@/lib/sessao";
 
-export type EstadoFormulario = { erro?: string };
+export type { EstadoFormulario };
+
+const SO_QUEM_MARCOU =
+  "Só quem marcou este compromisso pode mudá-lo — ele foi compartilhado com você para leitura. " +
+  "Se precisar de uma mudança, avise quem marcou.";
 
 /**
  * O formulário do compromisso, validado.
@@ -16,14 +26,24 @@ export type EstadoFormulario = { erro?: string };
  * banco tem o mesmo CHECK, mas a mensagem daqui é a que a pessoa entende.
  */
 const Compromisso = z.object({
-  titulo: z.string().trim().min(1, "Dê um título ao compromisso.").max(200, "Título longo demais."),
-  data: z.string().refine(dataValida, "Data inválida."),
+  titulo: z
+    .string()
+    .trim()
+    .min(1, "Dê um título ao compromisso — por exemplo, “Ligar para a FLEXOPET”.")
+    .max(200, "O título pode ter até 200 letras. Passe os detalhes para a anotação."),
+  data: z.string().refine(dataValida, "Escolha o dia do compromisso no calendário."),
   hora: z
     .string()
     .trim()
-    .refine((h) => h === "" || /^([01]\d|2[0-3]):[0-5]\d$/.test(h), "Hora inválida.")
+    .refine(
+      (h) => h === "" || /^([01]\d|2[0-3]):[0-5]\d$/.test(h),
+      "Esta hora não é válida. Digite como 14:30 — ou deixe em branco para o dia inteiro.",
+    )
     .transform((h) => (h === "" ? null : h)),
-  importancia: z.enum(["NORMAL", "IMPORTANTE", "URGENTE"], "Escolha a importância."),
+  importancia: z.enum(
+    ["NORMAL", "IMPORTANTE", "URGENTE"],
+    "Escolha a importância: normal, importante ou urgente.",
+  ),
   clienteId: z
     .string()
     .trim()
@@ -31,7 +51,7 @@ const Compromisso = z.object({
   anotacao: z
     .string()
     .trim()
-    .max(2000, "Anotação longa demais.")
+    .max(2000, "A anotação pode ter até 2.000 letras. Resuma o que for possível.")
     .transform((t) => (t === "" ? null : t)),
   compartilhado: z.boolean(),
 });
@@ -82,12 +102,22 @@ export async function salvarCompromisso(
 ): Promise<EstadoFormulario> {
   try {
     const lido = lerFormulario(formData);
-    if (!lido.success) return { erro: lido.error.issues[0]?.message ?? "Confira os campos." };
+    if (!lido.success) {
+      // O Zod sabe de qual campo é o problema; antes isso era jogado fora.
+      const [problema] = lido.error.issues;
+      const campo = problema?.path[0];
+      throw typeof campo === "string"
+        ? new ErroDeCampo(campo, problema.message)
+        : new ErroParaUsuario("Confira os campos do compromisso e tente de novo.");
+    }
     const dados = lido.data;
 
     const { organizacaoId, usuarioId, db } = await escopoAtual();
     if (!(await clienteVisivel(db, organizacaoId, dados.clienteId))) {
-      return { erro: "Cliente não encontrado." };
+      throw new ErroDeCampo(
+        "clienteId",
+        "Este cliente não foi encontrado, ou não é da sua carteira. Escolha outro na lista.",
+      );
     }
 
     const campos = {
@@ -109,10 +139,10 @@ export async function salvarCompromisso(
         where: { id: compromissoId, organizacaoId, autorId: usuarioId },
         data: campos,
       });
-      if (count === 0) return { erro: "Só quem marcou pode alterar este compromisso." };
+      if (count === 0) throw new ErroParaUsuario(SO_QUEM_MARCOU);
     }
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível salvar." };
+    return falhou(erro, formData);
   }
 
   revalidar();
@@ -132,9 +162,9 @@ export async function concluirCompromisso(
       where: { id: compromissoId, organizacaoId, autorId: usuarioId },
       data: { concluidoEm: feito ? new Date() : null },
     });
-    if (count === 0) return { erro: "Só quem marcou pode concluir este compromisso." };
+    if (count === 0) throw new ErroParaUsuario(SO_QUEM_MARCOU);
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível concluir." };
+    return falhou(erro);
   }
 
   revalidar();
@@ -151,9 +181,9 @@ export async function excluirCompromisso(
     const { count } = await db.compromisso.deleteMany({
       where: { id: compromissoId, organizacaoId, autorId: usuarioId },
     });
-    if (count === 0) return { erro: "Só quem marcou pode excluir este compromisso." };
+    if (count === 0) throw new ErroParaUsuario(SO_QUEM_MARCOU);
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível excluir." };
+    return falhou(erro);
   }
 
   revalidar();
@@ -180,7 +210,7 @@ export async function adiarAviso(
       update: { ate },
     });
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível adiar." };
+    return falhou(erro);
   }
 
   revalidatePath("/");

@@ -7,7 +7,8 @@ import {
 import { sessaoAtual } from "@/lib/sessao";
 
 import { carregarDadosDosGraficos } from "../../dados";
-import { parametrosDoRelatorio } from "../parametros";
+import { parametrosDoRelatorio } from "../parametros";
+import { sessaoExpiradaNoArquivo } from "@/lib/resposta-de-erro";
 
 /**
  * O relatório dos gráficos em PDF, gerado sob demanda.
@@ -21,7 +22,7 @@ export async function GET(requisicao: Request) {
   // Responde 401 em vez de lançar: sem sessão não é erro do servidor, e um 500
   // poluiria o log de problemas de verdade.
   const sessao = await sessaoAtual();
-  if (!sessao) return new Response("Não autenticado", { status: 401 });
+  if (!sessao) return sessaoExpiradaNoArquivo();
 
   const url = new URL(requisicao.url);
   const { competencia, meses, dias } = parametrosDoRelatorio(url);

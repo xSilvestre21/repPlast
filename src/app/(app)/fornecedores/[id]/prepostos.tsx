@@ -11,7 +11,8 @@
 import { Users } from "lucide-react";
 import { useActionState, useState } from "react";
 
-import { Botao, MensagemErro, SecaoCartao } from "@/components/ui";
+import { ErroGeral, Formulario } from "@/components/formulario";
+import { Botao, SecaoCartao } from "@/components/ui";
 
 import type { EstadoFormulario } from "../acoes";
 
@@ -44,9 +45,7 @@ export function SecaoPrepostos({
       titulo="Quem atende esta indústria"
       descricao="Marque os prepostos que trabalham com ela. Quem ficar de fora não vê esta indústria nem os produtos dela."
     >
-      <form action={enviar} className="space-y-4">
-        <MensagemErro>{estado.erro}</MensagemErro>
-
+      <Formulario estado={estado} action={enviar} className="space-y-4">
         <fieldset disabled={!editavel} className="grid gap-3 sm:grid-cols-2 min-w-0">
           {prepostos.map((p) => (
             <label
@@ -75,6 +74,8 @@ export function SecaoPrepostos({
           ))}
         </fieldset>
 
+        <ErroGeral />
+
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-mini text-tinta-3 leading-relaxed">
             {marcados.size === 0
@@ -90,7 +91,7 @@ export function SecaoPrepostos({
             </Botao>
           )}
         </div>
-      </form>
+      </Formulario>
     </SecaoCartao>
   );
 }

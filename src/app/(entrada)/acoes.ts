@@ -3,11 +3,20 @@
 import { redirect } from "next/navigation";
 
 import { dbAdministrativo } from "@/lib/db";
+import {
+  ErroDeCampo,
+  ErroParaUsuario,
+  falhou,
+  type EstadoFormulario,
+} from "@/lib/erro-formulario";
 import { conferirSenha, gerarHashSenha } from "@/lib/senha";
 import { TAMANHO_MINIMO_SENHA } from "@/lib/senha-regras";
 import { criarSessao, encerrarSessao } from "@/lib/sessao";
 
-export type EstadoFormulario = { erro?: string };
+export type { EstadoFormulario };
+
+const EMAIL_INCOMPLETO =
+  "Este e-mail parece incompleto. Confira se tem o @ e o final, como voce@escritorio.com.br.";
 
 function lerTexto(valor: FormDataEntryValue | null): string {
   return typeof valor === "string" ? valor.trim() : "";
@@ -26,7 +35,8 @@ export async function entrar(
     const email = lerEmail(formData.get("email"));
     const senha = lerTexto(formData.get("senha"));
 
-    if (!email || !senha) return { erro: "Informe e-mail e senha." };
+    if (!email) throw new ErroDeCampo("email", "Informe o e-mail com que você se cadastrou.");
+    if (!senha) throw new ErroDeCampo("senha", "Informe a sua senha.");
 
     const usuario = await dbAdministrativo().usuario.findUnique({
       where: { email },
@@ -38,7 +48,13 @@ export async function entrar(
      * distinguir os dois casos entregaria a quem tenta invadir a informação de
      * quais e-mails têm conta no sistema.
      */
-    const generico = { erro: "E-mail ou senha incorretos." };
+    const generico = falhou(
+      new ErroParaUsuario(
+        "E-mail ou senha incorretos. Confira se o e-mail está certo e se o Caps Lock não está " +
+          "ligado, e tente de novo.",
+      ),
+      formData,
+    );
 
     if (!usuario) {
       // Confere contra um hash descartável mesmo sem usuário: sem isso, a
@@ -48,11 +64,16 @@ export async function entrar(
     }
 
     if (!(await conferirSenha(senha, usuario.senhaHash))) return generico;
-    if (!usuario.organizacao.ativa) return { erro: "Este escritório está desativado." };
+    if (!usuario.organizacao.ativa) {
+      throw new ErroParaUsuario(
+        "Este escritório está desativado, e por isso não dá para entrar. Se acha que é engano, " +
+          "fale com o suporte.",
+      );
+    }
 
     await criarSessao(usuario.id);
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível entrar." };
+    return falhou(erro, formData);
   }
 
   redirect("/");
@@ -79,38 +100,58 @@ export async function cadastrar(
     const email = lerEmail(formData.get("email"));
     const senha = lerTexto(formData.get("senha"));
 
-    if (!escritorio) return { erro: "Informe o nome do seu escritório." };
-    if (!nome) return { erro: "Informe o seu nome." };
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { erro: "E-mail inválido." };
+    if (!escritorio) {
+      throw new ErroDeCampo(
+        "escritorio",
+        "Informe o nome do seu escritório — é como a sua representação é conhecida.",
+      );
+    }
+    if (!nome) throw new ErroDeCampo("nome", "Informe o seu nome e sobrenome.");
+    if (!email) throw new ErroDeCampo("email", "Informe o seu e-mail — é com ele que você vai entrar.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ErroDeCampo("email", EMAIL_INCOMPLETO);
 
     if (senha.length < TAMANHO_MINIMO_SENHA) {
-      return { erro: `A senha precisa ter pelo menos ${TAMANHO_MINIMO_SENHA} caracteres.` };
+      throw new ErroDeCampo(
+        "senha",
+        `A senha precisa ter pelo menos ${TAMANHO_MINIMO_SENHA} caracteres. ` +
+          "Misture letras e números para ficar mais difícil de adivinhar.",
+      );
     }
     if (senha !== lerTexto(formData.get("confirmacao"))) {
-      return { erro: "As senhas não conferem." };
+      throw new ErroDeCampo(
+        "confirmacao",
+        "A senha repetida não é igual à primeira. Digite as duas de novo, com calma.",
+      );
     }
 
     const db = dbAdministrativo();
 
     if (await db.usuario.findUnique({ where: { email }, select: { id: true } })) {
-      return { erro: "Já existe uma conta com este e-mail." };
+      throw new ErroDeCampo(
+        "email",
+        "Já existe uma conta com este e-mail. Se ela é sua, use “Entrar” em vez de criar outra.",
+      );
     }
 
-    const organizacao = await db.organizacao.create({ data: { nome: escritorio } });
-
-    const usuario = await db.usuario.create({
+    /*
+     * Escritório e primeiro usuário numa escrita SÓ. Eram duas, e quando a
+     * segunda falhava — dois cadastros com o mesmo e-mail ao mesmo tempo, que
+     * a conferência acima não pega — sobrava um escritório sem ninguém. A
+     * escrita aninhada é atômica: ou nascem os dois, ou nenhum.
+     */
+    const organizacao = await db.organizacao.create({
       data: {
-        organizacaoId: organizacao.id,
-        nome,
-        email,
-        senhaHash: await gerarHashSenha(senha),
+        nome: escritorio,
+        usuarios: {
+          create: { nome, email, senhaHash: await gerarHashSenha(senha) },
+        },
       },
-      select: { id: true },
+      select: { usuarios: { select: { id: true } } },
     });
 
-    await criarSessao(usuario.id);
+    await criarSessao(organizacao.usuarios[0].id);
   } catch (erro) {
-    return { erro: erro instanceof Error ? erro.message : "Não foi possível criar a conta." };
+    return falhou(erro, formData);
   }
 
   redirect("/");

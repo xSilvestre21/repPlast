@@ -4,7 +4,8 @@ import { Handshake } from "lucide-react";
 import { useActionState } from "react";
 
 import { SelecaoBuscavel } from "@/components/selecao-buscavel";
-import { Botao, MensagemErro, SecaoCartao } from "@/components/ui";
+import { ErroGeral, Formulario } from "@/components/formulario";
+import { Botao, SecaoCartao } from "@/components/ui";
 
 import type { EstadoFormulario } from "../acoes";
 
@@ -31,8 +32,7 @@ export function FormularioNovoPedido({
   const [estado, enviar, enviando] = useActionState(acao, {});
 
   return (
-    <form action={enviar} className="space-y-5">
-      <MensagemErro>{estado.erro}</MensagemErro>
+    <Formulario estado={estado} action={enviar} className="space-y-5">
 
       <SecaoCartao
         icone={Handshake}
@@ -60,11 +60,13 @@ export function FormularioNovoPedido({
         </div>
       </SecaoCartao>
 
+      <ErroGeral />
+
       <div className="flex justify-end">
         <Botao type="submit" carregando={enviando}>
           {enviando ? "Criando…" : rotuloEnvio}
         </Botao>
       </div>
-    </form>
+    </Formulario>
   );
 }

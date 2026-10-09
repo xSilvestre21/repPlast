@@ -30,12 +30,16 @@ import {
   BotaoTexto,
   CLASSE_CONTROLE,
   Campo,
+  EspacoDoRotulo,
   MensagemErro,
   formatarMoeda,
 } from "@/components/ui";
 import { ratearComissao } from "@/lib/comissao";
 import { mascararMoeda } from "@/lib/mascara";
 import { dividirIgual, lerPrazoEmDias, restanteDaBase, somarDias } from "@/lib/parcelas";
+
+import { ErroGeral, Formulario } from "@/components/formulario";
+import { campoDaLinha, erroDoCampo } from "@/lib/erro-formulario";
 
 import type { EstadoFormulario } from "./acoes";
 
@@ -180,12 +184,18 @@ export function EditorParcelas({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
+      {/* Pelo topo, com o espaço de um rótulo sobre o botão: o erro dos dias
+          aparece embaixo da caixa, e pela base o botão desceria junto. */}
+      <div className="flex flex-wrap items-start gap-3">
         <Campo
           id={idDias}
           rotulo="Dias a partir da entrega"
+          erro={erroDias ?? undefined}
           value={dias}
-          onChange={(e) => setDias(e.currentTarget.value)}
+          onChange={(e) => {
+            setDias(e.currentTarget.value);
+            setErroDias(null);
+          }}
           onKeyDown={(e) => {
             // Enter aqui divide, em vez de enviar o formulário de parcelas.
             if (e.key === "Enter") {
@@ -198,21 +208,27 @@ export function EditorParcelas({
           autoComplete="off"
           className="basis-48 grow"
         />
-        <div className="flex items-center h-11">
-          <Botao type="button" variante="secundaria" icone={Scissors} onClick={dividir}>
-            Dividir em partes iguais
-          </Botao>
+        <div>
+          <EspacoDoRotulo />
+          <div className="flex items-center h-11">
+            <Botao type="button" variante="secundaria" icone={Scissors} onClick={dividir}>
+              Dividir em partes iguais
+            </Botao>
+          </div>
         </div>
       </div>
-      <MensagemErro>{erroDias}</MensagemErro>
 
       {linhas.length > 0 && (
-        <form action={enviar} className="space-y-3">
+        <Formulario estado={estado} action={enviar} className="space-y-3">
           <ol className="space-y-2">
             {linhas.map((linha, i) => {
               const ultima = i === linhas.length - 1;
               const valor = ultima ? restante : paraDecimal(linha.valor);
               const rende = restanteInvalido ? null : comissao(valor);
+              // O erro desta parcela — data ou valor —, dito logo embaixo dela.
+              const erroDaLinha =
+                erroDoCampo(estado, campoDaLinha("vencimento", i)) ??
+                erroDoCampo(estado, campoDaLinha("base", i));
 
               return (
                 <li
@@ -281,6 +297,12 @@ export function EditorParcelas({
                   ) : (
                     <span />
                   )}
+
+                  {erroDaLinha && (
+                    <p data-invalido="" role="alert" className="col-start-2 col-span-3 -mt-1 text-mini text-perigo">
+                      {erroDaLinha}
+                    </p>
+                  )}
                 </li>
               );
             })}
@@ -293,7 +315,7 @@ export function EditorParcelas({
               última.
             </MensagemErro>
           )}
-          <MensagemErro>{estado.erro}</MensagemErro>
+          <ErroGeral />
           <MensagemErro>{estadoDesfazer.erro}</MensagemErro>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -324,7 +346,7 @@ export function EditorParcelas({
             Venda de {formatarMoeda(Number(venda))}. Mude o valor de qualquer parcela: a última fica
             com o restante. Cada parcela conta na comissão do mês em que vence.
           </p>
-        </form>
+        </Formulario>
       )}
     </div>
   );

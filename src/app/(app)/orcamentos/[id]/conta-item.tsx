@@ -14,7 +14,15 @@
 import { useActionState, useMemo, useState } from "react";
 
 import { SelecaoBuscavel } from "@/components/selecao-buscavel";
-import { Botao, BotaoTexto, Campo, MensagemErro, Selecao, formatarMoeda } from "@/components/ui";
+import { ErroGeral, Formulario } from "@/components/formulario";
+import {
+  Botao,
+  BotaoTexto,
+  Campo,
+  EspacoDoRotulo,
+  Selecao,
+  formatarMoeda,
+} from "@/components/ui";
 import { CAMPO_IPI, CAMPO_IPI_DEFINIDO } from "@/lib/ipi-do-formulario";
 import { descricaoFita, descricaoRolo, descricaoSaco, formatarNumero } from "@/lib/descricao";
 import { escreverNumeroBr, lerNumeroBr } from "@/lib/numero-br";
@@ -344,11 +352,7 @@ export function ContaItem({
   }
 
   return (
-    <form
-      action={enviar}
-      className="space-y-4"
-    >
-      <MensagemErro>{estado.erro}</MensagemErro>
+    <Formulario estado={estado} action={enviar} className="space-y-4">
 
       <p className="text-corpo text-tinta-2 leading-relaxed">
         Sem produto pronto: quem ainda não é cliente não tem produto cadastrado. Faça a conta do
@@ -646,9 +650,7 @@ export function ContaItem({
         </label>
 
         <div className="block">
-          <span className="rotulo block mb-1.5 invisible select-none" aria-hidden="true">
-            &nbsp;
-          </span>
+          <EspacoDoRotulo />
           <Botao
             type="submit"
             variante="secundaria"
@@ -665,7 +667,9 @@ export function ContaItem({
           Este item entra por {formatarMoeda(totalPrevisto)} antes do IPI.
         </p>
       )}
-    </form>
+
+      <ErroGeral />
+    </Formulario>
   );
 }
 

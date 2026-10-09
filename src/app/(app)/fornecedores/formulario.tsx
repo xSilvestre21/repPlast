@@ -1,10 +1,11 @@
 "use client";
 
-import { BadgeCheck, MapPin, Percent, Phone } from "lucide-react";
+import { BadgeCheck, Hash, MapPin, Percent, Phone } from "lucide-react";
 import { useActionState } from "react";
 
 import { CampoCep, CampoDocumento, CampoTelefone } from "@/components/campo-mascarado";
-import { Botao, Campo, MensagemErro, SecaoCartao } from "@/components/ui";
+import { ErroGeral, Formulario } from "@/components/formulario";
+import { Botao, Campo, SecaoCartao } from "@/components/ui";
 
 import type { EstadoFormulario } from "./acoes";
 import type { ValoresFornecedor } from "./valores";
@@ -24,8 +25,7 @@ export function FormularioFornecedor({
   const [estado, enviar, enviando] = useActionState(acao, {});
 
   return (
-    <form action={enviar} className="space-y-5">
-      <MensagemErro>{estado.erro}</MensagemErro>
+    <Formulario estado={estado} action={enviar} className="space-y-5">
 
       {/*
         Em leitura, o formulário inteiro trava de uma vez — mesmo recurso da
@@ -118,15 +118,47 @@ export function FormularioFornecedor({
             />
           </div>
         </SecaoCartao>
+
+        <SecaoCartao
+          icone={Hash}
+          titulo="Numeração de pedidos"
+          descricao="Cada indústria tem a sua sequência; o mesmo número em outra não conflita."
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Campo
+              name="ultimoNumeroPedido"
+              rotulo="Último pedido emitido"
+              inputMode="numeric"
+              dica={
+                valores.ultimoNumeroPedido === ""
+                  ? "Vindo de outro sistema, informe o último pedido de lá. Em branco, o primeiro sai com o nº 1."
+                  : `O próximo pedido desta indústria sai com o nº ${(Number(valores.ultimoNumeroPedido) + 1).toLocaleString("pt-BR")}.`
+              }
+              defaultValue={valores.ultimoNumeroPedido}
+              placeholder="0"
+            />
+            {/* O que a ficha mostrava ao abrir: o contador só se mexe se mudou. */}
+            <input
+              type="hidden"
+              name="ultimoNumeroPedidoVisto"
+              value={valores.ultimoNumeroPedido}
+            />
+          </div>
+        </SecaoCartao>
       </fieldset>
 
       {editavel && (
-        <div className="flex justify-end">
-          <Botao type="submit" carregando={enviando}>
-            {enviando ? "Salvando…" : rotuloEnvio}
-          </Botao>
+        <div className="space-y-3">
+          {/* Cada erro de campo aparece embaixo do campo; aqui só o que não é
+              de campo nenhum, perto de onde a pessoa acabou de clicar. */}
+          <ErroGeral />
+          <div className="flex justify-end">
+            <Botao type="submit" carregando={enviando}>
+              {enviando ? "Salvando…" : rotuloEnvio}
+            </Botao>
+          </div>
         </div>
       )}
-    </form>
+    </Formulario>
   );
 }

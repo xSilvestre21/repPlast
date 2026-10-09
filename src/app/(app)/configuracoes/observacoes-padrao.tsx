@@ -8,7 +8,8 @@
 import { ScrollText } from "lucide-react";
 import { useActionState } from "react";
 
-import { AreaTexto, Botao, MensagemErro, SecaoCartao } from "@/components/ui";
+import { ErroGeral, Formulario } from "@/components/formulario";
+import { AreaTexto, Botao, SecaoCartao } from "@/components/ui";
 
 import type { EstadoFormulario } from "./acoes";
 
@@ -27,9 +28,7 @@ export function FormObservacoesPadrao({
       titulo="Condições padrão do orçamento"
       descricao="Entra preenchido em todo orçamento novo que você criar. Dá para editar em cada proposta, sem afetar este padrão."
     >
-      <form action={enviar} className="space-y-4">
-        <MensagemErro>{estado.erro}</MensagemErro>
-
+      <Formulario estado={estado} action={enviar} className="space-y-4">
         <AreaTexto
           name="observacoesPadrao"
           rows={6}
@@ -37,12 +36,14 @@ export function FormObservacoesPadrao({
           placeholder={"ICMS: 18% (incluso no preço acima)\nFrete: CIF\nPrazo de entrega: 15 dias úteis"}
         />
 
+        <ErroGeral />
+
         <div className="flex justify-end">
           <Botao type="submit" variante="secundaria" carregando={salvando}>
             {salvando ? "Salvando…" : "Salvar padrão"}
           </Botao>
         </div>
-      </form>
+      </Formulario>
     </SecaoCartao>
   );
 }

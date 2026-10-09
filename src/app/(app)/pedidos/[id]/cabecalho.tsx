@@ -5,7 +5,8 @@ import { useActionState } from "react";
 import { ClipboardList, MessageSquareText, Percent } from "lucide-react";
 
 import { CampoData } from "@/components/campo-data";
-import { AreaTexto, Botao, Campo, MensagemErro, SecaoCartao, Selecao } from "@/components/ui";
+import { ErroGeral, Formulario } from "@/components/formulario";
+import { AreaTexto, Botao, Campo, SecaoCartao, Selecao } from "@/components/ui";
 
 import type { EstadoFormulario } from "../acoes";
 
@@ -45,8 +46,7 @@ export function SecaoCabecalho({
   const [estado, enviar, enviando] = useActionState(acao, {});
 
   return (
-    <form action={enviar} className="space-y-5">
-      <MensagemErro>{estado.erro}</MensagemErro>
+    <Formulario estado={estado} action={enviar} className="space-y-5">
 
       <SecaoCartao
         icone={ClipboardList}
@@ -169,12 +169,15 @@ export function SecaoCabecalho({
       </SecaoCartao>
 
       {editavel && (
-        <div className="flex justify-end">
-          <Botao type="submit" carregando={enviando}>
-            {enviando ? "Salvando…" : "Salvar e voltar"}
-          </Botao>
+        <div className="space-y-3">
+          <ErroGeral />
+          <div className="flex justify-end">
+            <Botao type="submit" carregando={enviando}>
+              {enviando ? "Salvando…" : "Salvar e voltar"}
+            </Botao>
+          </div>
         </div>
       )}
-    </form>
+    </Formulario>
   );
 }

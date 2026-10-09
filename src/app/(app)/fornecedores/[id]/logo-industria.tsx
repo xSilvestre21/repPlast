@@ -4,7 +4,9 @@ import { useActionState, useRef, useState } from "react";
 
 import { ImageUp } from "lucide-react";
 
-import { Botao, BotaoTexto, MensagemErro, SecaoCartao } from "@/components/ui";
+import { ErroGeral, Formulario } from "@/components/formulario";
+import { Botao, BotaoTexto, RodapeCampo, SecaoCartao } from "@/components/ui";
+import { erroDoCampo } from "@/lib/erro-formulario";
 
 import type { EstadoFormulario } from "../acoes";
 
@@ -31,6 +33,16 @@ export function SecaoLogo({
   const [previa, setPrevia] = useState<string | null>(null);
   const entrada = useRef<HTMLInputElement>(null);
 
+  // Recusado o arquivo, o navegador esvazia a escolha — e a prévia tem de ir
+  // junto, senão "Salvar logo" ficava ativo mostrando uma imagem que não seria
+  // enviada.
+  const [estadoVisto, setEstadoVisto] = useState(estado);
+  if (estado !== estadoVisto) {
+    setEstadoVisto(estado);
+    if (estado.erro) setPrevia(null);
+  }
+  const erroArquivo = erroDoCampo(estado, "logo");
+
   const src = previa ?? (temLogo ? `/fornecedores/${fornecedorId}/logo?v=${versao}` : null);
 
   return (
@@ -39,9 +51,7 @@ export function SecaoLogo({
       titulo="Logo da indústria"
       descricao="Vai no cabeçalho do PDF do pedido. É o logo da indústria, não o do seu escritório — é assim que o cliente dela está acostumado a receber."
     >
-      <MensagemErro>{estado.erro}</MensagemErro>
-
-      <form action={enviar} className="flex flex-wrap items-center gap-5 mt-3">
+      <Formulario estado={estado} action={enviar} className="flex flex-wrap items-center gap-5 mt-3">
         <div
           className="grid place-items-center shrink-0 size-28 rounded-suave border border-filete bg-folha overflow-hidden"
           aria-live="polite"
@@ -71,15 +81,23 @@ export function SecaoLogo({
                 const arquivo = evento.target.files?.[0];
                 setPrevia(arquivo ? URL.createObjectURL(arquivo) : null);
               }}
+              aria-invalid={erroArquivo ? true : undefined}
+              aria-describedby={`${fornecedorId}-logo-rodape`}
               className="block w-full text-corpo text-tinta-2
                 file:mr-3 file:rounded-full file:border-0 file:px-4 file:py-2 file:text-corpo
                 file:font-medium file:cursor-pointer file:bg-tinta file:text-papel
                 hover:file:brightness-110 file:transition-all"
             />
 
-            <p className="text-mini text-tinta-3">
-              PNG, JPEG ou WebP, até 2 MB. Fundo transparente fica melhor no papel.
-            </p>
+            {/* A dica cede o lugar ao erro, como em todo campo: com o arquivo
+                recusado, o que importa é por quê. */}
+            <RodapeCampo
+              id={`${fornecedorId}-logo-rodape`}
+              erro={erroArquivo}
+              dica="PNG, JPEG ou WebP, até 2 MB. Fundo transparente fica melhor no papel."
+            />
+
+            <ErroGeral />
 
             <div className="flex flex-wrap gap-3 items-center">
               <Botao type="submit" variante="secundaria" disabled={enviando || previa === null}>
@@ -103,7 +121,7 @@ export function SecaoLogo({
             </div>
           </div>
         )}
-      </form>
+      </Formulario>
     </SecaoCartao>
   );
 }

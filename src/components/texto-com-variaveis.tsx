@@ -24,7 +24,8 @@ import {
   type Gatilho,
 } from "@/lib/sugestao-variaveis";
 
-import { CLASSE_CONTROLE, CLASSE_ERRO, Rotulo } from "./ui";
+import { useCampoDoFormulario } from "./contexto-formulario";
+import { CLASSE_CONTROLE, CLASSE_ERRO, RodapeCampo, Rotulo } from "./ui";
 
 /**
  * Uma linha da lista de sugestões.
@@ -94,7 +95,7 @@ export function TextoComVariaveis({
   valor,
   aoMudar,
   linhas,
-  erro,
+  erro: erroExplicito,
 }: {
   name: string;
   rotulo: string;
@@ -103,8 +104,15 @@ export function TextoComVariaveis({
   aoMudar: (valor: string) => void;
   /** Ausente = campo de uma linha, como o assunto. */
   linhas?: number;
-  erro?: boolean;
+  /**
+   * A frase do problema, que aparece embaixo da caixa. Era só um booleano que
+   * pintava a borda, e a frase morava solta no formulário — sem dizer se era
+   * do assunto ou da mensagem. Sem ela, vale o erro do `Formulario`.
+   */
+  erro?: string;
 }) {
+  const doFormulario = useCampoDoFormulario(name);
+  const erro = erroExplicito ?? doFormulario.erro;
   const campoRef = useRef<Controle>(null);
   const listaRef = useRef<HTMLUListElement>(null);
   const caixaRef = useRef<HTMLDivElement>(null);
@@ -247,6 +255,8 @@ export function TextoComVariaveis({
     onSelect: acompanhar,
     onKeyDown: aoTeclar,
     onBlur: () => setGatilho(null),
+    "aria-invalid": erro ? true : undefined,
+    "aria-describedby": erro ? `${idLista}-rodape` : undefined,
     className: `${CLASSE_CONTROLE} pr-11 ${linhas ? "resize-y" : ""} ${erro ? CLASSE_ERRO : ""}`,
   };
 
@@ -342,6 +352,8 @@ export function TextoComVariaveis({
           </div>
         )}
       </div>
+
+      <RodapeCampo erro={erro} id={`${idLista}-rodape`} />
     </div>
   );
 }
