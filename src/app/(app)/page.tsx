@@ -13,6 +13,7 @@ import {
   UserRoundCheck,
   Users,
 } from "lucide-react";
+import { CascataAoFiltrar } from "@/components/cascata-ao-filtrar";
 import { Pagina } from "@/components/pagina";
 import { SeloStatus } from "@/components/selo-status";
 import { ValorAnimado } from "@/components/valor-animado";
@@ -485,44 +486,48 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
             />
           </div>
 
-          {sumidos.length === 0 ? (
-            <EstadoVazio icone={UserRoundCheck}>
-              Ninguém sumido há mais de {dias} dias. Bom sinal.
-            </EstadoVazio>
-          ) : (
-            <Cartao className="divide-y divide-filete overflow-hidden">
-              {sumidos.slice(0, 8).map(({ cliente, ultimaCompra, diasSemComprar }) => (
-                <LinhaLista key={cliente.id} href={`/clientes/${cliente.id}`}>
-                  <CorpoLinha
-                    titulo={cliente.apelido}
-                    detalhe={
-                      <span className="numerico">
-                        {DATA.format(ultimaCompra)}
-                        {cliente.ultimoValor ? <> · {moeda(cliente.ultimoValor)}</> : null}
-                      </span>
-                    }
-                  />
+          <CascataAoFiltrar
+            chave={String(dias)}
+            className="divide-y divide-filete overflow-hidden"
+            vazio={
+              sumidos.length === 0 && (
+                <EstadoVazio icone={UserRoundCheck}>
+                  Ninguém sumido há mais de {dias} dias. Bom sinal.
+                </EstadoVazio>
+              )
+            }
+          >
+            {sumidos.slice(0, 8).map(({ cliente, ultimaCompra, diasSemComprar }) => (
+              <LinhaLista key={cliente.id} href={`/clientes/${cliente.id}`}>
+                <CorpoLinha
+                  titulo={cliente.apelido}
+                  detalhe={
+                    <span className="numerico">
+                      {DATA.format(ultimaCompra)}
+                      {cliente.ultimoValor ? <> · {moeda(cliente.ultimoValor)}</> : null}
+                    </span>
+                  }
+                />
 
-                  {/*
-                    Passou do dobro do corte, o número fica vermelho. É perda
-                    iminente, não um link — por isso vermelho e não azul.
-                  */}
-                  <FimDaLinha>
-                    <div className="text-right w-16">
-                      <span
-                        className={`cifra text-medio ${
-                          diasSemComprar >= dias * 2 ? "text-perigo" : "text-tinta"
-                        }`}
-                      >
-                        {diasSemComprar}
-                      </span>
-                      <span className="text-mini text-tinta-3 ml-1">dias</span>
-                    </div>
-                  </FimDaLinha>
-                </LinhaLista>
-              ))}
-            </Cartao>
-          )}
+                {/*
+                  Passou do dobro do corte, o número fica vermelho. É perda
+                  iminente, não um link — por isso vermelho e não azul.
+                */}
+                <FimDaLinha>
+                  <div className="text-right w-16">
+                    <span
+                      className={`cifra text-medio ${
+                        diasSemComprar >= dias * 2 ? "text-perigo" : "text-tinta"
+                      }`}
+                    >
+                      {diasSemComprar}
+                    </span>
+                    <span className="text-mini text-tinta-3 ml-1">dias</span>
+                  </div>
+                </FimDaLinha>
+              </LinhaLista>
+            ))}
+          </CascataAoFiltrar>
         </section>
 
         <section className="revelar">

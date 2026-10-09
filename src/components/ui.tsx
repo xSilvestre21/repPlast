@@ -1142,10 +1142,13 @@ export function Segmentado<T extends string>({
         const ativa = opcao.valor === atual;
         const classe = `${PASTILHA} ${ativa ? ATIVA : INATIVA}`;
 
+        // O link troca um filtro da tela em que a pessoa já está — rolar para o
+        // topo a faria perder de vista justamente o bloco que acabou de filtrar.
         return opcao.href ? (
           <Link
             key={opcao.valor}
             href={opcao.href}
+            scroll={false}
             aria-current={ativa ? "true" : undefined}
             className={classe}
           >
