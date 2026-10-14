@@ -189,6 +189,9 @@ export default async function PaginaOrcamento({
             <SeloOrcamento status={orcamento.status} />
             <BotaoLink
               href={`/orcamentos/${orcamento.id}/pdf`}
+              // Rota que GERA o PDF: sem pré-carregar, o servidor só o monta
+              // quando alguém clica — como no PDF do pedido.
+              prefetch={false}
               variante="secundaria"
               icone={FileDown}
             >

@@ -41,6 +41,7 @@ import type { EChartsCoreOption, ECElementEvent } from "echarts/core";
 
 import { temaEcharts } from "@/lib/grafico/tema-echarts";
 
+import { naFila } from "./fila-de-graficos";
 import { useTemaGrafico } from "./use-tema-grafico";
 
 echarts.use([
@@ -177,78 +178,122 @@ export function Grafico({
     eixo.current = eixoDaCategoria;
   }, [aoClicar, aoClicarCategoria, eixoDaCategoria]);
 
-  // Nasce e morre com o elemento — e renasce quando o tema troca, porque o
-  // tema do ECharts é fixado no `init`.
+  // A opção mais recente, para o gráfico que nasce depois do render (a fila).
+  const opcaoAtual = useRef({ opcao, rotulo });
+  useEffect(() => {
+    opcaoAtual.current = { opcao, rotulo };
+  }, [opcao, rotulo]);
+
+  /*
+   * Nasce e morre com o elemento — e renasce quando o tema troca, porque o
+   * tema do ECharts é fixado no `init`.
+   *
+   * Nasce pela FILA (`fila-de-graficos.ts`), e não aqui mesmo: a página monta
+   * mais de dez destes, e criados todos neste efeito viravam uma tarefa só de
+   * quase um segundo com a tela congelada. A caixa já ocupa o lugar dela desde
+   * o primeiro quadro, então nada pula quando o desenho chega.
+   */
   useEffect(() => {
     const elemento = caixa.current;
     if (!elemento) return;
 
-    const nomeDoTema = `repplast-${cores.modo}`;
-    echarts.registerTheme(nomeDoTema, temaEcharts(cores));
+    /** O gráfico desta caixa, depois que a fila o criou. */
+    let vivo: echarts.ECharts | null = null;
+    let quadro = 0;
+    let redimensionar: ResizeObserver | null = null;
 
-    const instancia = echarts.init(elemento, nomeDoTema, { renderer: "canvas" });
-    grafico.current = instancia;
+    // Ligado a cada gráfico que nasce: os cliques e o acompanhamento do tamanho.
+    const configurar = (instancia: echarts.ECharts) => {
+      /*
+       * Dois caminhos para o mesmo clique. A série (barra, ponto, fatia) vai
+       * para `aoClicar`; o resto da área dos eixos vai para `aoClicarCategoria`
+       * — inclusive a área pintada sob uma linha, que é um alvo do ECharts mas
+       * não é um dado. A marca `tratado` evita que um clique numa barra dispare
+       * os dois; a categoria espera o fim do evento para saber.
+       */
+      let tratado = false;
 
-    /*
-     * Dois caminhos para o mesmo clique. A série (barra, ponto, fatia) vai
-     * para `aoClicar`; o resto da área dos eixos vai para `aoClicarCategoria`
-     * — inclusive a área pintada sob uma linha, que é um alvo do ECharts mas
-     * não é um dado. A marca `tratado` evita que um clique numa barra dispare
-     * os dois; a categoria espera o fim do evento para saber.
-     */
-    let tratado = false;
-
-    instancia.on("click", (evento) => {
-      // O nome no eixo (com `triggerEvent`) vale como clique na categoria: é
-      // nele que a mão vai primeiro numa lista de clientes.
-      const doEixo = evento as EventoGrafico & { componentType?: string; value?: unknown };
-      if (doEixo.componentType === "xAxis" || doEixo.componentType === "yAxis") {
-        const categorias = instancia.getOption()[doEixo.componentType] as { data?: unknown[] }[];
-        const indice = categorias?.[0]?.data?.indexOf(doEixo.value) ?? -1;
-        if (indice >= 0) cliqueCategoria.current?.(indice);
+      instancia.on("click", (evento) => {
+        // O nome no eixo (com `triggerEvent`) vale como clique na categoria: é
+        // nele que a mão vai primeiro numa lista de clientes.
+        const doEixo = evento as EventoGrafico & { componentType?: string; value?: unknown };
+        if (doEixo.componentType === "xAxis" || doEixo.componentType === "yAxis") {
+          const categorias = instancia.getOption()[doEixo.componentType] as { data?: unknown[] }[];
+          const indice = categorias?.[0]?.data?.indexOf(doEixo.value) ?? -1;
+          if (indice >= 0) cliqueCategoria.current?.(indice);
+          tratado = true;
+          return;
+        }
+        if (typeof evento.dataIndex !== "number" || !clique.current) return;
         tratado = true;
-        return;
-      }
-      if (typeof evento.dataIndex !== "number" || !clique.current) return;
-      tratado = true;
-      clique.current(evento as EventoGrafico);
-    });
+        clique.current(evento as EventoGrafico);
+      });
 
-    instancia.getZr().on("click", (evento) => {
-      const ponto = [evento.offsetX, evento.offsetY];
-      setTimeout(() => {
-        const jaFoi = tratado;
-        tratado = false;
-        const aoCategoria = cliqueCategoria.current;
-        if (jaFoi || !aoCategoria || instancia.isDisposed() || !instancia.containPixel("grid", ponto)) return;
-        // Pelo grid, e não pelo eixo: pedido ao eixo, o ECharts devolve `null`.
-        // O grid devolve [x, y] em coordenadas de dado — numa categoria, o índice.
-        const valor = instancia.convertFromPixel({ gridIndex: 0 }, ponto) as number[] | null;
-        const indice = Math.round(valor?.[eixo.current === "y" ? 1 : 0] ?? NaN);
-        if (Number.isFinite(indice) && indice >= 0) aoCategoria(indice);
+      instancia.getZr().on("click", (evento) => {
+        const ponto = [evento.offsetX, evento.offsetY];
+        setTimeout(() => {
+          const jaFoi = tratado;
+          tratado = false;
+          const aoCategoria = cliqueCategoria.current;
+          if (jaFoi || !aoCategoria || instancia.isDisposed() || !instancia.containPixel("grid", ponto)) return;
+          // Pelo grid, e não pelo eixo: pedido ao eixo, o ECharts devolve `null`.
+          // O grid devolve [x, y] em coordenadas de dado — numa categoria, o índice.
+          const valor = instancia.convertFromPixel({ gridIndex: 0 }, ponto) as number[] | null;
+          const indice = Math.round(valor?.[eixo.current === "y" ? 1 : 0] ?? NaN);
+          if (Number.isFinite(indice) && indice >= 0) aoCategoria(indice);
+        });
+      });
+
+      /*
+       * O resize vai para o próximo quadro: feito dentro do próprio callback do
+       * observador, ele mudava o layout no meio da medição e o navegador acusava
+       * "ResizeObserver loop completed with undelivered notifications".
+       *
+       * E só quando o tamanho mudou DE FATO: o observador também avisa na
+       * primeira observação e em mudanças que não alteram a caixa, e cada
+       * `resize()` redesenha o gráfico inteiro.
+       */
+      let largura = elemento.clientWidth;
+      let altura = elemento.clientHeight;
+      redimensionar = new ResizeObserver(() => {
+        cancelAnimationFrame(quadro);
+        quadro = requestAnimationFrame(() => {
+          const novaLargura = elemento.clientWidth;
+          const novaAltura = elemento.clientHeight;
+          if (novaLargura === largura && novaAltura === altura) return;
+          largura = novaLargura;
+          altura = novaAltura;
+          instancia.resize();
+        });
+      });
+      redimensionar.observe(elemento);
+    };
+
+    const desistir = naFila(elemento, () => {
+      const nomeDoTema = `repplast-${cores.modo}`;
+      echarts.registerTheme(nomeDoTema, temaEcharts(cores));
+
+      const criada = echarts.init(elemento, nomeDoTema, { renderer: "canvas" });
+      vivo = criada;
+      grafico.current = criada;
+      configurar(criada);
+      criada.setOption(completar(opcaoAtual.current.opcao, opcaoAtual.current.rotulo), {
+        notMerge: true,
       });
     });
 
-    // O resize vai para o próximo quadro: feito dentro do próprio callback do
-    // observador, ele mudava o layout no meio da medição e o navegador acusava
-    // "ResizeObserver loop completed with undelivered notifications".
-    let quadro = 0;
-    const redimensionar = new ResizeObserver(() => {
-      cancelAnimationFrame(quadro);
-      quadro = requestAnimationFrame(() => instancia.resize());
-    });
-    redimensionar.observe(elemento);
-
     return () => {
+      desistir();
       cancelAnimationFrame(quadro);
-      redimensionar.disconnect();
-      descartar(instancia);
+      redimensionar?.disconnect();
+      if (vivo) descartar(vivo);
       grafico.current = null;
     };
   }, [cores]);
 
   // `notMerge`: a opção é sempre a inteira. Mesclar com a anterior deixaria
-  // séries da visão antiga vivas ao trocar de barras para treemap.
+  // séries da visão antiga vivas ao trocar de barras para treemap. Ainda na
+  // fila, não há o que atualizar: ele nasce com a opção mais recente.
   useEffect(() => {
     grafico.current?.setOption(completar(opcao, rotulo), { notMerge: true });
   }, [opcao, rotulo, cores]);

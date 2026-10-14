@@ -11,7 +11,7 @@
  * Rode com:  npm run test:navegador
  */
 
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
 import * as echarts from "echarts/core";
 
@@ -118,7 +118,12 @@ describe("Grafico", () => {
     const { erros, parar } = capturarErros();
     for (let i = 0; i < 6; i++) {
       const tela = await render(<Grafico opcao={opcao} altura={240} rotulo="teste" />);
-      const canvas = tela.container.querySelector("canvas")!;
+      // O gráfico nasce pela fila, um quadro depois do render.
+      const canvas = await vi.waitFor(() => {
+        const achado = tela.container.querySelector("canvas");
+        if (!achado) throw new Error("ainda na fila");
+        return achado;
+      });
       const caixa = canvas.getBoundingClientRect();
       canvas.dispatchEvent(
         new MouseEvent("mousemove", { clientX: caixa.left + 100, clientY: caixa.top + 120, bubbles: true }),
@@ -131,6 +136,20 @@ describe("Grafico", () => {
     await quadros(20);
     parar();
     expect(erros).toEqual([]);
+  });
+
+  test("desmontar antes da vez na fila não cria gráfico nem dá erro", async () => {
+    const { erros, parar } = capturarErros();
+    const telas = [];
+    for (let i = 0; i < 8; i++) {
+      telas.push(await render(<Grafico opcao={opcao} altura={120} rotulo="teste" />));
+    }
+    // Desmonta todos no mesmo instante — boa parte ainda esperando a vez.
+    for (const tela of telas) await tela.unmount();
+    await quadros(30);
+    parar();
+    expect(erros).toEqual([]);
+    expect(document.querySelectorAll("canvas")).toHaveLength(0);
   });
 
   test("o canvas acompanha a altura do contêiner quando ele cresce e encolhe", async () => {

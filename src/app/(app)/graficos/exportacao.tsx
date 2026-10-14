@@ -49,15 +49,27 @@ export function BotoesExportacao({ competencia }: { competencia: string }) {
   const csv = (escopo: "mes" | "janela") =>
     `/graficos/exportar/csv?mes=${competencia}&escopo=${escopo}&meses=${janela}`;
 
+  /*
+   * `prefetch={false}` nos três: são rotas que GERAM arquivo (PDF, planilha).
+   * Com o pré-carregamento padrão do `Link`, o servidor montava o relatório
+   * inteiro só porque o botão apareceu na tela — e de novo a cada filtro
+   * trocado, que muda o endereço deles. Como no PDF do pedido.
+   */
   return (
     <div className="flex flex-wrap gap-2 items-start">
-      <BotaoLink href={relatorio("pdf")} target="_blank" variante="secundaria" icone={FileDown}>
+      <BotaoLink
+        href={relatorio("pdf")}
+        target="_blank"
+        prefetch={false}
+        variante="secundaria"
+        icone={FileDown}
+      >
         Relatório PDF
       </BotaoLink>
-      <BotaoLink href={csv("mes")} target="_blank" variante="secundaria" icone={Sheet}>
+      <BotaoLink href={csv("mes")} target="_blank" prefetch={false} variante="secundaria" icone={Sheet}>
         CSV do mês
       </BotaoLink>
-      <BotaoLink href={csv("janela")} target="_blank" variante="secundaria" icone={Sheet}>
+      <BotaoLink href={csv("janela")} target="_blank" prefetch={false} variante="secundaria" icone={Sheet}>
         CSV de {janela} meses
       </BotaoLink>
     </div>

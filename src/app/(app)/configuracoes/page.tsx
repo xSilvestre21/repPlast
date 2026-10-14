@@ -98,7 +98,7 @@ export default async function PaginaConfiguracoes() {
 
         <SecaoCartao titulo="Animações" descricao="Como a interface se move para você.">
           <p className="text-corpo text-tinta-2 mb-4">
-            Desliga a troca de aba, o confete de meta batida, a aurora de fundo, o
+            Desliga a troca de aba, o confete de meta batida, o avião do pedido enviado, o
             esqueleto de carregamento e a barra de progresso. O resto da tela
             continua igual — só o movimento some.
           </p>

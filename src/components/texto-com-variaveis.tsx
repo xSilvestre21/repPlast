@@ -242,8 +242,10 @@ export function TextoComVariaveis({
     value: valor,
     autoComplete: "off",
     spellCheck: false,
-    role: "combobox",
-    "aria-expanded": aberto,
+    // `combobox` só no campo de uma linha: o ARIA não permite esse papel num
+    // `textarea`, que fica com o papel nativo de caixa de texto — os atributos
+    // de lista de sugestões abaixo valem para ela também.
+    ...(linhas ? {} : { role: "combobox", "aria-expanded": aberto }),
     "aria-controls": idLista,
     "aria-autocomplete": "list" as const,
     "aria-activedescendant": aberto && opcoes[destaque] ? `${idLista}-${destaque}` : undefined,

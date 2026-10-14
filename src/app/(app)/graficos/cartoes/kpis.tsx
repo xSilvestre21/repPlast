@@ -12,7 +12,7 @@ import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 import Link from "next/link";
 import { useMemo } from "react";
 
-import { Grafico } from "@/components/grafico/echarts";
+import { Grafico, type OpcaoGrafico } from "@/components/grafico/echarts";
 import { useTemaGrafico } from "@/components/grafico/use-tema-grafico";
 import { kpisDoMes, mesesAte, type Kpis } from "@/lib/grafico/agregar";
 import type { BaseDosGraficos } from "@/lib/grafico/base";
@@ -45,12 +45,67 @@ export function FaixaKpis({ base }: { base: BaseDosGraficos }) {
   const anterior = porMes.at(-2)!;
   const nomeAnterior = base.rotulos[deslocarCompetencia(base.competencia, -1)]?.curto ?? "";
 
+  /*
+   * As opções das quatro minilinhas, montadas uma vez por dado/tema — como nos
+   * outros cartões. Escritas direto no JSX, nasciam novas a cada render, e o
+   * `Grafico` refazia o `setOption` inteiro (e a animação de entrada) sem
+   * nada ter mudado.
+   */
+  const opcoes = useMemo(
+    () =>
+      new Map(
+        CAIXAS.map(({ chave, rotulo }) => {
+          const serie = porMes.map((k) => k[chave] / 100);
+          const corLinha =
+            chave === "recebido" ? cores.verde : chave === "diferenca" ? cores.tinta3 : cores.categoricas[0];
+
+          return [
+            chave,
+            {
+              animationDuration: 600,
+              grid: { left: 2, right: 2, top: 6, bottom: 2 },
+              xAxis: { type: "category", show: false, data: meses.map((m) => base.rotulos[m].longo) },
+              yAxis: { type: "value", show: false, scale: chave === "diferenca" },
+              tooltip: {
+                trigger: "axis",
+                axisPointer: { type: "line", lineStyle: { color: cores.fileteForte } },
+                valueFormatter: (v: number) => moedaDe(Math.round(v * 100)),
+                confine: true,
+              },
+              series: [
+                {
+                  type: "line",
+                  name: rotulo,
+                  data: serie,
+                  smooth: 0.3,
+                  symbol: "circle",
+                  symbolSize: 5,
+                  showSymbol: false,
+                  lineStyle: { width: 2, color: corLinha },
+                  itemStyle: { color: corLinha },
+                  areaStyle: { color: corLinha, opacity: 0.08 },
+                  // O ponto do mês atual fica marcado: é o número grande acima.
+                  markPoint: {
+                    symbol: "circle",
+                    symbolSize: 6,
+                    itemStyle: { color: corLinha },
+                    label: { show: false },
+                    data: [{ coord: [serie.length - 1, serie.at(-1)!] }],
+                  },
+                },
+              ],
+            } satisfies OpcaoGrafico,
+          ] as const;
+        }),
+      ),
+    [porMes, meses, base.rotulos, cores],
+  );
+
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-filete border border-filete rounded-suave overflow-hidden">
       {CAIXAS.map(({ chave, rotulo, detalhe }) => {
         const valor = atual[chave];
         const antes = anterior[chave];
-        const serie = porMes.map((k) => k[chave] / 100);
 
         // A diferença é um saldo, não um volume: o tom vem do sinal dela.
         const tomValor =
@@ -63,9 +118,6 @@ export function FaixaKpis({ base }: { base: BaseDosGraficos }) {
             : chave === "recebido"
               ? "text-verde"
               : "text-tinta";
-
-        const corLinha =
-          chave === "recebido" ? cores.verde : chave === "diferenca" ? cores.tinta3 : cores.categoricas[0];
 
         return (
           // O total abre a apuração do mês em Comissões, de onde ele vem.
@@ -84,40 +136,7 @@ export function FaixaKpis({ base }: { base: BaseDosGraficos }) {
             <Grafico
               altura={44}
               rotulo={`${rotulo} nos últimos 12 meses`}
-              opcao={{
-                animationDuration: 600,
-                grid: { left: 2, right: 2, top: 6, bottom: 2 },
-                xAxis: { type: "category", show: false, data: meses.map((m) => base.rotulos[m].longo) },
-                yAxis: { type: "value", show: false, scale: chave === "diferenca" },
-                tooltip: {
-                  trigger: "axis",
-                  axisPointer: { type: "line", lineStyle: { color: cores.fileteForte } },
-                  valueFormatter: (v: number) => moedaDe(Math.round(v * 100)),
-                  confine: true,
-                },
-                series: [
-                  {
-                    type: "line",
-                    name: rotulo,
-                    data: serie,
-                    smooth: 0.3,
-                    symbol: "circle",
-                    symbolSize: 5,
-                    showSymbol: false,
-                    lineStyle: { width: 2, color: corLinha },
-                    itemStyle: { color: corLinha },
-                    areaStyle: { color: corLinha, opacity: 0.08 },
-                    // O ponto do mês atual fica marcado: é o número grande acima.
-                    markPoint: {
-                      symbol: "circle",
-                      symbolSize: 6,
-                      itemStyle: { color: corLinha },
-                      label: { show: false },
-                      data: [{ coord: [serie.length - 1, serie.at(-1)!] }],
-                    },
-                  },
-                ],
-              }}
+              opcao={opcoes.get(chave)!}
             />
           </Link>
         );

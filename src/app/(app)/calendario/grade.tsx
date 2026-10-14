@@ -15,6 +15,13 @@ import { dataPorExtenso, nomeDoFeriado, type DataIso } from "@/lib/calendario";
 import type { CompromissoDaAgenda } from "./consulta";
 import { Marca, aparencia } from "./marca";
 
+/**
+ * O vermelho do feriado misturado a 30% com a tinta — como nos selos de
+ * status. Puro, sobre o cinza do dia de folga, ficava em 3,5:1 no tema claro
+ * (o mínimo para texto pequeno é 4,5:1).
+ */
+const COR_FERIADO = "text-[color-mix(in_srgb,var(--perigo)_70%,var(--tinta))]";
+
 const DIAS_DA_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const VISIVEIS = 3;
 
@@ -63,9 +70,6 @@ export function GradeDoMes({
               key={dia}
               type="button"
               onClick={() => aoAbrir(dia)}
-              aria-label={`${dataPorExtenso(dia)}${eventos.length ? `, ${eventos.length} itens` : ""}${
-                feriado ? `, ${feriado}` : ""
-              }`}
               className={`group relative text-left min-h-16 sm:min-h-28 p-1.5 sm:p-2 flex flex-col gap-1
                 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-carimbo
                 focus-visible:-outline-offset-2 ${
@@ -74,8 +78,11 @@ export function GradeDoMes({
             >
               <span className="flex items-center justify-between gap-1">
                 <span
+                  // Hoje é a pílula do botão principal ("Novo compromisso"):
+                  // branca no tema escuro, preta no claro — a marca mais forte
+                  // da grade, e com contraste de sobra nos dois.
                   className={`grid place-items-center size-6 rounded-full text-mini font-semibold numerico ${
-                    ehHoje ? "bg-carimbo text-white" : feriado ? "text-perigo" : "text-tinta-2"
+                    ehHoje ? "bg-tinta text-papel shadow-suave" : feriado ? COR_FERIADO : "text-tinta-2"
                   }`}
                 >
                   {Number(dia.slice(8))}
@@ -88,8 +95,15 @@ export function GradeDoMes({
                 )}
               </span>
 
-              {feriado && (
-                <span className="hidden sm:block text-[10px] leading-tight text-perigo truncate">{feriado}</span>
+              {/*
+                Só no mês da tela: no dia de outro mês a célula inteira fica
+                esmaecida, e o nome do feriado em 10px apagado não se lia
+                (2,2:1). A data por extenso, no fim do botão, ainda diz qual é.
+              */}
+              {feriado && doMes && (
+                <span className={`hidden sm:block text-[10px] leading-tight truncate ${COR_FERIADO}`}>
+                  {feriado}
+                </span>
               )}
 
               {/* Computador: as marcas com título. */}
@@ -117,6 +131,18 @@ export function GradeDoMes({
                     style={{ background: aparencia(e).cor }}
                   />
                 ))}
+              </span>
+
+              {/*
+                O nome do botão para o leitor de tela é o texto visível (o
+                número, o feriado, as marcas) seguido disto. Era um
+                `aria-label` à parte, e aí o nome não continha o que se vê — o
+                comando de voz "clicar em 12" não achava o dia.
+              */}
+              <span className="sr-only">
+                {`, ${dataPorExtenso(dia)}${feriado ? `, ${feriado}` : ""}${
+                  eventos.length ? `, ${eventos.length} ${eventos.length === 1 ? "item" : "itens"}` : ""
+                }`}
               </span>
             </button>
           );
