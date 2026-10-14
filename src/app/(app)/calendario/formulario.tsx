@@ -13,6 +13,7 @@ import { AlertTriangle, CalendarClock, Flag } from "lucide-react";
 import { useActionState, useState } from "react";
 
 import { CampoData } from "@/components/campo-data";
+import { CampoHora } from "@/components/campo-hora";
 import { SelecaoBuscavel, type OpcaoBuscavel } from "@/components/selecao-buscavel";
 import { ErroGeral, Formulario } from "@/components/formulario";
 import { AreaTexto, Botao, BotaoTexto, Campo } from "@/components/ui";
@@ -103,17 +104,16 @@ export function FormularioCompromisso({
         autoFocus
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-[1fr_9rem] gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_11rem] gap-3">
         <CampoData
           name="data"
           rotulo="Data"
           defaultValue={compromisso?.dia ?? dia}
           atalhos={[1, 7, 14, 30]}
         />
-        {/* `Campo`, e não um input montado à mão: é o que mostra o erro da
-            hora embaixo dela, como em todo o resto. */}
-        <Campo
-          type="time"
+        {/* Seletor próprio, como o da data ao lado; o erro da hora continua
+            embaixo dela, achado pelo `name`. */}
+        <CampoHora
           name="hora"
           rotulo="Hora"
           defaultValue={compromisso?.hora ?? ""}

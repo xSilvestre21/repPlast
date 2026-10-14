@@ -41,6 +41,12 @@ import {
   type DataIso,
 } from "@/lib/calendario";
 
+import {
+  estiloDoLugar,
+  LUGAR_INICIAL,
+  medirLugar,
+  useCamadaDeTopo,
+} from "./camada-flutuante";
 import { useCampoDoFormulario } from "./contexto-formulario";
 import { CLASSE_CONTROLE, CLASSE_ERRO, RodapeCampo, Rotulo } from "./ui";
 
@@ -95,7 +101,7 @@ export function CampoData({
   const comAtalhos = atalhos.length > 0 || atalhosUteis.length > 0;
   const [aberto, setAberto] = useState(false);
   /** Onde o calendário se desenha, em coordenadas da PÁGINA (ver `medir`). */
-  const [lugar, setLugar] = useState({ paraCima: false, esquerda: 0, topo: 0 });
+  const [lugar, setLugar] = useState(LUGAR_INICIAL);
   const paraCima = lugar.paraCima;
   /** O dia com o foco do teclado; o mês mostrado é sempre o dele. */
   const [foco, setFoco] = useState<DataIso>(valor || hojeIso());
@@ -130,19 +136,14 @@ export function CampoData({
    * `<body>`: assim ele rola junto com o campo sem precisar ouvir a rolagem.
    */
   function medir() {
-    const caixa = botaoRef.current?.getBoundingClientRect();
-    if (!caixa) return;
-    const barra = document.querySelector(".barra-topo")?.getBoundingClientRect().bottom ?? 0;
-    const abaixo = window.innerHeight - caixa.bottom;
-    const acima = caixa.top - barra;
-    const sobe = abaixo < ALTURA_CALENDARIO && acima >= ALTURA_CALENDARIO;
-    // Nunca sai pela direita da janela, nem em tela estreita.
-    const esquerda = Math.max(8, Math.min(caixa.left, window.innerWidth - LARGURA_CALENDARIO - 8));
-    setLugar({
-      paraCima: sobe,
-      esquerda: esquerda + window.scrollX,
-      topo: (sobe ? caixa.top - 4 : caixa.bottom + 4) + window.scrollY,
-    });
+    if (!botaoRef.current) return;
+    setLugar(
+      medirLugar(botaoRef.current, {
+        largura: LARGURA_CALENDARIO,
+        altura: ALTURA_CALENDARIO,
+        alinhar: "esquerda",
+      }),
+    );
   }
 
   function abrir() {
@@ -160,6 +161,8 @@ export function CampoData({
     setValor(iso);
     fechar();
   }
+
+  useCamadaDeTopo(calendarioRef, lugar, aberto, medir);
 
   /* Clique fora fecha, sem roubar o foco de onde a pessoa clicou. */
   useEffect(() => {
@@ -277,12 +280,8 @@ export function CampoData({
             id={idCalendario}
             role="dialog"
             aria-label={`Escolher ${rotulo.toLowerCase()}`}
-            style={{
-              left: lugar.esquerda,
-              top: lugar.topo,
-              width: LARGURA_CALENDARIO,
-              transform: paraCima ? "translateY(-100%)" : undefined,
-            }}
+            popover={lugar.emDialogo ? "manual" : undefined}
+            style={estiloDoLugar(lugar, LARGURA_CALENDARIO)}
             className="folha absolute z-50 scroll-mb-4 scroll-mt-20 p-3"
           >
             <div className="mb-2 flex items-center justify-between">
@@ -432,7 +431,10 @@ export function CampoData({
                           : "border-filete text-tinta-2 hover:border-carimbo hover:text-tinta"
                       }`}
                     >
-                      {dias} {contagem === "uteis" ? "úteis" : "dias"}
+                      {dias}{" "}
+                      {contagem === "uteis"
+                        ? dias === 1 ? "útil" : "úteis"
+                        : dias === 1 ? "dia" : "dias"}
                     </button>
                   );
                 })}
@@ -464,7 +466,7 @@ export function CampoData({
               </div>
             </div>
           </div>,
-          document.body,
+          lugar.destino ?? document.body,
         )}
     </div>
   );
