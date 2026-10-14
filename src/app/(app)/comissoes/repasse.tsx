@@ -183,14 +183,14 @@ function Extrato({ itens }: { itens: ItemExtrato[] }) {
               </>
             }
           />
-          <FimDaLinha>
-            <ValorLinha className="w-28" valor={formatarMoeda(item.previsto)} nota="previsto" />
+          <ValoresDaLinha>
+            <ValorLinha className="sm:w-28" valor={formatarMoeda(item.previsto)} nota="previsto" />
             <ValorLinha
-              className="w-28"
+              className="sm:w-28"
               valor={item.recebido === null ? "—" : formatarMoeda(item.recebido)}
               nota={item.recebido === null ? "a acertar" : "devido"}
             />
-          </FimDaLinha>
+          </ValoresDaLinha>
         </LinhaDado>
       ))}
     </Painel>
@@ -242,32 +242,34 @@ export function LinhaRepasse({
           detalhe={plural(dados.pedidos, "pedido")}
         />
 
-        <FimDaLinha>
-          <ValorLinha className="w-28" valor={formatarMoeda(dados.previsto)} nota="previsto" />
-          <ValorLinha className="w-28" valor={formatarMoeda(dados.devido)} nota="devido" />
-          <ValorLinha className="w-28" valor={formatarMoeda(dados.pago)} nota="pago" />
-          <div className="w-28 text-right shrink-0">
+        <ValoresDaLinha>
+          <ValorLinha className="sm:w-28" valor={formatarMoeda(dados.previsto)} nota="previsto" />
+          <ValorLinha className="sm:w-28" valor={formatarMoeda(dados.devido)} nota="devido" />
+          <ValorLinha className="sm:w-28" valor={formatarMoeda(dados.pago)} nota="pago" />
+          <div className="sm:w-28 text-right shrink-0">
             <div className={`text-corpo numerico font-semibold ${tomDoSaldo(dados.aRepassar)}`}>
               {formatarMoeda(dados.aRepassar)}
             </div>
             <div className="text-mini text-tinta-3 mt-0.5">a repassar</div>
           </div>
-          <BotaoTexto
-            type="button"
-            onClick={() => setAberto((a) => !a)}
-            aria-expanded={aberto}
-            aria-controls={painel}
-            aria-label={`Extrato e pagamentos de ${dados.nome}`}
-            className="inline-flex items-center"
-          >
-            <ChevronDown
-              size={15}
-              strokeWidth={2}
-              aria-hidden="true"
-              className={`transition-transform duration-200 ${aberto ? "rotate-180" : ""}`}
-            />
-          </BotaoTexto>
-        </FimDaLinha>
+        </ValoresDaLinha>
+        {/* Depois dos valores no computador; no celular, na linha do nome —
+            embaixo da grade de valores ela ficaria sozinha numa linha. */}
+        <BotaoTexto
+          type="button"
+          onClick={() => setAberto((a) => !a)}
+          aria-expanded={aberto}
+          aria-controls={painel}
+          aria-label={`Extrato e pagamentos de ${dados.nome}`}
+          className="inline-flex items-center order-2 sm:order-3"
+        >
+          <ChevronDown
+            size={15}
+            strokeWidth={2}
+            aria-hidden="true"
+            className={`transition-transform duration-200 ${aberto ? "rotate-180" : ""}`}
+          />
+        </BotaoTexto>
       </LinhaDado>
 
       {/* `hidden`, e não desmontar: o que foi digitado sobrevive a fechar e abrir. */}
@@ -316,6 +318,32 @@ export function LinhaRepasse({
   );
 }
 
+/**
+ * Os valores de uma linha de repasse.
+ *
+ * No computador, a fileira de colunas fixas de `FimDaLinha` — é o que alinha
+ * previsto, devido, pago e saldo de um preposto com os do seguinte. No
+ * celular, quatro colunas de 112px não cabem em 375: a fileira (que não pode
+ * encolher) passava da borda e o cartão cortava o "pago" e o "a repassar".
+ * Ali eles viram uma grade, dois ou três por linha.
+ */
+export function ValoresDaLinha({
+  colunas = 2,
+  children,
+}: {
+  colunas?: 2 | 3;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`grid ${colunas === 3 ? "grid-cols-3" : "grid-cols-2"} gap-x-4 gap-y-2.5 basis-full order-3
+        sm:order-2 sm:flex sm:items-center sm:justify-end sm:gap-4 sm:basis-auto sm:ml-auto sm:shrink-0`}
+    >
+      {children}
+    </div>
+  );
+}
+
 /** O mesmo saldo, na tela do preposto: somente leitura. */
 export function ResumoRepasse({ dados }: { dados: DadosRepasse }) {
   return (
@@ -326,16 +354,16 @@ export function ResumoRepasse({ dados }: { dados: DadosRepasse }) {
             titulo="Do escritório"
             detalhe="sua fatia do que a indústria já pagou"
           />
-          <FimDaLinha>
-            <ValorLinha className="w-28" valor={formatarMoeda(dados.devido)} nota="devido" />
-            <ValorLinha className="w-28" valor={formatarMoeda(dados.pago)} nota="recebido" />
-            <div className="w-28 text-right shrink-0">
+          <ValoresDaLinha colunas={3}>
+            <ValorLinha className="sm:w-28" valor={formatarMoeda(dados.devido)} nota="devido" />
+            <ValorLinha className="sm:w-28" valor={formatarMoeda(dados.pago)} nota="recebido" />
+            <div className="sm:w-28 text-right shrink-0">
               <div className={`text-corpo numerico font-semibold ${tomDoSaldo(dados.aRepassar)}`}>
                 {formatarMoeda(dados.aRepassar)}
               </div>
               <div className="text-mini text-tinta-3 mt-0.5">a receber</div>
             </div>
-          </FimDaLinha>
+          </ValoresDaLinha>
         </LinhaDado>
       </Painel>
       <NotaAnterior anterior={dados.anterior} quem="preposto" />

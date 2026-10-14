@@ -698,6 +698,12 @@ export type ColunaTabela = {
  *
  * `larguraMinima` vai no elemento de dentro e a rolagem no de fora: a tabela
  * rola dentro do próprio contêiner em vez de arrastar a página junto.
+ *
+ * O `relative` do contêiner é o que faz isso valer de verdade. Sem ele, o que
+ * é `position: absolute` lá dentro — o rótulo `sr-only` de uma coluna, o "R$"
+ * de um campo — se posicionava pela PÁGINA, escapava do recorte da rolagem e
+ * esticava o documento: no celular, a tela de Comissões rolava 560px para o
+ * lado, até onde não havia nada.
  */
 export function Tabela({
   colunas,
@@ -714,7 +720,7 @@ export function Tabela({
   className?: string;
 }) {
   return (
-    <div className={`overflow-x-auto -mx-1 px-1 ${className}`}>
+    <div className={`relative overflow-x-auto -mx-1 px-1 ${className}`}>
       <table className={`w-full border-collapse text-corpo ${larguraMinima}`}>
         <thead>
           <tr className="border-b border-filete">

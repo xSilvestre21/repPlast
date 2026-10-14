@@ -7,7 +7,6 @@ import {
   Celula,
   Emblema,
   EstadoVazio,
-  FimDaLinha,
   GradeTotais,
   LinhaDado,
   Painel,
@@ -57,7 +56,7 @@ import {
 import { LinhaComissao, type LinhaPedido } from "./acerto";
 import { colunasDaComissao } from "./colunas";
 import { PainelMeta } from "./painel-meta";
-import { LinhaRepasse, ResumoRepasse, type DadosRepasse } from "./repasse";
+import { LinhaRepasse, ResumoRepasse, ValoresDaLinha, type DadosRepasse } from "./repasse";
 import { Pagina } from "@/components/pagina";
 import { NavegadorMes, nomeDoMes } from "@/components/navegador-mes";
 
@@ -336,22 +335,24 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
                 é com esses números que os de cima se comparam. */}
             <LinhaDado className="bg-folha">
               <span className="text-corpo font-medium flex-1">Fica com o escritório</span>
-              <FimDaLinha>
+              <ValoresDaLinha>
                 <ValorLinha
-                  className="w-28"
+                  className="sm:w-28"
                   valor={formatarMoeda(total.previstoDoEscritorio.toString())}
                   nota="previsto"
                 />
                 <ValorLinha
-                  className="w-28"
+                  className="sm:w-28"
                   valor={formatarMoeda(total.recebidoDoEscritorio.toString())}
                   nota="recebido"
                 />
-                <div className="w-28" aria-hidden="true" />
-                <div className="w-28" aria-hidden="true" />
-                {/* O lugar da seta das linhas de cima. */}
-                <div className="w-[19px]" aria-hidden="true" />
-              </FimDaLinha>
+                {/* Só no computador: guardam as colunas de pago, saldo e a
+                    seta das linhas de cima, para os valores caírem embaixo
+                    dos deles. No celular, a grade já alinha sozinha. */}
+                <div className="hidden sm:block w-28" aria-hidden="true" />
+                <div className="hidden sm:block w-28" aria-hidden="true" />
+                <div className="hidden sm:block w-[19px]" aria-hidden="true" />
+              </ValoresDaLinha>
             </LinhaDado>
           </Painel>
         </Cartao>
