@@ -1,5 +1,5 @@
 import { carregarOrcamentoParaPdf, gerarPdfOrcamento } from "@/lib/pdf/gerar-orcamento";
-import { sessaoAtual } from "@/lib/sessao";
+import { sessaoComAcesso } from "@/lib/sessao";
 import { respostaDeErro, sessaoExpiradaNoArquivo } from "@/lib/resposta-de-erro";
 
 /**
@@ -18,7 +18,7 @@ export async function GET(
 
   // Rota de arquivo não passa por layout: o guarda de sessão é aqui, e o ator
   // viaja junto para que um preposto não baixe a proposta de outro pela URL.
-  const sessao = await sessaoAtual();
+  const sessao = await sessaoComAcesso();
   if (!sessao) return sessaoExpiradaNoArquivo();
 
   const orcamento = await carregarOrcamentoParaPdf(id, sessao.organizacaoId, {

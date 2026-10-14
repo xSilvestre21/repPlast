@@ -1353,3 +1353,126 @@ body {
 :root[data-animacoes="desativadas"] *::after {
   transition-duration: 0.01ms !important;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Tela de entrada (landing)                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * O relógio de cada etapa do "Como funciona".
+ *
+ * O fim desta animação é o que passa para a etapa seguinte (`onAnimationEnd`
+ * em `como-funciona.tsx`): pausar é congelar a animação, e com as animações
+ * desligadas na conta ela não roda — o avanço automático some junto.
+ */
+.etapa-progresso {
+  animation: etapa-avanca 5.5s linear forwards;
+}
+
+@keyframes etapa-avanca {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+:root[data-animacoes="desativadas"] .etapa-progresso { display: none; }
+
+/**
+ * Régua das medidas: o `<input type="range">` com o traço fino do sistema e o
+ * pegador como a pílula preta — é o controle que a pessoa veio mexer.
+ */
+.regua {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 1.25rem;
+  background: transparent;
+  cursor: pointer;
+}
+
+.regua::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--filete-forte);
+}
+
+.regua::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--filete-forte);
+}
+
+.regua::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -7px;
+  border-radius: 999px;
+  background: var(--tinta);
+  border: 3px solid var(--folha);
+  box-shadow: var(--sombra);
+  transition: transform 0.15s ease;
+}
+
+.regua::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--tinta);
+  border: 3px solid var(--folha);
+  box-shadow: var(--sombra);
+}
+
+.regua:active::-webkit-slider-thumb { transform: scale(1.15); }
+
+/**
+ * O plano em destaque: um anel azul por fora da sombra. Azul porque é a cor do
+ * que se clica — o cartão inteiro é o convite.
+ */
+.plano-recomendado {
+  box-shadow: 0 0 0 1.5px var(--carimbo), var(--sombra-alta);
+}
+
+/**
+ * Perguntas: `<details>` que abre deslizando, sem JavaScript.
+ *
+ * `interpolate-size` deixa a altura animar até `auto`; navegador que não
+ * conhece simplesmente abre de uma vez, que é o comportamento nativo.
+ */
+.pergunta {
+  interpolate-size: allow-keywords;
+}
+
+.pergunta::details-content {
+  height: 0;
+  overflow: clip;
+  transition:
+    height 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    content-visibility 0.3s allow-discrete;
+}
+
+.pergunta[open]::details-content {
+  height: auto;
+}
+
+.pergunta summary {
+  list-style: none;
+}
+
+.pergunta summary::-webkit-details-marker {
+  display: none;
+}
+
+.pergunta .pergunta-sinal {
+  transition: transform 0.25s ease;
+}
+
+.pergunta[open] .pergunta-sinal {
+  transform: rotate(45deg);
+}
+
+:root[data-animacoes="desativadas"] .pergunta::details-content { transition: none; }
+
+/** Rolagem suave para as âncoras do menu da landing. */
+html:has(.landing) {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
+}

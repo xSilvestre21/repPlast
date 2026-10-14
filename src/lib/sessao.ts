@@ -28,6 +28,14 @@ const SESSAO_EXPIRADA =
   "Sua sessão expirou. Abra o sistema em outra aba, entre de novo e volte aqui para salvar — " +
   "assim o que você digitou não se perde.";
 
+/**
+ * Assinatura não paga no meio de uma ação: a tela estava aberta quando a
+ * cobrança venceu. As páginas nem chegam aqui — o layout leva a `/assinatura`.
+ */
+const ASSINATURA_PENDENTE =
+  "A assinatura do escritório não está em dia, e por isso não dá para salvar agora. Abra o " +
+  "sistema em outra aba para ver o que falta e regularizar.";
+
 const COOKIE = "repplast_sessao";
 const DURACAO_DIAS = 30;
 
@@ -39,6 +47,8 @@ export interface Sessao {
   papel: "ADMIN" | "REPRESENTANTE";
   /// Plano do escritório. Decide se as telas de preposto existem.
   plano: "PADRAO" | "PLUS";
+  /// Só ATIVA usa o sistema; o resto vai para `/assinatura`.
+  assinatura: "AGUARDANDO_PAGAMENTO" | "ATIVA" | "ATRASADA" | "CANCELADA";
   /// Nome do escritório, para exibir no lugar do nome do produto na barra.
   organizacaoNome: string;
   /// Preferência de conta que substitui `prefers-reduced-motion` do sistema.
@@ -119,7 +129,7 @@ export const sessaoAtual = cache(async (): Promise<Sessao | null> => {
       ativo: true,
       reduzirAnimacoes: true,
       ocultarValores: true,
-      organizacao: { select: { nome: true, ativa: true, plano: true } },
+      organizacao: { select: { nome: true, ativa: true, plano: true, assinatura: true } },
     },
   });
 
@@ -135,6 +145,7 @@ export const sessaoAtual = cache(async (): Promise<Sessao | null> => {
     email: usuario.email,
     papel: usuario.papel,
     plano: usuario.organizacao.plano,
+    assinatura: usuario.organizacao.assinatura,
     organizacaoNome: usuario.organizacao.nome,
     reduzirAnimacoes: usuario.reduzirAnimacoes,
     ocultarValores: usuario.ocultarValores,
@@ -149,10 +160,34 @@ export const sessaoAtual = cache(async (): Promise<Sessao | null> => {
  * 401. Também evita que um esquecimento vire acesso a dados de outro tenant.
  */
 export async function organizacaoAtual(): Promise<string> {
+  return (await sessaoComAssinatura()).organizacaoId;
+}
+
+/**
+ * A sessão de quem pode TRABALHAR: logado e com a assinatura em dia. `null`
+ * em qualquer outro caso.
+ *
+ * É o guarda das rotas de arquivo (PDF, exportação, busca), que não passam por
+ * layout e respondem 401 em vez de lançar.
+ */
+export async function sessaoComAcesso(): Promise<Sessao | null> {
+  const sessao = await sessaoAtual();
+  return sessao?.assinatura === "ATIVA" ? sessao : null;
+}
+
+/**
+ * A sessão, exigindo a assinatura em dia.
+ *
+ * O bloqueio mora AQUI, e não só no layout, porque as rotas de arquivo (PDF,
+ * exportação) e as ações não passam por layout: sem ele, quem não pagou ainda
+ * baixaria o PDF montando a URL à mão.
+ */
+async function sessaoComAssinatura(): Promise<Sessao> {
   const sessao = await sessaoAtual();
 
   if (!sessao) throw new ErroParaUsuario(SESSAO_EXPIRADA);
-  return sessao.organizacaoId;
+  if (sessao.assinatura !== "ATIVA") throw new ErroParaUsuario(ASSINATURA_PENDENTE);
+  return sessao;
 }
 
 /**
@@ -171,8 +206,7 @@ export async function escopoAtual(): Promise<{
   plano: Sessao["plano"];
   db: ReturnType<typeof dbParaOrganizacao>;
 }> {
-  const sessao = await sessaoAtual();
-  if (!sessao) throw new ErroParaUsuario(SESSAO_EXPIRADA);
+  const sessao = await sessaoComAssinatura();
 
   return {
     organizacaoId: sessao.organizacaoId,

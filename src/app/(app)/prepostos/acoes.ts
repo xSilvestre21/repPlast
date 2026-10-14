@@ -12,6 +12,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { atualizarValorAssinatura, ErroAsaas } from "@/lib/asaas";
 import { dbAdministrativo, type DbOrganizacao } from "@/lib/db";
 import {
   ErroDeCampo,
@@ -21,6 +22,7 @@ import {
 } from "@/lib/erro-formulario";
 import { normalizarTelefone } from "@/lib/mascara";
 import { exigirNumero } from "@/lib/numero-br";
+import { PLANOS, valorMensal } from "@/lib/planos";
 import { gerarHashSenha } from "@/lib/senha";
 import { TAMANHO_MINIMO_SENHA } from "@/lib/senha-regras";
 import { escopoAtual } from "@/lib/sessao";
@@ -56,6 +58,45 @@ async function contextoAdmin() {
   if (escopo.plano !== "PLUS") throw new ErroParaUsuario("Prepostos fazem parte do plano Plus.");
 
   return escopo;
+}
+
+/**
+ * Acerta a mensalidade no Asaas quando o número de prepostos ativos vai mudar.
+ *
+ * O Max cobre 3 prepostos; do quarto em diante cada um soma
+ * `precoPrepostoExtra`. Roda ANTES de gravar: se o Asaas recusar, o preposto
+ * não é criado nem reativado — melhor que um preposto trabalhando sem estar na
+ * cobrança. Escritório sem assinatura no Asaas (os de antes da cobrança) não
+ * tem o que acertar.
+ */
+async function acertarMensalidade(
+  db: DbOrganizacao,
+  organizacaoId: string,
+  variacao: 1 | -1,
+): Promise<void> {
+  const [organizacao, ativos] = await Promise.all([
+    db.organizacao.findUniqueOrThrow({
+      where: { id: organizacaoId },
+      select: { plano: true, asaasAssinaturaId: true },
+    }),
+    db.usuario.count({ where: { organizacaoId, papel: "REPRESENTANTE", ativo: true } }),
+  ]);
+
+  if (!organizacao.asaasAssinaturaId) return;
+
+  const antes = valorMensal(organizacao.plano, ativos);
+  const depois = valorMensal(organizacao.plano, ativos + variacao);
+  if (antes.equals(depois)) return;
+
+  try {
+    await atualizarValorAssinatura(organizacao.asaasAssinaturaId, depois);
+  } catch (erro) {
+    if (!(erro instanceof ErroAsaas)) throw erro;
+    throw new ErroParaUsuario(
+      `Com este, o escritório passa de ${PLANOS.PLUS.prepostosInclusos} prepostos ativos, e não ` +
+        "conseguimos acertar a mensalidade agora. Nada foi alterado — tente de novo em alguns minutos.",
+    );
+  }
 }
 
 function lerTexto(valor: FormDataEntryValue | null): string {
@@ -168,6 +209,8 @@ export async function inscreverPreposto(
       );
     }
 
+    await acertarMensalidade(db, organizacaoId, 1);
+
     const preposto = await db.usuario.create({
       data: {
         organizacaoId,
@@ -243,6 +286,8 @@ async function gravarAlternarAtivoPreposto(id: string, _formData: FormData): Pro
   });
 
   if (!preposto) throw new ErroParaUsuario(PREPOSTO_SUMIU);
+
+  await acertarMensalidade(db, organizacaoId, preposto.ativo ? -1 : 1);
 
   await db.usuario.updateMany({
     where: { id, organizacaoId, papel: "REPRESENTANTE" },

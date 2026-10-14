@@ -94,6 +94,18 @@ enum Plano {
   PLUS
 }
 
+/// Situação da assinatura paga no Asaas (`lib/asaas.ts`).
+///
+/// Só ATIVA usa o sistema; os outros estados caem na tela `/assinatura`, que
+/// explica o que houve e reabre o pagamento. Quem muda este campo é o webhook,
+/// nunca uma tela — um trigger recusa a escrita vinda do papel da aplicação.
+enum Assinatura {
+  AGUARDANDO_PAGAMENTO
+  ATIVA
+  ATRASADA
+  CANCELADA
+}
+
 /// Papel do usuário DENTRO do escritório.
 ///
 /// ADMIN é o dono da operação: enxerga tudo e administra cadastros e prepostos.
@@ -127,6 +139,20 @@ model Organizacao {
   /// e nada no sistema muda até alguém precisar de preposto.
   plano Plano @default(PADRAO)
 
+  /// Nasce ATIVA para os escritórios de antes da cobrança e para o seed; o
+  /// cadastro grava AGUARDANDO_PAGAMENTO explicitamente.
+  assinatura        Assinatura @default(ATIVA)
+  /// Último checkout aberto — é por ele que o webhook `CHECKOUT_PAID` acha o escritório.
+  asaasCheckoutId   String?    @unique
+  asaasClienteId    String?
+  /// A assinatura recorrente criada pelo checkout pago. Os eventos de cobrança
+  /// seguintes chegam com ela.
+  asaasAssinaturaId String?    @unique
+  /// CPF/CNPJ e CEP de quem paga, só dígitos. O checkout do Asaas exige os
+  /// dois, e guardá-los é o que deixa reabrir o pagamento sem perguntar de novo.
+  cobrancaDocumento String?
+  cobrancaCep       String?
+
   /// Contador do número do orçamento. É POR ESCRITÓRIO, e não por indústria
   /// como o do pedido: o orçamento é documento do representante para o cliente,
   /// e a indústria nem fica sabendo dele.
@@ -144,6 +170,17 @@ model Organizacao {
   compromissos Compromisso[]
 
   @@map("organizacao")
+}
+
+/// Eventos do webhook do Asaas já processados. A entrega é "pelo menos uma
+/// vez": o mesmo evento pode chegar de novo, e o id dele é a chave que impede
+/// processar duas vezes. Tabela só administrativa — o RLS fecha para a aplicação.
+model EventoAsaas {
+  id         String   @id
+  tipo       String
+  recebidoEm DateTime @default(now())
+
+  @@map("evento_asaas")
 }
 
 model Usuario {

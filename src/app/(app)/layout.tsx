@@ -15,6 +15,10 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
   const sessao = await sessaoAtual();
 
   if (!sessao) redirect("/entrar");
+  // Pagamento pendente, atrasado ou cancelado: a tela de assinatura explica o
+  // que houve e reabre o pagamento. As ações e as rotas de arquivo têm a mesma
+  // barreira em `sessao.ts`, para quem chegar sem passar por aqui.
+  if (sessao.assinatura !== "ATIVA") redirect("/assinatura");
 
   return (
     <>

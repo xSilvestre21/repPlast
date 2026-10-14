@@ -67,6 +67,9 @@ O erro aparece **embaixo do campo que o causou**, em português, dizendo o que f
 
 - Não existe `.env.example`; variáveis em uso: `DIRECT_DATABASE_URL`, `DATABASE_URL`,
   `APP_DB_ROLE`, `SESSAO_SECRET` e `EMAIL_CHAVE` (cifra a senha das caixas de e-mail; ver README)
+- Cobrança (Asaas): `ASAAS_URL` (sandbox `https://api-sandbox.asaas.com`), `ASAAS_API_KEY`,
+  `ASAAS_WEBHOOK_TOKEN` (o token do webhook no painel do Asaas — nunca a API key) e `APP_URL`
+  (base das URLs de volta do checkout)
 - Nenhuma `NEXT_PUBLIC_*` hoje — confirmar que o valor é seguro no client antes de criar uma
 - `.env` inteiro é ignorado pelo git, não só `.env.local`
 

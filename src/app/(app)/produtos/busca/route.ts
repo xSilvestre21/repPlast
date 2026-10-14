@@ -1,5 +1,5 @@
 import { dbParaOrganizacao } from "@/lib/db";
-import { sessaoAtual } from "@/lib/sessao";
+import { sessaoComAcesso } from "@/lib/sessao";
 
 import { buscarProdutos, filtrosDosParametros } from "../consulta";
 
@@ -12,7 +12,7 @@ import { buscarProdutos, filtrosDosParametros } from "../consulta";
  */
 export async function GET(requisicao: Request) {
   // Rota de arquivo não passa pelo layout: o guarda de sessão é aqui.
-  const sessao = await sessaoAtual();
+  const sessao = await sessaoComAcesso();
   if (!sessao) return new Response("Não autenticado", { status: 401 });
 
   const db = dbParaOrganizacao(sessao.organizacaoId, {

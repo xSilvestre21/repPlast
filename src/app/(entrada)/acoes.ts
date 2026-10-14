@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 
+import { criarCheckout, ErroAsaas } from "@/lib/asaas";
 import { dbAdministrativo } from "@/lib/db";
 import {
   ErroDeCampo,
@@ -9,14 +10,25 @@ import {
   falhou,
   type EstadoFormulario,
 } from "@/lib/erro-formulario";
+import { normalizarCep, normalizarDocumento, somenteDigitos } from "@/lib/mascara";
+import { planoDaUrl, type CodigoPlano } from "@/lib/planos";
 import { conferirSenha, gerarHashSenha } from "@/lib/senha";
 import { TAMANHO_MINIMO_SENHA } from "@/lib/senha-regras";
-import { criarSessao, encerrarSessao } from "@/lib/sessao";
+import { criarSessao, encerrarSessao, sessaoAtual } from "@/lib/sessao";
 
 export type { EstadoFormulario };
 
 const EMAIL_INCOMPLETO =
   "Este e-mail parece incompleto. Confira se tem o @ e o final, como voce@escritorio.com.br.";
+
+/**
+ * O Asaas fora do ar ou recusando o pedido. A conta já existe nesse ponto, e
+ * por isso a frase manda entrar — e não cadastrar de novo, que daria "e-mail
+ * já cadastrado".
+ */
+const PAGAMENTO_INDISPONIVEL =
+  "Não conseguimos abrir a página de pagamento agora. Sua conta foi criada: entre com o seu " +
+  "e-mail e senha em alguns minutos e use “Ir para o pagamento” para concluir.";
 
 function lerTexto(valor: FormDataEntryValue | null): string {
   return typeof valor === "string" ? valor.trim() : "";
@@ -85,16 +97,71 @@ export async function sair(): Promise<void> {
 }
 
 /**
- * Cria um escritório novo com o seu primeiro usuário.
+ * Abre um checkout novo e o amarra ao escritório.
+ *
+ * Grava o id ANTES de devolver o link: é por ele que o webhook `CHECKOUT_PAID`
+ * acha o escritório, e um pagamento feito num checkout que não foi gravado não
+ * liberaria ninguém. O cliente administrativo é necessário porque um trigger
+ * impede o papel da aplicação de mexer nos campos de cobrança.
+ */
+async function abrirPagamento(organizacao: {
+  id: string;
+  plano: CodigoPlano;
+  nome: string;
+  email: string;
+  documento: string;
+  cep: string;
+}): Promise<string> {
+  const checkout = await criarCheckout(organizacao.plano, {
+    nome: organizacao.nome,
+    email: organizacao.email,
+    cpfCnpj: organizacao.documento,
+    cep: organizacao.cep,
+  });
+
+  await dbAdministrativo().organizacao.update({
+    where: { id: organizacao.id },
+    data: { asaasCheckoutId: checkout.id },
+  });
+
+  return checkout.url;
+}
+
+/** Falha do Asaas vira frase em português; o resto segue para o `falhou`. */
+async function abrirPagamentoOu(
+  frase: string,
+  organizacao: Parameters<typeof abrirPagamento>[0],
+): Promise<string> {
+  try {
+    return await abrirPagamento(organizacao);
+  } catch (erro) {
+    if (erro instanceof ErroAsaas) throw new ErroParaUsuario(frase);
+    throw erro;
+  }
+}
+
+/**
+ * Cria um escritório novo com o seu primeiro usuário, e manda pagar.
  *
  * É o onboarding do SaaS: cada cadastro nasce como um tenant isolado, e a
- * partir daí nada mais atravessa a fronteira entre escritórios.
+ * partir daí nada mais atravessa a fronteira entre escritórios. Nasce
+ * AGUARDANDO_PAGAMENTO e com a sessão aberta — quem fechar o checkout sem
+ * pagar cai em `/assinatura` ao entrar, e de lá retoma.
  */
 export async function cadastrar(
   _estado: EstadoFormulario,
   formData: FormData,
 ): Promise<EstadoFormulario> {
+  let pagamento: string;
+
   try {
+    const plano = planoDaUrl(lerTexto(formData.get("plano")));
+    if (!plano) {
+      throw new ErroParaUsuario(
+        "Escolha um plano antes de criar o escritório — use “Trocar plano”, logo acima.",
+      );
+    }
+
     const escritorio = lerTexto(formData.get("escritorio"));
     const nome = lerTexto(formData.get("nome"));
     const email = lerEmail(formData.get("email"));
@@ -124,6 +191,18 @@ export async function cadastrar(
       );
     }
 
+    // O checkout do Asaas exige os dois; aqui eles são obrigatórios, ao
+    // contrário do cadastro de cliente, onde vazio quer dizer "não sei".
+    const documento = normalizarDocumento(lerTexto(formData.get("documento")), "documento");
+    if (!documento) {
+      throw new ErroDeCampo(
+        "documento",
+        "Informe o CPF ou o CNPJ de quem paga a assinatura, como 123.456.789-09.",
+      );
+    }
+    const cep = normalizarCep(lerTexto(formData.get("cep")), "cep");
+    if (!cep) throw new ErroDeCampo("cep", "Informe o CEP de quem paga, como 14781-160.");
+
     const db = dbAdministrativo();
 
     if (await db.usuario.findUnique({ where: { email }, select: { id: true } })) {
@@ -142,17 +221,90 @@ export async function cadastrar(
     const organizacao = await db.organizacao.create({
       data: {
         nome: escritorio,
+        plano: plano.codigo,
+        assinatura: "AGUARDANDO_PAGAMENTO",
+        cobrancaDocumento: somenteDigitos(documento),
+        cobrancaCep: somenteDigitos(cep),
         usuarios: {
           create: { nome, email, senhaHash: await gerarHashSenha(senha) },
         },
       },
-      select: { usuarios: { select: { id: true } } },
+      select: { id: true, usuarios: { select: { id: true } } },
     });
 
+    // A sessão vem antes do pagamento: se o Asaas falhar, a conta já existe e
+    // a pessoa retoma de `/assinatura` sem cadastrar de novo.
     await criarSessao(organizacao.usuarios[0].id);
+
+    pagamento = await abrirPagamentoOu(PAGAMENTO_INDISPONIVEL, {
+      id: organizacao.id,
+      plano: plano.codigo,
+      nome,
+      email,
+      documento: somenteDigitos(documento),
+      cep: somenteDigitos(cep),
+    });
   } catch (erro) {
     return falhou(erro, formData);
   }
 
-  redirect("/");
+  // Fora do `try`: o `redirect` lança de propósito, e o `catch` o engoliria.
+  redirect(pagamento);
+}
+
+/**
+ * Abre outro checkout para o escritório da sessão — o anterior venceu, foi
+ * fechado, ou a assinatura atrasou ou foi cancelada.
+ *
+ * Usa `sessaoAtual` e não `escopoAtual`: este é justamente o caminho de quem
+ * ainda não tem a assinatura em dia.
+ */
+export async function reabrirPagamento(
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  let pagamento: string;
+
+  try {
+    const sessao = await sessaoAtual();
+    if (!sessao) {
+      throw new ErroParaUsuario("Sua sessão expirou. Entre de novo para concluir o pagamento.");
+    }
+    if (sessao.papel !== "ADMIN") {
+      throw new ErroParaUsuario(
+        "Quem paga a assinatura é o administrador do escritório. Peça a essa pessoa para entrar e " +
+          "concluir o pagamento.",
+      );
+    }
+    if (sessao.assinatura === "ATIVA") {
+      throw new ErroParaUsuario("A assinatura já está em dia. Use “Ir para o sistema”.");
+    }
+
+    const organizacao = await dbAdministrativo().organizacao.findUniqueOrThrow({
+      where: { id: sessao.organizacaoId },
+      select: { plano: true, cobrancaDocumento: true, cobrancaCep: true },
+    });
+
+    if (!organizacao.cobrancaDocumento || !organizacao.cobrancaCep) {
+      throw new ErroParaUsuario(
+        "Faltam o CPF/CNPJ e o CEP de quem paga neste escritório. Fale com o suporte para concluir.",
+      );
+    }
+
+    pagamento = await abrirPagamentoOu(
+      "Não conseguimos abrir a página de pagamento agora. Tente de novo em alguns minutos.",
+      {
+        id: sessao.organizacaoId,
+        plano: organizacao.plano,
+        nome: sessao.nome,
+        email: sessao.email,
+        documento: organizacao.cobrancaDocumento,
+        cep: organizacao.cobrancaCep,
+      },
+    );
+  } catch (erro) {
+    return falhou(erro, formData);
+  }
+
+  redirect(pagamento);
 }

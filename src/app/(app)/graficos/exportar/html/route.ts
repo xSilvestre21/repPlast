@@ -1,7 +1,7 @@
 import { dbAdministrativo, dbParaOrganizacao } from "@/lib/db";
 import { relatorioEmHtml } from "@/lib/grafico/documento-html";
 import { nomeArquivoGraficos, relatorioDosGraficos } from "@/lib/pdf/gerar-graficos";
-import { sessaoAtual } from "@/lib/sessao";
+import { sessaoComAcesso } from "@/lib/sessao";
 
 import { carregarDadosDosGraficos } from "../../dados";
 import { parametrosDoRelatorio } from "../parametros";
@@ -18,7 +18,7 @@ import { sessaoExpiradaNoArquivo } from "@/lib/resposta-de-erro";
 export async function GET(requisicao: Request) {
   // Rota de arquivo não passa por layout, então o guarda de sessão é aqui.
   // Responde 401 em vez de lançar: sem sessão não é erro do servidor.
-  const sessao = await sessaoAtual();
+  const sessao = await sessaoComAcesso();
   if (!sessao) return sessaoExpiradaNoArquivo();
 
   const url = new URL(requisicao.url);
