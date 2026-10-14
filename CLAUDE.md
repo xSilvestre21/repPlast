@@ -11,8 +11,8 @@ comissões. Porta o sistema legado SICOV (dados reais em `referencia/`, nunca ve
 - Tailwind CSS 4 — paleta em variáveis CSS puras (`src/app/globals.css`), sem shadcn/ui
 - Zod para validação; `Decimal` (decimal.js) para todo valor monetário — nunca `float`
 - Prisma 7 + `@prisma/adapter-pg` sobre PostgreSQL
-- Server Component First — hoje **não há nenhum `'use client'` no projeto**; formulários usam
-  `<form action={...}>` direto com Server Actions
+- Server Component First — `'use client'` só onde há interação (formulários com
+  `useActionState`, campos, listas com busca); formulários usam `<Formulario>` com Server Actions
 
 ## Commands
 
@@ -37,6 +37,24 @@ comissões. Porta o sistema legado SICOV (dados reais em `referencia/`, nunca ve
 - Sem `types/` central: schemas Zod e tipos ficam junto do módulo que os usa
 - Comportamento herdado do SICOV que parece mal resolvido não é bug — perguntar antes de remover
   ou "melhorar"; reproduzir é o padrão, melhoria é decisão separada
+
+## Erros de formulário
+
+O erro aparece **embaixo do campo que o causou**, em português, dizendo o que fazer. Padrão único:
+
+- Ações devolvem `EstadoFormulario` (`src/lib/erro-formulario.ts`). Recusa de campo:
+  `throw new ErroDeCampo("name", frase)`; recusa geral: `throw new ErroParaUsuario(frase)`; o
+  `catch` é sempre `return falhou(erro, formData)` — nunca `erro.message` direto (vaza texto do
+  Prisma/RLS/SMTP); `falhou` também devolve o que foi digitado (senha nunca)
+- Número de formulário: `exigirNumero`/`exigirNumeroDe` (`numero-br.ts`), nunca
+  `lerNumeroBr(...) ?? 0` — "abc" tem de ser recusado, não gravado como zero
+- Tela: `<Formulario estado={estado} action={enviar}>` e `<ErroGeral />` logo acima do botão de
+  enviar. `Campo`/`Selecao`/`AreaTexto`/`CampoData`/`SelecaoBuscavel` acham o erro pelo `name`;
+  linha de tabela usa `campoDaLinha("email", i)` no servidor e `data-campo` no input
+- Botão que pode ser recusado (excluir, inativar, status): ação `(estado, formData) =>
+  EstadoFormulario` dentro de `<AcaoComRecusa>` — ação `void` que lança vira página de erro
+- Frase: o que houve + como resolver, com exemplo ("como 1.250,00") e o nome real do botão
+  citado; na tabela, a linha ("Na faixa 3…")
 
 ## Code Style
 
@@ -64,11 +82,19 @@ comissões. Porta o sistema legado SICOV (dados reais em `referencia/`, nunca ve
 
 - `revalidatePath`/`revalidateTag` só funcionam dentro de Server Actions/Route Handlers
 - Não há `middleware.ts`; a proteção de rota é o layout `src/app/(app)/layout.tsx` — rotas de
-  arquivo (PDF, logo) não passam por layout e se protegem sozinhas, respondendo 401
+  arquivo (PDF, exportação) não passam por layout e se protegem sozinhas, respondendo 401 com
+  `respostaDeErro`/`sessaoExpiradaNoArquivo` (`src/lib/resposta-de-erro.ts`)
 - Superusuário do Postgres ignora Row Level Security — nunca validar isolamento multi-tenant
   conectado como dono do banco
 - Componente de ícone não atravessa de Server para Client Component como prop ("Only plain
   objects..."); passar o nome do ícone e resolver do lado client
+- Constante exportada de módulo `'use client'` chega ao Server Component como referência, não
+  como valor — por isso as classes de controle moram em `components/controle.ts`, fora de
+  `campos.tsx`
+- O React 19 limpa o `<form action>` depois de cada envio, inclusive o recusado: campo não
+  controlado só volta preenchido pelo `valores` do estado (o `Campo` já faz isso pelo `name`)
+- Botão ao lado de campo: linha com `items-start` e `<EspacoDoRotulo />` sobre o botão — com
+  `items-end`, a frase de erro embaixo da caixa empurra o botão para baixo
 
 ## Git Commits
 
