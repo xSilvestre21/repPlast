@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Abrir o servidor de desenvolvimento do PC a partir do notebook, pela rede
+  // local. Sem isto o Next bloqueia os recursos de dev vindos de outra origem e
+  // a página carrega sem a parte interativa.
+  allowedDevOrigins: ["192.168.15.129"],
   experimental: {
     // Uploads passam por server action, e o padrão do Next é 1 MB. O maior é o
     // envio do pedido por e-mail: a aplicação valida 20 MB de anexos (ver
