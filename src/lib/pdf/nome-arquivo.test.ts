@@ -98,6 +98,12 @@ describe("nome do arquivo do relatório dos gráficos", () => {
     );
   });
 
+  it("aceita só o ano, para a exportação da janela", () => {
+    expect(nomeArquivoRelatorio("Representação Modelo", "2026", "csv")).toBe(
+      "Relatorio-Representacao-Modelo-2026.csv",
+    );
+  });
+
   it("não fica com o nome vazio quando o escritório é só símbolo", () => {
     expect(nomeArquivoRelatorio("***", "2026-12", "pdf")).toBe("Relatorio-Escritorio-12-2026.pdf");
   });

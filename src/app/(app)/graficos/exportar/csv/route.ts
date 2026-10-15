@@ -10,7 +10,8 @@ import {
   resumirComissao,
   type PedidoDaComissao,
 } from "@/lib/comissao-consulta";
-import { dbParaOrganizacao } from "@/lib/db";
+import { dbAdministrativo, dbParaOrganizacao } from "@/lib/db";
+import { nomeArquivoRelatorio } from "@/lib/pdf/nome-arquivo";
 import { sessaoComAcesso } from "@/lib/sessao";
 import { sessaoExpiradaNoArquivo } from "@/lib/resposta-de-erro";
 
@@ -75,31 +76,39 @@ export async function GET(requisicao: Request) {
     papel: sessao.papel,
   });
 
-  const pedidos =
+  const [pedidos, organizacao] = await Promise.all([
     escopo === "janela"
-      ? await pedidosDoIntervalo(
+      ? pedidosDoIntervalo(
           db,
           sessao.organizacaoId,
           deslocarCompetencia(competencia, -(meses - 1)),
           competencia,
           ehAdmin ? null : sessao.usuarioId,
         )
-      : await pedidosDaCompetencia(
+      : pedidosDaCompetencia(
           db,
           sessao.organizacaoId,
           competencia,
           ehAdmin ? null : sessao.usuarioId,
-        );
+        ),
+    dbAdministrativo().organizacao.findUnique({
+      where: { id: sessao.organizacaoId },
+      select: { nome: true },
+    }),
+  ]);
 
   const linhas = [
     CABECALHO.join(SEPARADOR),
     ...pedidos.map((pedido) => paraLinha(pedido, ehAdmin).join(SEPARADOR)),
   ];
 
-  const nome =
-    escopo === "janela"
-      ? `repplast-comissoes-${deslocarCompetencia(competencia, -(meses - 1))}-a-${competencia}.csv`
-      : `repplast-comissoes-${competencia}.csv`;
+  // O do mês leva mês e ano, como o PDF; o da janela leva só o ano — o do
+  // mês final, que é o que a pessoa escolheu na tela.
+  const nome = nomeArquivoRelatorio(
+    organizacao?.nome ?? "RepPlast",
+    escopo === "janela" ? competencia.slice(0, 4) : competencia,
+    "csv",
+  );
 
   // CRLF porque é o que o Excel espera; com LF puro algumas versões colam a
   // última coluna de uma linha na primeira da seguinte.

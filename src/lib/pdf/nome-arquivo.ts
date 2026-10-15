@@ -51,17 +51,21 @@ function semAcento(texto: string): string {
 }
 
 /**
- * Nome do arquivo do relatório dos gráficos (PDF e HTML).
+ * Nome do arquivo do relatório dos gráficos (PDF, HTML e CSV).
  *
- *     Relatorio-Representacao-Modelo-09-2026.pdf
+ *     Relatorio-Representacao-Modelo-09-2026.pdf   ← período "2026-09"
+ *     Relatorio-Representacao-Modelo-2026.csv      ← período "2026"
+ *
+ * O período é uma competência ("AAAA-MM") ou só o ano ("AAAA"), e sai na
+ * ordem de leitura: mês antes do ano, como as datas dos outros arquivos.
  *
  * O nome do escritório vai como foi cadastrado, só sem acento e com hífen no
  * lugar do espaço: o nome viaja no `Content-Disposition`, que só aceita ASCII
  * em `filename=` — com "ç" alguns navegadores trocam o nome por "download".
  */
-export function nomeArquivoRelatorio(escritorio: string, competencia: string, extensao: string): string {
-  const [ano, mes] = competencia.split("-");
-  return `Relatorio-${semAcento(escritorio) || "Escritorio"}-${mes}-${ano}.${extensao}`;
+export function nomeArquivoRelatorio(escritorio: string, periodo: string, extensao: string): string {
+  const quando = periodo.split("-").reverse().join("-");
+  return `Relatorio-${semAcento(escritorio) || "Escritorio"}-${quando}.${extensao}`;
 }
 
 /**
