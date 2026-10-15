@@ -187,10 +187,14 @@ function estaAtivo(href: string, caminho: string) {
  * como uma segunda cápsula dentro da primeira). Selecionado, recebe a mesma
  * pílula preta das outras.
  *
- * Entre `sm` e `lg` a barra não tem largura para sete rótulos: as abas dos
+ * Entre `sm` e `xl` a barra não tem largura para sete rótulos: as abas dos
  * lados mostram só o ícone (o nome fica no `title` e no `aria-label`), e o
  * Painel, que é a âncora, mantém o dele. Abaixo de `sm` a barra some e entra o
  * menu de três riscas (`MenuCelular`).
+ *
+ * `xl`, e não `lg`: com rótulo, as abas ocupam ~820 px, e o topo nunca passa
+ * de 1104 (`max-w-6xl` menos o recuo). Em 1024 px elas invadiam o avatar e a
+ * página ganhava rolagem lateral.
  */
 function Aba({
   item,
@@ -240,7 +244,7 @@ function Aba({
         // do caminho — nenhum some enquanto ela atravessa.
         className={`relative flex items-center gap-1.5 rounded-full py-1.5 text-corpo
           whitespace-nowrap transition-colors duration-200 ${
-            inicio ? "px-3.5" : "px-2.5 lg:px-3"
+            inicio ? "px-3.5" : "px-2.5 xl:px-3"
           } ${
             ativo
               ? "text-papel font-semibold"
@@ -256,7 +260,7 @@ function Aba({
         */}
         {ativo && <Pilula />}
         <Icone size={inicio ? 16 : 15} strokeWidth={ativo || inicio ? 2.25 : 1.75} aria-hidden="true" />
-        <span className={inicio ? "" : "hidden lg:inline"}>{item.rotulo}</span>
+        <span className={inicio ? "" : "hidden xl:inline"}>{item.rotulo}</span>
       </Link>
     </li>
   );
@@ -349,7 +353,7 @@ function MenuCelular({
         {aberto && (
           <div className="flex h-full flex-col">
             <div className="flex h-14 items-center justify-between gap-3 border-b border-filete px-4">
-              <span className="truncate text-medio font-extrabold tracking-[-0.03em]">
+              <span className="truncate text-medio font-extrabold tracking-[-0.03em]" title={nomeOrganizacao}>
                 {nomeOrganizacao}
               </span>
               <button
@@ -457,10 +461,16 @@ export function Navegacao({
           {/*
             O nome do escritório leva ao Painel — e faz a MESMA viagem que a aba
             dele: a mesma direção de deslize e a pílula indo até o Painel.
+
+            Ele é quem cede espaço: fica com o que sobra ao lado das abas (que
+            não encolhem, `min-w-fit` no `nav`), até 220 px, e corta com "…".
+            O nome inteiro fica no `title` e na gaveta do celular. Ao contrário,
+            um nome comprido empurrava as abas para cima do avatar.
           */}
           <Link
             href="/"
             onClick={() => partir(indicePainel, indiceAtual)}
+            title={nomeOrganizacao}
             className="min-w-0 max-w-[50vw] truncate text-medio font-extrabold tracking-[-0.03em]
               transition-colors hover:text-carimbo sm:max-w-[220px]"
           >
@@ -475,7 +485,7 @@ export function Navegacao({
             gaveta do celular não a repete, porque nome repetido faz o navegador
             abortar a animação.
           */}
-          <nav aria-label="Principal" className="hidden sm:block flex-1 min-w-0">
+          <nav aria-label="Principal" className="hidden sm:block flex-1 min-w-fit">
             {/*
               Sem fundo nem borda próprios: as abas ficam direto no fundo do
               topo. Uma cápsula cinza em volta delas pesava o cabeçalho — quem
