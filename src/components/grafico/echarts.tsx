@@ -12,7 +12,7 @@
  * cerca de 1 MB; assim a rota leva só os tipos de gráfico desta página.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import * as echarts from "echarts/core";
 import {
   BarChart,
@@ -41,7 +41,7 @@ import type { EChartsCoreOption, ECElementEvent } from "echarts/core";
 
 import { temaEcharts } from "@/lib/grafico/tema-echarts";
 
-import { naFila } from "./fila-de-graficos";
+import { naFila, segurarALargada } from "./fila-de-graficos";
 import { useTemaGrafico } from "./use-tema-grafico";
 
 echarts.use([
@@ -64,14 +64,22 @@ echarts.use([
   VisualMapComponent,
   LabelLayout,
   // Sem `UniversalTransition` (a transformação animada de um tipo de gráfico
-  // em outro): trocar de rosca para barras travava no meio do caminho e
-  // deixava a rosca congelada por cima das barras. A troca de visão é
-  // instantânea, como num painel de verdade.
+  // em outro): com poucos itens, a barra virando rosca passava por uma massa
+  // disforme. Cada troca de visão monta o gráfico do zero, com a animação de
+  // entrada dele — a rosca se fechando, as barras crescendo, a linha se
+  // desenhando.
   CanvasRenderer,
 ]);
 
 export type OpcaoGrafico = EChartsCoreOption;
 export type EventoGrafico = ECElementEvent;
+
+/**
+ * A animação de uma mudança de tamanho. O ritmo do resto é o padrão do
+ * ECharts (entrada de 1 s, `cubicOut`), de propósito: foi testado mais curto e
+ * em cascata, e ficou menos bonito.
+ */
+const DURACAO_DO_REDIMENSIONAMENTO = 300;
 
 /**
  * O que vale para todo gráfico, posto aqui para nenhum cartão esquecer:
@@ -133,6 +141,15 @@ export function descartar(instancia: echarts.ECharts) {
   }
 }
 
+
+/** Confere a caixa contra o último tamanho desenhado — e o atualiza. */
+function mudouDeTamanho(elemento: HTMLElement, ultimo: { current: { largura: number; altura: number } }) {
+  const { clientWidth: largura, clientHeight: altura } = elemento;
+  if (largura === ultimo.current.largura && altura === ultimo.current.altura) return false;
+  ultimo.current = { largura, altura };
+  return true;
+}
+
 export function Grafico({
   opcao,
   altura = 320,
@@ -180,20 +197,35 @@ export function Grafico({
 
   // A opção mais recente, para o gráfico que nasce depois do render (a fila).
   const opcaoAtual = useRef({ opcao, rotulo });
-  useEffect(() => {
+  useLayoutEffect(() => {
     opcaoAtual.current = { opcao, rotulo };
   }, [opcao, rotulo]);
+
+  // A opção que o gráfico já mostra — para o efeito de baixo não repetir a do
+  // nascimento, o que recomeçaria a animação de entrada.
+  const aplicada = useRef<{ opcao: OpcaoGrafico; rotulo: string } | null>(null);
+
+  // O tamanho para o qual o gráfico foi desenhado por último.
+  const tamanho = useRef({ largura: 0, altura: 0 });
+
+  // Como soltar a animação segurada no último `setOption` (`segurarALargada`).
+  const largada = useRef(() => {});
 
   /*
    * Nasce e morre com o elemento — e renasce quando o tema troca, porque o
    * tema do ECharts é fixado no `init`.
    *
-   * Nasce pela FILA (`fila-de-graficos.ts`), e não aqui mesmo: a página monta
-   * mais de dez destes, e criados todos neste efeito viravam uma tarefa só de
-   * quase um segundo com a tela congelada. A caixa já ocupa o lugar dela desde
-   * o primeiro quadro, então nada pula quando o desenho chega.
+   * Quem decide QUANDO é a fila (`fila-de-graficos.ts`): o que está na tela
+   * nasce na hora, junto com os vizinhos; o de fora espera a vez. A caixa já
+   * ocupa o lugar dela desde o primeiro quadro, então nada pula quando o
+   * desenho chega.
+   *
+   * Efeito de LAYOUT, que roda antes da pintura: o custo de criar os gráficos
+   * da primeira dobra entra no mesmo trabalho que monta a página, e a tela já
+   * começa a aparecer com eles prontos. Num efeito comum, a criação caía
+   * depois — no meio da cascata dos cartões, que parava por um quadro longo.
    */
-  useEffect(() => {
+  useLayoutEffect(() => {
     const elemento = caixa.current;
     if (!elemento) return;
 
@@ -252,18 +284,18 @@ export function Grafico({
        * E só quando o tamanho mudou DE FATO: o observador também avisa na
        * primeira observação e em mudanças que não alteram a caixa, e cada
        * `resize()` redesenha o gráfico inteiro.
+       *
+       * Com transição: o `resize()` puro redesenha tudo no estado final, sem
+       * animação — e cortava ao meio a entrada que estivesse rodando. Quando a
+       * troca de visão no cartão vizinho muda a altura da linha, este aqui
+       * acompanha encolhendo ou crescendo, em vez de pular.
        */
-      let largura = elemento.clientWidth;
-      let altura = elemento.clientHeight;
+      tamanho.current = { largura: elemento.clientWidth, altura: elemento.clientHeight };
       redimensionar = new ResizeObserver(() => {
         cancelAnimationFrame(quadro);
         quadro = requestAnimationFrame(() => {
-          const novaLargura = elemento.clientWidth;
-          const novaAltura = elemento.clientHeight;
-          if (novaLargura === largura && novaAltura === altura) return;
-          largura = novaLargura;
-          altura = novaAltura;
-          instancia.resize();
+          if (!mudouDeTamanho(elemento, tamanho)) return;
+          instancia.resize({ animation: { duration: DURACAO_DO_REDIMENSIONAMENTO, easing: "cubicOut" } });
         });
       });
       redimensionar.observe(elemento);
@@ -277,25 +309,44 @@ export function Grafico({
       vivo = criada;
       grafico.current = criada;
       configurar(criada);
-      criada.setOption(completar(opcaoAtual.current.opcao, opcaoAtual.current.rotulo), {
-        notMerge: true,
-      });
+      const { opcao, rotulo } = opcaoAtual.current;
+      criada.setOption(completar(opcao, rotulo), { notMerge: true });
+      largada.current = segurarALargada(elemento, criada.getZr().animation);
+      aplicada.current = { opcao, rotulo };
     });
 
     return () => {
       desistir();
+      largada.current();
+      largada.current = () => {};
       cancelAnimationFrame(quadro);
       redimensionar?.disconnect();
       if (vivo) descartar(vivo);
       grafico.current = null;
+      aplicada.current = null;
     };
   }, [cores]);
 
   // `notMerge`: a opção é sempre a inteira. Mesclar com a anterior deixaria
   // séries da visão antiga vivas ao trocar de barras para treemap. Ainda na
   // fila, não há o que atualizar: ele nasce com a opção mais recente.
-  useEffect(() => {
-    grafico.current?.setOption(completar(opcao, rotulo), { notMerge: true });
+  //
+  // A caixa que mudou de altura junto com a visão (rosca → barras) é medida
+  // ANTES do `setOption`: redimensionada depois, pelo observador, ela cortava
+  // no meio a animação da troca — as barras já apareciam prontas, secas.
+  //
+  // E a animação da troca espera a thread ficar livre para começar, como a
+  // de entrada: o clique que a disparou ainda está re-renderizando a página.
+  useLayoutEffect(() => {
+    const instancia = grafico.current;
+    const elemento = caixa.current;
+    if (!instancia || !elemento) return;
+    if (aplicada.current?.opcao === opcao && aplicada.current.rotulo === rotulo) return;
+    if (mudouDeTamanho(elemento, tamanho)) instancia.resize();
+    largada.current();
+    instancia.setOption(completar(opcao, rotulo), { notMerge: true });
+    largada.current = segurarALargada(elemento, instancia.getZr().animation);
+    aplicada.current = { opcao, rotulo };
   }, [opcao, rotulo, cores]);
 
   /*

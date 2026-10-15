@@ -1,6 +1,4 @@
-import { ViewTransition } from "react";
-
-import { DIRECOES } from "@/components/pagina";
+import { Pagina } from "@/components/pagina";
 
 /**
  * O que a tela mostra entre o clique e o dado.
@@ -16,13 +14,14 @@ import { DIRECOES } from "@/components/pagina";
  * forma que não é a delas — o que é pior do que uma forma neutra, porque
  * promete um layout e entrega outro.
  *
- * Entrada e saída acompanham a direção da aba, com o mesmo tipo — nunca um
- * movimento vertical à parte. Para o olho, o esqueleto É a página: ele entra
- * pelo lado com ela e sai pelo lado quando cede o lugar ao conteúdo real.
+ * A entrada acompanha a direção da aba, pelo mesmo envelope da página
+ * (`Pagina`) — nunca um movimento vertical à parte. Para o olho, o esqueleto É
+ * a página: ele entra pelo lado, e o conteúdo real depois só toma o lugar
+ * dele, sem entrar de novo.
  */
 export default function Carregando() {
   return (
-    <ViewTransition enter={DIRECOES} exit={DIRECOES} default="none">
+    <Pagina>
       {/*
         `aria-busy` e o texto escondido são o que o leitor de tela recebe. O
         brilho que varre os blocos não existe para ele, e uma tela que fica em
@@ -50,6 +49,6 @@ export default function Carregando() {
           </div>
         </div>
       </div>
-    </ViewTransition>
+    </Pagina>
   );
 }

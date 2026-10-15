@@ -105,18 +105,35 @@ export function ListaClientes({
     [],
   );
 
-  // Primeira renderização não busca: a fatia inicial já veio do servidor.
-  const primeira = useRef(true);
+  /*
+   * Os filtros da fatia que está na tela. A inicial já veio do servidor, então
+   * abrir a página não busca nada — só mudar um filtro busca.
+   *
+   * Por comparação, e não por uma marca de "primeira vez": o React roda os
+   * efeitos duas vezes ao montar em desenvolvimento, a marca se gastava na
+   * primeira rodada e a segunda pedia a mesma fatia de novo — "Carregando…"
+   * piscando embaixo da lista e as linhas entrando duas vezes. Só é marcada
+   * quando a busca sai de verdade, para uma espera cancelada não contar.
+   */
+  const naTela = useRef(endereco(buscaInicial, situacaoInicial));
+  /** A pessoa já mexeu em algum filtro desde que a página abriu. */
+  const mexeu = useRef(false);
 
   useEffect(() => {
-    if (primeira.current) {
-      primeira.current = false;
-      return;
-    }
+    const alvo = endereco(busca, situacao);
+    if (alvo !== naTela.current) mexeu.current = true;
 
-    window.history.replaceState(null, "", endereco(busca, situacao));
+    // O endereço acompanha os filtros — inclusive quem volta ao da tela antes
+    // da busca sair. Ao abrir, não: o endereço é o da navegação, e quem cuida
+    // dele ainda é o roteador.
+    const url = endereco(busca, situacao);
+    if (mexeu.current && window.location.pathname + window.location.search !== url) {
+      window.history.replaceState(null, "", url);
+    }
+    if (alvo === naTela.current) return;
 
     const espera = setTimeout(() => {
+      naTela.current = alvo;
       void buscarFatia({ busca, situacao, pagina: 0 });
     }, ESPERA_MS);
 

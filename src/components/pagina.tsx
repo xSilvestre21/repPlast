@@ -1,39 +1,29 @@
-import { ViewTransition } from "react";
-import type { ReactNode } from "react";
+"use client";
 
-/**
- * Direção do deslize, decidida pelo tipo que o link da barra carrega.
- *
- * `default: "none"` é o que impede este bloco de animar em transições que não
- * são troca de aba — voltar pelo botão do navegador, `router.refresh()`.
- */
-export const DIRECOES = {
-  "nav-direita-perto": "nav-direita-perto",
-  "nav-direita-media": "nav-direita-media",
-  "nav-direita-longe": "nav-direita-longe",
-  "nav-esquerda-perto": "nav-esquerda-perto",
-  "nav-esquerda-media": "nav-esquerda-media",
-  "nav-esquerda-longe": "nav-esquerda-longe",
-  default: "none",
-} as const;
+import { useLayoutEffect, useRef, type ReactNode } from "react";
+
+import { chegarPagina } from "./viagem";
 
 /**
  * Envelope de conteúdo de página.
  *
- * Precisa ficar em cada `page.tsx`, e não no layout: layout persiste entre
- * navegações, então entrada e saída nunca disparariam lá. É o preço de ter a
- * barra do topo parada enquanto o conteúdo troca.
+ * Precisa ficar em cada `page.tsx` (e no `loading.tsx`), e não no layout:
+ * layout persiste entre navegações, e a entrada só acontece no que MONTA. É o
+ * preço de ter a barra do topo parada enquanto o conteúdo troca.
  *
- * Entrada usa o mesmo `DIRECOES` da saída — de propósito. O conteúdo real
- * substituindo o esqueleto de `loading.tsx` já não carrega tipo nenhum (é uma
- * revelação do Suspense, não uma navegação), então cai no `default: "none"` e
- * só troca sem animar. O deslize horizontal fica reservado para quando a aba
- * muda de verdade; nenhuma transição deste sistema ganha movimento vertical.
+ * Depois de um clique numa aba, a primeira página a montar entra deslizando
+ * pelo lado da aba (`chegarPagina`, em `viagem.ts`). Sem clique — a primeira
+ * carga, o botão de voltar, um `router.refresh()` — ela só aparece. Nenhuma
+ * transição deste sistema ganha movimento vertical.
  */
 export function Pagina({ children }: { children: ReactNode }) {
-  return (
-    <ViewTransition enter={DIRECOES} exit={DIRECOES} default="none">
-      <div>{children}</div>
-    </ViewTransition>
-  );
+  const pagina = useRef<HTMLDivElement>(null);
+
+  // De layout, antes da pintura: o primeiro quadro da página nova já é o do
+  // começo da entrada, e não um piscar dela no lugar final.
+  useLayoutEffect(() => {
+    if (pagina.current) chegarPagina(pagina.current);
+  }, []);
+
+  return <div ref={pagina}>{children}</div>;
 }

@@ -763,13 +763,11 @@ body {
 /*
  * Só opacidade, de propósito: nenhum deslocamento vertical.
  *
- * `.surgir`/`.palco` disparam ao MONTAR — o elemento real, escondido atrás da
- * foto que a View Transition anima por cima. Enquanto a foto desliza na
- * horizontal (220-460ms), o elemento de verdade já está correndo por baixo os
- * próprios 500-550ms; quando a foto some e ele aparece, ainda está no meio do
- * caminho e continua se movendo sozinho. Com translateY isso lia como "desliza
- * e ainda por cima sobe um pouco depois" — com só opacidade, o resto que
- * sobra por baixo do deslize é imperceptível.
+ * `.surgir`/`.palco` disparam ao MONTAR — junto com a página inteira, que na
+ * troca de aba entra deslizando de lado (`components/viagem.ts`). Os dois
+ * movimentos correm ao mesmo tempo; com translateY aqui, isso lia como
+ * "desliza e ainda por cima sobe um pouco" — com só opacidade, a cascata se
+ * soma ao deslize sem disputar a direção com ele.
  */
 .surgir {
   animation: surgir 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -824,35 +822,6 @@ body {
 .palco-curto > *:nth-child(5) { animation-delay: 0.08s; }
 .palco-curto > *:nth-child(n + 6) { animation-delay: 0.1s; }
 
-/*
- * Monta ZERADA qualquer linha nova que aparecer DURANTE uma transição que não
- * é troca de aba — depois de uma mutação que chama `router.refresh()`, por
- * exemplo, onde a lista inteira volta do servidor sem ser página nova.
- *
- * Não é isto que protege a busca de Orçamentos: lá a lista filtra em memória,
- * sem navegação nenhuma para uma view transition acontecer em cima. O `palco`
- * sai da lista assim que a pessoa mexe no filtro, dentro de `orcamentos/lista.tsx`.
- *
- * A duração zerada não tem o problema de reiniciar uma animação já em
- * andamento: são elementos que NUNCA existiram antes, então não há "meio do
- * caminho" para dessincronizar — só nascem já no estado final. As regras
- * seguintes reativam a entrada de verdade só quando o tipo é uma troca de aba
- * real (`nav-perto`/`nav-media`/`nav-longe`), onde é conteúdo novo de verdade
- * chegando e o fade faz sentido.
- */
-:root:active-view-transition .surgir,
-:root:active-view-transition .palco > * {
-  animation-duration: 0s;
-}
-
-:root:active-view-transition-type(nav-perto, nav-media, nav-longe) .surgir {
-  animation-duration: 0.5s;
-}
-
-:root:active-view-transition-type(nav-perto, nav-media, nav-longe) .palco > * {
-  animation-duration: 0.55s;
-}
-
 /**
  * Revelação ao rolar, sem JavaScript e sem observador.
  *
@@ -871,242 +840,57 @@ body {
 }
 
 /**
- * `--alvo` é a largura final, escrita no `style` do elemento.
+ * A barra de progresso cresce DESLIZANDO, não se esticando.
  *
- * Registrada como porcentagem para poder ter TRANSIÇÃO: ao entrar, a barra
- * cresce do zero pela animação; depois, quando o alvo muda com a barra na tela
- * (a meta trocada no lugar), ela desliza do valor antigo até o novo em vez de
- * pular. Sem o `@property`, o navegador não sabe interpolar uma variável e a
- * troca seria instantânea.
+ * O preenchimento ocupa o trilho inteiro e fica escondido à esquerda dele; o
+ * `translate` do `style` (escrito em `Barra`, `components/ui.tsx`) o empurra
+ * até o progresso. Animar `width` — como antes — refazia o layout a cada
+ * quadro na thread principal: a barra cresce justamente enquanto a página
+ * monta, e cada tarefa longa da montagem a congelava no meio do caminho
+ * (medido: parada 600 ms, depois um salto até o fim). `translate` é do
+ * compositor, que anima sozinho mesmo com a thread principal ocupada — o
+ * mesmo princípio das animações da Apple, calculadas fora do app.
+ *
+ * Deslizando, a ponta da direita continua redonda (um `scaleX` a achataria);
+ * a da esquerda fica sob o trilho, que já corta com os cantos dele.
+ *
+ * São duas propriedades, de propósito: o progresso mora em `translate` (com
+ * `transition`, para a barra deslizar do valor antigo ao novo quando a meta
+ * muda na tela) e a entrada anima `transform`, que se soma a ele — parte de
+ * `-progresso` (`--p`) e volta a zero, então a ponta sai do começo do trilho.
+ * Com a entrada e a transição na MESMA propriedade, o Chrome tirava a
+ * transição do compositor, e ela voltava a travar com a thread ocupada
+ * (medido).
+ *
+ * A curva é uma mola sem quique do Motion (`spring(0.6, 0)` em `linear()`,
+ * cauda cortada onde já não anda nem um pixel), a mesma família das molas da
+ * troca de aba (`components/viagem.ts`).
  */
-@property --alvo {
-  syntax: "<percentage>";
-  inherits: false;
-  initial-value: 0%;
-}
-
 .barra-preenche {
-  animation: preencher 1.1s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+  --mola-barra: linear(0, 0.0304, 0.1023, 0.1943, 0.2929, 0.3899, 0.4805, 0.5624, 0.6346, 0.6971,
+    0.7504, 0.7955, 0.8332, 0.8645, 0.8903, 0.9115, 0.9288, 0.9428, 0.9542, 0.9634, 0.9708, 0.9768,
+    0.9816, 0.9854, 0.9884, 0.9908, 0.9927, 0.9943, 0.9955, 1);
+  animation: preencher 0.9s var(--mola-barra) 0.15s backwards;
   transition:
-    --alvo 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+    translate 0.9s var(--mola-barra),
     background-color 0.5s ease;
 }
 
 @keyframes preencher {
-  from { width: 0; }
-  to   { width: var(--alvo); }
+  from { transform: translateX(calc(var(--p) * -1)); }
 }
 
 /* -------------------------------------------------------------------------- */
 /* Troca de aba                                                               */
 /*                                                                            */
-/* A direção carrega significado: a barra do topo tem uma ORDEM, e ir para a   */
-/* direita nela empurra o conteúdo para a esquerda, como virar a página de um  */
-/* fichário. Voltar faz o contrário. Sem isso, ir e voltar seriam a mesma      */
-/* animação, e o movimento não diria nada.                                    */
+/* Não mora mais aqui: a página nova entra e a pílula viaja pelos próprios    */
+/* elementos, com molas, em `components/viagem.ts` — sem as fotos de tela     */
+/* inteira da View Transition, que travavam a troca sem aceleração de vídeo.  */
 /* -------------------------------------------------------------------------- */
-
-/*
- * Três variantes por direção — perto, média, longe —, na mesma proporção
- * entre si (~0.65× / 1× / ~1.35×) que a duração da pílula logo abaixo. Perto
- * e longe são o meio (`media`, os números de sempre) escalado: mesma forma de
- * animação, só mais rápida ou mais lenta.
- */
-::view-transition-old(.nav-direita-perto) {
-  --deslocamento: -20px;
-  animation: 85ms ease-in both esmaecer reverse,
-             220ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar reverse;
-}
-
-::view-transition-new(.nav-direita-perto) {
-  --deslocamento: 20px;
-  animation: 125ms ease-out 85ms both esmaecer,
-             220ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar;
-}
-
-::view-transition-old(.nav-direita-media) {
-  --deslocamento: -32px;
-  animation: 130ms ease-in both esmaecer reverse,
-             340ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar reverse;
-}
-
-::view-transition-new(.nav-direita-media) {
-  --deslocamento: 32px;
-  animation: 190ms ease-out 130ms both esmaecer,
-             340ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar;
-}
-
-::view-transition-old(.nav-direita-longe) {
-  --deslocamento: -44px;
-  animation: 175ms ease-in both esmaecer reverse,
-             460ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar reverse;
-}
-
-::view-transition-new(.nav-direita-longe) {
-  --deslocamento: 44px;
-  animation: 255ms ease-out 175ms both esmaecer,
-             460ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar;
-}
-
-::view-transition-old(.nav-esquerda-perto) {
-  --deslocamento: 20px;
-  animation: 85ms ease-in both esmaecer reverse,
-             220ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar reverse;
-}
-
-::view-transition-new(.nav-esquerda-perto) {
-  --deslocamento: -20px;
-  animation: 125ms ease-out 85ms both esmaecer,
-             220ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar;
-}
-
-::view-transition-old(.nav-esquerda-media) {
-  --deslocamento: 32px;
-  animation: 130ms ease-in both esmaecer reverse,
-             340ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar reverse;
-}
-
-::view-transition-new(.nav-esquerda-media) {
-  --deslocamento: -32px;
-  animation: 190ms ease-out 130ms both esmaecer,
-             340ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar;
-}
-
-::view-transition-old(.nav-esquerda-longe) {
-  --deslocamento: 44px;
-  animation: 175ms ease-in both esmaecer reverse,
-             460ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar reverse;
-}
-
-::view-transition-new(.nav-esquerda-longe) {
-  --deslocamento: -44px;
-  animation: 255ms ease-out 175ms both esmaecer,
-             460ms cubic-bezier(0.4, 0, 0.2, 1) both deslizar;
-}
 
 @keyframes esmaecer {
   from { opacity: 0; }
   to   { opacity: 1; }
-}
-
-@keyframes deslizar {
-  from { translate: var(--deslocamento); }
-  to   { translate: 0; }
-}
-
-/**
- * A pílula desliza; ela não pisca. E ela não redimensiona em voo.
- *
- * As fotos do estado antigo e do novo são idênticas — uma pílula preta —,
- * então deixá-las esmaecer uma sobre a outra só produziria uma borra no meio do
- * caminho. A antiga some, a nova fica **opaca do primeiro quadro ao último**, e
- * o grupo carrega essa foto de um item ao outro.
- *
- * Zerar as duas seria o erro fácil aqui: o grupo é só a moldura, quem tem
- * pixels são as fotos, e o marcador sumiria durante a viagem inteira.
- *
- * `width`/`height` travados em `--largura-pilula`/`--altura-pilula` (medidas
- * no clique, em `navegacao.tsx`) substituem a animação automática de tamanho
- * que o navegador geraria sozinho. Sem isso, ir de uma aba larga para uma
- * estreita anima `width` (uma propriedade de LAYOUT) ao mesmo tempo que
- * `transform` desliza (uma propriedade de COMPOSITOR) — e são threads
- * diferentes. Quando o layout atrasa um quadro em relação ao compositor
- * (mais chance quanto maior o encolhimento), a pílula pisca fora de posição
- * por um instante: foi isso que lia como "desce e sobe indo pro lado". Com o
- * tamanho travado no valor final desde o primeiro quadro, só `transform`
- * anima — pura viagem lateral, sem segunda propriedade para dessincronizar.
- *
- * A duração BASE é 0s de propósito — zero, não um número pequeno. Buscar e
- * filtrar (em Orçamentos, por exemplo) também disparam uma transição (o
- * `router.replace` ali roda dentro de `useTransition`, e é isso que mantém a
- * lista atual visível em vez de piscar o esqueleto), mas a aba continua a
- * mesma: `indiceAtual` não muda, o link da pílula nem chega a desmontar. Sem
- * um tipo `nav-*` — só a troca de aba de verdade carrega um —, o navegador
- * ainda assim tentaria reconciliar o retângulo da pílula, e como
- * `--largura-pilula`/`--altura-pilula` só são medidas no CLIQUE de uma aba
- * (podem estar desatualizadas ou nem terem sido definidas ainda), o resultado
- * era a pílula piscando de tamanho errado a cada tecla. Com base em 0s, essa
- * reconciliação indesejada acontece num quadro só — imperceptível — e as
- * regras abaixo reativam a duração de verdade só quando o tipo é um `nav-*`.
- */
-::view-transition-group(marca-nav) {
-  animation-duration: 0s;
-  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 1;
-  /* Sem !important a animação automática do navegador vence: animação
-     sempre supera declaração normal, só perde para outra com !important. */
-  width: var(--largura-pilula) !important;
-  height: var(--altura-pilula) !important;
-}
-
-/*
- * A viagem da pílula muda de duração conforme o alcance que o link carregou
- * (ver `nav-${alcance}` em navegacao.tsx) — perto anda rápido, longe leva
- * mais tempo pra varrer as abas do meio em vez de pular por cima delas.
- * As três precisam de regra própria agora: a duração BASE é 0s (comentário
- * acima), então nenhuma delas mais "cai" nela por omissão.
- *
- * `:active-view-transition-type()` é suporte recente (Chromium 125+); sem
- * ele a regra simplesmente não casa e a pílula fica na duração base (0s) —
- * sem tipo reconhecido, ela some/aparece na hora, o que é a mesma degradação
- * graciosa que o resto do arquivo já assume para View Transitions.
- */
-:root:active-view-transition-type(nav-media)::view-transition-group(marca-nav) {
-  animation-duration: 340ms;
-}
-:root:active-view-transition-type(nav-perto)::view-transition-group(marca-nav) {
-  animation-duration: 220ms;
-}
-
-:root:active-view-transition-type(nav-longe)::view-transition-group(marca-nav) {
-  animation-duration: 460ms;
-}
-
-::view-transition-old(marca-nav) {
-  animation: none;
-  opacity: 0;
-}
-
-::view-transition-new(marca-nav) {
-  animation: none;
-  opacity: 1;
-}
-
-/**
- * O resto da página não faz nada.
- *
- * `root` é a foto de tudo o que não recebeu nome — fundo, luz, margens. O
- * navegador cruza essa foto por padrão, e esse cruzamento se somava ao deslize
- * do conteúdo: o efeito lido era um esmaecimento geral, e não uma página
- * entrando pelo lado. Desligado, sobra só o movimento que significa algo.
- */
-::view-transition-group(root),
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation: none;
-}
-
-/**
- * A barra do topo fica parada.
- *
- * Ela é o ponto de referência que diz ao olho que quem se moveu foi o
- * CONTEÚDO, e não a tela inteira. Sem o `display: none` no quadro antigo,
- * aparece um piscar com as duas barras sobrepostas.
- */
-::view-transition-group(barra-topo) {
-  animation: none;
-  z-index: 100;
-}
-
-::view-transition-old(barra-topo) { display: none; }
-::view-transition-new(barra-topo) { animation: none; }
-
-/**
- * Enquanto a transição roda, a camada de cima engole os cliques. Deixá-los
- * passar evita perder o toque de quem já sabe para onde vai.
- */
-::view-transition {
-  pointer-events: none;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1346,15 +1130,8 @@ body:has(> .entrega.entrega-saindo) > :not(.entrega) {
 /* Não é o SO quem decide — é `usuario.reduzirAnimacoes`, aplicado como       */
 /* atributo em <html> por `src/app/layout.tsx`. Quem desligou recebe o        */
 /* ESTADO FINAL, não o inicial, senão a barra de progresso ficaria em zero e  */
-/* os itens em cascata, invisíveis.                                          */
-/*                                                                            */
-/* As três regras de `::view-transition-*` são compostas SEM espaço entre     */
-/* `:root[data-animacoes="desativadas"]` e o pseudo-elemento — esses pseudo-  */
-/* elementos vivem numa árvore paralela presa a `:root`, não são descendentes */
-/* reais do DOM, e um combinador com espaço não casa (silenciosamente, sem    */
-/* erro). Descoberto testando ao vivo com `getAnimations()` na sessão que     */
-/* implementou a pílula da navegação. As demais regras são elementos reais    */
-/* do DOM e usam combinador descendente normal, com espaço.                   */
+/* os itens em cascata, invisíveis. A troca de aba confere o mesmo atributo  */
+/* em `components/viagem.ts`.                                                 */
 /* -------------------------------------------------------------------------- */
 
 :root[data-animacoes="desativadas"] .confete { display: none; }
@@ -1400,14 +1177,7 @@ body:has(> .entrega.entrega-saindo) > :not(.entrega) {
 
 :root[data-animacoes="desativadas"] .barra-preenche {
   animation: none;
-  width: var(--alvo);
-}
-
-:root[data-animacoes="desativadas"]::view-transition-old(*),
-:root[data-animacoes="desativadas"]::view-transition-new(*),
-:root[data-animacoes="desativadas"]::view-transition-group(*) {
-  animation-duration: 0s !important;
-  animation-delay: 0s !important;
+  transition: none;
 }
 
 :root[data-animacoes="desativadas"] *,

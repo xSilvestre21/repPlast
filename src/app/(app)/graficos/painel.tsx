@@ -23,8 +23,11 @@ import { CartaoPrepostos } from "./cartoes/prepostos";
 import { CartaoSumidos } from "./cartoes/sumidos";
 
 export function PainelGraficos({ base }: { base: BaseDosGraficos }) {
+  // `palco`: as linhas de cartões entram em cascata, como as listas. Cada
+  // gráfico espera a vez do próprio cartão para nascer (`fila-de-graficos.ts`)
+  // e anima a entrada enquanto o cartão aparece.
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 palco">
       <FaixaKpis base={base} />
 
       {/*

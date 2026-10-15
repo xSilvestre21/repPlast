@@ -923,8 +923,8 @@ export function Avatar({
 /**
  * Barra de progresso.
  *
- * O trilho e o preenchimento eram montados à mão, com a animação lendo `--alvo`
- * de um `style` inline. Aqui a conta fica num lugar só, e o `role`/`aria` fazem
+ * O trilho e o preenchimento eram montados à mão, cada tela com a sua conta.
+ * Aqui a conta fica num lugar só, e o `role`/`aria` fazem
  * o número existir para quem não enxerga a barra.
  */
 export function Barra({
@@ -950,10 +950,12 @@ export function Barra({
       className={`h-2.5 rounded-full bg-folha-2 overflow-hidden ${className}`}
     >
       {/* Cresce de zero até o valor: o preenchimento mostra o progresso
-          acontecendo, não só o resultado. */}
+          acontecendo, não só o resultado. Ele tem a largura do trilho e
+          desliza até o progresso (`translate`, do compositor) — ver
+          `.barra-preenche` em `globals.css`. */}
       <div
         className={`h-full rounded-full barra-preenche ${TONS[tom]}`}
-        style={{ "--alvo": `${limitado}%` } as CSSProperties}
+        style={{ translate: `${limitado - 100}% 0`, "--p": `${limitado}%` } as CSSProperties}
       />
     </div>
   );

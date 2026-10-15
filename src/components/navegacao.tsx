@@ -16,11 +16,12 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { Fragment, ViewTransition, useEffect, useId, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { sair } from "@/app/(entrada)/acoes";
 
 import { AlternadorTema } from "./alternador-tema";
+import { chegarPilula, partir } from "./viagem";
 import { Avatar } from "./ui";
 
 /**
@@ -178,56 +179,6 @@ function estaAtivo(href: string, caminho: string) {
 }
 
 /**
- * Quanto mais longe a aba de destino, mais tempo a pílula leva pra chegar lá.
- *
- * Sem isso, ir para a aba vizinha e ir para a do outro extremo da barra
- * animariam na mesma velocidade — e a pílula pareceria pular em vez de
- * varrer as abas do meio.
- */
-function alcanceDe(distancia: number): "perto" | "media" | "longe" {
-  if (distancia <= 1) return "perto";
-  if (distancia <= 3) return "media";
-  return "longe";
-}
-
-/**
- * Os tipos de view transition de uma viagem entre abas.
- *
- * A direção sai da posição na barra, não do histórico; o alcance sai da
- * distância entre abas. O primeiro tipo move o conteúdo (`Pagina`), o segundo
- * só ajusta a duração da pílula (ver `:active-view-transition-type` em
- * globals.css) — nenhum dos dois lê o outro.
- *
- * Função à parte porque são DOIS caminhos até o Painel — a aba e o nome do
- * escritório — e os dois precisam viajar igual.
- */
-function tiposDaViagem(destino: number, atual: number): string[] {
-  const direcao = destino > atual ? "nav-direita" : "nav-esquerda";
-  const alcance = alcanceDe(Math.abs(destino - atual));
-  return [`${direcao}-${alcance}`, `nav-${alcance}`];
-}
-
-/**
- * Guarda o tamanho da aba de DESTINO antes de navegar.
- *
- * Trava `width`/`height` da pílula em `globals.css` no valor final, para ela
- * só andar de lado, nunca redimensionar em voo — encolher/crescer ENQUANTO
- * desliza é o que fazia a viagem parecer arquear (ver comentário lá). Sem a
- * medida, a pílula viaja com o tamanho da última aba clicada: era o salto de
- * quem saía de "Fornecedores" pelo nome do escritório.
- */
-function medirPilula(destino: Element | null) {
-  if (!destino) return;
-  const retangulo = destino.getBoundingClientRect();
-  // Escondida (a barra some no celular), não há pílula para ajustar.
-  if (retangulo.width === 0) return;
-
-  const raiz = document.documentElement.style;
-  raiz.setProperty("--largura-pilula", `${retangulo.width}px`);
-  raiz.setProperty("--altura-pilula", `${retangulo.height}px`);
-}
-
-/**
  * Uma aba da barra: ícone e rótulo, como todas — o Painel inclusive.
  *
  * O Painel se distingue sem sair da família: fica no centro, entre as
@@ -254,16 +205,40 @@ function Aba({
   const inicio = item.grupo === "inicio";
   const Icone = item.icone;
 
+  /*
+   * A página chega PRONTA quando a pessoa mostra que vai clicar.
+   *
+   * Por padrão o Next pré-carrega só o esqueleto (`loading.tsx`) de uma página
+   * dinâmica: a troca deslizava para um bloco cinza, esperava o servidor e só
+   * então o conteúdo aparecia — dois estalos em toda troca, e era isso que a
+   * deixava pesada. Com o mouse em cima (ou o foco, ou o dedo), o link passa a
+   * pré-carregar a página inteira; nos ~300 ms até o clique ela já está no
+   * cliente, e o deslize leva o conteúdo de verdade, como no iOS.
+   *
+   * Só na intenção, e não para as sete abas assim que a tela abre: seriam sete
+   * páginas montadas no servidor a cada visita, quase todas à toa. O que veio
+   * vale por 30 s (`staleTimes.static`, em next.config.ts) — mais que isso e um
+   * pedido lançado por um preposto demoraria a aparecer.
+   */
+  const [intencao, setIntencao] = useState(false);
+  const mostrouIntencao = () => setIntencao(true);
+
   return (
     <li>
       <Link
         href={item.href}
+        prefetch={intencao && !ativo ? true : null}
+        onMouseEnter={mostrouIntencao}
+        onFocus={mostrouIntencao}
+        onTouchStart={mostrouIntencao}
         aria-current={ativo ? "page" : undefined}
         aria-label={item.rotulo}
         title={item.rotulo}
-        transitionTypes={tiposDaViagem(indice, indiceAtual)}
-        onClick={(evento) => medirPilula(evento.currentTarget)}
-        className={`relative isolate flex items-center gap-1.5 rounded-full py-1.5 text-corpo
+        onClick={() => partir(indice, indiceAtual)}
+        // Sem `isolate`: a pílula (`-z-10`) desce para a camada da lista
+        // inteira (ver o `ul`) e passa POR BAIXO dos rótulos de todas as abas
+        // do caminho — nenhum some enquanto ela atravessa.
+        className={`relative flex items-center gap-1.5 rounded-full py-1.5 text-corpo
           whitespace-nowrap transition-colors duration-200 ${
             inicio ? "px-3.5" : "px-2.5 lg:px-3"
           } ${
@@ -276,20 +251,26 @@ function Aba({
       >
         {/*
           A pílula preta existe UMA vez na árvore, sempre dentro do item ativo.
-          Ao trocar de aba ela desmonta aqui e monta ali — e como carrega um
-          nome de view transition, o navegador anima a viagem em vez de apagar e
-          acender.
+          Ao trocar de aba ela desmonta aqui e monta ali — e, ao montar, sai de
+          onde a antiga estava e desliza até aqui (`chegarPilula`).
         */}
-        {ativo && (
-          <ViewTransition name="marca-nav">
-            <span aria-hidden="true" className="marca-nav -z-10" />
-          </ViewTransition>
-        )}
+        {ativo && <Pilula />}
         <Icone size={inicio ? 16 : 15} strokeWidth={ativo || inicio ? 2.25 : 1.75} aria-hidden="true" />
         <span className={inicio ? "" : "hidden lg:inline"}>{item.rotulo}</span>
       </Link>
     </li>
   );
+}
+
+/** A pílula preta da aba ativa, que chega deslizando de onde estava. */
+function Pilula() {
+  const pilula = useRef<HTMLSpanElement>(null);
+  // De layout, antes da pintura: o primeiro quadro já a mostra no ponto de
+  // partida, e não um piscar dela no destino.
+  useLayoutEffect(() => {
+    if (pilula.current) chegarPilula(pilula.current);
+  }, []);
+  return <span ref={pilula} aria-hidden="true" className="marca-nav -z-10" />;
 }
 
 /** A divisória fina entre os grupos — dentro da barra, sem quebrá-la. */
@@ -462,12 +443,7 @@ export function Navegacao({
   const itensMenu = mostrarPrepostos ? [...ITENS_MENU, ITEM_PREPOSTOS] : ITENS_MENU;
 
   return (
-    // `view-transition-name` prende a barra: durante o deslize ela é o ponto
-    // fixo que diz ao olho que quem se moveu foi o conteúdo, não a tela.
-    <header
-      className="sticky top-0 z-40 barra-topo"
-      style={{ viewTransitionName: "barra-topo" }}
-    >
+    <header className="sticky top-0 z-40 barra-topo">
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6">
         <div className="flex h-14 items-center gap-x-3 sm:gap-x-4">
           {/* No celular a barra de abas não cabe: as três riscas abrem a gaveta. */}
@@ -480,15 +456,11 @@ export function Navegacao({
 
           {/*
             O nome do escritório leva ao Painel — e faz a MESMA viagem que a aba
-            dele: mede a aba do Painel e manda a direção do deslize. Sem isso a
-            pílula ia com o tamanho da aba de onde se saiu e se corrigia no fim.
+            dele: a mesma direção de deslize e a pílula indo até o Painel.
           */}
           <Link
             href="/"
-            transitionTypes={tiposDaViagem(indicePainel, indiceAtual)}
-            onClick={() =>
-              medirPilula(document.querySelector('nav[aria-label="Principal"] a[href="/"]'))
-            }
+            onClick={() => partir(indicePainel, indiceAtual)}
             className="min-w-0 max-w-[50vw] truncate text-medio font-extrabold tracking-[-0.03em]
               transition-colors hover:text-carimbo sm:max-w-[220px]"
           >
@@ -510,7 +482,7 @@ export function Navegacao({
               separa os grupos são as divisórias, e quem marca a aba atual é a
               pílula.
             */}
-            <ul aria-label="Seções" className="mx-auto flex w-max items-center gap-0.5">
+            <ul aria-label="Seções" className="relative isolate mx-auto flex w-max items-center gap-0.5">
               {itens.map((item, indice) => (
                 <Fragment key={item.href}>
                   {/* A divisória antes do Painel e depois dele: os grupos se
