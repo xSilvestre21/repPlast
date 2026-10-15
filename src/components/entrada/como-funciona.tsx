@@ -32,7 +32,6 @@ import {
   BadgePercent,
   BarChart3,
   Calculator,
-  Check,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
@@ -1130,26 +1129,7 @@ function QuadroEnvio({ exemplo }: { exemplo: Exemplo }) {
               <span className="truncate">{exemplo.anexo}</span>
             </m.span>
 
-            <AnimatePresence mode="wait" initial={false}>
-              {enviado ? (
-                <m.span
-                  key="enviado"
-                  className="inline-flex items-center gap-1.5 rounded-full bg-verde-fraco text-verde px-3 py-1 text-mini font-semibold"
-                  initial={{ opacity: 0, scale: 0.85 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                >
-                  <Check size={13} strokeWidth={2.5} aria-hidden="true" /> Enviado
-                </m.span>
-              ) : (
-                <m.span
-                  key="enviar"
-                  className="inline-flex items-center gap-1.5 rounded-full bg-tinta text-papel px-3 py-1 text-mini font-semibold"
-                  exit={{ opacity: 0, x: 16 }}
-                >
-                  <Send size={12} strokeWidth={2.25} aria-hidden="true" /> Enviar
-                </m.span>
-              )}
-            </AnimatePresence>
+            <BotaoEnviar enviado={enviado} />
           </div>
         </m.div>
 
@@ -1161,6 +1141,69 @@ function QuadroEnvio({ exemplo }: { exemplo: Exemplo }) {
         </p>
       </div>
     </div>
+  );
+}
+
+/**
+ * O "Enviar" que vira "Enviado" — um botão só, que se transforma.
+ *
+ * Eram dois, trocados por `AnimatePresence mode="wait"`: o primeiro saía, o
+ * lugar ficava vazio esperando, e o segundo entrava com outra largura — a
+ * linha pulava no meio. Agora os dois rótulos moram na mesma célula do grid
+ * (o botão já nasce com a largura do maior), a cor muda por transição de CSS
+ * e o movimento é só opacidade e deslocamento: nada recalcula o layout.
+ */
+function BotaoEnviar({ enviado }: { enviado: boolean }) {
+  return (
+    <m.span
+      className={`grid rounded-full px-3 py-1 text-mini font-semibold overflow-hidden
+        transition-colors duration-300 ease-out ${
+          enviado ? "bg-verde-fraco text-verde" : "bg-tinta text-papel"
+        }`}
+      // O "aperto": afunda um pouco e volta, no instante do clique.
+      animate={enviado ? { scale: [1, 0.93, 1.03, 1] } : { scale: 1 }}
+      transition={{ duration: 0.45, times: [0, 0.25, 0.65, 1], ease: "easeOut" }}
+    >
+      <m.span
+        className="col-start-1 row-start-1 inline-flex items-center justify-center gap-1.5"
+        animate={enviado ? { opacity: 0, y: -10 } : { opacity: 1, y: 0 }}
+        transition={{ duration: 0.22, ease: "easeIn" }}
+        aria-hidden={enviado}
+      >
+        {/* O aviãozinho sai voando na diagonal, um pouco antes do texto. */}
+        <m.span
+          className="inline-flex"
+          animate={enviado ? { x: 10, y: -8 } : { x: 0, y: 0 }}
+          transition={{ duration: 0.25, ease: "easeIn" }}
+        >
+          <Send size={12} strokeWidth={2.25} aria-hidden="true" />
+        </m.span>
+        Enviar
+      </m.span>
+
+      <m.span
+        className="col-start-1 row-start-1 inline-flex items-center justify-center gap-1.5"
+        initial={false}
+        animate={enviado ? { opacity: 1, y: 0 } : { opacity: 0, y: 10 }}
+        transition={{ delay: enviado ? 0.15 : 0, duration: 0.3, ease: SUAVE }}
+        aria-hidden={!enviado}
+      >
+        {/* O check se desenha, em vez de aparecer pronto. */}
+        <svg viewBox="0 0 24 24" className="size-[13px]" fill="none" aria-hidden="true">
+          <m.path
+            d="M20 6 9 17l-5-5"
+            stroke="currentColor"
+            strokeWidth={2.75}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            initial={false}
+            animate={{ pathLength: enviado ? 1 : 0 }}
+            transition={{ delay: enviado ? 0.25 : 0, duration: 0.35, ease: SUAVE }}
+          />
+        </svg>
+        Enviado
+      </m.span>
+    </m.span>
   );
 }
 
