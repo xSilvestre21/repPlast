@@ -13,6 +13,7 @@ import {
 import { normalizarCep, normalizarDocumento, somenteDigitos } from "@/lib/mascara";
 import { planoDaUrl, type CodigoPlano } from "@/lib/planos";
 import { conferirSenha, gerarHashSenha } from "@/lib/senha";
+import { TAMANHO_MAXIMO_ESCRITORIO } from "@/lib/escritorio-regras";
 import { TAMANHO_MINIMO_SENHA } from "@/lib/senha-regras";
 import { criarSessao, encerrarSessao, sessaoAtual } from "@/lib/sessao";
 
@@ -171,6 +172,14 @@ export async function cadastrar(
       throw new ErroDeCampo(
         "escritorio",
         "Informe o nome do seu escritório — é como a sua representação é conhecida.",
+      );
+    }
+    if (escritorio.length > TAMANHO_MAXIMO_ESCRITORIO) {
+      throw new ErroDeCampo(
+        "escritorio",
+        `O nome do escritório pode ter até ${TAMANHO_MAXIMO_ESCRITORIO} caracteres — este tem ` +
+          `${escritorio.length}. Use o nome pelo qual os clientes conhecem a representação, ` +
+          "como “Representação Silvestre”.",
       );
     }
     if (!nome) throw new ErroDeCampo("nome", "Informe o seu nome e sobrenome.");

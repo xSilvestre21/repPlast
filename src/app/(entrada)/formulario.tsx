@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { CampoCep, CampoDocumento } from "@/components/campo-mascarado";
 import { ErroGeral, Formulario } from "@/components/formulario";
 import { Botao, Campo } from "@/components/ui";
+import { TAMANHO_MAXIMO_ESCRITORIO } from "@/lib/escritorio-regras";
 import { TAMANHO_MINIMO_SENHA } from "@/lib/senha-regras";
 
 import type { EstadoFormulario } from "./acoes";
@@ -52,8 +53,9 @@ export function FormularioCadastro({ acao, plano }: { acao: Acao; plano: "solo" 
       <Campo
         name="escritorio"
         rotulo="Nome do escritório"
-        dica="Como a sua representação é conhecida."
+        dica={`Como a sua representação é conhecida — até ${TAMANHO_MAXIMO_ESCRITORIO} caracteres.`}
         placeholder="Representação Silvestre"
+        maxLength={TAMANHO_MAXIMO_ESCRITORIO}
         required
         autoFocus
       />
