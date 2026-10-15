@@ -1,3 +1,5 @@
+import Decimal from "decimal.js";
+
 import { competenciaDe, deslocarCompetencia } from "@/lib/comissao";
 import {
   acertoDoPedido,
@@ -127,20 +129,34 @@ function paraLinha(pedido: PedidoDaComissao, ehAdmin: boolean): string[] {
     texto(pedido.cliente.apelido),
     texto(pedido.fornecedor.nome),
     texto(prepostoDoPedido(pedido)?.nome ?? ""),
-    numero(pedido.subtotalSemIpi.toString()),
+    moeda(pedido.subtotalSemIpi.toString()),
     // O percentual da indústria é conta do escritório com a indústria: para o
     // preposto sai em branco, como já sai na tela de Comissões.
     ehAdmin ? numero(percentualDoPedido(pedido)) : "",
-    numero((ehAdmin ? resumo.valor : resumo.previstoDoPreposto).toString()),
-    acerto ? numero(acerto.base) : "",
+    moeda((ehAdmin ? resumo.valor : resumo.previstoDoPreposto).toString()),
+    acerto ? moeda(acerto.base) : "",
     acerto && ehAdmin ? numero(acerto.percentual) : "",
-    acerto ? numero((ehAdmin ? resumo.recebido : resumo.recebidoDoPreposto).toString()) : "",
+    acerto ? moeda((ehAdmin ? resumo.recebido : resumo.recebidoDoPreposto).toString()) : "",
   ];
 }
 
 /** Decimal com vírgula, que é o que a planilha em português soma. */
 function numero(valor: string): string {
   return valor.replace(".", ",");
+}
+
+/**
+ * "R$ 1.234,56", que o Excel em português lê como moeda — continua número,
+ * soma e ordena. O espaço depois do "R$" é comum de propósito: o do
+ * `Intl.NumberFormat` é inseparável (U+00A0), e com ele o Excel trata a célula
+ * como texto e para de somar.
+ */
+function moeda(valor: string): string {
+  const arredondado = new Decimal(valor).toDecimalPlaces(2);
+  const [inteira, centavos] = arredondado.abs().toFixed(2).split(".");
+  const milhares = inteira.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  const sinal = arredondado.isNegative() && !arredondado.isZero() ? "-" : "";
+  return `${sinal}R$ ${milhares},${centavos}`;
 }
 
 /** "AAAA-MM-DD": ordena certo como texto e o Excel reconhece como data. */
