@@ -70,6 +70,9 @@ O erro aparece **embaixo do campo que o causou**, em português, dizendo o que f
 - Cobrança (Asaas): `ASAAS_URL` (sandbox `https://api-sandbox.asaas.com`), `ASAAS_API_KEY`,
   `ASAAS_WEBHOOK_TOKEN` (o token do webhook no painel do Asaas — nunca a API key) e `APP_URL`
   (base das URLs de volta do checkout)
+- Remetente do sistema (só o "Esqueceu sua senha?"): `SISTEMA_SMTP_HOST`, `SISTEMA_SMTP_PORTA`,
+  `SISTEMA_SMTP_USUARIO`, `SISTEMA_SMTP_SENHA`, `SISTEMA_EMAIL_REMETENTE`; o link usa `APP_URL`
+  (obrigatória em produção — nunca o `Host` da requisição). Ver README, "Esqueceu sua senha?"
 - Nenhuma `NEXT_PUBLIC_*` hoje — confirmar que o valor é seguro no client antes de criar uma
 - `.env` inteiro é ignorado pelo git, não só `.env.local`
 

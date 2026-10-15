@@ -72,15 +72,20 @@ function assinar(dados: string): string {
   return createHmac("sha256", segredo()).update(dados).digest("base64url");
 }
 
-/** Token no formato `payload.assinatura`, com o vencimento dentro do payload. */
-function criarToken(usuarioId: string): string {
+/**
+ * Token no formato `payload.assinatura`, com o vencimento dentro do payload.
+ *
+ * `versao` é a `sessaoVersao` do usuário no momento do login: redefinir a
+ * senha a soma, e o token velho deixa de bater (`sessaoAtual`).
+ */
+function criarToken(usuarioId: string, versao: number): string {
   const expiraEm = Date.now() + DURACAO_DIAS * 24 * 60 * 60 * 1000;
-  const dados = Buffer.from(JSON.stringify({ usuarioId, expiraEm })).toString("base64url");
+  const dados = Buffer.from(JSON.stringify({ usuarioId, expiraEm, versao })).toString("base64url");
 
   return `${dados}.${assinar(dados)}`;
 }
 
-function lerToken(token: string): string | null {
+function lerToken(token: string): { usuarioId: string; versao: number } | null {
   const [dados, assinatura] = token.split(".");
   if (!dados || !assinatura) return null;
 
@@ -92,11 +97,12 @@ function lerToken(token: string): string | null {
   if (esperada.length !== recebida.length || !timingSafeEqual(esperada, recebida)) return null;
 
   try {
-    const { usuarioId, expiraEm } = JSON.parse(Buffer.from(dados, "base64url").toString());
+    const { usuarioId, expiraEm, versao } = JSON.parse(Buffer.from(dados, "base64url").toString());
     if (typeof usuarioId !== "string" || typeof expiraEm !== "number") return null;
     if (Date.now() > expiraEm) return null;
 
-    return usuarioId;
+    // Token de antes da versão existir conta como 0: o deploy não desloga ninguém.
+    return { usuarioId, versao: typeof versao === "number" ? versao : 0 };
   } catch {
     return null;
   }
@@ -112,8 +118,9 @@ export const sessaoAtual = cache(async (): Promise<Sessao | null> => {
   const token = (await cookies()).get(COOKIE)?.value;
   if (!token) return null;
 
-  const usuarioId = lerToken(token);
-  if (!usuarioId) return null;
+  const lido = lerToken(token);
+  if (!lido) return null;
+  const { usuarioId } = lido;
 
   // O cliente administrativo é necessário aqui: ainda não sabemos a qual
   // escritório o usuário pertence, então não há escopo de tenant a aplicar.
@@ -127,6 +134,7 @@ export const sessaoAtual = cache(async (): Promise<Sessao | null> => {
       organizacaoId: true,
       papel: true,
       ativo: true,
+      sessaoVersao: true,
       reduzirAnimacoes: true,
       ocultarValores: true,
       organizacao: { select: { nome: true, ativa: true, plano: true, assinatura: true } },
@@ -136,6 +144,8 @@ export const sessaoAtual = cache(async (): Promise<Sessao | null> => {
   // Desativar um preposto tem efeito na requisição seguinte, e não quando o
   // cookie dele vencer — é o mesmo motivo de a organização ser relida aqui.
   if (!usuario || !usuario.ativo || !usuario.organizacao.ativa) return null;
+  // A senha foi redefinida depois deste login: a sessão é da senha antiga.
+  if (usuario.sessaoVersao !== lido.versao) return null;
 
   return {
     usuarioId: usuario.id,
@@ -234,7 +244,12 @@ export async function exigirAdmin(): Promise<void> {
 }
 
 export async function criarSessao(usuarioId: string): Promise<void> {
-  (await cookies()).set(COOKIE, criarToken(usuarioId), {
+  const usuario = await dbAdministrativo().usuario.findUnique({
+    where: { id: usuarioId },
+    select: { sessaoVersao: true },
+  });
+
+  (await cookies()).set(COOKIE, criarToken(usuarioId, usuario?.sessaoVersao ?? 0), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

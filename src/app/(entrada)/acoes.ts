@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 
 import { criarCheckout, ErroAsaas } from "@/lib/asaas";
 import { dbAdministrativo } from "@/lib/db";
@@ -16,9 +17,27 @@ import { conferirSenha, gerarHashSenha } from "@/lib/senha";
 import { normalizarNomeEscritorio, problemaNoNomeEscritorio } from "@/lib/escritorio-regras";
 import { ehConflitoDeNome, erroNomeEmUso, nomeEmUso } from "@/lib/nome-escritorio";
 import { TAMANHO_MINIMO_SENHA } from "@/lib/senha-regras";
+import { enviarDoSistema, urlDoSistema } from "@/lib/email-sistema";
+import { minutosAte, minutosPorExtenso } from "@/lib/limite-tentativas";
+import {
+  bloqueioDosPedidos,
+  criarRedefinicao,
+  LINK_VENCIDO,
+  redefinirPeloLink,
+  VALIDADE_MIN,
+} from "@/lib/redefinicao-senha";
 import { criarSessao, encerrarSessao, sessaoAtual } from "@/lib/sessao";
+import {
+  bloqueioDoLogin,
+  ipDaRequisicao,
+  limparFalhas,
+  registrarFalha,
+} from "@/lib/tentativas-login";
 
 export type { EstadoFormulario };
+
+/** Fim de linha dos e-mails do sistema, que vão em texto puro. */
+const QUEBRA = "\n";
 
 const EMAIL_INCOMPLETO =
   "Este e-mail parece incompleto. Confira se tem o @ e o final, como voce@escritorio.com.br.";
@@ -41,6 +60,23 @@ function lerEmail(valor: FormDataEntryValue | null): string {
   return lerTexto(valor).toLowerCase();
 }
 
+/** A senha nova e a repetição — no cadastro e na redefinição, com as mesmas frases. */
+function conferirSenhaNova(senha: string, formData: FormData): void {
+  if (senha.length < TAMANHO_MINIMO_SENHA) {
+    throw new ErroDeCampo(
+      "senha",
+      `A senha precisa ter pelo menos ${TAMANHO_MINIMO_SENHA} caracteres. ` +
+        "Misture letras e números para ficar mais difícil de adivinhar.",
+    );
+  }
+  if (senha !== lerTexto(formData.get("confirmacao"))) {
+    throw new ErroDeCampo(
+      "confirmacao",
+      "A senha repetida não é igual à primeira. Digite as duas de novo, com calma.",
+    );
+  }
+}
+
 export async function entrar(
   _estado: EstadoFormulario,
   formData: FormData,
@@ -51,6 +87,16 @@ export async function entrar(
 
     if (!email) throw new ErroDeCampo("email", "Informe o e-mail com que você se cadastrou.");
     if (!senha) throw new ErroDeCampo("senha", "Informe a sua senha.");
+
+    // Antes de olhar a senha: bloqueado, nem a certa entra.
+    const ip = await ipDaRequisicao();
+    const libera = await bloqueioDoLogin({ email, ip });
+    if (libera) {
+      throw new ErroParaUsuario(
+        `Muitas tentativas com senha errada. Espere ${minutosPorExtenso(minutosAte(libera, new Date()))} ` +
+          "e tente de novo — ou use “Esqueceu sua senha?” para criar uma nova.",
+      );
+    }
 
     const usuario = await dbAdministrativo().usuario.findUnique({
       where: { email },
@@ -74,10 +120,14 @@ export async function entrar(
       // Confere contra um hash descartável mesmo sem usuário: sem isso, a
       // resposta voltaria bem mais rápido e denunciaria que o e-mail não existe.
       await conferirSenha(senha, await gerarHashSenha("descartavel"));
+      await registrarFalha({ email, ip });
       return generico;
     }
 
-    if (!(await conferirSenha(senha, usuario.senhaHash))) return generico;
+    if (!(await conferirSenha(senha, usuario.senhaHash))) {
+      await registrarFalha({ email, ip });
+      return generico;
+    }
     if (!usuario.organizacao.ativa) {
       throw new ErroParaUsuario(
         "Este escritório está desativado, e por isso não dá para entrar. Se acha que é engano, " +
@@ -85,12 +135,107 @@ export async function entrar(
       );
     }
 
+    await limparFalhas(email);
     await criarSessao(usuario.id);
   } catch (erro) {
     return falhou(erro, formData);
   }
 
   redirect("/");
+}
+
+/**
+ * "Esqueceu sua senha?": manda o link para criar uma senha nova.
+ *
+ * A resposta é a MESMA com ou sem conta para o e-mail — senão esta tela diria
+ * a qualquer um quais e-mails têm conta. Pelo mesmo motivo o e-mail sai em
+ * `after`, depois da resposta: enviar leva segundos, e esperar por ele só
+ * quando a conta existe denunciaria a conta pelo tempo.
+ */
+export async function pedirRedefinicaoSenha(
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    const email = lerEmail(formData.get("email"));
+    if (!email) throw new ErroDeCampo("email", "Informe o e-mail com que você entra no sistema.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ErroDeCampo("email", EMAIL_INCOMPLETO);
+
+    const ip = await ipDaRequisicao();
+    const libera = await bloqueioDosPedidos({ email, ip });
+    if (libera) {
+      throw new ErroParaUsuario(
+        "Já pedimos vários links para este e-mail há pouco. Confira a caixa de entrada e o spam — " +
+          `ou espere ${minutosPorExtenso(minutosAte(libera, new Date()))} para pedir de novo.`,
+      );
+    }
+
+    const envio = await criarRedefinicao({ email, ip });
+    if (envio) {
+      const link = `${urlDoSistema()}/redefinir-senha/${envio.token}`;
+      after(() =>
+        enviarDoSistema({
+          para: envio.para,
+          assunto: "Crie uma senha nova no RepPlast",
+          texto: [
+            `Olá, ${envio.nome}.`,
+            "",
+            "Alguém pediu para criar uma senha nova para a sua conta no RepPlast. Para criar, abra este link:",
+            "",
+            link,
+            "",
+            `Ele vale por ${VALIDADE_MIN} minutos e funciona uma vez só.`,
+            "",
+            "Se não foi você, ignore este e-mail: a sua senha continua a mesma.",
+          ].join(QUEBRA),
+        }),
+      );
+    }
+  } catch (erro) {
+    return falhou(erro, formData);
+  }
+
+  redirect("/esqueci-senha?enviado=1");
+}
+
+/**
+ * A senha nova, pelo link do e-mail. O `token` chega preso pelo `.bind` da
+ * página, mas viaja do navegador como qualquer argumento: quem confere é
+ * `redefinirPeloLink`, não a página.
+ */
+export async function redefinirSenha(
+  token: string,
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    const senha = lerTexto(formData.get("senha"));
+    conferirSenhaNova(senha, formData);
+
+    const trocada = await redefinirPeloLink(String(token), await gerarHashSenha(senha));
+    if (!trocada) throw new ErroParaUsuario(LINK_VENCIDO);
+
+    // As senhas erradas de antes não contam mais contra quem acabou de provar
+    // que é dono do e-mail.
+    await limparFalhas(trocada.email);
+    after(() =>
+      enviarDoSistema({
+        para: trocada.email,
+        assunto: "A sua senha do RepPlast foi alterada",
+        texto: [
+          "A senha da sua conta no RepPlast acabou de ser trocada, e todos os aparelhos que estavam " +
+            "conectados precisam entrar de novo.",
+          "",
+          "Se foi você, está tudo certo. Se não foi, use “Esqueceu sua senha?” na tela de entrar para " +
+            "criar outra agora e fale com o suporte.",
+        ].join(QUEBRA),
+      }),
+    );
+  } catch (erro) {
+    return falhou(erro, formData);
+  }
+
+  redirect("/entrar?senha=redefinida");
 }
 
 export async function sair(): Promise<void> {
@@ -175,19 +320,7 @@ export async function cadastrar(
     if (!email) throw new ErroDeCampo("email", "Informe o seu e-mail — é com ele que você vai entrar.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ErroDeCampo("email", EMAIL_INCOMPLETO);
 
-    if (senha.length < TAMANHO_MINIMO_SENHA) {
-      throw new ErroDeCampo(
-        "senha",
-        `A senha precisa ter pelo menos ${TAMANHO_MINIMO_SENHA} caracteres. ` +
-          "Misture letras e números para ficar mais difícil de adivinhar.",
-      );
-    }
-    if (senha !== lerTexto(formData.get("confirmacao"))) {
-      throw new ErroDeCampo(
-        "confirmacao",
-        "A senha repetida não é igual à primeira. Digite as duas de novo, com calma.",
-      );
-    }
+    conferirSenhaNova(senha, formData);
 
     // O checkout do Asaas exige os dois; aqui eles são obrigatórios, ao
     // contrário do cadastro de cliente, onde vazio quer dizer "não sei".

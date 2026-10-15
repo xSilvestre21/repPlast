@@ -11,7 +11,7 @@ import { Perguntas } from "@/components/entrada/perguntas";
 import { Recursos } from "@/components/entrada/recursos";
 import { Revelar, SemScriptRevela } from "@/components/entrada/revelar";
 import { TopoEntrada } from "@/components/entrada/topo-entrada";
-import { Cartao, Placa } from "@/components/ui";
+import { Cartao, Mensagem, Placa } from "@/components/ui";
 import { sessaoAtual } from "@/lib/sessao";
 
 import { entrar } from "../acoes";
@@ -75,9 +75,10 @@ function Secao({
   );
 }
 
-export default async function PaginaEntrar() {
+export default async function PaginaEntrar({ searchParams }: PageProps<"/entrar">) {
   // Quem já está logado não tem o que fazer aqui.
   if (await sessaoAtual()) redirect("/");
+  const { senha } = await searchParams;
 
   return (
     <Movimento>
@@ -145,6 +146,11 @@ export default async function PaginaEntrar() {
                 Seus pedidos, produtos e comissões do jeito que você deixou.
               </p>
 
+              {senha === "redefinida" && (
+                <div className="mb-6">
+                  <Mensagem tom="verde">Senha nova salva. Entre com ela.</Mensagem>
+                </div>
+              )}
               <FormularioEntrada acao={entrar} rotulo="Entrar" />
 
               <p className="text-corpo text-tinta-2 mt-7 text-center">

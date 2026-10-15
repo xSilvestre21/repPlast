@@ -200,6 +200,10 @@ model Usuario {
   /// digitado e pontuado pelo campo de telefone, igual ao do cliente.
   telefone      String?
   senhaHash     String
+  /// Vai dentro do token da sessão. Redefinir a senha soma 1, e toda sessão
+  /// aberta com a senha antiga deixa de valer — o token não tem estado, e sem
+  /// isto um celular perdido continuaria logado por 30 dias.
+  sessaoVersao  Int      @default(0)
   criadoEm      DateTime @default(now())
 
   /// ADMIN por padrão porque toda conta que existe hoje é a do dono do
@@ -267,9 +271,47 @@ model Usuario {
   compromissos Compromisso[]
   avisosAdiados AvisoAdiado[]
   trocasDeNome TrocaNomeEscritorio[]
+  redefinicoesSenha RedefinicaoSenha[]
 
   @@index([organizacaoId])
   @@map("usuario")
+}
+
+/// Cada pedido de "Esqueceu sua senha?".
+///
+/// Guarda o HASH do token, nunca o token: quem lê o banco não consegue usar o
+/// link. Pedido para e-mail sem conta também vira linha — sem usuário nem
+/// token —, só para entrar no limite de pedidos: se o limite contasse apenas
+/// e-mails com conta, ele mesmo denunciaria quem tem conta.
+model RedefinicaoSenha {
+  id        String    @id @default(uuid()) @db.Uuid
+  usuarioId String?   @db.Uuid
+  /// Como foi digitado (já em minúsculas), para contar no limite.
+  email     String
+  ip        String
+  tokenHash String?   @unique
+  expiraEm  DateTime
+  usadaEm   DateTime?
+  criadaEm  DateTime  @default(now())
+
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([email, criadaEm])
+  @@index([ip, criadaEm])
+  @@map("redefinicao_senha")
+}
+
+/// Cada senha errada no login. Só as falhas: o limite conta quantas houve na
+/// janela, e o login certo apaga as do e-mail. E-mail sem conta também conta.
+model TentativaLogin {
+  id       String   @id @default(uuid()) @db.Uuid
+  email    String
+  ip       String
+  criadaEm DateTime @default(now())
+
+  @@index([email, criadaEm])
+  @@index([ip, criadaEm])
+  @@map("tentativa_login")
 }
 
 /// Cada troca do nome do escritório. A troca seguinte espera o intervalo a

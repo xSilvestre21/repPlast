@@ -148,6 +148,42 @@ SESSAO_SECRET="uma chave aleatória com 32 caracteres ou mais"
 
 Gere a sua com `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`.
 
+O token também leva a `sessaoVersao` do usuário: redefinir a senha a soma, e toda sessão aberta com
+a senha antiga cai na requisição seguinte.
+
+### Esqueceu sua senha?
+
+Em `/esqueci-senha` a pessoa informa o e-mail e recebe um link (`/redefinir-senha/<token>`) que vale
+por **1 hora e uma vez**. O banco guarda só o hash do token. A tela responde igual com ou sem conta
+para o e-mail, e o envio acontece depois da resposta, para nem o tempo denunciar quem tem conta.
+Limite: 3 pedidos por e-mail e 10 por IP a cada hora.
+
+Esse é o único e-mail que não sai da caixa do usuário (quem esqueceu a senha não tem como mandar),
+e sim de um **remetente do sistema**, por qualquer SMTP (Resend, Brevo, Amazon SES, Google
+Workspace…):
+
+```
+SISTEMA_SMTP_HOST="smtp.provedor.com"
+SISTEMA_SMTP_PORTA="587"            # 465 liga o TLS direto
+SISTEMA_SMTP_USUARIO="..."
+SISTEMA_SMTP_SENHA="..."
+SISTEMA_EMAIL_REMETENTE="nao-responda@seudominio.com.br"
+APP_URL="https://seudominio.com.br"  # obrigatória em produção: é a base do link
+```
+
+O link nunca é montado a partir do cabeçalho `Host` da requisição — com ele, um atacante faria o
+e-mail da vítima apontar para o site dele. Sem `APP_URL`, só no desenvolvimento, vale
+`http://localhost:3000`. Para ver os e-mails no desenvolvimento sem enviá-los, suba um SMTP local
+(`npx maildev`, interface em `http://localhost:1080`) com `SISTEMA_SMTP_HOST="localhost"` e
+`SISTEMA_SMTP_PORTA="1025"`.
+
+### Limite de tentativas
+
+5 senhas erradas para o mesmo e-mail em 15 minutos fecham aquele e-mail por 15 minutos; 30 erros do
+mesmo IP em 15 minutos fecham o IP (quem testa uma senha comum em muitas contas). Conta também
+e-mail sem conta. Bloqueado, o login nem confere a senha. Entrar certo, ou redefinir a senha, zera
+as falhas do e-mail. O IP vem de `x-forwarded-for`, que só é confiável atrás do proxy da hospedagem.
+
 O guarda de sessão vive em um lugar só, [`src/app/(app)/layout.tsx`](src/app/(app)/layout.tsx), e
 vale para tudo sob aquele grupo de rotas — assim **uma página nova nasce protegida**. As rotas de
 arquivo (PDF, logo) não passam por layout e por isso se protegem sozinhas, respondendo 401.

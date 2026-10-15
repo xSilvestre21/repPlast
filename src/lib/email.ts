@@ -5,9 +5,11 @@
  * e para os erros do servidor chegarem à tela como uma frase que diz o que
  * fazer, e não como "535-5.7.8 Username and Password not accepted".
  *
- * Não há remetente do sistema: o pedido sai do endereço de quem o manda, que é
- * com quem a indústria fala. No Gmail, o enviado ainda aparece na pasta
- * Enviados da pessoa, como se ela tivesse mandado de lá.
+ * O pedido sai do endereço de quem o manda, que é com quem a indústria fala.
+ * No Gmail, o enviado ainda aparece na pasta Enviados da pessoa, como se ela
+ * tivesse mandado de lá. A única exceção é o que não tem dono — o link de
+ * "Esqueceu sua senha?" —, que sai do remetente do RepPlast (`email-sistema.ts`),
+ * pelo mesmo `enviarEmail` daqui.
  */
 
 import "server-only";
