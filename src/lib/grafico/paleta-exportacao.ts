@@ -24,7 +24,7 @@ export const EXPORTACAO = {
 
   tinta: "#111117",
   tinta2: "#5a5a68",
-  tinta3: "#8d8d9c",
+  tinta3: "#6f6f7e",
 
   serie: "#6d54d6",
   verde: "#0f9d70",
@@ -32,7 +32,22 @@ export const EXPORTACAO = {
   mar: "#2f6fed",
   sol: "#b97f0c",
   pessego: "#d9652f",
+
+  /** As placas de ícone: o fundo lavado e o traço saturado por cima. */
+  placas: {
+    sol: { fundo: "#fff2d0", traco: "#b97f0c" },
+    mar: { fundo: "#e2edff", traco: "#2f6fed" },
+    menta: { fundo: "#dcf6ec", traco: "#0b8a61" },
+    pessego: { fundo: "#ffe7db", traco: "#d9652f" },
+    lilas: { fundo: "#ece7ff", traco: "#6d54d6" },
+    neutro: { fundo: "#f4f4f7", traco: "#5a5a68" },
+  },
+
+  /** O campo de luz atrás do topo. */
+  aurora: ["#fdeaa8", "#cfe4ff", "#d5f6e4", "#ffdcc6"],
 } as const;
+
+export type TomPlaca = keyof typeof EXPORTACAO.placas;
 
 /**
  * Traduz um token da paleta da tela para o valor do arquivo exportado.

@@ -1,6 +1,7 @@
 import { dbAdministrativo, dbParaOrganizacao } from "@/lib/db";
 import { relatorioEmHtml } from "@/lib/grafico/documento-html";
-import { nomeArquivoGraficos, relatorioDosGraficos } from "@/lib/pdf/gerar-graficos";
+import { relatorioDosGraficos } from "@/lib/pdf/gerar-graficos";
+import { nomeArquivoRelatorio } from "@/lib/pdf/nome-arquivo";
 import { sessaoComAcesso } from "@/lib/sessao";
 
 import { carregarDadosDosGraficos } from "../../dados";
@@ -45,15 +46,13 @@ export async function GET(requisicao: Request) {
     }),
   ]);
 
-  const arquivo = relatorioEmHtml(
-    relatorioDosGraficos(dados, organizacao?.nome ?? "RepPlast"),
-    new Date(),
-  );
+  const escritorio = organizacao?.nome ?? "RepPlast";
+  const arquivo = relatorioEmHtml(relatorioDosGraficos(dados, escritorio), new Date());
 
   return new Response(arquivo, {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${nomeArquivoGraficos(competencia, "html")}"`,
+      "Content-Disposition": `attachment; filename="${nomeArquivoRelatorio(escritorio, competencia, "html")}"`,
       "Cache-Control": "private, no-store",
       // O arquivo carrega dado de um escritório; o navegador não deve tentar
       // adivinhar outro tipo para ele.

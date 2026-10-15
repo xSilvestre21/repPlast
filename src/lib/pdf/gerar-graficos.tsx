@@ -10,7 +10,7 @@
 import { renderToBuffer } from "@react-pdf/renderer";
 
 import type { DadosDosGraficos } from "@/app/(app)/graficos/dados";
-import { SERIES_DA_COMISSAO } from "../grafico/paleta";
+import { SEMANTICAS, SERIES_DA_COMISSAO } from "../grafico/paleta";
 import {
   DocumentoGraficos,
   type DadosDoRelatorio,
@@ -41,16 +41,18 @@ export function secoesDoRelatorio(dados: DadosDosGraficos): Secao[] {
     secoes.push(
       itens.length > 0
         ? { tipo: "barras", titulo, periodo, itens, ...extra }
-        : { tipo: "texto", titulo, periodo, corpo: vazio },
+        : { tipo: "texto", titulo, periodo, corpo: vazio, tom: extra.tom, icone: extra.icone },
     );
   };
 
+  // O tom e o ícone de cada seção são os do cartão dela na tela: quem recebe
+  // o papel reconhece a seção pela placa antes de ler o título.
   barrasOuTexto(
     "Comissão por indústria",
     dados.mes,
     dados.porIndustria,
     "Nenhum pedido enviado neste mês.",
-    { rotuloResiduo: "Outras" },
+    { rotuloResiduo: "Outras", tom: "pessego", icone: "industria" },
   );
 
   barrasOuTexto(
@@ -58,6 +60,7 @@ export function secoesDoRelatorio(dados: DadosDosGraficos): Secao[] {
     dados.mes,
     dados.porCliente,
     "Nenhum pedido enviado neste mês.",
+    { tom: "lilas", icone: "clientes" },
   );
 
   if (dados.porPreposto) {
@@ -66,6 +69,7 @@ export function secoesDoRelatorio(dados: DadosDosGraficos): Secao[] {
       dados.mes,
       dados.porPreposto,
       "Nenhum pedido deste mês está creditado a um preposto.",
+      { tom: "mar", icone: "preposto" },
     );
   }
 
@@ -74,6 +78,8 @@ export function secoesDoRelatorio(dados: DadosDosGraficos): Secao[] {
     dados.mes,
     dados.perdidos,
     "Nenhum pedido cancelado neste mês.",
+    // A barra é perda, e "vermelho é erro e perda" — como na tela.
+    { tom: "pessego", icone: "cancelado", cor: SEMANTICAS.perda },
   );
 
   secoes.push(
@@ -84,12 +90,16 @@ export function secoesDoRelatorio(dados: DadosDosGraficos): Secao[] {
           periodo: dados.janela,
           pontos: dados.serieMensal,
           series: SERIES_DA_COMISSAO,
+          tom: "menta",
+          icone: "tendencia",
         }
       : {
           tipo: "texto",
           titulo: "Comissão mês a mês",
           periodo: dados.janela,
           corpo: "Nenhum pedido enviado nesta janela.",
+          tom: "menta",
+          icone: "tendencia",
         },
   );
 
@@ -98,12 +108,15 @@ export function secoesDoRelatorio(dados: DadosDosGraficos): Secao[] {
     dados.janela,
     dados.abcDeClientes,
     "Nenhum pedido enviado nesta janela.",
+    { tom: "lilas", icone: "clientes" },
   );
 
   secoes.push({
     tipo: "texto",
     titulo: "Orçamento que virou pedido",
     periodo: dados.janela,
+    tom: "sol",
+    icone: "orcamento",
     corpo:
       dados.totalOrcamentos === 0
         ? "Nenhuma proposta criada nesta janela."
@@ -118,6 +131,8 @@ export function secoesDoRelatorio(dados: DadosDosGraficos): Secao[] {
     tipo: "texto",
     titulo: "Pontualidade de entrega",
     periodo: dados.janela,
+    tom: "menta",
+    icone: "entrega",
     corpo:
       dados.totalEntregas === 0
         ? "Nenhum pedido desta janela tem entrega registrada."
@@ -134,7 +149,7 @@ export function secoesDoRelatorio(dados: DadosDosGraficos): Secao[] {
     `Sem comprar há mais de ${dados.dias} dias`,
     dados.sumidos,
     `Ninguém passou de ${dados.dias} dias sem comprar.`,
-    { unidade: "dias", mostrarTotal: false },
+    { unidade: "dias", mostrarTotal: false, tom: "pessego", icone: "sumido" },
   );
 
   return secoes;
@@ -148,25 +163,32 @@ export function relatorioDosGraficos(
     escritorio,
     mes: dados.mes,
     janela: dados.janela,
+    // O tom do valor segue a faixa de indicadores da tela (`cartoes/kpis.tsx`):
+    // recebido é resultado alcançado; a diferença é saldo, e o sinal decide.
     totais: [
-      { rotulo: "Previsto", valor: moeda(dados.vista.previsto) },
-      { rotulo: "Recebido", valor: moeda(dados.vista.recebido) },
       {
-        rotulo: "A acertar",
-        valor: moeda(dados.vista.aAcertar),
+        rotulo: "Previsto",
+        valor: moeda(dados.vista.previsto),
         detalhe: `${dados.pedidosDoMes} ${dados.pedidosDoMes === 1 ? "pedido" : "pedidos"} no mês`,
       },
-      { rotulo: "Diferença", valor: moeda(dados.vista.diferenca) },
+      { rotulo: "Recebido", valor: moeda(dados.vista.recebido), tom: "verde" },
+      { rotulo: "A acertar", valor: moeda(dados.vista.aAcertar), detalhe: "ainda sem acerto" },
+      {
+        rotulo: "Diferença",
+        valor: moeda(dados.vista.diferenca),
+        detalhe: "recebido − previsto dos acertados",
+        tom: tomDoSaldo(Number(dados.vista.diferenca.toString())),
+      },
     ],
     secoes: secoesDoRelatorio(dados),
   };
 }
 
-export async function gerarPdfDosGraficos(relatorio: DadosDoRelatorio): Promise<Buffer> {
-  return renderToBuffer(<DocumentoGraficos dados={relatorio} />);
+function tomDoSaldo(valor: number): "verde" | "perigo" | undefined {
+  return valor > 0 ? "verde" : valor < 0 ? "perigo" : undefined;
 }
 
-/** "repplast-graficos-2026-09.pdf" */
-export function nomeArquivoGraficos(competencia: string, extensao: string): string {
-  return `repplast-graficos-${competencia}.${extensao}`;
+export async function gerarPdfDosGraficos(relatorio: DadosDoRelatorio): Promise<Buffer> {
+  return renderToBuffer(<DocumentoGraficos dados={relatorio} geradoEm={new Date()} />);
 }
+

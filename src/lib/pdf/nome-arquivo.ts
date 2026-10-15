@@ -37,13 +37,31 @@ export function nomeArquivoPedido(pedido: {
 
 /** Deixa só letras sem acento, dígitos e hifens — nome de arquivo tem que viajar bem. */
 function normalizar(texto: string): string {
+  return semAcento(texto).toUpperCase();
+}
+
+/** O mesmo, mantendo maiúsculas e minúsculas como foram digitadas. */
+function semAcento(texto: string): string {
   return texto
     .normalize("NFD")
     // Remove os acentos que o NFD separou das letras.
     .replace(/[̀-ͯ]/g, "")
     .replace(/[^A-Za-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .toUpperCase();
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * Nome do arquivo do relatório dos gráficos (PDF e HTML).
+ *
+ *     Relatorio-Representacao-Modelo-09-2026.pdf
+ *
+ * O nome do escritório vai como foi cadastrado, só sem acento e com hífen no
+ * lugar do espaço: o nome viaja no `Content-Disposition`, que só aceita ASCII
+ * em `filename=` — com "ç" alguns navegadores trocam o nome por "download".
+ */
+export function nomeArquivoRelatorio(escritorio: string, competencia: string, extensao: string): string {
+  const [ano, mes] = competencia.split("-");
+  return `Relatorio-${semAcento(escritorio) || "Escritorio"}-${mes}-${ano}.${extensao}`;
 }
 
 /**

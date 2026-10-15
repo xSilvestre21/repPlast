@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { nomeArquivoPedido } from "./nome-arquivo";
+import { nomeArquivoPedido, nomeArquivoRelatorio } from "./nome-arquivo";
 
 /** Data em UTC ao meio-dia: evita o fuso empurrar o dia para trás. */
 const emUtc = (iso: string) => new Date(`${iso}T12:00:00Z`);
@@ -82,5 +82,23 @@ describe("nome do arquivo do pedido", () => {
 
     expect(nome).toBe("10-CLI-01-03-2026.pdf");
     expect(nome).not.toContain("PC-");
+  });
+});
+
+describe("nome do arquivo do relatório dos gráficos", () => {
+  it("é Relatorio-escritório-mês-ano, sem acento e com hífen no lugar do espaço", () => {
+    expect(nomeArquivoRelatorio("Representação Modelo", "2026-09", "pdf")).toBe(
+      "Relatorio-Representacao-Modelo-09-2026.pdf",
+    );
+  });
+
+  it("tira o símbolo que não viaja no cabeçalho do download", () => {
+    expect(nomeArquivoRelatorio('Silva & Filhos "Ltda."', "2026-01", "html")).toBe(
+      "Relatorio-Silva-Filhos-Ltda-01-2026.html",
+    );
+  });
+
+  it("não fica com o nome vazio quando o escritório é só símbolo", () => {
+    expect(nomeArquivoRelatorio("***", "2026-12", "pdf")).toBe("Relatorio-Escritorio-12-2026.pdf");
   });
 });

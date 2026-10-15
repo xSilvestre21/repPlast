@@ -1,9 +1,6 @@
 import { dbAdministrativo, dbParaOrganizacao } from "@/lib/db";
-import {
-  gerarPdfDosGraficos,
-  nomeArquivoGraficos,
-  relatorioDosGraficos,
-} from "@/lib/pdf/gerar-graficos";
+import { gerarPdfDosGraficos, relatorioDosGraficos } from "@/lib/pdf/gerar-graficos";
+import { nomeArquivoRelatorio } from "@/lib/pdf/nome-arquivo";
 import { sessaoComAcesso } from "@/lib/sessao";
 
 import { carregarDadosDosGraficos } from "../../dados";
@@ -48,9 +45,8 @@ export async function GET(requisicao: Request) {
     }),
   ]);
 
-  const arquivo = await gerarPdfDosGraficos(
-    relatorioDosGraficos(dados, organizacao?.nome ?? "RepPlast"),
-  );
+  const escritorio = organizacao?.nome ?? "RepPlast";
+  const arquivo = await gerarPdfDosGraficos(relatorioDosGraficos(dados, escritorio));
 
   // `?abrir` mostra no navegador; sem ele, baixa. Mesmo contrato do PDF do
   // pedido, para o botão se comportar do jeito que a pessoa já conhece.
@@ -59,7 +55,7 @@ export async function GET(requisicao: Request) {
   return new Response(new Uint8Array(arquivo), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `${abrirNoNavegador ? "inline" : "attachment"}; filename="${nomeArquivoGraficos(competencia, "pdf")}"`,
+      "Content-Disposition": `${abrirNoNavegador ? "inline" : "attachment"}; filename="${nomeArquivoRelatorio(escritorio, competencia, "pdf")}"`,
       "Cache-Control": "private, no-store",
     },
   });
