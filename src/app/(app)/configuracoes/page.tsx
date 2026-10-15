@@ -6,12 +6,15 @@ import { CAMPOS_PUBLICOS_CONTA } from "@/lib/conta-email";
 import { criptoConfigurada } from "@/lib/cripto";
 import { MODELOS_DE_EMAIL } from "@/lib/tipos-de-email";
 import { escopoAtual, sessaoAtual } from "@/lib/sessao";
+import { dataDaProximaTroca } from "@/lib/escritorio-regras";
+import { situacaoDoNome } from "@/lib/nome-escritorio";
 import { nomeCompleto } from "@/lib/nome-usuario";
 
 import {
   alternarReduzirAnimacoes,
   definirContaPadrao,
   excluirContaEmail,
+  renomearEscritorio,
   salvarCidade,
   salvarContaEmail,
   salvarMensagemEnvioPadrao,
@@ -19,6 +22,7 @@ import {
   testarContaEmail,
 } from "./acoes";
 import { FormCidade } from "./cidade";
+import { FormNomeEscritorio } from "./escritorio";
 import { SecaoContasEmail } from "./contas-email";
 import { FormMensagemEnvio } from "./mensagem-envio";
 import { FormObservacoesPadrao } from "./observacoes-padrao";
@@ -27,8 +31,8 @@ export default async function PaginaConfiguracoes() {
   const sessao = await sessaoAtual();
   const reduzidas = sessao?.reduzirAnimacoes ?? false;
 
-  const { usuarioId, db } = await escopoAtual();
-  const [usuario, contas] = await Promise.all([
+  const { usuarioId, organizacaoId, ehAdmin, db } = await escopoAtual();
+  const [usuario, contas, nomeEscritorio] = await Promise.all([
     db.usuario.findUnique({
       where: { id: usuarioId },
       select: {
@@ -48,6 +52,8 @@ export default async function PaginaConfiguracoes() {
       orderBy: [{ padrao: "desc" }, { criadoEm: "asc" }],
       select: CAMPOS_PUBLICOS_CONTA,
     }),
+    // O nome é do escritório: só o administrador troca, e só ele vê a seção.
+    ehAdmin ? situacaoDoNome(db, organizacaoId) : null,
   ]);
 
   return (
@@ -55,10 +61,20 @@ export default async function PaginaConfiguracoes() {
       <Cabecalho
         icone={Sparkles}
         titulo="Configurações"
-        descricao="Preferências da sua conta."
+        descricao={ehAdmin ? "Preferências da sua conta e do escritório." : "Preferências da sua conta."}
       />
 
       <div className="space-y-5 palco">
+        {nomeEscritorio && (
+          <FormNomeEscritorio
+            nome={nomeEscritorio.nome}
+            proximaTroca={
+              nomeEscritorio.proximaTroca ? dataDaProximaTroca(nomeEscritorio.proximaTroca) : null
+            }
+            salvar={renomearEscritorio}
+          />
+        )}
+
         <SecaoContasEmail
           nomeUsuario={usuario ? nomeCompleto(usuario) : ""}
           emailUsuario={usuario?.email ?? ""}

@@ -18,6 +18,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { dbAdministrativo } from "./db";
+import { nomeDeTeste } from "../../test/nome-de-teste";
 
 const admin = dbAdministrativo();
 
@@ -45,7 +46,7 @@ async function aoLancarPara(clienteId: string | null, fornecedorId: string) {
 
 beforeAll(async () => {
   const organizacao = await admin.organizacao.create({
-    data: { nome: "Teste lista de produtos" },
+    data: { nome: nomeDeTeste("Teste lista de produtos") },
   });
   organizacaoId = organizacao.id;
 

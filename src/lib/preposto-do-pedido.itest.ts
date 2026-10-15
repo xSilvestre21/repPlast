@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { dbAdministrativo } from "./db";
 import { prepostoDoNovoPedido } from "./preposto-do-pedido";
+import { nomeDeTeste } from "../../test/nome-de-teste";
 
 const admin = dbAdministrativo();
 
@@ -24,7 +25,7 @@ let semPreposto = "";
 
 beforeAll(async () => {
   const org = await admin.organizacao.create({
-    data: { nome: "Teste preposto do pedido", plano: "PLUS" },
+    data: { nome: nomeDeTeste("Teste preposto do pedido"), plano: "PLUS" },
   });
   organizacaoId = org.id;
 

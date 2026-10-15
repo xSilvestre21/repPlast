@@ -17,6 +17,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buscarPedidos } from "@/app/(app)/pedidos/consulta";
 
 import { dbAdministrativo, type DbOrganizacao } from "./db";
+import { nomeDeTeste } from "../../test/nome-de-teste";
 
 const admin = dbAdministrativo();
 
@@ -71,8 +72,8 @@ async function apagar(pedido: { id: string; numero: number }, fornecedorId: stri
 
 beforeAll(async () => {
   const [organizacao, daBusca] = await Promise.all([
-    admin.organizacao.create({ data: { nome: "Teste numeração" } }),
-    admin.organizacao.create({ data: { nome: "Escritório da busca de pedidos" } }),
+    admin.organizacao.create({ data: { nome: nomeDeTeste("Teste numeração") } }),
+    admin.organizacao.create({ data: { nome: nomeDeTeste("Escritório da busca de pedidos") } }),
   ]);
 
   organizacaoId = organizacao.id;

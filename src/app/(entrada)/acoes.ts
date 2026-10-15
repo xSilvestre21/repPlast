@@ -13,7 +13,8 @@ import {
 import { normalizarCep, normalizarDocumento, somenteDigitos } from "@/lib/mascara";
 import { planoDaUrl, type CodigoPlano } from "@/lib/planos";
 import { conferirSenha, gerarHashSenha } from "@/lib/senha";
-import { TAMANHO_MAXIMO_ESCRITORIO } from "@/lib/escritorio-regras";
+import { normalizarNomeEscritorio, problemaNoNomeEscritorio } from "@/lib/escritorio-regras";
+import { ehConflitoDeNome, erroNomeEmUso, nomeEmUso } from "@/lib/nome-escritorio";
 import { TAMANHO_MINIMO_SENHA } from "@/lib/senha-regras";
 import { criarSessao, encerrarSessao, sessaoAtual } from "@/lib/sessao";
 
@@ -163,25 +164,13 @@ export async function cadastrar(
       );
     }
 
-    const escritorio = lerTexto(formData.get("escritorio"));
+    const escritorio = normalizarNomeEscritorio(lerTexto(formData.get("escritorio")));
     const nome = lerTexto(formData.get("nome"));
     const email = lerEmail(formData.get("email"));
     const senha = lerTexto(formData.get("senha"));
 
-    if (!escritorio) {
-      throw new ErroDeCampo(
-        "escritorio",
-        "Informe o nome do seu escritório — é como a sua representação é conhecida.",
-      );
-    }
-    if (escritorio.length > TAMANHO_MAXIMO_ESCRITORIO) {
-      throw new ErroDeCampo(
-        "escritorio",
-        `O nome do escritório pode ter até ${TAMANHO_MAXIMO_ESCRITORIO} caracteres — este tem ` +
-          `${escritorio.length}. Use o nome pelo qual os clientes conhecem a representação, ` +
-          "como “Representação Silvestre”.",
-      );
-    }
+    const problemaNoNome = problemaNoNomeEscritorio(escritorio);
+    if (problemaNoNome) throw new ErroDeCampo("escritorio", problemaNoNome);
     if (!nome) throw new ErroDeCampo("nome", "Informe o seu nome e sobrenome.");
     if (!email) throw new ErroDeCampo("email", "Informe o seu e-mail — é com ele que você vai entrar.");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ErroDeCampo("email", EMAIL_INCOMPLETO);
@@ -214,6 +203,7 @@ export async function cadastrar(
 
     const db = dbAdministrativo();
 
+    if (await nomeEmUso(db, escritorio)) throw erroNomeEmUso("escritorio", escritorio);
     if (await db.usuario.findUnique({ where: { email }, select: { id: true } })) {
       throw new ErroDeCampo(
         "email",
@@ -254,6 +244,11 @@ export async function cadastrar(
       cep: somenteDigitos(cep),
     });
   } catch (erro) {
+    // Outro cadastro levou o nome entre a conferência e a gravação.
+    if (ehConflitoDeNome(erro)) {
+      const escritorio = normalizarNomeEscritorio(lerTexto(formData.get("escritorio")));
+      return falhou(erroNomeEmUso("escritorio", escritorio), formData);
+    }
     return falhou(erro, formData);
   }
 

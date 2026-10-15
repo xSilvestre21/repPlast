@@ -131,6 +131,9 @@ enum Papel {
 
 model Organizacao {
   id       String   @id @default(uuid()) @db.Uuid
+  /// Único entre os escritórios ativos, sem distinguir maiúsculas, acentos e
+  /// espaços — índice `organizacao_nome_unico`, por expressão, criado em SQL na
+  /// migração `nome_escritorio_unico` (o schema do Prisma não descreve esse tipo).
   nome     String
   ativa    Boolean  @default(true)
   criadaEm DateTime @default(now())
@@ -168,6 +171,7 @@ model Organizacao {
   metas        MetaComissao[]
   repasses     RepassePreposto[]
   compromissos Compromisso[]
+  trocasDeNome TrocaNomeEscritorio[]
 
   @@map("organizacao")
 }
@@ -262,9 +266,29 @@ model Usuario {
   repasses     RepassePreposto[]
   compromissos Compromisso[]
   avisosAdiados AvisoAdiado[]
+  trocasDeNome TrocaNomeEscritorio[]
 
   @@index([organizacaoId])
   @@map("usuario")
+}
+
+/// Cada troca do nome do escritório. A troca seguinte espera o intervalo a
+/// partir da última (`proximaTrocaPermitida`), e o suporte lê daqui como o
+/// escritório se chamava antes.
+model TrocaNomeEscritorio {
+  id            String   @id @default(uuid()) @db.Uuid
+  organizacaoId String   @db.Uuid
+  /// Quem trocou — sempre um administrador.
+  usuarioId     String   @db.Uuid
+  nomeAnterior  String
+  nomeNovo      String
+  criadaEm      DateTime @default(now())
+
+  organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  usuario     Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([organizacaoId, criadaEm])
+  @@map("troca_nome_escritorio")
 }
 
 /// A meta de comissão de uma pessoa, a partir de um mês.

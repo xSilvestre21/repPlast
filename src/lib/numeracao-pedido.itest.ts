@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { dbAdministrativo } from "./db";
 import { definirUltimoNumeroPedido, lerUltimoNumeroPedido } from "./numeracao-pedido";
+import { nomeDeTeste } from "../../test/nome-de-teste";
 
 const admin = dbAdministrativo();
 
@@ -19,7 +20,7 @@ let organizacaoId = "";
 let clienteId = "";
 
 beforeAll(async () => {
-  const org = await admin.organizacao.create({ data: { nome: "Teste numeração de pedidos" } });
+  const org = await admin.organizacao.create({ data: { nome: nomeDeTeste("Teste numeração de pedidos") } });
   organizacaoId = org.id;
   const cliente = await admin.cliente.create({
     data: { organizacaoId, apelido: "CLIENTE", razaoSocial: "CLIENTE LTDA" },

@@ -7,6 +7,7 @@ import {
   resumirComissao,
 } from "./comissao-consulta";
 import { type Ator, dbAdministrativo, dbParaOrganizacao } from "./db";
+import { nomeDeTeste } from "../../test/nome-de-teste";
 
 const admin = dbAdministrativo();
 const DONO: Ator = { usuarioId: "00000000-0000-0000-0000-000000000000", papel: "ADMIN" };
@@ -16,7 +17,7 @@ let prepostoId = "";
 
 beforeAll(async () => {
   const o = await admin.organizacao.create({
-    data: { nome: "Escritório da Comissão", plano: "PLUS" },
+    data: { nome: nomeDeTeste("Escritório da Comissão"), plano: "PLUS" },
   });
   org = o.id;
 

@@ -1,7 +1,8 @@
 "use server";
 
 /**
- * Preferências de conta do usuário logado.
+ * Preferências de conta do usuário logado — e, para o administrador, o nome do
+ * escritório.
  */
 
 import { revalidatePath } from "next/cache";
@@ -19,13 +20,83 @@ import {
   falhou,
   type EstadoFormulario,
 } from "@/lib/erro-formulario";
-import { escopoAtual } from "@/lib/sessao";
+import {
+  dataDaProximaTroca,
+  normalizarNomeEscritorio,
+  problemaNoNomeEscritorio,
+} from "@/lib/escritorio-regras";
+import { ehConflitoDeNome, erroNomeEmUso, nomeEmUso, situacaoDoNome } from "@/lib/nome-escritorio";
+import { escopoAtual, exigirAdmin } from "@/lib/sessao";
 
 export type { EstadoFormulario };
 
 const CONTA_SUMIU =
   "Esta conta de e-mail não foi encontrada — ela pode ter sido excluída em outra tela. " +
   "Recarregue a página.";
+
+/**
+ * Troca o nome do escritório — o que aparece no topo de todas as telas.
+ *
+ * Só o administrador: o nome é do escritório, não de quem clicou. De graça,
+ * livre nos primeiros dias e depois uma troca por intervalo
+ * (`proximaTrocaPermitida`); nome de outro escritório ativo é recusado, e o
+ * nome que este deixou fica livre — para outro, ou para ele mesmo voltar.
+ *
+ * O nome e o histórico vão numa escrita só (aninhada): sem histórico, a troca
+ * seguinte não saberia esperar o intervalo.
+ */
+export async function renomearEscritorio(
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  const bruto = formData.get("escritorio");
+  const nome = normalizarNomeEscritorio(typeof bruto === "string" ? bruto : "");
+
+  try {
+    await exigirAdmin();
+    const { usuarioId, organizacaoId, db } = await escopoAtual();
+
+    const problema = problemaNoNomeEscritorio(nome);
+    if (problema) throw new ErroDeCampo("escritorio", problema);
+
+    const situacao = await situacaoDoNome(db, organizacaoId);
+    if (!situacao) {
+      throw new ErroParaUsuario("Não encontramos o seu escritório. Saia e entre de novo no sistema.");
+    }
+    if (situacao.nome === nome) {
+      throw new ErroDeCampo(
+        "escritorio",
+        "Este já é o nome do escritório. Digite o nome novo antes de usar “Trocar nome”.",
+      );
+    }
+    if (situacao.proximaTroca) {
+      throw new ErroDeCampo(
+        "escritorio",
+        "O nome foi trocado há pouco tempo. A próxima troca fica liberada em " +
+          `${dataDaProximaTroca(situacao.proximaTroca)}.`,
+      );
+    }
+    if (await nomeEmUso(db, nome, { exceto: organizacaoId })) {
+      throw erroNomeEmUso("escritorio", nome);
+    }
+
+    await db.organizacao.update({
+      where: { id: organizacaoId },
+      data: {
+        nome,
+        trocasDeNome: { create: { usuarioId, nomeAnterior: situacao.nome, nomeNovo: nome } },
+      },
+    });
+  } catch (erro) {
+    // Outro escritório levou o nome entre a conferência e a gravação.
+    if (ehConflitoDeNome(erro)) return falhou(erroNomeEmUso("escritorio", nome), formData);
+    return falhou(erro, formData);
+  }
+
+  // O topo de TODAS as telas mostra o nome.
+  revalidatePath("/", "layout");
+  return {};
+}
 
 /**
  * Liga e desliga a animação da conta.

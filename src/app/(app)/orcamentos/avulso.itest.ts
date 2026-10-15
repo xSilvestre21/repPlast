@@ -16,6 +16,7 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { dbAdministrativo } from "@/lib/db";
+import { nomeDeTeste } from "../../../../test/nome-de-teste";
 
 const admin = dbAdministrativo();
 // O usuário é de verdade: o pedido e a proposta gravam quem os criou, e a
@@ -80,7 +81,7 @@ const SACO = {
 
 beforeAll(async () => {
   const organizacao = await admin.organizacao.create({
-    data: { nome: "Teste proposta avulsa" },
+    data: { nome: nomeDeTeste("Teste proposta avulsa") },
   });
   sessao.organizacaoId = organizacao.id;
   const dono = await admin.usuario.create({

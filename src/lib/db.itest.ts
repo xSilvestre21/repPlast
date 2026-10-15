@@ -14,6 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { type Ator, dbAdministrativo, dbParaOrganizacao } from "./db";
 import { soIndustriasMarcadas } from "./industrias-do-ator";
+import { nomeDeTeste } from "../../test/nome-de-teste";
 
 /**
  * No PostgreSQL, superusuário (e qualquer papel com BYPASSRLS) ignora as
@@ -71,8 +72,8 @@ let orgB = "";
 let clienteDeB = "";
 
 beforeAll(async () => {
-  const a = await admin.organizacao.create({ data: { nome: "Escritório A" } });
-  const b = await admin.organizacao.create({ data: { nome: "Escritório B" } });
+  const a = await admin.organizacao.create({ data: { nome: nomeDeTeste("Escritório A") } });
+  const b = await admin.organizacao.create({ data: { nome: nomeDeTeste("Escritório B") } });
   orgA = a.id;
   orgB = b.id;
 
@@ -160,7 +161,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
 
   beforeAll(async () => {
     const org = await admin.organizacao.create({
-      data: { nome: "Escritório Plus", plano: "PLUS" },
+      data: { nome: nomeDeTeste("Escritório Plus"), plano: "PLUS" },
     });
     escritorio = org.id;
 
@@ -1137,7 +1138,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
   });
 
   it("preposto só existe em escritório Plus", async () => {
-    const padrao = await admin.organizacao.create({ data: { nome: "Escritório Padrão" } });
+    const padrao = await admin.organizacao.create({ data: { nome: nomeDeTeste("Escritório Padrão") } });
 
     await expect(
       admin.usuario.create({

@@ -21,6 +21,7 @@ import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from "r
 import { sair } from "@/app/(entrada)/acoes";
 
 import { AlternadorTema } from "./alternador-tema";
+import { NomeQueCabe } from "./nome-que-cabe";
 import { chegarPilula, partir } from "./viagem";
 import { Avatar } from "./ui";
 
@@ -187,10 +188,15 @@ function estaAtivo(href: string, caminho: string) {
  * como uma segunda cápsula dentro da primeira). Selecionado, recebe a mesma
  * pílula preta das outras.
  *
- * Entre `sm` e `xl` a barra não tem largura para sete rótulos: as abas dos
+ * Entre `md` e `xl` a barra não tem largura para sete rótulos: as abas dos
  * lados mostram só o ícone (o nome fica no `title` e no `aria-label`), e o
- * Painel, que é a âncora, mantém o dele. Abaixo de `sm` a barra some e entra o
+ * Painel, que é a âncora, mantém o dele. Abaixo de `md` a barra some e entra o
  * menu de três riscas (`MenuCelular`).
+ *
+ * `md`, e não `sm`: com as abas no centro exato do topo, o nome do escritório
+ * fica com metade do que sobra ao lado delas, e de 640 a 767 px isso dava só
+ * 112 px — o cadastro teria de recusar nomes comuns. Nessa faixa (celular
+ * deitado, tablet pequeno) a gaveta serve tão bem quanto.
  *
  * `xl`, e não `lg`: com rótulo, as abas ocupam ~820 px, e o topo nunca passa
  * de 1104 (`max-w-6xl` menos o recuo). Em 1024 px elas invadiam o avatar e a
@@ -326,7 +332,7 @@ function MenuCelular({
     "flex items-center gap-3 rounded-suave px-3 py-2.5 text-corpo transition-colors";
 
   return (
-    <div className="sm:hidden">
+    <div className="md:hidden">
       <button
         type="button"
         onClick={() => setAberto(true)}
@@ -353,8 +359,8 @@ function MenuCelular({
         {aberto && (
           <div className="flex h-full flex-col">
             <div className="flex h-14 items-center justify-between gap-3 border-b border-filete px-4">
-              <span className="truncate text-medio font-extrabold tracking-[-0.03em]" title={nomeOrganizacao}>
-                {nomeOrganizacao}
+              <span className="min-w-0 font-extrabold tracking-[-0.03em]" title={nomeOrganizacao}>
+                <NomeQueCabe nome={nomeOrganizacao} />
               </span>
               <button
                 type="button"
@@ -449,7 +455,17 @@ export function Navegacao({
   return (
     <header className="sticky top-0 z-40 barra-topo">
       <div className="w-full max-w-6xl mx-auto px-4 sm:px-6">
-        <div className="flex h-14 items-center gap-x-3 sm:gap-x-4">
+        {/*
+          Do `md` para cima, uma grade de três colunas: nome | abas | avatar,
+          com as duas laterais do MESMO tamanho (`1fr` cada). É isso que deixa as
+          abas no centro exato do topo, qualquer que seja o nome. Com `flex`, as
+          abas ficavam no meio do que SOBRAVA entre o nome e o avatar — e um nome
+          comprido as empurrava para a direita.
+        */}
+        <div
+          className="flex h-14 items-center gap-x-3 md:grid md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]
+            md:gap-x-4"
+        >
           {/* No celular a barra de abas não cabe: as três riscas abrem a gaveta. */}
           <MenuCelular
             itens={itens}
@@ -462,30 +478,33 @@ export function Navegacao({
             O nome do escritório leva ao Painel — e faz a MESMA viagem que a aba
             dele: a mesma direção de deslize e a pílula indo até o Painel.
 
-            Ele é quem cede espaço: fica com o que sobra ao lado das abas (que
-            não encolhem, `min-w-fit` no `nav`), até 220 px, e corta com "…".
-            O nome inteiro fica no `title` e na gaveta do celular. Ao contrário,
-            um nome comprido empurrava as abas para cima do avatar.
+            Ele é quem cede espaço: fica com a coluna da esquerda — metade do
+            que sobra ao lado das abas, que nunca encolhem (`auto` na grade) —,
+            até 220 px. Ao contrário, um nome comprido empurrava as abas para
+            cima do avatar. O que não
+            couber não vira "…": a fonte encolhe e, se preciso, quebra em duas
+            linhas (`NomeQueCabe`) — e o limite do cadastro
+            (`escritorio-regras.ts`) é o que ainda cabe assim no pior caso.
           */}
           <Link
             href="/"
             onClick={() => partir(indicePainel, indiceAtual)}
             title={nomeOrganizacao}
-            className="min-w-0 max-w-[50vw] truncate text-medio font-extrabold tracking-[-0.03em]
-              transition-colors hover:text-carimbo sm:max-w-[220px]"
+            className="min-w-0 max-w-[50vw] justify-self-start font-extrabold tracking-[-0.03em]
+              transition-colors hover:text-carimbo md:max-w-[min(220px,100%)]"
           >
-            {nomeOrganizacao}
+            <NomeQueCabe nome={nomeOrganizacao} />
           </Link>
 
           {/*
-            A barra de abas, do `sm` para cima. Abaixo disso ela some, e não
+            A barra de abas, do `md` para cima. Abaixo disso ela some, e não
             vira uma fila rolando de lado: com o Painel no meio, metade das abas
             ficava fora da tela, e quem estava em Fornecedores não via onde
             estava. A pílula com nome de view transition só existe aqui — a
             gaveta do celular não a repete, porque nome repetido faz o navegador
             abortar a animação.
           */}
-          <nav aria-label="Principal" className="hidden sm:block flex-1 min-w-fit">
+          <nav aria-label="Principal" className="hidden md:block">
             {/*
               Sem fundo nem borda próprios: as abas ficam direto no fundo do
               topo. Uma cápsula cinza em volta delas pesava o cabeçalho — quem
@@ -505,7 +524,7 @@ export function Navegacao({
             </ul>
           </nav>
 
-          <div className="ml-auto sm:ml-0 flex items-center gap-1 shrink-0">
+          <div className="ml-auto md:ml-0 md:justify-self-end flex items-center gap-1 shrink-0">
             <MenuUsuario nome={nomeUsuario} itensMenu={itensMenu} />
             <AlternadorTema />
           </div>

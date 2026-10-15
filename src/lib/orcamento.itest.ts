@@ -18,6 +18,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buscarOrcamentos } from "@/app/(app)/orcamentos/consulta";
 
 import { dbAdministrativo, type DbOrganizacao } from "./db";
+import { nomeDeTeste } from "../../test/nome-de-teste";
 
 const admin = dbAdministrativo();
 
@@ -63,10 +64,10 @@ async function apagar(orcamento: { id: string; numero: number }, orgId = organiz
 beforeAll(async () => {
   const [organizacao, outra, daBusca] = await Promise.all([
     admin.organizacao.create({
-      data: { nome: "Teste numeração de orçamento", proximoNumeroOrcamento: 41 },
+      data: { nome: nomeDeTeste("Teste numeração de orçamento"), proximoNumeroOrcamento: 41 },
     }),
     admin.organizacao.create({
-      data: { nome: "Escritório vizinho", proximoNumeroOrcamento: 41 },
+      data: { nome: nomeDeTeste("Escritório vizinho"), proximoNumeroOrcamento: 41 },
     }),
     /*
      * A busca tem escritório próprio.
@@ -76,7 +77,7 @@ beforeAll(async () => {
      * teste conforme a ORDEM em que os arquivos declaram os seus, que é o tipo de
      * armadilha que o próximo a mexer aqui não merece.
      */
-    admin.organizacao.create({ data: { nome: "Escritório da busca" } }),
+    admin.organizacao.create({ data: { nome: nomeDeTeste("Escritório da busca") } }),
   ]);
 
   organizacaoId = organizacao.id;
