@@ -16,6 +16,7 @@
 
 import { Download, Maximize2, Minimize2, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import * as echarts from "echarts/core";
 
 import { Cartao, EstadoVazio, Placa } from "@/components/ui";
@@ -75,7 +76,7 @@ export function CartaoGrafico({
     "grid place-items-center size-8 rounded-full text-tinta-3 hover:text-tinta hover:bg-folha-2 " +
     "transition-colors cursor-pointer";
 
-  return (
+  const cartao = (
     <>
       {/* O fundo da tela cheia: clicar fora fecha. */}
       {cheia && (
@@ -143,4 +144,11 @@ export function CartaoGrafico({
       </Cartao>
     </>
   );
+
+  // A tela cheia vai para o `<body>`. No lugar, o `z-50` ficava preso no
+  // contexto de empilhamento de um ancestral — a linha do grid dentro do
+  // `.palco`, cuja animação de entrada (`fill: both`) cria um — e os cartões
+  // das linhas de baixo pintavam por cima. O gráfico remonta na troca, mas o
+  // estado (visão, período, busca) mora no cartão que o chama.
+  return cheia ? createPortal(cartao, document.body) : cartao;
 }
