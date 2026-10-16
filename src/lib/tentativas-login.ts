@@ -3,7 +3,7 @@ import "server-only";
 import { headers } from "next/headers";
 
 import { dbAdministrativo } from "./db";
-import { liberacao } from "./limite-tentativas";
+import { liberacao, restantes } from "./limite-tentativas";
 
 /**
  * O limite de tentativas do login.
@@ -41,9 +41,8 @@ export async function ipDaRequisicao(): Promise<string> {
   return encaminhado || cabecalhos.get("x-real-ip")?.trim() || "desconhecido";
 }
 
-/** Até quando o login está fechado para este e-mail ou este IP, ou `null`. */
-export async function bloqueioDoLogin({ email, ip }: { email: string; ip: string }): Promise<Date | null> {
-  const agora = new Date();
+/** As falhas dentro da janela, das duas portas. */
+async function falhasRecentes({ email, ip }: { email: string; ip: string }, agora: Date) {
   const desde = new Date(agora.getTime() - JANELA_MIN * 60 * 1000);
   const db = dbAdministrativo();
 
@@ -51,13 +50,34 @@ export async function bloqueioDoLogin({ email, ip }: { email: string; ip: string
     db.tentativaLogin.findMany({ where: { email, criadaEm: { gt: desde } }, select: { criadaEm: true } }),
     db.tentativaLogin.findMany({ where: { ip, criadaEm: { gt: desde } }, select: { criadaEm: true } }),
   ]);
+  return { doEmail: doEmail.map((t) => t.criadaEm), doIp: doIp.map((t) => t.criadaEm) };
+}
 
-  const porEmail = liberacao(doEmail.map((t) => t.criadaEm), { limite: LIMITE_POR_EMAIL, janelaMin: JANELA_MIN, agora });
-  const porIp = liberacao(doIp.map((t) => t.criadaEm), { limite: LIMITE_POR_IP, janelaMin: JANELA_MIN, agora });
+/** Até quando o login está fechado para este e-mail ou este IP, ou `null`. */
+export async function bloqueioDoLogin(quem: { email: string; ip: string }): Promise<Date | null> {
+  const agora = new Date();
+  const { doEmail, doIp } = await falhasRecentes(quem, agora);
+
+  const porEmail = liberacao(doEmail, { limite: LIMITE_POR_EMAIL, janelaMin: JANELA_MIN, agora });
+  const porIp = liberacao(doIp, { limite: LIMITE_POR_IP, janelaMin: JANELA_MIN, agora });
 
   // As duas fechadas: vale a que demora mais.
   if (porEmail && porIp) return porEmail > porIp ? porEmail : porIp;
   return porEmail ?? porIp;
+}
+
+/**
+ * Quantas senhas erradas ainda cabem antes do bloqueio: a porta que estiver
+ * mais perto de fechar. Conta igual para e-mail com e sem conta — é a mesma
+ * tabela —, então o número não denuncia quais e-mails existem.
+ */
+export async function tentativasRestantes(quem: { email: string; ip: string }): Promise<number> {
+  const agora = new Date();
+  const { doEmail, doIp } = await falhasRecentes(quem, agora);
+  return Math.min(
+    restantes(doEmail, { limite: LIMITE_POR_EMAIL, janelaMin: JANELA_MIN, agora }),
+    restantes(doIp, { limite: LIMITE_POR_IP, janelaMin: JANELA_MIN, agora }),
+  );
 }
 
 export async function registrarFalha({ email, ip }: { email: string; ip: string }): Promise<void> {

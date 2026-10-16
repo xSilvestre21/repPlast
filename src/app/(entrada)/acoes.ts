@@ -31,8 +31,10 @@ import { criarSessao, encerrarSessao, sessaoAtual } from "@/lib/sessao";
 import {
   bloqueioDoLogin,
   ipDaRequisicao,
+  JANELA_MIN,
   limparFalhas,
   registrarFalha,
+  tentativasRestantes,
 } from "@/lib/tentativas-login";
 
 export type { EstadoFormulario };
@@ -75,6 +77,36 @@ function conferirSenhaNova(senha: string, formData: FormData): void {
   }
 }
 
+function loginBloqueado(libera: Date): ErroParaUsuario {
+  return new ErroParaUsuario(
+    `Muitas tentativas com senha errada. Espere ${minutosPorExtenso(minutosAte(libera, new Date()))} ` +
+      "e tente de novo — ou use “Esqueceu sua senha?” para criar uma nova.",
+  );
+}
+
+/**
+ * Registra a senha errada e devolve a recusa, dizendo quantas tentativas sobram. A que esgota o
+ * limite já mostra o bloqueio: avisar "restam 0" e só bloquear na próxima
+ * faria a pessoa digitar mais uma senha à toa.
+ *
+ * A mesma frase para e-mail inexistente e senha errada, de propósito:
+ * distinguir os dois casos entregaria a quem tenta invadir a informação de
+ * quais e-mails têm conta no sistema.
+ */
+async function senhaErrada(quem: { email: string; ip: string }): Promise<ErroParaUsuario> {
+  await registrarFalha(quem);
+
+  const libera = await bloqueioDoLogin(quem);
+  if (libera) return loginBloqueado(libera);
+
+  const resta = await tentativasRestantes(quem);
+  return new ErroParaUsuario(
+    "E-mail ou senha incorretos. Confira se o e-mail está certo e se o Caps Lock não está " +
+      `ligado. ${resta === 1 ? "Resta 1 tentativa" : `Restam ${resta} tentativas`} antes de o ` +
+      `acesso ficar bloqueado por ${JANELA_MIN} minutos.`,
+  );
+}
+
 export async function entrar(
   _estado: EstadoFormulario,
   formData: FormData,
@@ -89,43 +121,21 @@ export async function entrar(
     // Antes de olhar a senha: bloqueado, nem a certa entra.
     const ip = await ipDaRequisicao();
     const libera = await bloqueioDoLogin({ email, ip });
-    if (libera) {
-      throw new ErroParaUsuario(
-        `Muitas tentativas com senha errada. Espere ${minutosPorExtenso(minutosAte(libera, new Date()))} ` +
-          "e tente de novo — ou use “Esqueceu sua senha?” para criar uma nova.",
-      );
-    }
+    if (libera) throw loginBloqueado(libera);
 
     const usuario = await dbAdministrativo().usuario.findUnique({
       where: { email },
       select: { id: true, senhaHash: true, organizacao: { select: { ativa: true } } },
     });
 
-    /*
-     * A mesma mensagem para e-mail inexistente e senha errada, de propósito:
-     * distinguir os dois casos entregaria a quem tenta invadir a informação de
-     * quais e-mails têm conta no sistema.
-     */
-    const generico = falhou(
-      new ErroParaUsuario(
-        "E-mail ou senha incorretos. Confira se o e-mail está certo e se o Caps Lock não está " +
-          "ligado, e tente de novo.",
-      ),
-      formData,
-    );
-
     if (!usuario) {
       // Confere contra um hash descartável mesmo sem usuário: sem isso, a
       // resposta voltaria bem mais rápido e denunciaria que o e-mail não existe.
       await conferirSenha(senha, await gerarHashSenha("descartavel"));
-      await registrarFalha({ email, ip });
-      return generico;
+      throw await senhaErrada({ email, ip });
     }
 
-    if (!(await conferirSenha(senha, usuario.senhaHash))) {
-      await registrarFalha({ email, ip });
-      return generico;
-    }
+    if (!(await conferirSenha(senha, usuario.senhaHash))) throw await senhaErrada({ email, ip });
     if (!usuario.organizacao.ativa) {
       throw new ErroParaUsuario(
         "Este escritório está desativado, e por isso não dá para entrar. Se acha que é engano, " +

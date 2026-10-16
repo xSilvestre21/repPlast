@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { liberacao, minutosAte, minutosPorExtenso } from "./limite-tentativas";
+import { liberacao, minutosAte, minutosPorExtenso, restantes } from "./limite-tentativas";
 
 const agora = new Date("2026-10-15T12:00:00Z");
 const ha = (min: number) => new Date(agora.getTime() - min * 60 * 1000);
@@ -36,5 +36,17 @@ describe("minutosAte", () => {
   it("escreve singular e plural", () => {
     expect(minutosPorExtenso(1)).toBe("1 minuto");
     expect(minutosPorExtenso(12)).toBe("12 minutos");
+  });
+});
+
+describe("restantes", () => {
+  it("desconta só as falhas da janela", () => {
+    expect(restantes([], regra)).toBe(5);
+    expect(restantes([ha(1), ha(2), ha(20)], regra)).toBe(3);
+  });
+
+  it("no limite ou acima, é zero — nunca negativo", () => {
+    expect(restantes([ha(1), ha(2), ha(3), ha(4), ha(5)], regra)).toBe(0);
+    expect(restantes([ha(1), ha(2), ha(3), ha(4), ha(5), ha(6)], regra)).toBe(0);
   });
 });

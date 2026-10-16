@@ -26,6 +26,16 @@ export function liberacao(
   return new Date(naJanela[limite - 1] + janelaMin * MINUTO_MS);
 }
 
+/** Quantas falhas ainda cabem na janela antes de a porta fechar — nunca negativo. */
+export function restantes(
+  datas: Date[],
+  { limite, janelaMin, agora }: { limite: number; janelaMin: number; agora: Date },
+): number {
+  const inicioDaJanela = agora.getTime() - janelaMin * MINUTO_MS;
+  const naJanela = datas.filter((data) => data.getTime() > inicioDaJanela).length;
+  return Math.max(0, limite - naJanela);
+}
+
 /** Minutos que faltam, arredondados para cima: "espere 1 minuto", nunca "0". */
 export function minutosAte(libera: Date, agora: Date): number {
   return Math.max(1, Math.ceil((libera.getTime() - agora.getTime()) / MINUTO_MS));
