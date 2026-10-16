@@ -81,6 +81,18 @@ describe("valoresDigitados", () => {
     expect(valores).toEqual({ email: "a@b.com", "email#0": "a@b.com" });
   });
 
+  it("também não devolve a senha repetida (confirmacao) nem a atual", () => {
+    const valores = valoresDigitados(
+      formulario([
+        ["nome", "Ana"],
+        ["confirmacao", "segredo"],
+        ["atual", "antiga"],
+      ]),
+    );
+
+    expect(valores).toEqual({ nome: "Ana", "nome#0": "Ana" });
+  });
+
   it("numera os campos repetidos das linhas de tabela", () => {
     const valores = valoresDigitados(
       formulario([

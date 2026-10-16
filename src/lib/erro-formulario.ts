@@ -49,8 +49,13 @@ export function campoDaLinha(nome: string, indice: number): string {
   return `${nome}#${indice}`;
 }
 
-/** Campos que NUNCA voltam para o navegador, em formulário nenhum. */
-const NUNCA_DEVOLVER = /senha/i;
+/**
+ * Campos que NUNCA voltam para o navegador, em formulário nenhum: as senhas,
+ * pelo nome. `confirmacao` (a senha repetida) e `atual` (a senha de hoje, na
+ * troca) também são senha, mas sem a palavra no nome — a repetida voltava
+ * preenchida depois de qualquer recusa no cadastro.
+ */
+const NUNCA_DEVOLVER = /senha|^confirmacao$|^atual$/i;
 
 /**
  * O que foi digitado, pronto para voltar ao formulário.
