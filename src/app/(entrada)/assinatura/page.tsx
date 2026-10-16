@@ -70,22 +70,28 @@ export default async function PaginaAssinatura({ searchParams }: PageProps<"/ass
               : texto.texto}
           </p>
 
-          {voltouPago && (
+          {voltouPago ? (
             <div className="mt-6">
-              <AguardarConfirmacao />
+              <AguardarConfirmacao
+                seDesistir={
+                  sessao.papel === "ADMIN" && (
+                    <ReabrirPagamento acao={reabrirPagamento} rotulo="Abrir o pagamento de novo" />
+                  )
+                }
+              />
+            </div>
+          ) : (
+            <div className="mt-8">
+              {sessao.papel === "ADMIN" ? (
+                <ReabrirPagamento acao={reabrirPagamento} rotulo={texto.botao} />
+              ) : (
+                <p className="text-corpo text-tinta-2">
+                  Quem acerta a assinatura é o administrador do escritório. Avise essa pessoa — assim
+                  que estiver em dia, você entra normalmente.
+                </p>
+              )}
             </div>
           )}
-
-          <div className="mt-8">
-            {sessao.papel === "ADMIN" ? (
-              <ReabrirPagamento acao={reabrirPagamento} rotulo={texto.botao} />
-            ) : (
-              <p className="text-corpo text-tinta-2">
-                Quem acerta a assinatura é o administrador do escritório. Avise essa pessoa — assim
-                que estiver em dia, você entra normalmente.
-              </p>
-            )}
-          </div>
 
           <form action={sair} className="mt-6 text-center">
             <BotaoTexto type="submit">Sair e entrar com outra conta</BotaoTexto>

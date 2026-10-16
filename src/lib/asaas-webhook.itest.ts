@@ -52,7 +52,11 @@ beforeAll(async () => {
       assinatura: "AGUARDANDO_PAGAMENTO",
       asaasCheckoutId: checkoutId,
       usuarios: {
-        create: { nome: "Dona", email: `webhook-${sufixo}@teste.local`, senhaHash: "x" },
+        create: {
+          nome: "Dona",
+          email: `webhook-${sufixo}@teste.local`,
+          senhaHash: "x",
+        },
       },
     },
     select: { id: true, usuarios: { select: { id: true } } },
@@ -80,7 +84,9 @@ describe("token do webhook", () => {
 describe("processarEventoAsaas", () => {
   it("CHECKOUT_PAID libera o escritório do checkout e grava cliente e assinatura", async () => {
     await processarEventoAsaas(
-      evento("CHECKOUT_PAID", { checkout: { id: checkoutId, customer: clienteId } }),
+      evento("CHECKOUT_PAID", {
+        checkout: { id: checkoutId, customer: clienteId },
+      }),
     );
 
     expect(await situacao()).toEqual({
@@ -110,7 +116,9 @@ describe("processarEventoAsaas", () => {
 
     // Atrasa por outro evento, e a reentrega do pagamento antigo não reativa.
     await processarEventoAsaas(
-      evento("PAYMENT_OVERDUE", { payment: { subscription: "sub_teste_checkout" } }),
+      evento("PAYMENT_OVERDUE", {
+        payment: { subscription: "sub_teste_checkout" },
+      }),
     );
     await processarEventoAsaas(pago);
 
@@ -119,7 +127,9 @@ describe("processarEventoAsaas", () => {
 
   it("evento de outro escritório não mexe neste", async () => {
     await processarEventoAsaas(
-      evento("SUBSCRIPTION_DELETED", { subscription: { id: "sub_de_ninguem" } }),
+      evento("SUBSCRIPTION_DELETED", {
+        subscription: { id: "sub_de_ninguem" },
+      }),
     );
 
     expect((await situacao()).assinatura).toBe("ATRASADA");
@@ -138,24 +148,102 @@ describe("processarEventoAsaas", () => {
 
 describe("trava da cobrança", () => {
   it("o próprio escritório não consegue se marcar como pago", async () => {
-    const db = dbParaOrganizacao(organizacaoId, { usuarioId: adminUsuarioId, papel: "ADMIN" });
+    const db = dbParaOrganizacao(organizacaoId, {
+      usuarioId: adminUsuarioId,
+      papel: "ADMIN",
+    });
 
     await expect(
-      db.organizacao.update({ where: { id: organizacaoId }, data: { assinatura: "ATIVA" } }),
+      db.organizacao.update({
+        where: { id: organizacaoId },
+        data: { assinatura: "ATIVA" },
+      }),
     ).rejects.toThrow();
     await expect(
-      db.organizacao.update({ where: { id: organizacaoId }, data: { plano: "PADRAO" } }),
+      db.organizacao.update({
+        where: { id: organizacaoId },
+        data: { plano: "PADRAO" },
+      }),
     ).rejects.toThrow();
 
     expect((await situacao()).assinatura).toBe("CANCELADA");
   });
 
   it("o resto da organização continua editável pelo escritório", async () => {
-    const db = dbParaOrganizacao(organizacaoId, { usuarioId: adminUsuarioId, papel: "ADMIN" });
+    const db = dbParaOrganizacao(organizacaoId, {
+      usuarioId: adminUsuarioId,
+      papel: "ADMIN",
+    });
 
     await db.organizacao.update({
       where: { id: organizacaoId },
       data: { proximoNumeroOrcamento: { increment: 1 } },
+    });
+  });
+});
+
+describe("CHECKOUT_PAID sem cliente", () => {
+  // Como o sandbox entrega hoje: o checkout pago chega com `customer: null`, e
+  // só a assinatura criada diz quem é o cliente — e de qual checkout veio.
+  const outroCheckout = `chk2_${sufixo}`;
+  let outraOrganizacaoId = "";
+
+  beforeAll(async () => {
+    const organizacao = await admin.organizacao.create({
+      data: {
+        nome: `WEBHOOK SEM CLIENTE ${sufixo}`,
+        plano: "PADRAO",
+        assinatura: "AGUARDANDO_PAGAMENTO",
+        asaasCheckoutId: outroCheckout,
+        usuarios: {
+          create: {
+            nome: "Dono",
+            email: `webhook2-${sufixo}@teste.local`,
+            senhaHash: "x",
+          },
+        },
+      },
+      select: { id: true },
+    });
+    outraOrganizacaoId = organizacao.id;
+  });
+
+  afterAll(async () => {
+    await admin.usuario.deleteMany({
+      where: { organizacaoId: outraOrganizacaoId },
+    });
+    await admin.organizacao.deleteMany({ where: { id: outraOrganizacaoId } });
+  });
+
+  it("SUBSCRIPTION_CREATED liga assinatura e cliente pelo checkout que a criou", async () => {
+    await processarEventoAsaas(
+      evento("CHECKOUT_PAID", {
+        checkout: { id: outroCheckout, customer: null },
+      }),
+    );
+    await processarEventoAsaas(
+      evento("SUBSCRIPTION_CREATED", {
+        subscription: {
+          id: `sub2_${sufixo}`,
+          customer: `cus2_${sufixo}`,
+          checkoutSession: outroCheckout,
+        },
+      }),
+    );
+
+    expect(
+      await admin.organizacao.findUniqueOrThrow({
+        where: { id: outraOrganizacaoId },
+        select: {
+          assinatura: true,
+          asaasClienteId: true,
+          asaasAssinaturaId: true,
+        },
+      }),
+    ).toEqual({
+      assinatura: "ATIVA",
+      asaasClienteId: `cus2_${sufixo}`,
+      asaasAssinaturaId: `sub2_${sufixo}`,
     });
   });
 });

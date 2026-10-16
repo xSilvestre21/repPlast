@@ -8,8 +8,11 @@
  *
  *   - `CHECKOUT_PAID` traz o id do checkout, que o cadastro gravou. É o
  *     primeiro elo, e o único que existe antes do pagamento.
- *   - Ele NÃO diz qual assinatura o checkout criou, só o cliente. A assinatura
- *     se acha pelo cliente: no `SUBSCRIPTION_CREATED`, ou consultando o Asaas.
+ *   - Ele NÃO diz qual assinatura o checkout criou, e na prática chega até
+ *     sem o cliente (`customer: null`). Quem fecha o elo é o
+ *     `SUBSCRIPTION_CREATED`: a assinatura traz o checkout que a criou
+ *     (`checkoutSession`), e por ele se acha o escritório. O caminho pelo
+ *     cliente fica de reserva.
  *   - Os eventos de cobrança (`PAYMENT_*`) trazem a assinatura e o cliente.
  */
 
@@ -26,7 +29,7 @@ interface EventoAsaas {
   id?: string;
   event?: string;
   checkout?: { id?: string; customer?: string | null };
-  subscription?: { id?: string; customer?: string };
+  subscription?: { id?: string; customer?: string; checkoutSession?: string | null };
   payment?: { subscription?: string | null; customer?: string };
 }
 
@@ -96,6 +99,12 @@ export async function processarEventoAsaas(corpo: unknown): Promise<void> {
       const assinatura = await assinaturaDoCliente(cliente).catch(() => null);
       if (assinatura) dados.asaasAssinaturaId = assinatura;
     }
+  } else if (evento.event === "SUBSCRIPTION_CREATED" && evento.subscription?.checkoutSession) {
+    // A assinatura do próprio checkout do cadastro: o elo mais firme que há,
+    // e o único que não depende de o CHECKOUT_PAID ter trazido o cliente.
+    onde = { asaasCheckoutId: evento.subscription.checkoutSession };
+    if (evento.subscription.id) dados.asaasAssinaturaId = evento.subscription.id;
+    if (evento.subscription.customer) dados.asaasClienteId = evento.subscription.customer;
   } else if (evento.event === "SUBSCRIPTION_CREATED" && evento.subscription?.customer) {
     onde = { asaasClienteId: evento.subscription.customer };
     if (evento.subscription.id) dados.asaasAssinaturaId = evento.subscription.id;

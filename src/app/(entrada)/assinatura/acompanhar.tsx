@@ -5,7 +5,7 @@
  */
 
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect, useState, type ReactNode } from "react";
 
 import { ErroGeral, Formulario } from "@/components/formulario";
 import { Botao } from "@/components/ui";
@@ -23,8 +23,12 @@ const LIMITE_MS = 60_000;
  * Desiste em 1 minuto e diz isso, em vez de girar para sempre: aí o mais
  * provável é o cartão ter sido recusado, e a pessoa precisa saber que pode
  * tentar de novo.
+ *
+ * O botão de pagar (`seDesistir`) só aparece depois de desistir. Ao lado do
+ * "Confirmando o pagamento…", um "Ir para o pagamento" convidava quem acabou
+ * de pagar a pagar outra vez.
  */
-export function AguardarConfirmacao() {
+export function AguardarConfirmacao({ seDesistir }: { seDesistir?: ReactNode }) {
   const router = useRouter();
   const [desistiu, setDesistiu] = useState(false);
 
@@ -44,10 +48,13 @@ export function AguardarConfirmacao() {
 
   if (desistiu) {
     return (
-      <p className="text-corpo text-tinta-2" role="status">
-        A confirmação está demorando mais que o normal. Se o cartão foi recusado, abra o pagamento de
-        novo abaixo; se já foi aprovado, recarregue esta página em alguns minutos.
-      </p>
+      <>
+        <p className="text-corpo text-tinta-2" role="status">
+          A confirmação está demorando mais que o normal. Se o cartão foi recusado, abra o pagamento
+          de novo abaixo; se já foi aprovado, recarregue esta página em alguns minutos.
+        </p>
+        {seDesistir && <div className="mt-6">{seDesistir}</div>}
+      </>
     );
   }
 
