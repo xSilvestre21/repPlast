@@ -91,7 +91,7 @@ export default async function PaginaEntrar({ searchParams }: PageProps<"/entrar"
         {/* ------------------------------------------------------------------ */}
         <div
           className="w-full max-w-6xl mx-auto px-4 sm:px-6 pt-10 pb-16 sm:pt-16 sm:pb-24
-            grid items-center gap-10 lg:gap-16 lg:grid-cols-[1.1fr_minmax(0,25rem)]"
+            grid items-center lg:items-stretch gap-10 lg:gap-16 lg:grid-cols-[1.1fr_minmax(0,25rem)]"
         >
           <section className="palco min-w-0">
             <p className="chip">Para representantes de embalagens plásticas</p>
@@ -138,9 +138,13 @@ export default async function PaginaEntrar({ searchParams }: PageProps<"/entrar"
           {/*
             `marcada` dá a esta folha o canto maior e a sombra alta: no herói ela
             é o único cartão, e é o que a levanta do fundo em vez de encostá-la.
+
+            No desktop ela estica até a altura da coluna do argumento: topo na
+            linha do selo, base na linha do último item da lista. Centrada, ficava
+            solta entre as duas, sem bater com nada do texto ao lado.
           */}
-          <div className="w-full min-w-0 surgir">
-            <Cartao marcada className="px-6 py-8 sm:px-8 sm:py-9">
+          <div className="w-full min-w-0 surgir flex flex-col">
+            <Cartao marcada className="flex-1 flex flex-col justify-center px-6 py-8 sm:px-8 sm:py-9">
               <h2 className="text-forte font-bold tracking-[-0.025em] leading-none">Entrar</h2>
               <p className="text-corpo text-tinta-2 mt-2.5 mb-7 leading-relaxed">
                 Seus pedidos, produtos e comissões do jeito que você deixou.
