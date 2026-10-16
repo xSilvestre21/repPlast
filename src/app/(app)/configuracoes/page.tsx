@@ -1,7 +1,7 @@
-import { Sparkles } from "lucide-react";
+import { KeyRound, Sparkles } from "lucide-react";
 
 import { Pagina } from "@/components/pagina";
-import { Botao, Cabecalho, SecaoCartao } from "@/components/ui";
+import { Botao, BotaoLink, Cabecalho, SecaoCartao } from "@/components/ui";
 import { CAMPOS_PUBLICOS_CONTA } from "@/lib/conta-email";
 import { criptoConfigurada } from "@/lib/cripto";
 import { MODELOS_DE_EMAIL } from "@/lib/tipos-de-email";
@@ -111,6 +111,16 @@ export default async function PaginaConfiguracoes() {
           mensagem={usuario?.mensagemOrcamentoPadrao ?? MODELOS_DE_EMAIL.orcamento.mensagemPadrao}
           salvar={salvarMensagemEnvioPadrao.bind(null, "orcamento")}
         />
+
+        <SecaoCartao
+          icone={KeyRound}
+          titulo="Senha"
+          descricao="Só você troca a sua senha — nem o administrador do escritório."
+        >
+          <BotaoLink href="/senha" variante="secundaria" icone={KeyRound}>
+            Trocar minha senha
+          </BotaoLink>
+        </SecaoCartao>
 
         <SecaoCartao titulo="Animações" descricao="Como a interface se move para você.">
           <p className="text-corpo text-tinta-2 mb-4">

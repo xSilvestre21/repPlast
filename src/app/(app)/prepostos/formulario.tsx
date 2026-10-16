@@ -6,8 +6,8 @@
  * o envio no pé.
  *
  * A diferença entre os dois usos é o login: na inscrição se escolhe o e-mail e
- * a senha provisória; depois, o e-mail fica travado (é a chave do login) e a
- * senha se troca à parte, na ficha.
+ * a senha inicial; depois, o e-mail fica travado (é a chave do login) e a
+ * senha passa a ser só dele — o administrador não a troca mais.
  */
 
 import { BadgeCheck, Factory, HandCoins, KeyRound, Phone } from "lucide-react";
@@ -58,7 +58,7 @@ export function FormularioPreposto({
   /** Todas as indústrias que se podem marcar para ele. */
   industrias: IndustriaDoFormulario[];
   rotuloEnvio: string;
-  /** Inscrição: o e-mail se escolhe aqui, e a senha provisória também. */
+  /** Inscrição: o e-mail se escolhe aqui, e a senha inicial também. */
   novo?: boolean;
   /** Ficha aberta para leitura: tudo travado até clicar em Editar. */
   editavel?: boolean;
@@ -165,12 +165,12 @@ export function FormularioPreposto({
           <SecaoCartao
             icone={KeyRound}
             titulo="Acesso"
-            descricao="A senha é provisória: passe a ele por um canal seguro e combine de trocá-la no primeiro acesso."
+            descricao="Passe a senha inicial a ele por um canal seguro. No primeiro acesso, o sistema sugere que ele crie uma senha só dele — e daí em diante só ele pode trocá-la. Se ele esquecer, usa “Esqueceu sua senha?” na tela de entrar."
           >
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <Campo
                 name="senha"
-                rotulo="Senha provisória"
+                rotulo="Senha inicial"
                 type="password"
                 required
                 autoComplete="new-password"

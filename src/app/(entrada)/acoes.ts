@@ -14,9 +14,9 @@ import {
 import { mascararTelefone, normalizarCep, somenteDigitos } from "@/lib/mascara";
 import { planoDaUrl, type CodigoPlano } from "@/lib/planos";
 import { conferirSenha, gerarHashSenha } from "@/lib/senha";
+import { conferirSenhaNova } from "@/lib/senha-nova";
 import { normalizarNomeEscritorio, problemaNoNomeEscritorio } from "@/lib/escritorio-regras";
 import { ehConflitoDeNome, erroNomeEmUso, nomeEmUso } from "@/lib/nome-escritorio";
-import { TAMANHO_MINIMO_SENHA } from "@/lib/senha-regras";
 import { consultarCep } from "@/lib/cep";
 import { dominioRecebeEmail } from "@/lib/dominio-email";
 import { documentoSemPontuacao, problemaNoDocumento } from "@/lib/documento";
@@ -88,23 +88,6 @@ function lerEmail(valor: FormDataEntryValue | null): string {
   return lerTexto(valor).toLowerCase();
 }
 
-/** A senha nova e a repetição — no cadastro e na redefinição, com as mesmas frases. */
-function conferirSenhaNova(senha: string, formData: FormData): void {
-  if (senha.length < TAMANHO_MINIMO_SENHA) {
-    throw new ErroDeCampo(
-      "senha",
-      `A senha precisa ter pelo menos ${TAMANHO_MINIMO_SENHA} caracteres. ` +
-        "Misture letras e números para ficar mais difícil de adivinhar.",
-    );
-  }
-  if (senha !== lerTexto(formData.get("confirmacao"))) {
-    throw new ErroDeCampo(
-      "confirmacao",
-      "A senha repetida não é igual à primeira. Digite as duas de novo, com calma.",
-    );
-  }
-}
-
 function loginBloqueado(libera: Date): ErroParaUsuario {
   return new ErroParaUsuario(
     `Muitas tentativas com senha errada. Espere ${minutosPorExtenso(minutosAte(libera, new Date()))} ` +
@@ -139,7 +122,7 @@ export async function entrar(
   _estado: EstadoFormulario,
   formData: FormData,
 ): Promise<EstadoFormulario> {
-  let destino: "/" | "/assinatura";
+  let destino: string;
 
   try {
     const email = lerEmail(formData.get("email"));
@@ -158,6 +141,7 @@ export async function entrar(
       select: {
         id: true,
         senhaHash: true,
+        senhaProvisoria: true,
         organizacao: { select: { ativa: true, assinatura: true } },
       },
     });
@@ -180,6 +164,9 @@ export async function entrar(
     await limparFalhas(email);
     await criarSessao(usuario.id);
     destino = inicioDa(usuario.organizacao);
+    // Entrou com a senha inicial que o administrador criou: antes do sistema,
+    // a sugestão de criar uma só dele (com "Agora não" — é sugestão).
+    if (destino === "/" && usuario.senhaProvisoria) destino = "/senha?primeiro-acesso=1";
   } catch (erro) {
     return falhou(erro, formData);
   }
@@ -254,7 +241,7 @@ export async function redefinirSenha(
 ): Promise<EstadoFormulario> {
   try {
     const senha = lerTexto(formData.get("senha"));
-    conferirSenhaNova(senha, formData);
+    conferirSenhaNova(senha, lerTexto(formData.get("confirmacao")));
 
     const trocada = await redefinirPeloLink(String(token), await gerarHashSenha(senha));
     if (!trocada) throw new ErroParaUsuario(LINK_VENCIDO);
@@ -403,7 +390,7 @@ export async function cadastrar(
       );
     }
 
-    conferirSenhaNova(senha, formData);
+    conferirSenhaNova(senha, lerTexto(formData.get("confirmacao")));
 
     // O checkout do Asaas exige documento e CEP; aqui são obrigatórios e
     // conferidos de verdade, ao contrário do cadastro de cliente, onde vazio

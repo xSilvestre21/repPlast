@@ -28,10 +28,10 @@ import { TAMANHO_MINIMO_SENHA } from "@/lib/senha-regras";
 import { escopoAtual } from "@/lib/sessao";
 
 /**
- * O estado de sempre (erro preso ao campo, o que foi digitado de volta — a
- * senha nunca volta) mais o recado verde da troca de senha.
+ * O estado de sempre: erro preso ao campo e o que foi digitado de volta — a
+ * senha nunca volta.
  */
-export type EstadoFormulario = EstadoBase & { aviso?: string };
+export type EstadoFormulario = EstadoBase;
 
 const PREPOSTO_SUMIU =
   "Este preposto não foi encontrado — ele pode ter sido removido em outra tela. " +
@@ -219,6 +219,9 @@ export async function inscreverPreposto(
         email,
         telefone: lerTelefone(formData.get("telefone")),
         senhaHash: await gerarHashSenha(senha),
+        // A inicial, que o administrador conhece: no primeiro acesso o sistema
+        // sugere a troca, e daí em diante só o preposto troca.
+        senhaProvisoria: true,
         papel: "REPRESENTANTE",
         comissaoPercentualPadrao,
       },
@@ -295,31 +298,6 @@ async function gravarAlternarAtivoPreposto(id: string, _formData: FormData): Pro
   });
 
   revalidarPreposto(id);
-}
-
-export async function redefinirSenhaPreposto(
-  id: string,
-  _estado: EstadoFormulario,
-  formData: FormData,
-): Promise<EstadoFormulario> {
-  try {
-    const { organizacaoId, db } = await contextoAdmin();
-
-    const senha = lerTexto(formData.get("senha"));
-    if (senha.length < TAMANHO_MINIMO_SENHA) throw new ErroDeCampo("senha", SENHA_CURTA);
-
-    const { count } = await db.usuario.updateMany({
-      where: { id, organizacaoId, papel: "REPRESENTANTE" },
-      data: { senhaHash: await gerarHashSenha(senha) },
-    });
-
-    if (count === 0) throw new ErroParaUsuario(PREPOSTO_SUMIU);
-  } catch (erro) {
-    return falhou(erro);
-  }
-
-  revalidarPreposto(id);
-  return { aviso: "Senha trocada." };
 }
 
 /**

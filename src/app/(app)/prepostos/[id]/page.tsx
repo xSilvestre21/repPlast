@@ -3,6 +3,7 @@ import {
   CalendarDays,
   Factory,
   Inbox,
+  KeyRound,
   Link2,
   Mail,
   Percent,
@@ -39,11 +40,10 @@ import {
 import { escreverNumeroBr } from "@/lib/numero-br";
 import { escopoAtual } from "@/lib/sessao";
 
-import { alternarAtivoPreposto, atualizarPreposto, redefinirSenhaPreposto } from "../acoes";
+import { alternarAtivoPreposto, atualizarPreposto } from "../acoes";
 import { AvatarPreposto } from "../avatar-preposto";
 import { fichaDoPreposto } from "../consulta";
 import { FormularioPreposto } from "../formulario";
-import { TrocarSenha } from "./senha";
 
 const DATA = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 const MES_ANO = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" });
@@ -123,7 +123,6 @@ export default async function PaginaPreposto({
             }}
             industrias={opcoes}
           />
-          <TrocarSenha acao={redefinirSenhaPreposto.bind(null, preposto.id)} />
         </div>
       </Pagina>
     );
@@ -208,6 +207,14 @@ export default async function PaginaPreposto({
               </Dado>
               <Dado icone={CalendarDays} rotulo="Inscrito em">
                 {MES_ANO.format(preposto.criadoEm)}
+              </Dado>
+              {/* A senha é dele: o administrador só vê se a inicial já foi trocada. */}
+              <Dado icone={KeyRound} rotulo="Senha">
+                {preposto.senhaProvisoria ? (
+                  <span className="text-tinta-3">ainda a inicial — ele troca no próximo acesso</span>
+                ) : (
+                  "criada por ele"
+                )}
               </Dado>
             </ul>
           </Cartao>

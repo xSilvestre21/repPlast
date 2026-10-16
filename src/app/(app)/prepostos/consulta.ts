@@ -30,6 +30,7 @@ const CAMPOS_DO_PREPOSTO = {
   telefone: true,
   ativo: true,
   criadoEm: true,
+  senhaProvisoria: true,
   comissaoPercentualPadrao: true,
   fornecedores: { select: { fornecedor: { select: { id: true, nome: true } } } },
   _count: { select: { clientes: true } },

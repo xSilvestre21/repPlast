@@ -215,6 +215,12 @@ model Usuario {
   sessaoVersao  Int      @default(0)
   criadoEm      DateTime @default(now())
 
+  /// A senha ainda é a inicial que o administrador criou para o preposto. Ao
+  /// entrar com ela, o sistema sugere trocar por uma só dele; trocar (na tela
+  /// de senha ou pelo "Esqueceu sua senha?") desliga. Quem se cadastra sozinho
+  /// escolhe a própria e nasce `false`.
+  senhaProvisoria Boolean @default(false)
+
   /// O aceite dos Termos de Uso e da Política de Privacidade no cadastro: a
   /// prova do consentimento (LGPD, art. 8º, §2º) e a versão aceita
   /// (`VERSAO_TERMOS`, `lib/lgpd.ts`). Nulos em quem entrou antes dos termos e

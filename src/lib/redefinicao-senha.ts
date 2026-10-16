@@ -150,6 +150,8 @@ export async function redefinirPeloLink(
     where: { id: dono.usuarioId },
     data: {
       senhaHash,
+      // Criada por ele pelo link: deixa de ser a inicial que o administrador conhece.
+      senhaProvisoria: false,
       sessaoVersao: { increment: 1 },
       redefinicoesSenha: { updateMany: { where: { usadaEm: null }, data: { usadaEm: agora } } },
     },
