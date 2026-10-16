@@ -4,7 +4,12 @@ const nextConfig: NextConfig = {
   // Abrir o servidor de desenvolvimento do PC a partir do notebook, pela rede
   // local. Sem isto o Next bloqueia os recursos de dev vindos de outra origem e
   // a página carrega sem a parte interativa.
-  allowedDevOrigins: ["192.168.15.129"],
+  //
+  // 127.0.0.1 pelo mesmo motivo: o checkout do Asaas recusa "localhost" nas
+  // URLs de volta, então no desenvolvimento o sistema é aberto por
+  // 127.0.0.1 — e sem isto os planos de /comecar nem aparecem (são revelados
+  // por JavaScript, que o Next bloqueava).
+  allowedDevOrigins: ["192.168.15.129", "127.0.0.1"],
   experimental: {
     // Uploads passam por server action, e o padrão do Next é 1 MB. O maior é o
     // envio do pedido por e-mail: a aplicação valida 20 MB de anexos (ver

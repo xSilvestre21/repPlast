@@ -16,7 +16,8 @@
     "db:setup": "node --conditions react-server scripts/setup-db-role.mjs",
     "db:seed": "tsx --conditions react-server prisma/seed.ts",
     "db:importar": "tsx --conditions react-server scripts/importar-sicov.ts",
-    "db:peso": "tsx --conditions react-server scripts/retrocalcular-peso.ts"
+    "db:peso": "tsx --conditions react-server scripts/retrocalcular-peso.ts",
+    "tunel": "node scripts/tunel-webhook.mjs"
   },
   "dependencies": {
     "@fontsource/plus-jakarta-sans": "^5.3.0",
