@@ -99,7 +99,9 @@ export async function criarRedefinicao({
 }
 
 /** O link ainda serve? Devolve a quem ele pertence, ou `null`. */
-export async function donoDoLink(token: string): Promise<{ usuarioId: string; email: string } | null> {
+export async function donoDoLink(
+  token: string,
+): Promise<{ usuarioId: string; email: string; nome: string } | null> {
   if (!token) return null;
 
   const pedido = await dbAdministrativo().redefinicaoSenha.findUnique({
@@ -107,14 +109,16 @@ export async function donoDoLink(token: string): Promise<{ usuarioId: string; em
     select: {
       usadaEm: true,
       expiraEm: true,
-      usuario: { select: { id: true, email: true, ativo: true, organizacao: { select: { ativa: true } } } },
+      usuario: {
+        select: { id: true, email: true, nome: true, ativo: true, organizacao: { select: { ativa: true } } },
+      },
     },
   });
 
   const usuario = pedido?.usuario;
   if (!pedido || !usuario || pedido.usadaEm || pedido.expiraEm <= new Date()) return null;
   if (!usuario.ativo || !usuario.organizacao.ativa) return null;
-  return { usuarioId: usuario.id, email: usuario.email };
+  return { usuarioId: usuario.id, email: usuario.email, nome: usuario.nome };
 }
 
 /**
@@ -126,7 +130,10 @@ export async function donoDoLink(token: string): Promise<{ usuarioId: string; em
  * com a senha antiga — e o encerramento dos outros links. Se esta segunda parte
  * falhar, o link já foi gasto e a senha continua a antiga: pede-se outro.
  */
-export async function redefinirPeloLink(token: string, senhaHash: string): Promise<{ email: string } | null> {
+export async function redefinirPeloLink(
+  token: string,
+  senhaHash: string,
+): Promise<{ email: string; nome: string } | null> {
   const dono = await donoDoLink(token);
   if (!dono) return null;
 
@@ -148,5 +155,5 @@ export async function redefinirPeloLink(token: string, senhaHash: string): Promi
     },
   });
 
-  return { email: dono.email };
+  return { email: dono.email, nome: dono.nome };
 }

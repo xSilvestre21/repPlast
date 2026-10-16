@@ -16,7 +16,12 @@ import "server-only";
 
 import nodemailer from "nodemailer";
 
-export type Anexo = { nome: string; conteudo: Buffer; tipo?: string };
+/**
+ * Com `cid`, o anexo é uma imagem do próprio corpo HTML (`<img src="cid:…">`):
+ * chega junto com a mensagem, sem depender de site no ar nem de a pessoa
+ * clicar em "mostrar imagens".
+ */
+export type Anexo = { nome: string; conteudo: Buffer; tipo?: string; cid?: string };
 
 /** Uma caixa pronta para usar: a senha já decifrada. Nunca sai do servidor. */
 export type ContaSmtp = {
@@ -141,6 +146,8 @@ export async function enviarEmail(mensagem: {
   cc?: string[];
   assunto: string;
   texto: string;
+  /** A versão bonita. O `texto` continua indo junto, para quem lê em texto puro. */
+  html?: string;
   anexos?: Anexo[];
 }): Promise<ResultadoEnvio> {
   const { conta } = mensagem;
@@ -156,10 +163,12 @@ export async function enviarEmail(mensagem: {
       cc: mensagem.cc && mensagem.cc.length > 0 ? mensagem.cc : undefined,
       subject: mensagem.assunto,
       text: mensagem.texto,
+      html: mensagem.html,
       attachments: mensagem.anexos?.map((anexo) => ({
         filename: anexo.nome,
         content: anexo.conteudo,
         contentType: anexo.tipo,
+        cid: anexo.cid,
       })),
     });
 

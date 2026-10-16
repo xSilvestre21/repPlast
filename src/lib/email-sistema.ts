@@ -1,6 +1,10 @@
 import "server-only";
 
-import { enviarEmail, type ContaSmtp } from "./email";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
+import { enviarEmail, type Anexo, type ContaSmtp } from "./email";
+import { CID_LOGO } from "./email-sistema-html";
 
 /**
  * O remetente do PRÓPRIO RepPlast — a exceção à regra de `email.ts`, onde todo
@@ -33,6 +37,21 @@ function contaDoSistema(): ContaSmtp | null {
 }
 
 /**
+ * A marca do cabeçalho, anexada inline. Sem ela o e-mail ainda sai — o `alt`
+ * do `<img>` mostra "RepPlast" no amarelo —: um logo que sumiu não pode
+ * impedir alguém de recuperar a senha.
+ */
+async function anexoDoLogo(): Promise<Anexo[]> {
+  try {
+    const conteudo = await readFile(path.join(process.cwd(), "public/email/repplast-logo.png"));
+    return [{ nome: "repplast.png", conteudo, tipo: "image/png", cid: CID_LOGO }];
+  } catch (erro) {
+    console.error("[email-sistema] logo do e-mail não encontrado; enviando sem ele.", erro);
+    return [];
+  }
+}
+
+/**
  * Envia, ou registra no log por que não enviou. Não lança: quem chama já
  * respondeu à pessoa (o envio roda em `after`), e não há tela para mostrar
  * erro. O log é o que sobra para o suporte.
@@ -40,6 +59,8 @@ function contaDoSistema(): ContaSmtp | null {
 export async function enviarDoSistema(mensagem: {
   para: string;
   assunto: string;
+  /** Os dois de `montarEmailSistema`: o HTML com a marca e a alternativa em texto puro. */
+  html: string;
   texto: string;
 }): Promise<void> {
   const conta = contaDoSistema();
@@ -56,6 +77,8 @@ export async function enviarDoSistema(mensagem: {
     para: [mensagem.para],
     assunto: mensagem.assunto,
     texto: mensagem.texto,
+    html: mensagem.html,
+    anexos: await anexoDoLogo(),
   });
   if (!resultado.enviado) {
     console.error(`[email-sistema] "${mensagem.assunto}" não saiu: ${resultado.motivo}`);

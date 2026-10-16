@@ -18,6 +18,7 @@ import { normalizarNomeEscritorio, problemaNoNomeEscritorio } from "@/lib/escrit
 import { ehConflitoDeNome, erroNomeEmUso, nomeEmUso } from "@/lib/nome-escritorio";
 import { TAMANHO_MINIMO_SENHA } from "@/lib/senha-regras";
 import { enviarDoSistema, urlDoSistema } from "@/lib/email-sistema";
+import { montarEmailSistema } from "@/lib/email-sistema-html";
 import { minutosAte, minutosPorExtenso } from "@/lib/limite-tentativas";
 import {
   bloqueioDosPedidos,
@@ -35,9 +36,6 @@ import {
 } from "@/lib/tentativas-login";
 
 export type { EstadoFormulario };
-
-/** Fim de linha dos e-mails do sistema, que vão em texto puro. */
-const QUEBRA = "\n";
 
 const EMAIL_INCOMPLETO =
   "Este e-mail parece incompleto. Confira se tem o @ e o final, como voce@escritorio.com.br.";
@@ -177,17 +175,18 @@ export async function pedirRedefinicaoSenha(
         enviarDoSistema({
           para: envio.para,
           assunto: "Crie uma senha nova no RepPlast",
-          texto: [
-            `Olá, ${envio.nome}.`,
-            "",
-            "Alguém pediu para criar uma senha nova para a sua conta no RepPlast. Para criar, abra este link:",
-            "",
-            link,
-            "",
-            `Ele vale por ${VALIDADE_MIN} minutos e funciona uma vez só.`,
-            "",
-            "Se não foi você, ignore este e-mail: a sua senha continua a mesma.",
-          ].join(QUEBRA),
+          ...montarEmailSistema({
+            nome: envio.nome,
+            paragrafos: [
+              "Recebemos um pedido para criar uma senha nova para a sua conta no RepPlast. " +
+                "Clique no botão abaixo para criar:",
+            ],
+            botao: { rotulo: "Criar senha nova", url: link },
+            notas: [
+              `Este link vale por ${VALIDADE_MIN} minutos e funciona uma vez só.`,
+              "Se não foi você, ignore este e-mail: a sua senha continua a mesma.",
+            ],
+          }),
         }),
       );
     }
@@ -222,13 +221,18 @@ export async function redefinirSenha(
       enviarDoSistema({
         para: trocada.email,
         assunto: "A sua senha do RepPlast foi alterada",
-        texto: [
-          "A senha da sua conta no RepPlast acabou de ser trocada, e todos os aparelhos que estavam " +
-            "conectados precisam entrar de novo.",
-          "",
-          "Se foi você, está tudo certo. Se não foi, use “Esqueceu sua senha?” na tela de entrar para " +
-            "criar outra agora e fale com o suporte.",
-        ].join(QUEBRA),
+        ...montarEmailSistema({
+          nome: trocada.nome,
+          paragrafos: [
+            "A senha da sua conta no RepPlast acabou de ser trocada, e todos os aparelhos que estavam " +
+              "conectados precisam entrar de novo.",
+          ],
+          botao: { rotulo: "Entrar no RepPlast", url: `${urlDoSistema()}/entrar` },
+          notas: [
+            "Se foi você, está tudo certo. Se não foi, use “Esqueceu sua senha?” na tela de entrar " +
+              "para criar outra agora e fale com o suporte.",
+          ],
+        }),
       }),
     );
   } catch (erro) {

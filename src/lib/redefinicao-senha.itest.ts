@@ -34,7 +34,7 @@ let organizacaoId = "";
 async function usuario(quem: string, dados: { ativo?: boolean } = {}) {
   return admin.usuario.create({
     data: { organizacaoId, nome: quem, email: emailDe(quem), senhaHash: "antiga", ...dados },
-    select: { id: true, email: true },
+    select: { id: true, email: true, nome: true },
   });
 }
 
@@ -56,8 +56,8 @@ describe("link de redefinição", () => {
     const envio = await criarRedefinicao({ email: ana.email, ip: ipDe("ana") });
     expect(envio?.para).toBe(ana.email);
 
-    expect(await donoDoLink(envio!.token)).toEqual({ usuarioId: ana.id, email: ana.email });
-    expect(await redefinirPeloLink(envio!.token, "nova")).toEqual({ email: ana.email });
+    expect(await donoDoLink(envio!.token)).toEqual({ usuarioId: ana.id, email: ana.email, nome: ana.nome });
+    expect(await redefinirPeloLink(envio!.token, "nova")).toEqual({ email: ana.email, nome: ana.nome });
 
     const depois = await admin.usuario.findUnique({
       where: { id: ana.id },
