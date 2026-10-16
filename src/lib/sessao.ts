@@ -186,6 +186,18 @@ export async function sessaoComAcesso(): Promise<Sessao | null> {
 }
 
 /**
+ * Para onde vai quem já está logado: o sistema, ou a tela de pagamento.
+ *
+ * Mandar para "/" quem não pagou NÃO basta o layout redirecionar: no App Router
+ * o layout e a página rodam juntos, e a página inicial lança
+ * `ASSINATURA_PENDENTE` antes de o redirecionamento do layout valer — a tela
+ * fica carregando para sempre. Por isso as telas de entrada já mandam direto.
+ */
+export function inicioDa(sessao: { assinatura: Sessao["assinatura"] }): "/" | "/assinatura" {
+  return sessao.assinatura === "ATIVA" ? "/" : "/assinatura";
+}
+
+/**
  * A sessão, exigindo a assinatura em dia.
  *
  * O bloqueio mora AQUI, e não só no layout, porque as rotas de arquivo (PDF,

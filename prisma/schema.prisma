@@ -156,10 +156,12 @@ model Organizacao {
   /// pagamento sem perguntar de novo.
   cobrancaDocumento String?
   cobrancaCep       String?
-  /// "Rua Alfa, Centro" e "505" — preenchidos pelo CEP no cadastro e mandados
-  /// ao checkout. Nulos nos escritórios de antes de o cadastro pedir.
+  /// "Rua Alfa", "505" e "Centro" — rua e bairro preenchidos pelo CEP no
+  /// cadastro, e os três mandados ao checkout (que recusa sem o bairro). Nulos
+  /// nos escritórios de antes de o cadastro pedir.
   cobrancaEndereco    String?
   cobrancaNumero      String?
+  cobrancaBairro      String?
   /// "Sala 3, bloco B". Opcional: nulo também quando o endereço não tem.
   cobrancaComplemento String?
 

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { TopoEntrada } from "@/components/entrada/topo-entrada";
 import { Cartao, MensagemErro } from "@/components/ui";
 import { donoDoLink, LINK_VENCIDO } from "@/lib/redefinicao-senha";
-import { sessaoAtual } from "@/lib/sessao";
+import { inicioDa, sessaoAtual } from "@/lib/sessao";
 
 import { redefinirSenha } from "../../acoes";
 import { FormularioSenhaNova } from "../../formulario";
@@ -23,7 +23,8 @@ export const metadata: Metadata = {
 };
 
 export default async function PaginaRedefinirSenha({ params }: PageProps<"/redefinir-senha/[token]">) {
-  if (await sessaoAtual()) redirect("/");
+  const logado = await sessaoAtual();
+  if (logado) redirect(inicioDa(logado));
   const { token } = await params;
 
   // Conferido ao abrir, e de novo ao salvar (`redefinirPeloLink`): link que

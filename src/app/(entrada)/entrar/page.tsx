@@ -12,7 +12,7 @@ import { Recursos } from "@/components/entrada/recursos";
 import { Revelar, SemScriptRevela } from "@/components/entrada/revelar";
 import { TopoEntrada } from "@/components/entrada/topo-entrada";
 import { Cartao, Mensagem, Placa } from "@/components/ui";
-import { sessaoAtual } from "@/lib/sessao";
+import { inicioDa, sessaoAtual } from "@/lib/sessao";
 
 import { entrar } from "../acoes";
 import { FormularioEntrada } from "../formulario";
@@ -77,7 +77,8 @@ function Secao({
 
 export default async function PaginaEntrar({ searchParams }: PageProps<"/entrar">) {
   // Quem já está logado não tem o que fazer aqui.
-  if (await sessaoAtual()) redirect("/");
+  const logado = await sessaoAtual();
+  if (logado) redirect(inicioDa(logado));
   const { senha } = await searchParams;
 
   return (

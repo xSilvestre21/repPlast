@@ -56,9 +56,3 @@ export async function consultarCep(cep: string): Promise<ResultadoCep> {
     return null;
   }
 }
-
-/** "Rua Alfa, Centro" — o que vai no campo de endereço. Vazio no CEP geral. */
-export function enderecoPorExtenso({ logradouro, bairro }: EnderecoDoCep): string {
-  if (!logradouro) return "";
-  return bairro ? `${logradouro}, ${bairro}` : logradouro;
-}

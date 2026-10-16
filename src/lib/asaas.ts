@@ -20,6 +20,12 @@ export class ErroAsaas extends Error {
   constructor(
     mensagem: string,
     readonly status?: number,
+    /**
+     * Os campos que o Asaas recusou ("name", "phone"…), tirados de "O campo
+     * name é inválido." — é o que deixa quem chama pôr a frase embaixo do
+     * campo certo do formulário.
+     */
+    readonly campos: string[] = [],
   ) {
     super(mensagem);
     this.name = "ErroAsaas";
@@ -36,7 +42,30 @@ function configuracao() {
       "ASAAS_URL, ASAAS_API_KEY ou APP_URL ausente no .env — sem elas não há como abrir o pagamento.",
     );
   }
+  // O checkout recusa "localhost" nas URLs de volta ("O campo successUrl é
+  // inválido"); 127.0.0.1 passa. Dito aqui, o log aponta o conserto.
+  if (new URL(app).hostname === "localhost") {
+    throw new ErroAsaas(
+      'APP_URL usa "localhost", que o Asaas recusa nas URLs de volta. No desenvolvimento, use ' +
+        'APP_URL="http://127.0.0.1:3000" e abra o sistema por esse endereço.',
+    );
+  }
   return { url, chave, app };
+}
+
+/**
+ * As variáveis do Asaas estão no `.env`? O cadastro pergunta ANTES de criar a
+ * conta: sem isto, cada tentativa num servidor sem configuração deixava um
+ * escritório "aguardando pagamento" que nunca teria como pagar.
+ */
+export function pagamentoConfigurado(): boolean {
+  try {
+    configuracao();
+    return true;
+  } catch (erro) {
+    console.error(`[asaas] ${(erro as Error).message}`);
+    return false;
+  }
 }
 
 async function chamar<T>(caminho: string, init: { method: "GET" | "POST"; corpo?: unknown }): Promise<T> {
@@ -56,7 +85,8 @@ async function chamar<T>(caminho: string, init: { method: "GET" | "POST"; corpo?
   if (!resposta.ok) {
     const corpo = await resposta.text().catch(() => "");
     console.error(`[asaas] ${init.method} ${caminho} → ${resposta.status}`, corpo);
-    throw new ErroAsaas(`Asaas respondeu ${resposta.status} em ${caminho}`, resposta.status);
+    const campos = [...corpo.matchAll(/O campo (\w+)/g)].map((m) => m[1]);
+    throw new ErroAsaas(`Asaas respondeu ${resposta.status} em ${caminho}`, resposta.status, campos);
   }
 
   return (await resposta.json()) as T;
@@ -81,10 +111,14 @@ export interface ClienteCobranca {
   cpfCnpj: string;
   /** Só dígitos. */
   cep: string;
-  /** "Rua Alfa, Centro". Ausente nos escritórios de antes de o cadastro pedir. */
+  /** Só dígitos, com DDD. O checkout recusa sem telefone. */
+  telefone?: string;
+  /** "Rua Alfa". Ausentes nos escritórios de antes de o cadastro pedir. */
   endereco?: string;
   numero?: string;
   complemento?: string;
+  /** O checkout recusa sem bairro (`province`). */
+  bairro?: string;
 }
 
 /**
@@ -98,7 +132,8 @@ export async function criarCheckout(plano: CodigoPlano, cliente: ClienteCobranca
   const { app } = configuracao();
   const dados = PLANOS[plano];
 
-  const checkout = await chamar<{ id: string; url?: string; link?: string }>("/v3/checkout", {
+  // `/v3/checkouts`, no plural: o singular de antes passou a responder 404.
+  const checkout = await chamar<{ id: string; url?: string; link?: string }>("/v3/checkouts", {
     method: "POST",
     corpo: {
       billingTypes: ["CREDIT_CARD"],
@@ -121,10 +156,12 @@ export async function criarCheckout(plano: CodigoPlano, cliente: ClienteCobranca
         name: cliente.nome,
         email: cliente.email,
         cpfCnpj: cliente.cpfCnpj,
+        phone: cliente.telefone,
         postalCode: cliente.cep,
         address: cliente.endereco,
         addressNumber: cliente.numero,
         complement: cliente.complemento,
+        province: cliente.bairro,
       },
       subscription: {
         cycle: "MONTHLY",

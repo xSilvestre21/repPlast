@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { TopoEntrada } from "@/components/entrada/topo-entrada";
 import { Cartao, Mensagem } from "@/components/ui";
 import { VALIDADE_MIN } from "@/lib/redefinicao-senha";
-import { sessaoAtual } from "@/lib/sessao";
+import { inicioDa, sessaoAtual } from "@/lib/sessao";
 
 import { pedirRedefinicaoSenha } from "../acoes";
 import { FormularioEsqueciSenha } from "../formulario";
@@ -16,7 +16,8 @@ import { FormularioEsqueciSenha } from "../formulario";
  * (`pedirRedefinicaoSenha`): a tela não pode servir para descobrir quem tem conta.
  */
 export default async function PaginaEsqueciSenha({ searchParams }: PageProps<"/esqueci-senha">) {
-  if (await sessaoAtual()) redirect("/");
+  const logado = await sessaoAtual();
+  if (logado) redirect(inicioDa(logado));
   const { enviado } = await searchParams;
 
   return (

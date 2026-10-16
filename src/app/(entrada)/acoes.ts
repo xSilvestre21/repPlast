@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 
-import { criarCheckout, ErroAsaas } from "@/lib/asaas";
+import { criarCheckout, ErroAsaas, pagamentoConfigurado } from "@/lib/asaas";
 import { dbAdministrativo } from "@/lib/db";
 import {
   ErroDeCampo,
@@ -11,7 +11,7 @@ import {
   falhou,
   type EstadoFormulario,
 } from "@/lib/erro-formulario";
-import { normalizarCep, somenteDigitos } from "@/lib/mascara";
+import { mascararTelefone, normalizarCep, somenteDigitos } from "@/lib/mascara";
 import { planoDaUrl, type CodigoPlano } from "@/lib/planos";
 import { conferirSenha, gerarHashSenha } from "@/lib/senha";
 import { normalizarNomeEscritorio, problemaNoNomeEscritorio } from "@/lib/escritorio-regras";
@@ -32,7 +32,7 @@ import {
   redefinirPeloLink,
   VALIDADE_MIN,
 } from "@/lib/redefinicao-senha";
-import { criarSessao, encerrarSessao, sessaoAtual } from "@/lib/sessao";
+import { criarSessao, encerrarSessao, inicioDa, sessaoAtual } from "@/lib/sessao";
 import {
   bloqueioDoLogin,
   ipDaRequisicao,
@@ -48,13 +48,36 @@ const EMAIL_INCOMPLETO =
   "Este e-mail parece incompleto. Confira se tem o @ e o final, como voce@escritorio.com.br.";
 
 /**
- * O Asaas fora do ar ou recusando o pedido. A conta já existe nesse ponto, e
- * por isso a frase manda entrar — e não cadastrar de novo, que daria "e-mail
- * já cadastrado".
+ * O campo do formulário de cadastro para cada campo que o checkout do Asaas
+ * recusa, com o que fazer. O Asaas diz só "O campo name é inválido."
  */
-const PAGAMENTO_INDISPONIVEL =
-  "Não conseguimos abrir a página de pagamento agora. Sua conta foi criada: entre com o seu " +
-  "e-mail e senha em alguns minutos e use “Ir para o pagamento” para concluir.";
+const CAMPOS_DO_ASAAS: Record<string, [campo: string, frase: string]> = {
+  name: ["nome", "O pagamento não aceitou este nome. Escreva nome e sobrenome, só com letras."],
+  email: ["email", "O pagamento não aceitou este e-mail. Confira se está certo."],
+  cpfCnpj: ["documento", "O pagamento não aceitou este CPF/CNPJ. Confira os números."],
+  phone: ["telefone", "O pagamento não aceitou este celular. Confira o DDD e o número."],
+  phoneNumber: ["telefone", "O pagamento não aceitou este celular. Confira o DDD e o número."],
+  mobilePhone: ["telefone", "O pagamento não aceitou este celular. Confira o DDD e o número."],
+  postalCode: ["cep", "O pagamento não aceitou este CEP. Confira os números."],
+  address: ["endereco", "O pagamento não aceitou este endereço. Confira a rua."],
+  addressNumber: ["numero", "O pagamento não aceitou este número. Sem número? Escreva S/N."],
+  province: ["bairro", "O pagamento não aceitou este bairro. Confira o nome."],
+  complement: ["complemento", "O pagamento não aceitou este complemento. Encurte ou deixe vazio."],
+};
+
+/**
+ * A recusa do Asaas no cadastro, já em português: embaixo do campo que ele
+ * apontou, ou geral quando ele está fora do ar. Nada foi gravado ainda.
+ */
+function recusaDoAsaas(erro: ErroAsaas): Error {
+  console.error(`[asaas] checkout do cadastro não abriu: ${erro.message} ${erro.campos.join(", ")}`);
+  const conhecido = erro.campos.map((campo) => CAMPOS_DO_ASAAS[campo]).find(Boolean);
+  if (conhecido) return new ErroDeCampo(conhecido[0], conhecido[1]);
+  return new ErroParaUsuario(
+    "Não conseguimos abrir a página de pagamento agora, e por isso o escritório ainda não foi " +
+      "criado. Tente de novo em alguns minutos.",
+  );
+}
 
 function lerTexto(valor: FormDataEntryValue | null): string {
   return typeof valor === "string" ? valor.trim() : "";
@@ -116,6 +139,8 @@ export async function entrar(
   _estado: EstadoFormulario,
   formData: FormData,
 ): Promise<EstadoFormulario> {
+  let destino: "/" | "/assinatura";
+
   try {
     const email = lerEmail(formData.get("email"));
     const senha = lerTexto(formData.get("senha"));
@@ -130,7 +155,11 @@ export async function entrar(
 
     const usuario = await dbAdministrativo().usuario.findUnique({
       where: { email },
-      select: { id: true, senhaHash: true, organizacao: { select: { ativa: true } } },
+      select: {
+        id: true,
+        senhaHash: true,
+        organizacao: { select: { ativa: true, assinatura: true } },
+      },
     });
 
     if (!usuario) {
@@ -150,11 +179,12 @@ export async function entrar(
 
     await limparFalhas(email);
     await criarSessao(usuario.id);
+    destino = inicioDa(usuario.organizacao);
   } catch (erro) {
     return falhou(erro, formData);
   }
 
-  redirect("/");
+  redirect(destino);
 }
 
 /**
@@ -277,18 +307,22 @@ async function abrirPagamento(organizacao: {
   email: string;
   documento: string;
   cep: string;
+  telefone?: string;
   endereco?: string;
   numero?: string;
   complemento?: string;
+  bairro?: string;
 }): Promise<string> {
   const checkout = await criarCheckout(organizacao.plano, {
     nome: organizacao.nome,
     email: organizacao.email,
     cpfCnpj: organizacao.documento,
     cep: organizacao.cep,
+    telefone: organizacao.telefone,
     endereco: organizacao.endereco,
     numero: organizacao.numero,
     complemento: organizacao.complemento,
+    bairro: organizacao.bairro,
   });
 
   await dbAdministrativo().organizacao.update({
@@ -307,7 +341,11 @@ async function abrirPagamentoOu(
   try {
     return await abrirPagamento(organizacao);
   } catch (erro) {
-    if (erro instanceof ErroAsaas) throw new ErroParaUsuario(frase);
+    if (erro instanceof ErroAsaas) {
+      // A tela recebe a frase em português; o motivo de verdade fica no log.
+      console.error(`[asaas] checkout não abriu: ${erro.message}`);
+      throw new ErroParaUsuario(frase);
+    }
     throw erro;
   }
 }
@@ -342,9 +380,28 @@ export async function cadastrar(
     const problemaNoNome = problemaNoNomeEscritorio(escritorio);
     if (problemaNoNome) throw new ErroDeCampo("escritorio", problemaNoNome);
     if (!nome) throw new ErroDeCampo("nome", "Informe o seu nome e sobrenome.");
+    // O checkout do Asaas recusa nome sem sobrenome ("O campo name é inválido").
+    const [primeiroNome, ...restoDoNome] = nome.split(/\s+/);
+    if (restoDoNome.length === 0) {
+      throw new ErroDeCampo(
+        "nome",
+        "Informe também o sobrenome, como Valquiria Silvestre — o pagamento pede o nome completo.",
+      );
+    }
     if (!email) throw new ErroDeCampo("email", "Informe o seu e-mail — é com ele que você vai entrar.");
     const problemaNoFormato = problemaNoEmail(email);
     if (problemaNoFormato) throw new ErroDeCampo("email", problemaNoFormato);
+
+    // O checkout do Asaas recusa sem telefone. Com DDD, e o DDD não começa em 0.
+    const telefone = somenteDigitos(lerTexto(formData.get("telefone")));
+    if (!/^[1-9]\d{9,10}$/.test(telefone)) {
+      throw new ErroDeCampo(
+        "telefone",
+        telefone === ""
+          ? "Informe um celular com DDD, como (17) 99687-3399."
+          : "Este telefone não está completo. Digite o DDD e o número, como (17) 99687-3399.",
+      );
+    }
 
     conferirSenhaNova(senha, formData);
 
@@ -362,11 +419,13 @@ export async function cadastrar(
     if (!endereco) {
       throw new ErroDeCampo(
         "endereco",
-        "Informe a rua e o bairro de quem paga. O CEP costuma preencher sozinho — confira se ele está certo.",
+        "Informe a rua de quem paga. O CEP costuma preencher sozinho — confira se ele está certo.",
       );
     }
     const numero = lerTexto(formData.get("numero"));
     if (!numero) throw new ErroDeCampo("numero", "Informe o número. Sem número? Escreva S/N.");
+    const bairro = lerTexto(formData.get("bairro"));
+    if (!bairro) throw new ErroDeCampo("bairro", "Informe o bairro de quem paga, como Centro.");
     // Opcional: vazio vira nulo, não texto em branco.
     const complemento = lerTexto(formData.get("complemento")).slice(0, 60) || undefined;
 
@@ -393,6 +452,15 @@ export async function cadastrar(
       throw new ErroDeCampo("cep", "Este CEP não existe. Confira os números, como 14781-160.");
     }
 
+    // Antes de gravar qualquer coisa: conta criada sem como pagar fica presa
+    // em "aguardando pagamento", e a próxima tentativa já esbarra no e-mail.
+    if (!pagamentoConfigurado()) {
+      throw new ErroParaUsuario(
+        "O pagamento está fora do ar no momento, e por isso o escritório ainda não foi criado. " +
+          "Tente de novo mais tarde — se continuar, fale com o suporte.",
+      );
+    }
+
     const db = dbAdministrativo();
 
     if (await nomeEmUso(db, escritorio)) throw erroNomeEmUso("escritorio", escritorio);
@@ -401,6 +469,31 @@ export async function cadastrar(
         "email",
         "Já existe uma conta com este e-mail. Se ela é sua, use “Entrar” em vez de criar outra.",
       );
+    }
+
+    /*
+     * O checkout ANTES da conta. Era depois, e quando o Asaas recusava um dado
+     * (nome sem sobrenome, telefone) a conta já existia, presa em "aguardando
+     * pagamento" com o dado errado e sem tela para corrigir. Assim, a recusa
+     * volta para o formulário e nada é gravado; se a gravação é que falhar, o
+     * checkout aberto à toa só vence em uma hora.
+     */
+    let checkout: { id: string; url: string };
+    try {
+      checkout = await criarCheckout(plano.codigo, {
+        nome,
+        email,
+        cpfCnpj: documento,
+        cep: somenteDigitos(cep),
+        telefone,
+        endereco,
+        numero,
+        complemento,
+        bairro,
+      });
+    } catch (erro) {
+      if (erro instanceof ErroAsaas) throw recusaDoAsaas(erro);
+      throw erro;
     }
 
     /*
@@ -414,15 +507,19 @@ export async function cadastrar(
         nome: escritorio,
         plano: plano.codigo,
         assinatura: "AGUARDANDO_PAGAMENTO",
+        asaasCheckoutId: checkout.id,
         cobrancaDocumento: documento,
         cobrancaCep: somenteDigitos(cep),
         cobrancaEndereco: endereco,
         cobrancaNumero: numero,
         cobrancaComplemento: complemento,
+        cobrancaBairro: bairro,
         usuarios: {
           create: {
-            nome,
+            nome: primeiroNome,
+            sobrenome: restoDoNome.join(" "),
             email,
+            telefone: mascararTelefone(telefone),
             senhaHash: await gerarHashSenha(senha),
             termosAceitosEm: new Date(),
             termosVersao: VERSAO_TERMOS,
@@ -432,21 +529,10 @@ export async function cadastrar(
       select: { id: true, usuarios: { select: { id: true } } },
     });
 
-    // A sessão vem antes do pagamento: se o Asaas falhar, a conta já existe e
-    // a pessoa retoma de `/assinatura` sem cadastrar de novo.
+    // Logada antes de ir pagar: quem fechar o checkout sem pagar retoma de
+    // `/assinatura` sem cadastrar de novo.
     await criarSessao(organizacao.usuarios[0].id);
-
-    pagamento = await abrirPagamentoOu(PAGAMENTO_INDISPONIVEL, {
-      id: organizacao.id,
-      plano: plano.codigo,
-      nome,
-      email,
-      documento,
-      cep: somenteDigitos(cep),
-      endereco,
-      numero,
-      complemento,
-    });
+    pagamento = checkout.url;
   } catch (erro) {
     // Outro cadastro levou o nome entre a conferência e a gravação.
     if (ehConflitoDeNome(erro)) {
@@ -497,7 +583,12 @@ export async function reabrirPagamento(
         cobrancaEndereco: true,
         cobrancaNumero: true,
         cobrancaComplemento: true,
+        cobrancaBairro: true,
       },
+    });
+    const pagador = await dbAdministrativo().usuario.findUniqueOrThrow({
+      where: { id: sessao.usuarioId },
+      select: { telefone: true },
     });
 
     if (!organizacao.cobrancaDocumento || !organizacao.cobrancaCep) {
@@ -518,6 +609,8 @@ export async function reabrirPagamento(
         endereco: organizacao.cobrancaEndereco ?? undefined,
         numero: organizacao.cobrancaNumero ?? undefined,
         complemento: organizacao.cobrancaComplemento ?? undefined,
+        bairro: organizacao.cobrancaBairro ?? undefined,
+        telefone: pagador.telefone ? somenteDigitos(pagador.telefone) : undefined,
       },
     );
   } catch (erro) {

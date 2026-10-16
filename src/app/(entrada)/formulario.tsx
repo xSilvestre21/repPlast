@@ -3,7 +3,10 @@
 import Link from "next/link";
 import { useActionState } from "react";
 
-import { CampoDocumentoCobranca } from "@/components/campo-mascarado";
+import {
+  CampoDocumentoCobranca,
+  CampoTelefone,
+} from "@/components/campo-mascarado";
 import { CampoNomeEscritorio } from "@/components/campo-nome-escritorio";
 import { RodapeCampo } from "@/components/campos";
 import { useCampoDoFormulario } from "@/components/contexto-formulario";
@@ -14,14 +17,22 @@ import { TAMANHO_MINIMO_SENHA } from "@/lib/senha-regras";
 
 import type { EstadoFormulario } from "./acoes";
 
-type Acao = (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
+type Acao = (
+  estado: EstadoFormulario,
+  formData: FormData,
+) => Promise<EstadoFormulario>;
 
-export function FormularioEntrada({ acao, rotulo }: { acao: Acao; rotulo: string }) {
+export function FormularioEntrada({
+  acao,
+  rotulo,
+}: {
+  acao: Acao;
+  rotulo: string;
+}) {
   const [estado, enviar, enviando] = useActionState(acao, {});
 
   return (
     <Formulario estado={estado} action={enviar} className="space-y-4">
-
       <Campo
         name="email"
         rotulo="E-mail"
@@ -115,7 +126,13 @@ export function FormularioSenhaNova({ acao }: { acao: Acao }) {
   );
 }
 
-export function FormularioCadastro({ acao, plano }: { acao: Acao; plano: "solo" | "max" }) {
+export function FormularioCadastro({
+  acao,
+  plano,
+}: {
+  acao: Acao;
+  plano: "solo" | "max";
+}) {
   const [estado, enviar, enviando] = useActionState(acao, {});
 
   return (
@@ -138,7 +155,20 @@ export function FormularioCadastro({ acao, plano }: { acao: Acao; plano: "solo" 
         autoComplete="name"
         required
       />
-      <Campo name="email" rotulo="E-mail" type="email" autoComplete="email" required />
+      <Campo
+        name="email"
+        rotulo="E-mail"
+        type="email"
+        autoComplete="email"
+        required
+      />
+      <CampoTelefone
+        name="telefone"
+        rotulo="Celular"
+        placeholder="(17) 99687-3399"
+        dica="Com DDD. O pagamento da assinatura pede um telefone de contato."
+        required
+      />
       <Campo
         name="senha"
         rotulo="Senha"
@@ -162,7 +192,9 @@ export function FormularioCadastro({ acao, plano }: { acao: Acao; plano: "solo" 
         que faz a pessoa desistir.
       */}
       <div className="pt-2">
-        <p className="text-rotulo font-semibold text-tinta">Dados de cobrança</p>
+        <p className="text-rotulo font-semibold text-tinta">
+          Dados de cobrança
+        </p>
         <p className="text-mini text-tinta-3 mt-0.5">
           O pagamento da assinatura pede o documento e o endereço de quem paga.
         </p>
@@ -198,20 +230,26 @@ export function FormularioCadastro({ acao, plano }: { acao: Acao; plano: "solo" 
 function ComoUsamosSeusDados() {
   return (
     <div className="rounded-suave bg-folha-2 px-4 py-3.5 text-mini text-tinta-2 leading-relaxed">
-      <p className="text-rotulo font-semibold text-tinta">Como usamos os seus dados</p>
+      <p className="text-rotulo font-semibold text-tinta">
+        Como usamos os seus dados
+      </p>
       <ul className="mt-1.5 list-disc pl-4 space-y-1 marker:text-tinta-3">
         <li>
-          <strong className="font-semibold text-tinta">E-mail e senha:</strong> para você entrar e
-          recuperar o acesso. A senha é guardada embaralhada — nem nós conseguimos lê-la.
+          <strong className="font-semibold text-tinta">E-mail e senha:</strong>{" "}
+          para você entrar e recuperar o acesso. A senha é guardada embaralhada
+          — nem nós conseguimos lê-la.
         </li>
         <li>
-          <strong className="font-semibold text-tinta">CPF/CNPJ e endereço:</strong> só para a
-          cobrança, repassados ao Asaas. O cartão é digitado no Asaas e nunca passa pelo RepPlast.
+          <strong className="font-semibold text-tinta">
+            Celular, CPF/CNPJ e endereço:
+          </strong>{" "}
+          só para a cobrança, repassados ao Asaas. O cartão é digitado no Asaas
+          e nunca passa pelo RepPlast.
         </li>
         <li>
-          <strong className="font-semibold text-tinta">Protegidos:</strong> os dados do seu
-          escritório ficam isolados dos de qualquer outro, e nunca são vendidos nem usados para
-          publicidade.
+          <strong className="font-semibold text-tinta">Protegidos:</strong> os
+          dados do seu escritório ficam isolados dos de qualquer outro, e nunca
+          são vendidos nem usados para publicidade.
         </li>
       </ul>
     </div>

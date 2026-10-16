@@ -8,7 +8,7 @@ import { SemScriptRevela } from "@/components/entrada/revelar";
 import { TopoEntrada } from "@/components/entrada/topo-entrada";
 import { Cartao } from "@/components/ui";
 import { planoDaUrl, type Plano } from "@/lib/planos";
-import { sessaoAtual } from "@/lib/sessao";
+import { inicioDa, sessaoAtual } from "@/lib/sessao";
 
 import { cadastrar } from "../acoes";
 import { FormularioCadastro } from "../formulario";
@@ -21,7 +21,8 @@ import { FormularioCadastro } from "../formulario";
  * volta aos cartões, e um recarregar no meio não perde a escolha.
  */
 export default async function PaginaComecar({ searchParams }: PageProps<"/comecar">) {
-  if (await sessaoAtual()) redirect("/");
+  const logado = await sessaoAtual();
+  if (logado) redirect(inicioDa(logado));
 
   const { plano: slug } = await searchParams;
   const plano = planoDaUrl(typeof slug === "string" ? slug : null);

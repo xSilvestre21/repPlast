@@ -4,19 +4,20 @@ import { useRef, useState, type ChangeEvent, type ReactNode } from "react";
 
 import { CampoCep } from "@/components/campo-mascarado";
 import { Campo } from "@/components/ui";
-import { consultarCep, enderecoPorExtenso } from "@/lib/cep";
+import { consultarCep } from "@/lib/cep";
 import { somenteDigitos } from "@/lib/mascara";
 
 /**
- * CEP, endereço, número e complemento de quem paga a assinatura.
+ * CEP, endereço, número, bairro e complemento de quem paga a assinatura.
  *
- * Com o CEP completo, o endereço se preenche sozinho (ViaCEP) e o cursor pula
- * para o número — a única parte que o CEP não sabe. O campo de endereço
- * continua editável: o CEP geral de cidade pequena não traz rua, e o ViaCEP
- * fora do ar não pode travar o cadastro (a frase manda digitar à mão).
+ * Com o CEP completo, rua e bairro se preenchem sozinhos (ViaCEP) e o cursor
+ * pula para o número — a única parte que o CEP não sabe. O bairro é campo
+ * próprio porque o checkout do Asaas o pede separado (`province`). Os campos
+ * continuam editáveis: o CEP geral de cidade pequena não traz rua nem bairro,
+ * e o ViaCEP fora do ar não pode travar o cadastro (a frase manda digitar à mão).
  *
- * Os campos continuam não controlados, como o resto do formulário: o
- * endereço é escrito direto no nó, e o envio sem JavaScript segue funcionando.
+ * Os campos continuam não controlados, como o resto do formulário: o que o CEP
+ * acha é escrito direto no nó, e o envio sem JavaScript segue funcionando.
  * Quem confere de verdade é `cadastrar`, no servidor.
  *
  * O documento entra como filho porque divide a linha com o CEP.
@@ -34,6 +35,7 @@ export function EnderecoCobranca({ documento }: { documento: ReactNode }) {
   const ultimoCep = useRef("");
   const endereco = useRef<HTMLInputElement>(null);
   const numero = useRef<HTMLInputElement>(null);
+  const bairro = useRef<HTMLInputElement>(null);
 
   async function aoDigitarCep(evento: ChangeEvent<HTMLInputElement>) {
     const cep = somenteDigitos(evento.currentTarget.value);
@@ -53,15 +55,11 @@ export function EnderecoCobranca({ documento }: { documento: ReactNode }) {
     if (resultado === "inexistente") return setBusca({ tipo: "inexistente" });
     if (resultado === null) return setBusca({ tipo: "indisponivel" });
 
-    const extenso = enderecoPorExtenso(resultado);
-    if (endereco.current) endereco.current.value = extenso;
-    setBusca({
-      tipo: "achou",
-      cidade: resultado.cidade,
-      uf: resultado.uf,
-      geral: !extenso,
-    });
-    (extenso ? numero : endereco).current?.focus();
+    if (endereco.current) endereco.current.value = resultado.logradouro;
+    if (bairro.current) bairro.current.value = resultado.bairro;
+    const geral = !resultado.logradouro;
+    setBusca({ tipo: "achou", cidade: resultado.cidade, uf: resultado.uf, geral });
+    (geral ? endereco : numero).current?.focus();
   }
 
   const lugar = busca.tipo === "achou" ? `${busca.cidade}/${busca.uf}` : "";
@@ -95,7 +93,7 @@ export function EnderecoCobranca({ documento }: { documento: ReactNode }) {
           ref={endereco}
           name="endereco"
           rotulo="Endereço"
-          placeholder="Rua, bairro"
+          placeholder="Rua, avenida…"
           autoComplete="address-line1"
           required
           dica={
@@ -119,13 +117,16 @@ export function EnderecoCobranca({ documento }: { documento: ReactNode }) {
         />
       </div>
 
-      <Campo
-        name="complemento"
-        rotulo="Complemento (opcional)"
-        placeholder="Sala 3, bloco B"
-        autoComplete="address-line2"
-        maxLength={60}
-      />
+      <div className="grid gap-4 sm:grid-cols-2 items-start">
+        <Campo ref={bairro} name="bairro" rotulo="Bairro" placeholder="Centro" required />
+        <Campo
+          name="complemento"
+          rotulo="Complemento (opcional)"
+          placeholder="Sala 3, bloco B"
+          autoComplete="address-line2"
+          maxLength={60}
+        />
+      </div>
     </>
   );
 }
