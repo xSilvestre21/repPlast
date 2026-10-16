@@ -67,6 +67,22 @@ export function mascararDocumento(valor: string): string {
 }
 
 /**
+ * O documento de quem PAGA a assinatura: igual a `mascararDocumento`, mas
+ * aceitando as letras do CNPJ alfanumérico (ver `documento.ts`).
+ *
+ * Com uma letra, só pode ser CNPJ, e a forma vira de CNPJ na hora — mesmo com
+ * menos de 12 caracteres. Fica só no cadastro do escritório: no de cliente a
+ * máscara numérica continua, e as letras seriam apagadas ali.
+ */
+export function mascararDocumentoCobranca(valor: string): string {
+  const caracteres = valor.toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, DIGITOS_CNPJ);
+
+  return caracteres.length <= DIGITOS_CPF && !/[A-Z]/.test(caracteres)
+    ? agrupar(caracteres, [3, 3, 3, 2], [".", ".", "-"])
+    : agrupar(caracteres, [2, 3, 3, 4, 2], [".", ".", "/", "-"]);
+}
+
+/**
  * Telefone brasileiro com DDD: "(17) 3321-5900" ou "(17) 99687-3399".
  *
  * O corte entre prefixo e sufixo depende do total: 11 dígitos é celular e o

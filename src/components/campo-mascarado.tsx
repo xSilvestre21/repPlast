@@ -20,27 +20,35 @@
 import type { ChangeEvent, ComponentProps, KeyboardEvent } from "react";
 
 import { Campo } from "@/components/ui";
-import { mascararCep, mascararDocumento, mascararMoeda, mascararTelefone } from "@/lib/mascara";
+import {
+  mascararCep,
+  mascararDocumento,
+  mascararDocumentoCobranca,
+  mascararMoeda,
+  mascararTelefone,
+} from "@/lib/mascara";
 
 type PropsCampo = ComponentProps<typeof Campo>;
 
 const EH_DIGITO = /\d/;
+/** No CNPJ alfanumérico a letra conta como o dígito: é conteúdo, não pontuação. */
+const EH_LETRA_OU_DIGITO = /[0-9a-z]/i;
 
-function contarDigitos(texto: string): number {
+function contarDigitos(texto: string, conteudo: RegExp): number {
   let total = 0;
   for (const caractere of texto) {
-    if (EH_DIGITO.test(caractere)) total++;
+    if (conteudo.test(caractere)) total++;
   }
   return total;
 }
 
 /** Posição logo depois do n-ésimo dígito do texto. */
-function posicaoAposDigitos(texto: string, quantidade: number): number {
+function posicaoAposDigitos(texto: string, quantidade: number, conteudo: RegExp): number {
   if (quantidade === 0) return 0;
 
   let vistos = 0;
   for (let i = 0; i < texto.length; i++) {
-    if (!EH_DIGITO.test(texto[i])) continue;
+    if (!conteudo.test(texto[i])) continue;
 
     vistos++;
     if (vistos === quantidade) return i + 1;
@@ -54,6 +62,7 @@ function CampoMascarado({
   onChange,
   onKeyDown,
   cursorNoFim = false,
+  conteudo = EH_DIGITO,
   ...props
 }: PropsCampo & {
   mascara: (valor: string) => string;
@@ -63,6 +72,8 @@ function CampoMascarado({
    * primeiro zero, com a próxima tecla entrando no meio do número.
    */
   cursorNoFim?: boolean;
+  /** O que é conteúdo — o resto é pontuação da máscara. Dígitos, salvo no CNPJ com letras. */
+  conteudo?: RegExp;
 }) {
   /**
    * Remonta a máscara e recoloca o cursor.
@@ -75,13 +86,13 @@ function CampoMascarado({
   function aoDigitar(evento: ChangeEvent<HTMLInputElement>) {
     const alvo = evento.currentTarget;
     const posicao = alvo.selectionStart ?? alvo.value.length;
-    const digitosAteOCursor = contarDigitos(alvo.value.slice(0, posicao));
+    const digitosAteOCursor = contarDigitos(alvo.value.slice(0, posicao), conteudo);
 
     alvo.value = mascara(alvo.value);
 
     const destino = cursorNoFim
       ? alvo.value.length
-      : posicaoAposDigitos(alvo.value, digitosAteOCursor);
+      : posicaoAposDigitos(alvo.value, digitosAteOCursor, conteudo);
     alvo.setSelectionRange(destino, destino);
 
     onChange?.(evento);
@@ -122,7 +133,7 @@ function CampoMascarado({
     if (evento.key !== "Backspace") return;
 
     let posicao = selectionStart;
-    while (posicao > 0 && !EH_DIGITO.test(value[posicao - 1])) posicao--;
+    while (posicao > 0 && !conteudo.test(value[posicao - 1])) posicao--;
 
     if (posicao !== selectionStart) alvo.setSelectionRange(posicao, posicao);
   }
@@ -150,6 +161,25 @@ export function CampoDocumento(props: PropsCampo) {
       placeholder="09.507.378/0001-50"
       {...props}
       mascara={mascararDocumento}
+    />
+  );
+}
+
+/**
+ * CPF ou CNPJ de quem paga a assinatura — aceita o CNPJ com letras. Só no
+ * cadastro do escritório; ver `mascararDocumentoCobranca`.
+ */
+export function CampoDocumentoCobranca(props: PropsCampo) {
+  return (
+    <CampoMascarado
+      inputMode="text"
+      autoCapitalize="characters"
+      autoComplete="off"
+      spellCheck={false}
+      placeholder="123.456.789-09"
+      {...props}
+      mascara={mascararDocumentoCobranca}
+      conteudo={EH_LETRA_OU_DIGITO}
     />
   );
 }

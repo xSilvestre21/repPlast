@@ -77,10 +77,14 @@ function hojeNoBrasil(): string {
 export interface ClienteCobranca {
   nome: string;
   email: string;
-  /** Só dígitos. */
+  /** Sem pontuação; o CNPJ alfanumérico tem letras. */
   cpfCnpj: string;
   /** Só dígitos. */
   cep: string;
+  /** "Rua Alfa, Centro". Ausente nos escritórios de antes de o cadastro pedir. */
+  endereco?: string;
+  numero?: string;
+  complemento?: string;
 }
 
 /**
@@ -118,6 +122,9 @@ export async function criarCheckout(plano: CodigoPlano, cliente: ClienteCobranca
         email: cliente.email,
         cpfCnpj: cliente.cpfCnpj,
         postalCode: cliente.cep,
+        address: cliente.endereco,
+        addressNumber: cliente.numero,
+        complement: cliente.complemento,
       },
       subscription: {
         cycle: "MONTHLY",

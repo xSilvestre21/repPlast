@@ -151,10 +151,17 @@ model Organizacao {
   /// A assinatura recorrente criada pelo checkout pago. Os eventos de cobrança
   /// seguintes chegam com ela.
   asaasAssinaturaId String?    @unique
-  /// CPF/CNPJ e CEP de quem paga, só dígitos. O checkout do Asaas exige os
-  /// dois, e guardá-los é o que deixa reabrir o pagamento sem perguntar de novo.
+  /// CPF/CNPJ e CEP de quem paga, sem pontuação (o CNPJ pode ter letras). O
+  /// checkout do Asaas exige os dois, e guardá-los é o que deixa reabrir o
+  /// pagamento sem perguntar de novo.
   cobrancaDocumento String?
   cobrancaCep       String?
+  /// "Rua Alfa, Centro" e "505" — preenchidos pelo CEP no cadastro e mandados
+  /// ao checkout. Nulos nos escritórios de antes de o cadastro pedir.
+  cobrancaEndereco    String?
+  cobrancaNumero      String?
+  /// "Sala 3, bloco B". Opcional: nulo também quando o endereço não tem.
+  cobrancaComplemento String?
 
   /// Contador do número do orçamento. É POR ESCRITÓRIO, e não por indústria
   /// como o do pedido: o orçamento é documento do representante para o cliente,
@@ -205,6 +212,13 @@ model Usuario {
   /// isto um celular perdido continuaria logado por 30 dias.
   sessaoVersao  Int      @default(0)
   criadoEm      DateTime @default(now())
+
+  /// O aceite dos Termos de Uso e da Política de Privacidade no cadastro: a
+  /// prova do consentimento (LGPD, art. 8º, §2º) e a versão aceita
+  /// (`VERSAO_TERMOS`, `lib/lgpd.ts`). Nulos em quem entrou antes dos termos e
+  /// nos prepostos, que não passam pelo cadastro.
+  termosAceitosEm DateTime?
+  termosVersao    String?
 
   /// ADMIN por padrão porque toda conta que existe hoje é a do dono do
   /// escritório. Preposto só nasce REPRESENTANTE, e só pela tela do admin.

@@ -11,13 +11,18 @@ import {
   falhou,
   type EstadoFormulario,
 } from "@/lib/erro-formulario";
-import { normalizarCep, normalizarDocumento, somenteDigitos } from "@/lib/mascara";
+import { normalizarCep, somenteDigitos } from "@/lib/mascara";
 import { planoDaUrl, type CodigoPlano } from "@/lib/planos";
 import { conferirSenha, gerarHashSenha } from "@/lib/senha";
 import { normalizarNomeEscritorio, problemaNoNomeEscritorio } from "@/lib/escritorio-regras";
 import { ehConflitoDeNome, erroNomeEmUso, nomeEmUso } from "@/lib/nome-escritorio";
 import { TAMANHO_MINIMO_SENHA } from "@/lib/senha-regras";
+import { consultarCep } from "@/lib/cep";
+import { dominioRecebeEmail } from "@/lib/dominio-email";
+import { documentoSemPontuacao, problemaNoDocumento } from "@/lib/documento";
 import { enviarDoSistema, urlDoSistema } from "@/lib/email-sistema";
+import { problemaNoEmail } from "@/lib/email-valido";
+import { VERSAO_TERMOS } from "@/lib/lgpd";
 import { montarEmailSistema } from "@/lib/email-sistema-html";
 import { minutosAte, minutosPorExtenso } from "@/lib/limite-tentativas";
 import {
@@ -272,12 +277,18 @@ async function abrirPagamento(organizacao: {
   email: string;
   documento: string;
   cep: string;
+  endereco?: string;
+  numero?: string;
+  complemento?: string;
 }): Promise<string> {
   const checkout = await criarCheckout(organizacao.plano, {
     nome: organizacao.nome,
     email: organizacao.email,
     cpfCnpj: organizacao.documento,
     cep: organizacao.cep,
+    endereco: organizacao.endereco,
+    numero: organizacao.numero,
+    complemento: organizacao.complemento,
   });
 
   await dbAdministrativo().organizacao.update({
@@ -332,21 +343,55 @@ export async function cadastrar(
     if (problemaNoNome) throw new ErroDeCampo("escritorio", problemaNoNome);
     if (!nome) throw new ErroDeCampo("nome", "Informe o seu nome e sobrenome.");
     if (!email) throw new ErroDeCampo("email", "Informe o seu e-mail — é com ele que você vai entrar.");
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ErroDeCampo("email", EMAIL_INCOMPLETO);
+    const problemaNoFormato = problemaNoEmail(email);
+    if (problemaNoFormato) throw new ErroDeCampo("email", problemaNoFormato);
 
     conferirSenhaNova(senha, formData);
 
-    // O checkout do Asaas exige os dois; aqui eles são obrigatórios, ao
-    // contrário do cadastro de cliente, onde vazio quer dizer "não sei".
-    const documento = normalizarDocumento(lerTexto(formData.get("documento")), "documento");
-    if (!documento) {
-      throw new ErroDeCampo(
-        "documento",
-        "Informe o CPF ou o CNPJ de quem paga a assinatura, como 123.456.789-09.",
-      );
-    }
+    // O checkout do Asaas exige documento e CEP; aqui são obrigatórios e
+    // conferidos de verdade, ao contrário do cadastro de cliente, onde vazio
+    // quer dizer "não sei" e os números importados do SICOV nunca foram checados.
+    const documento = documentoSemPontuacao(lerTexto(formData.get("documento")));
+    const problemaNoDoc = problemaNoDocumento(documento);
+    if (problemaNoDoc) throw new ErroDeCampo("documento", problemaNoDoc);
+
     const cep = normalizarCep(lerTexto(formData.get("cep")), "cep");
     if (!cep) throw new ErroDeCampo("cep", "Informe o CEP de quem paga, como 14781-160.");
+
+    const endereco = lerTexto(formData.get("endereco"));
+    if (!endereco) {
+      throw new ErroDeCampo(
+        "endereco",
+        "Informe a rua e o bairro de quem paga. O CEP costuma preencher sozinho — confira se ele está certo.",
+      );
+    }
+    const numero = lerTexto(formData.get("numero"));
+    if (!numero) throw new ErroDeCampo("numero", "Informe o número. Sem número? Escreva S/N.");
+    // Opcional: vazio vira nulo, não texto em branco.
+    const complemento = lerTexto(formData.get("complemento")).slice(0, 60) || undefined;
+
+    if (formData.get("termos") !== "aceito") {
+      throw new ErroDeCampo(
+        "termos",
+        "Para criar o escritório, leia e marque o aceite dos Termos de Uso e da Política de Privacidade.",
+      );
+    }
+
+    // Por último, as duas que dependem de rede — e deixam passar se a rede
+    // não responder (ver `consultarCep` e `dominioRecebeEmail`).
+    const [cepExiste, emailRecebe] = await Promise.all([
+      consultarCep(somenteDigitos(cep)),
+      dominioRecebeEmail(email.split("@")[1]),
+    ]);
+    if (!emailRecebe) {
+      throw new ErroDeCampo(
+        "email",
+        `O endereço “${email.split("@")[1]}” não recebe e-mails. Confira o que vem depois do @, como voce@escritorio.com.br.`,
+      );
+    }
+    if (cepExiste === "inexistente") {
+      throw new ErroDeCampo("cep", "Este CEP não existe. Confira os números, como 14781-160.");
+    }
 
     const db = dbAdministrativo();
 
@@ -369,10 +414,19 @@ export async function cadastrar(
         nome: escritorio,
         plano: plano.codigo,
         assinatura: "AGUARDANDO_PAGAMENTO",
-        cobrancaDocumento: somenteDigitos(documento),
+        cobrancaDocumento: documento,
         cobrancaCep: somenteDigitos(cep),
+        cobrancaEndereco: endereco,
+        cobrancaNumero: numero,
+        cobrancaComplemento: complemento,
         usuarios: {
-          create: { nome, email, senhaHash: await gerarHashSenha(senha) },
+          create: {
+            nome,
+            email,
+            senhaHash: await gerarHashSenha(senha),
+            termosAceitosEm: new Date(),
+            termosVersao: VERSAO_TERMOS,
+          },
         },
       },
       select: { id: true, usuarios: { select: { id: true } } },
@@ -387,8 +441,11 @@ export async function cadastrar(
       plano: plano.codigo,
       nome,
       email,
-      documento: somenteDigitos(documento),
+      documento,
       cep: somenteDigitos(cep),
+      endereco,
+      numero,
+      complemento,
     });
   } catch (erro) {
     // Outro cadastro levou o nome entre a conferência e a gravação.
@@ -433,7 +490,14 @@ export async function reabrirPagamento(
 
     const organizacao = await dbAdministrativo().organizacao.findUniqueOrThrow({
       where: { id: sessao.organizacaoId },
-      select: { plano: true, cobrancaDocumento: true, cobrancaCep: true },
+      select: {
+        plano: true,
+        cobrancaDocumento: true,
+        cobrancaCep: true,
+        cobrancaEndereco: true,
+        cobrancaNumero: true,
+        cobrancaComplemento: true,
+      },
     });
 
     if (!organizacao.cobrancaDocumento || !organizacao.cobrancaCep) {
@@ -451,6 +515,9 @@ export async function reabrirPagamento(
         email: sessao.email,
         documento: organizacao.cobrancaDocumento,
         cep: organizacao.cobrancaCep,
+        endereco: organizacao.cobrancaEndereco ?? undefined,
+        numero: organizacao.cobrancaNumero ?? undefined,
+        complemento: organizacao.cobrancaComplemento ?? undefined,
       },
     );
   } catch (erro) {
