@@ -222,14 +222,19 @@ export function LinhaRepasse({
   const painel = useId();
 
   /*
-   * Salvou sem erro, limpa o formulário trocando a chave — o valor sugerido
-   * muda com o pagamento novo, e o campo precisa renascer com ele.
+   * Salvou sem erro, fecha o painel e limpa o formulário trocando a chave — o
+   * valor sugerido muda com o pagamento novo, e o campo precisa renascer com
+   * ele. O pagamento aparece na linha, no "pago" e no "a repassar". Com erro,
+   * fica aberto mostrando a mensagem, como o acerto da comissão (`acerto.tsx`).
    */
   const [estadoVisto, setEstadoVisto] = useState(estado);
   const [versao, setVersao] = useState(0);
   if (estado !== estadoVisto) {
     setEstadoVisto(estado);
-    if (!estado.erro) setVersao((v) => v + 1);
+    if (!estado.erro) {
+      setVersao((v) => v + 1);
+      setAberto(false);
+    }
   }
 
   return (
