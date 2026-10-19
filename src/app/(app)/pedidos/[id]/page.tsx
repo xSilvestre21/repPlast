@@ -51,6 +51,7 @@ export default async function PaginaPedido({
         select: {
           id: true,
           nome: true,
+          proximoNumeroPedido: true,
           contatos: {
             orderBy: { ordem: "asc" },
             select: { id: true, nome: true, setor: true, email: true, padrao: true },
@@ -155,6 +156,20 @@ export default async function PaginaPedido({
         .map((e) => ({ id: e.id, quem: e.usuario!.nome, quando: DATA_HORA.format(e.editadoEm) }))
     : [];
   const listaAConferir = aConferir.map((e) => `${e.quem} em ${e.quando}`).join("; ");
+
+  // Só o último pedido da indústria devolve o número (ver `apagarPedido`).
+  const avisoApagar = [
+    pedido.itens.length > 0
+      ? `O pedido e ${pedido.itens.length === 1 ? "o item dele" : `os ${pedido.itens.length} itens dele`} são apagados de vez.`
+      : "O pedido é apagado de vez.",
+    pedido.orcamentoId && "A proposta de onde ele veio continua existindo, marcada como aceita.",
+    pedido.fornecedor.proximoNumeroPedido === pedido.numero + 1
+      ? `Como é o último da ${pedido.fornecedor.nome}, o número ${pedido.numero} volta a ser usado no próximo pedido.`
+      : `O número ${pedido.numero} não é reaproveitado.`,
+    "Esta ação não pode ser desfeita.",
+  ]
+    .filter(Boolean)
+    .join(" ");
   const texto = (v: { toString(): string } | null) => (v === null ? null : v.toString());
 
   return (
@@ -240,13 +255,16 @@ export default async function PaginaPedido({
               rotuloOcupado="Marcando…"
               variante="secundaria"
               icone="enviar"
-              confirmacao={
-                (aConferir.length > 0
-                  ? `Atenção: um preposto editou este pedido (${listaAConferir}). ` +
-                    "Confira as alterações antes de continuar.\n\n"
-                  : "") +
-                "Marcar como enviado trava o pedido e passa a contar a comissão. Confirma?"
-              }
+              confirmacao={{
+                titulo: `Marcar o pedido ${pedido.numero} como enviado?`,
+                texto:
+                  (aConferir.length > 0
+                    ? `Atenção: um preposto editou este pedido (${listaAConferir}). ` +
+                      "Confira as alterações antes de continuar.\n\n"
+                    : "") +
+                  "O pedido fica travado para edição e passa a contar na comissão do mês da " +
+                  "entrega. Para mexer nele depois, use “Desmarcar envio”.",
+              }}
               acao={marcarEnviado.bind(null, pedido.id)}
             />
           )}
@@ -256,6 +274,12 @@ export default async function PaginaPedido({
               rotulo="Desmarcar envio"
               rotuloOcupado="Desmarcando…"
               icone="desfazer"
+              confirmacao={{
+                titulo: `Desmarcar o envio do pedido ${pedido.numero}?`,
+                texto:
+                  "Ele volta a ficar aberto, pode ser editado de novo e deixa de contar na comissão " +
+                  "até ser marcado como enviado outra vez. O e-mail que já foi para a indústria não volta.",
+              }}
               acao={desmarcarEnvio.bind(null, pedido.id)}
             />
           )}
@@ -272,6 +296,12 @@ export default async function PaginaPedido({
               rotulo="Reabrir"
               rotuloOcupado="Reabrindo…"
               icone="reabrir"
+              confirmacao={{
+                titulo: `Reabrir o pedido ${pedido.numero}?`,
+                texto:
+                  "Ele deixa de estar cancelado e volta a ficar aberto, para editar. A comissão só " +
+                  "volta a contar quando ele for marcado como enviado de novo.",
+              }}
               acao={reabrirPedido.bind(null, pedido.id)}
             />
           ) : (
@@ -284,7 +314,10 @@ export default async function PaginaPedido({
               rotuloOcupado="Apagando…"
               variante="perigo"
               icone="apagar"
-              confirmacao="Apagar remove o pedido de vez. Confirma?"
+              confirmacao={{
+                titulo: `Apagar o pedido ${pedido.numero}?`,
+                texto: avisoApagar,
+              }}
               acao={excluirPedido.bind(null, pedido.id)}
             />
           )}

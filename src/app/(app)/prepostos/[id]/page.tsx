@@ -38,6 +38,7 @@ import {
   formatarMoeda,
 } from "@/components/ui";
 import { escreverNumeroBr } from "@/lib/numero-br";
+import { valorMensal } from "@/lib/planos";
 import { escopoAtual } from "@/lib/sessao";
 
 import { alternarAtivoPreposto, atualizarPreposto } from "../acoes";
@@ -87,6 +88,40 @@ export default async function PaginaPreposto({
   const inativos = clientes.filter((c) => !c.ativo).length;
 
   const selo = preposto.ativo ? <Selo tom="verde">com acesso</Selo> : <Selo tom="cancelado">sem acesso</Selo>;
+
+  /*
+   * O que tirar ou devolver o acesso muda, dito antes do clique — inclusive na
+   * mensalidade, que `acertarMensalidade` (../acoes.ts) ajusta acima dos
+   * prepostos inclusos no plano.
+   */
+  const [ativos, assinatura] = await Promise.all([
+    db.usuario.count({ where: { organizacaoId, papel: "REPRESENTANTE", ativo: true } }),
+    db.organizacao.findUnique({ where: { id: organizacaoId }, select: { asaasAssinaturaId: true } }),
+  ]);
+  const mensalidadeAgora = valorMensal(plano, ativos);
+  const mensalidadeDepois = valorMensal(plano, ativos + (preposto.ativo ? -1 : 1));
+  const mudaMensalidade =
+    assinatura?.asaasAssinaturaId && !mensalidadeAgora.equals(mensalidadeDepois)
+      ? ` A mensalidade do escritório passa de ${formatarMoeda(mensalidadeAgora.toString())} para ` +
+        `${formatarMoeda(mensalidadeDepois.toString())}.`
+      : "";
+  const perguntaAcesso = preposto.ativo
+    ? {
+        titulo: `Tirar o acesso de ${preposto.nomeCompleto}?`,
+        texto:
+          `${preposto.nome} não consegue mais entrar no sistema, a partir de agora. Os clientes, ` +
+          "pedidos e comissões dele continuam guardados, e “Devolver o acesso” desfaz." +
+          mudaMensalidade,
+        rotulo: "Tirar o acesso",
+      }
+    : {
+        titulo: `Devolver o acesso de ${preposto.nomeCompleto}?`,
+        texto:
+          `${preposto.nome} volta a entrar no sistema com o e-mail e a senha de antes, e a ver ` +
+          "os clientes e as indústrias marcados para ele." + mudaMensalidade,
+        rotulo: "Devolver o acesso",
+        perigo: false,
+      };
 
   if (editavel) {
     // As ativas, e as inativas que ainda estão marcadas para ele: escondê-las
@@ -141,7 +176,11 @@ export default async function PaginaPreposto({
             </BotaoLink>
             {/* Tirar o acesso, e não excluir: ele aparece em pedido e comissão
                 de meses fechados, e o cadastro precisa continuar existindo. */}
-            <AcaoComRecusa acao={alternarAtivoPreposto.bind(null, preposto.id)} alinhamento="inicio">
+            <AcaoComRecusa
+              acao={alternarAtivoPreposto.bind(null, preposto.id)}
+              alinhamento="inicio"
+              confirmar={perguntaAcesso}
+            >
               <Botao
                 type="submit"
                 variante="secundaria"

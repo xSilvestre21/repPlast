@@ -14,6 +14,10 @@ import {
 import { normalizarCep, normalizarDocumento, normalizarTelefone } from "@/lib/mascara";
 import { escopoAtual, exigirAdmin } from "@/lib/sessao";
 
+import { recusaExcluirCliente } from "@/lib/recusa-exclusao";
+
+import { contaDoProduto } from "../produtos/leitura";
+
 export type { EstadoFormulario };
 
 /** O cliente sumiu entre abrir a ficha e salvar — excluído em outra tela. */
@@ -258,14 +262,69 @@ export async function excluirCliente(
   try {
     const { organizacaoId, db } = await contexto();
 
-    const pedidos = await db.pedido.count({ where: { clienteId: id, organizacaoId } });
-    if (pedidos > 0) {
-      const quantos = pedidos === 1 ? "1 pedido" : `${pedidos} pedidos`;
-      throw new ErroParaUsuario(
-        `Este cliente tem ${quantos} e não pode ser excluído. Se ele parou de comprar, use ` +
-          `“Marcar como inativo”: sai das listas e continua nos pedidos antigos.`,
-      );
+    const recusa = recusaExcluirCliente(
+      await db.pedido.count({ where: { clienteId: id, organizacaoId } }),
+    );
+    if (recusa) throw new ErroParaUsuario(recusa);
+
+    const cliente = await db.cliente.findFirst({
+      where: { id, organizacaoId },
+      select: { apelido: true, municipio: true },
+    });
+    if (!cliente) throw new ErroParaUsuario(CLIENTE_SUMIU);
+
+    /*
+     * A proposta não impede: ela volta a ser de quem ainda não é cliente.
+     *
+     * Era a FK da proposta que barrava a exclusão, com um erro que ninguém
+     * entendia — e o cliente cadastrado a partir dela, por engano ou cedo
+     * demais, ficava preso. A proposta que virou pedido nem chega aqui: o
+     * pedido é deste cliente e a trava acima já recusou.
+     *
+     * Vai em passos, sem transação (o banco com RLS não abre uma interativa),
+     * e cada um pode ser repetido: o que já foi desfeito sai do filtro.
+     *
+     * 1. A linha que é produto deste cliente volta a ser conta, com as medidas
+     *    dele — é o que deixa recadastrar o cliente e refazer os produtos com
+     *    "Cadastrar todos os produtos", sem redigitar.
+     */
+    const itens = await db.orcamentoItem.findMany({
+      where: { produto: { clienteId: id, organizacaoId } },
+      select: {
+        id: true,
+        produto: {
+          include: { aditivos: { select: { aditivoId: true } } },
+        },
+      },
+    });
+    for (const item of itens) {
+      if (!item.produto) continue;
+      const { aditivos, ...produto } = item.produto;
+      await db.orcamentoItem.update({
+        where: { id: item.id },
+        data: {
+          produtoId: null,
+          conta: contaDoProduto({ ...produto, aditivos: aditivos.map((a) => a.aditivoId) }),
+        },
+      });
     }
+
+    // 2. A proposta fica com o nome e a cidade, como quando nasceu avulsa.
+    await db.orcamento.updateMany({
+      where: { clienteId: id, organizacaoId },
+      data: {
+        clienteId: null,
+        clienteAvulsoNome: cliente.apelido,
+        clienteAvulsoMunicipio: cliente.municipio,
+      },
+    });
+
+    // 3. Os produtos dele vão junto: o preço que eles guardam era o negociado
+    //    com este cliente, e sem dono não servem a ninguém. O que por acaso
+    //    estiver em pedido de outro cliente fica, sem dono (`SetNull`).
+    await db.produto.deleteMany({
+      where: { clienteId: id, organizacaoId, itensPedido: { none: {} } },
+    });
 
     await db.cliente.deleteMany({ where: { id, organizacaoId } });
   } catch (erro) {

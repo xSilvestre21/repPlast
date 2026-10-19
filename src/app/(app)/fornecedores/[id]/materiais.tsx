@@ -308,7 +308,17 @@ function LinhaMaterial({
           <Celula alinhamento="acao">
             <div className="flex items-center justify-end gap-3">
               <Situacao gravando={linha.gravando} salvo={linha.salvo} />
-              <AcaoComRecusa acao={remover}>
+              <AcaoComRecusa
+                acao={remover}
+                confirmar={{
+                  titulo: `Remover o material ${material.nome}?`,
+                  texto:
+                    "Ele sai da tabela de preço desta indústria, com as faixas de peso, e deixa de " +
+                    "aparecer para escolher em produtos novos. Os produtos já cadastrados com ele " +
+                    "não mudam: guardam o material e o preço que tinham.",
+                  rotulo: "Remover",
+                }}
+              >
                 <input type="hidden" name="materialId" value={material.id} />
                 <BotaoTexto type="submit" perigoso aria-label={`Remover material ${material.nome}`}>
                   remover

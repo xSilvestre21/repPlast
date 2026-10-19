@@ -155,6 +155,26 @@ export default async function PaginaOrcamento({
   const descartavel =
     (aberto || orcamento.status === "EXPIRADO") && orcamento.pedidos.length === 0;
 
+  // Só a última proposta devolve o número (ver `excluirOrcamentoDoBanco`).
+  const contador = descartavel
+    ? await db.organizacao.findUnique({
+        where: { id: organizacaoId },
+        select: { proximoNumeroOrcamento: true },
+      })
+    : null;
+  const avisoExclusao = [
+    orcamento.itens.length > 0
+      ? `A proposta e ${orcamento.itens.length === 1 ? "o item dela" : `os ${orcamento.itens.length} itens dela`} são apagados.`
+      : "A proposta é apagada.",
+    orcamento.envios.length > 0 &&
+      "O e-mail que já foi para o cliente não volta: só o registro do envio some daqui.",
+    contador?.proximoNumeroOrcamento === orcamento.numero + 1
+      ? `Como é a última criada, o número ${orcamento.numero} volta a ser usado na próxima proposta.`
+      : `O número ${orcamento.numero} não é reaproveitado.`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   /*
    * Para quem a proposta vai: os e-mails do cadastro do cliente, os dois já
    * marcados. O da NF-e só aparece se for outro endereço. Proposta de quem
@@ -248,7 +268,7 @@ export default async function PaginaOrcamento({
               <BotaoExcluir
                 rotulo="Apagar"
                 nome={`Orçamento #${orcamento.numero}`}
-                aviso="Some de vez. Se for a última proposta criada, o número volta para a próxima."
+                aviso={avisoExclusao}
                 acao={excluirOrcamento.bind(null, orcamento.id)}
               />
             )}

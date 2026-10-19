@@ -13,6 +13,7 @@ import { Check, ChevronRight, Pencil, Plus, RotateCcw, Trash2, Users } from "luc
 import Link from "next/link";
 import { useActionState, useState } from "react";
 
+import { usePerguntaAntes } from "@/components/pergunta-antes";
 import type { OpcaoBuscavel } from "@/components/selecao-buscavel";
 import { MensagemErro } from "@/components/ui";
 import type { EventoAgenda } from "@/lib/agenda";
@@ -150,6 +151,15 @@ function LinhaCompromisso({
     excluirCompromisso.bind(null, compromisso.id),
     {},
   );
+  const perguntaExcluir = usePerguntaAntes({
+    titulo: `Excluir “${compromisso.titulo}”?`,
+    texto:
+      (compromisso.compartilhado
+        ? "Ele some do seu calendário e do calendário de todo o escritório, com os avisos dele."
+        : "Ele some do seu calendário, com os avisos dele.") +
+      " Para só tirar dos pendentes, use “Marcar como feito”. Esta ação não pode ser desfeita.",
+    rotulo: "Excluir",
+  });
 
   return (
     <Faixa cor={cor}>
@@ -194,15 +204,11 @@ function LinhaCompromisso({
             <BotaoAcao rotulo="Alterar" aoClicar={aoEditar}>
               <Pencil size={14} />
             </BotaoAcao>
-            <form
-              action={excluir}
-              onSubmit={(e) => {
-                if (!confirm(`Excluir "${compromisso.titulo}"?`)) e.preventDefault();
-              }}
-            >
+            <form action={excluir} onSubmit={perguntaExcluir.aoEnviar}>
               <BotaoAcao rotulo="Excluir" desabilitado={excluindo} perigoso>
                 <Trash2 size={14} />
               </BotaoAcao>
+              {perguntaExcluir.janela}
             </form>
           </div>
         )}

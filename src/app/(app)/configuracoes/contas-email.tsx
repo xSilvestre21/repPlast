@@ -180,10 +180,14 @@ function LinhaConta({ conta }: { conta: ContaVisivel }) {
           </BotaoTexto>
           <AcaoComRecusa
             acao={conta.excluir}
-            onSubmit={(evento) => {
-              if (!confirm(`Excluir a conta ${conta.email}? A senha guardada vai junto.`)) {
-                evento.preventDefault();
-              }
+            confirmar={{
+              titulo: `Excluir a conta ${conta.email}?`,
+              texto:
+                "A senha guardada vai junto, e pedidos e propostas não podem mais ser enviados por " +
+                "esta caixa." +
+                (conta.padrao ? " Ela é a padrão: a próxima conta da lista passa a ser a padrão." : "") +
+                " O que já foi enviado continua registrado. Esta ação não pode ser desfeita.",
+              rotulo: "Excluir",
             }}
           >
             <BotaoTexto type="submit" perigoso>

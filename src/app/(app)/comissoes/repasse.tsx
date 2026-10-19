@@ -31,6 +31,7 @@ import {
   formatarMoeda,
 } from "@/components/ui";
 import { ErroGeral, Formulario } from "@/components/formulario";
+import { usePerguntaAntes } from "@/components/pergunta-antes";
 
 import type { EstadoFormulario } from "./acoes";
 import { BolinhaPreposto } from "@/components/bolinha-preposto";
@@ -135,15 +136,17 @@ function LinhaPagamento({ pagamento }: { pagamento: PagamentoRepasse }) {
 
 function ExcluirPagamento({ valor, excluir }: { valor: number; excluir: Acao }) {
   const [estado, enviar, excluindo] = useActionState(excluir, {});
+  const pergunta = usePerguntaAntes({
+    titulo: `Excluir o pagamento de ${formatarMoeda(valor)}?`,
+    texto:
+      `O pagamento sai do extrato e o saldo do mês volta a mostrar ${formatarMoeda(valor)} ` +
+      "como devido ao preposto. Use para corrigir um lançamento errado. Esta ação não pode ser desfeita.",
+    rotulo: "Excluir",
+  });
 
   return (
-    <form
-      action={enviar}
-      onSubmit={(evento) => {
-        if (!confirm(`Excluir o pagamento de ${formatarMoeda(valor)}?`)) evento.preventDefault();
-      }}
-      className="text-right"
-    >
+    <form action={enviar} onSubmit={pergunta.aoEnviar} className="text-right">
+      {pergunta.janela}
       <BotaoTexto type="submit" perigoso disabled={excluindo}>
         {excluindo ? "excluindo…" : "excluir"}
       </BotaoTexto>

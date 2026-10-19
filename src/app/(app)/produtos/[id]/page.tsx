@@ -8,6 +8,7 @@ import { alternarAtivoProduto, atualizarProduto, excluirProduto } from "../acoes
 import { carregarClientes, carregarFornecedores, paraCampo } from "../dados";
 import { FormularioProduto } from "../formulario";
 import { BotaoExcluir } from "@/components/botao-excluir";
+import { recusaExcluirProduto } from "@/lib/recusa-exclusao";
 import { Archive, ArchiveRestore, Package, Pencil } from "lucide-react";
 import { Pagina } from "@/components/pagina";
 
@@ -19,13 +20,16 @@ export default async function PaginaProduto({
 
   const { organizacaoId, ehAdmin, db } = await escopoAtual();
 
-  const [produto, fornecedores, clientes] = await Promise.all([
+  const [produto, fornecedores, clientes, propostas, itensDePedido] = await Promise.all([
     db.produto.findFirst({
       where: { id, organizacaoId },
       include: { aditivos: { select: { aditivoId: true } } },
     }),
     carregarFornecedores(id),
     carregarClientes(id),
+    // As propostas em que ele está, para a pergunta de excluir dizer o que muda nelas.
+    db.orcamento.count({ where: { organizacaoId, itens: { some: { produtoId: id } } } }),
+    db.pedidoItem.count({ where: { produtoId: id } }),
   ]);
 
   if (!produto) notFound();
@@ -38,6 +42,14 @@ export default async function PaginaProduto({
    * só para o administrador: o preposto consulta o cadastro, não mexe nele.
    */
   const editavel = ehAdmin && parametros.editar === "1";
+
+  const avisoExclusao =
+    "Ele some do catálogo e não pode mais ser lançado em pedidos e propostas." +
+    (propostas > 0
+      ? ` ${propostas === 1 ? "Na proposta em que ele está" : `Nas ${propostas} propostas em que ele está`}, ` +
+        "a linha continua com o mesmo preço, mas volta a ser só a conta: para virar pedido, " +
+        "cadastre o produto de novo."
+      : "");
 
   return (
     <Pagina>
@@ -70,6 +82,8 @@ export default async function PaginaProduto({
             <BotaoExcluir
               rotulo="Excluir produto"
               nome={produto.descricao}
+              aviso={avisoExclusao}
+              impedimento={recusaExcluirProduto(itensDePedido)}
               acao={excluirProduto.bind(null, produto.id)}
             />
           </div>

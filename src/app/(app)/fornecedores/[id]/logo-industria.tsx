@@ -5,6 +5,7 @@ import { useActionState, useRef, useState } from "react";
 import { ImageUp } from "lucide-react";
 
 import { ErroGeral, Formulario } from "@/components/formulario";
+import { usePerguntaAntes } from "@/components/pergunta-antes";
 import { Botao, BotaoTexto, RodapeCampo, SecaoCartao } from "@/components/ui";
 import { erroDoCampo } from "@/lib/erro-formulario";
 
@@ -32,6 +33,17 @@ export function SecaoLogo({
   const [estado, enviar, enviando] = useActionState(salvar, {});
   const [previa, setPrevia] = useState<string | null>(null);
   const entrada = useRef<HTMLInputElement>(null);
+  const perguntaRemover = usePerguntaAntes(
+    {
+      titulo: `Remover o logo da ${nome}?`,
+      texto: "O PDF do pedido passa a sair sem logo até você enviar outro.",
+      rotulo: "Remover",
+    },
+    () => {
+      setPrevia(null);
+      if (entrada.current) entrada.current.value = "";
+    },
+  );
 
   // Recusado o arquivo, o navegador esvazia a escolha — e a prévia tem de ir
   // junto, senão "Salvar logo" ficava ativo mostrando uma imagem que não seria
@@ -110,14 +122,12 @@ export function SecaoLogo({
                   type="submit"
                   formAction={remover}
                   formNoValidate
-                  onClick={() => {
-                    setPrevia(null);
-                    if (entrada.current) entrada.current.value = "";
-                  }}
+                  onClick={perguntaRemover.aoClicar}
                 >
                   remover logo atual
                 </BotaoTexto>
               )}
+              {perguntaRemover.janela}
             </div>
           </div>
         )}

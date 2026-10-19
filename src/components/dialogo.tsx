@@ -20,12 +20,15 @@ export function Dialogo({
   aoFechar,
   titulo,
   descricao,
+  estreito = false,
   children,
 }: {
   aberto: boolean;
   aoFechar: () => void;
   titulo: string;
   descricao?: string;
+  /** Para a pergunta de sim ou não: a largura de formulário a deixava perdida. */
+  estreito?: boolean;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -59,9 +62,9 @@ export function Dialogo({
         if (evento.target === ref.current) aoFechar();
       }}
       aria-labelledby="dialogo-titulo"
-      className="m-auto w-[min(42rem,calc(100vw-2rem))] max-h-[calc(100dvh-2rem)] rounded-suave
-        bg-folha text-tinta shadow-[var(--sombra-alta)] p-0
-        backdrop:bg-black/45 backdrop:backdrop-blur-[2px]"
+      className={`m-auto ${estreito ? "w-[min(28rem,calc(100vw-2rem))]" : "w-[min(42rem,calc(100vw-2rem))]"} max-h-[calc(100dvh-2rem)] rounded-suave
+        bg-folha text-tinta text-left shadow-[var(--sombra-alta)] p-0
+        backdrop:bg-black/45 backdrop:backdrop-blur-[2px]`}
     >
       {aberto && (
         <div className="p-5 sm:p-6">

@@ -10,9 +10,9 @@
  * Sem `'use server'`: módulo puro, não expõe nada como ação.
  */
 
-import type { Familia } from "@/generated/prisma/enums";
+import type { Familia, UnidadeVenda } from "@/generated/prisma/enums";
 import { ErroDeCampo } from "@/lib/erro-formulario";
-import { exigirNumero } from "@/lib/numero-br";
+import { escreverNumeroBr, exigirNumero } from "@/lib/numero-br";
 
 export function lerTexto(valor: FormDataEntryValue | null): string | null {
   const texto = typeof valor === "string" ? valor.trim() : "";
@@ -321,4 +321,114 @@ export function formularioDaConta(
   if (extras.clienteId) formData.set("clienteId", extras.clienteId);
 
   return formData;
+}
+
+/** O que a linha da proposta guarda e que serve de começo de conta. */
+type LinhaSemConta = {
+  familia: Familia;
+  unidade: UnidadeVenda;
+  precoUnitario: { toString(): string };
+};
+
+/**
+ * A conta de uma linha que não guardou nenhuma — a que veio do SICOV, onde a
+ * proposta tinha só descrição e preço.
+ *
+ * Medida não há de onde tirar; o que dá é a família e o preço, no campo que
+ * responde por ele na unidade da linha (o espelho de `precoUnitario`). O saco
+ * por milheiro fica sem: ali o preço sai da conta das medidas, e o que a
+ * proposta cobrou volta a aparecer quando elas forem digitadas.
+ */
+export function contaDaLinha(linha: LinhaSemConta): Conta {
+  const conta: Conta = {
+    ...(Object.fromEntries(CAMPOS_DA_CONTA.map((campo) => [campo, ""])) as Record<
+      (typeof CAMPOS_DA_CONTA)[number],
+      string
+    >),
+    familia: linha.familia,
+    unidadeAvulsa: "UN",
+    aditivos: [],
+  };
+  const preco = escreverNumeroBr(linha.precoUnitario.toString(), 2);
+
+  switch (linha.familia) {
+    case "SACO":
+      conta.unidadeRotulo = linha.unidade;
+      if (linha.unidade === "KG") conta.fatorKg = preco;
+      break;
+    case "FITA":
+      if (linha.unidade === "CX") conta.precoCaixa = preco;
+      else conta.precoUnidade = preco;
+      break;
+    case "AVULSO":
+      conta.unidadeAvulsa = linha.unidade;
+      conta.precoAvulso = preco;
+      break;
+    default:
+      conta.precoKg = preco;
+  }
+
+  return conta;
+}
+
+type Coluna = { toString(): string } | null;
+
+/** As colunas do produto que formam a conta. */
+type ProdutoDaConta = {
+  familia: Familia;
+  material: string | null;
+  complemento: string | null;
+  unidadeRotulo: string | null;
+  larguraCm: Coluna;
+  comprimentoCm: Coluna;
+  espessuraMm: Coluna;
+  densidade: Coluna;
+  sanfona: string | null;
+  fatorKg: Coluna;
+  larguraMm: Coluna;
+  metragemM: Coluna;
+  micragem: Coluna;
+  unidadesPorCaixa: number | null;
+  precoUnidade: Coluna;
+  precoCaixa: Coluna;
+  precoKg: Coluna;
+  unidadeAvulsa: string | null;
+  precoAvulso: Coluna;
+  aditivos: string[];
+};
+
+/**
+ * O produto de volta a conta — o caminho inverso do "cadastrar todos".
+ *
+ * É o que deixa apagar o cliente sem perder a proposta: o produto dele some, a
+ * linha volta a ser conta com as mesmas medidas e, se o cliente for cadastrado
+ * de novo, "Cadastrar todos os produtos" refaz o produto sem redigitar. Os
+ * textos saem como na ficha do produto, para a releitura dar o mesmo número.
+ */
+export function contaDoProduto(produto: ProdutoDaConta): Conta {
+  const campo = (valor: Coluna, casas?: number) =>
+    valor === null ? "" : escreverNumeroBr(valor.toString(), casas);
+
+  return {
+    familia: produto.familia,
+    material: produto.material ?? "",
+    complemento: produto.complemento ?? "",
+    unidadeRotulo: produto.unidadeRotulo ?? "",
+    larguraCm: campo(produto.larguraCm),
+    comprimentoCm: campo(produto.comprimentoCm),
+    espessuraMm: campo(produto.espessuraMm),
+    densidade: campo(produto.densidade),
+    sanfona: produto.sanfona ?? "",
+    fatorKg: campo(produto.fatorKg, 2),
+    larguraMm: campo(produto.larguraMm),
+    metragemM: campo(produto.metragemM),
+    micragem: campo(produto.micragem),
+    unidadesPorCaixa: produto.unidadesPorCaixa?.toString() ?? "",
+    precoUnidade: campo(produto.precoUnidade, 2),
+    precoCaixa: campo(produto.precoCaixa, 2),
+    precoKg: campo(produto.precoKg, 2),
+    unidadeAvulsa: produto.unidadeAvulsa ?? "UN",
+    precoAvulso: campo(produto.precoAvulso, 2),
+    aditivos: produto.aditivos,
+  };
 }

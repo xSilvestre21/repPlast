@@ -9,7 +9,14 @@
 
 import { describe, expect, it } from "vitest";
 
-import { contaDoFormulario, dadosDoFormulario, formularioDaConta, lerConta } from "./leitura";
+import {
+  contaDaLinha,
+  contaDoFormulario,
+  contaDoProduto,
+  dadosDoFormulario,
+  formularioDaConta,
+  lerConta,
+} from "./leitura";
 
 function formulario(campos: Record<string, string>, aditivos: string[] = []): FormData {
   const formData = new FormData();
@@ -72,5 +79,65 @@ describe("conta do item", () => {
     expect(lerConta(null)).toBeNull();
     expect(lerConta({})).toBeNull();
     expect(lerConta([1, 2])).toBeNull();
+  });
+});
+
+describe("conta de quem não guardou uma", () => {
+  const preco = { toString: () => "17.98" };
+
+  it("a linha do SICOV leva família e preço, no campo da unidade dela", () => {
+    expect(contaDaLinha({ familia: "STRETCH", unidade: "KG", precoUnitario: preco })).toMatchObject(
+      { familia: "STRETCH", precoKg: "17,98" },
+    );
+    expect(contaDaLinha({ familia: "FITA", unidade: "CX", precoUnitario: preco })).toMatchObject({
+      precoCaixa: "17,98",
+    });
+    expect(contaDaLinha({ familia: "SACO", unidade: "KG", precoUnitario: preco })).toMatchObject({
+      fatorKg: "17,98",
+      unidadeRotulo: "KG",
+    });
+    expect(contaDaLinha({ familia: "AVULSO", unidade: "CX", precoUnitario: preco })).toMatchObject(
+      { precoAvulso: "17,98", unidadeAvulsa: "CX" },
+    );
+  });
+
+  it("o saco por milheiro fica sem preço: ele sai das medidas", () => {
+    const conta = contaDaLinha({ familia: "SACO", unidade: "MIL", precoUnitario: preco });
+    expect(conta.fatorKg).toBe("");
+    expect(conta.unidadeRotulo).toBe("MIL");
+  });
+
+  it("o produto volta a conta, e a conta relida dá o mesmo produto", () => {
+    const extras = { fornecedorId: "f", clienteId: "c", descricao: "30x40x0,06 S/SF PEAD" };
+    const produto = dadosDoFormulario(formulario({ ...SACO, ...extras }));
+    const coluna = (v: string | null | undefined) =>
+      v === null || v === undefined ? null : { toString: () => v };
+
+    const conta = contaDoProduto({
+      familia: produto.familia,
+      material: produto.material ?? null,
+      complemento: produto.complemento ?? null,
+      unidadeRotulo: produto.unidadeRotulo ?? null,
+      larguraCm: coluna(produto.larguraCm),
+      comprimentoCm: coluna(produto.comprimentoCm),
+      espessuraMm: coluna(produto.espessuraMm),
+      densidade: coluna(produto.densidade),
+      sanfona: produto.sanfona ?? null,
+      fatorKg: coluna(produto.fatorKg),
+      larguraMm: coluna(produto.larguraMm),
+      metragemM: coluna(produto.metragemM),
+      micragem: coluna(produto.micragem),
+      unidadesPorCaixa: produto.unidadesPorCaixa ?? null,
+      precoUnidade: coluna(produto.precoUnidade),
+      precoCaixa: coluna(produto.precoCaixa),
+      precoKg: coluna(produto.precoKg),
+      unidadeAvulsa: produto.unidadeAvulsa ?? null,
+      precoAvulso: coluna(produto.precoAvulso),
+      aditivos: ["a1"],
+    });
+
+    expect(conta.espessuraMm).toBe("0,06");
+    expect(conta.aditivos).toEqual(["a1"]);
+    expect(dadosDoFormulario(formularioDaConta(conta, extras))).toEqual(produto);
   });
 });

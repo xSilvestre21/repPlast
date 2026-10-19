@@ -449,7 +449,16 @@ function LinhaItem({
 
       {editavel && (
         <Celula alinhamento="acao">
-          <AcaoComRecusa acao={remover}>
+          <AcaoComRecusa
+            acao={remover}
+            confirmar={{
+              titulo: `Remover “${item.descricao}”?`,
+              texto:
+                `A linha sai, com a quantidade e o preço dela, e o total é recalculado sem ` +
+                `${formatarMoeda(item.total)}. Para trazê-la de volta, lance o item de novo.`,
+              rotulo: "Remover",
+            }}
+          >
             <input type="hidden" name="itemId" value={item.id} />
             <BotaoTexto
               type="submit"

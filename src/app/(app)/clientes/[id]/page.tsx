@@ -15,6 +15,7 @@ import { SecaoCompromissos } from "./compromissos";
 import { Building2, Pencil, UserRoundCheck, UserRoundX } from "lucide-react";
 import { Pagina } from "@/components/pagina";
 import { nomeCompleto } from "@/lib/nome-usuario";
+import { recusaExcluirCliente } from "@/lib/recusa-exclusao";
 
 export default async function PaginaCliente({
   params,
@@ -26,7 +27,7 @@ export default async function PaginaCliente({
   const { organizacaoId, db, usuarioId, ehAdmin } = escopo;
   const hoje = hojeIso();
 
-  const [cliente, produtos, compromissos] = await Promise.all([
+  const [cliente, produtos, compromissos, propostas, todosOsProdutos, pedidos] = await Promise.all([
     db.cliente.findFirst({
       where: { id, organizacaoId },
       include: { prepostos: { select: { usuarioId: true } } },
@@ -61,6 +62,10 @@ export default async function PaginaCliente({
         autor: { select: { nome: true, sobrenome: true } },
       },
     }),
+    // O que a exclusão leva junto, para o aviso dizer antes de apagar.
+    db.orcamento.count({ where: { organizacaoId, clienteId: id } }),
+    db.produto.count({ where: { organizacaoId, clienteId: id } }),
+    db.pedido.count({ where: { organizacaoId, clienteId: id } }),
   ]);
 
   if (!cliente) notFound();
@@ -76,6 +81,19 @@ export default async function PaginaCliente({
    * só para o administrador: o preposto consulta o cadastro, não mexe nele.
    */
   const editavel = ehAdmin && parametros.editar === "1";
+
+  const avisoExclusao = [
+    propostas > 0 &&
+      (propostas === 1
+        ? "A proposta dele volta a ser de quem ainda não é cliente."
+        : `As ${propostas} propostas dele voltam a ser de quem ainda não é cliente.`),
+    todosOsProdutos > 0 &&
+      (todosOsProdutos === 1
+        ? "O produto dele é apagado."
+        : `Os ${todosOsProdutos} produtos dele são apagados.`),
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <Pagina>
@@ -107,6 +125,8 @@ export default async function PaginaCliente({
             <BotaoExcluir
               rotulo="Excluir cliente"
               nome={cliente.apelido}
+              aviso={avisoExclusao || undefined}
+              impedimento={recusaExcluirCliente(pedidos)}
               acao={excluirCliente.bind(null, cliente.id)}
             />
           </div>

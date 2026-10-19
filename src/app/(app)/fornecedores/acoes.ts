@@ -14,6 +14,7 @@ import {
 import { definirUltimoNumeroPedido, lerUltimoNumeroPedido } from "@/lib/numeracao-pedido";
 import { normalizarCep, normalizarDocumento, normalizarTelefone } from "@/lib/mascara";
 import { exigirNumero, exigirNumeroDe } from "@/lib/numero-br";
+import { recusaExcluirIndustria } from "@/lib/recusa-exclusao";
 import { escopoAtual, exigirAdmin } from "@/lib/sessao";
 
 export type { EstadoFormulario };
@@ -183,14 +184,15 @@ export async function excluirFornecedor(
   try {
     const { organizacaoId, db } = await contexto();
 
-    const emUso = await db.produto.count({ where: { fornecedorId: id, organizacaoId } });
-    if (emUso > 0) {
-      const quantos = emUso === 1 ? "1 produto cadastrado" : `${emUso} produtos cadastrados`;
-      throw new ErroParaUsuario(
-        `Esta indústria tem ${quantos} e não pode ser excluída. Se você não a representa mais, ` +
-          `use “Marcar como inativa”: ela sai das listas e continua nos pedidos antigos.`,
-      );
-    }
+    // Pedido e proposta também guardam a indústria: sem contá-los, o banco
+    // recusava pela chave estrangeira e a pessoa via um erro sem explicação.
+    const [produtos, pedidos, propostas] = await Promise.all([
+      db.produto.count({ where: { fornecedorId: id, organizacaoId } }),
+      db.pedido.count({ where: { fornecedorId: id, organizacaoId } }),
+      db.orcamento.count({ where: { fornecedorId: id, organizacaoId } }),
+    ]);
+    const recusa = recusaExcluirIndustria({ produtos, pedidos, propostas });
+    if (recusa) throw new ErroParaUsuario(recusa);
 
     await db.fornecedor.deleteMany({ where: { id, organizacaoId } });
   } catch (erro) {

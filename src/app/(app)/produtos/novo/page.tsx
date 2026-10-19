@@ -6,7 +6,7 @@ import { escopoAtual } from "@/lib/sessao";
 import { criarProduto, criarProdutoDoItem } from "../acoes";
 import { carregarClientes, carregarFornecedores } from "../dados";
 import { FormularioProduto } from "../formulario";
-import { lerConta } from "../leitura";
+import { contaDaLinha, lerConta } from "../leitura";
 import { VALORES_VAZIOS } from "../valores";
 import { Factory, PackagePlus } from "lucide-react";
 import { Pagina } from "@/components/pagina";
@@ -62,6 +62,9 @@ export default async function PaginaNovoProduto({ searchParams }: PageProps<"/pr
           select: {
             id: true,
             descricao: true,
+            familia: true,
+            unidade: true,
+            precoUnitario: true,
             conta: true,
             orcamento: {
               select: { id: true, numero: true, clienteId: true, fornecedorId: true },
@@ -69,9 +72,17 @@ export default async function PaginaNovoProduto({ searchParams }: PageProps<"/pr
           },
         })
       : null;
-  const conta = item ? lerConta(item.conta) : null;
 
-  if (item && conta) {
+  if (item) {
+    /*
+     * A linha sem conta é a que veio do SICOV: lá a proposta guardava só a
+     * descrição e o preço. Exigir a conta aqui fazia a página cair em silêncio
+     * no cadastro comum — o produto saía solto e a linha continuava sem ele.
+     * Sem conta, o formulário nasce do que a linha sabe e as medidas ficam
+     * para quem cadastra.
+     */
+    const conta = lerConta(item.conta);
+
     return (
       <Pagina>
         <Cabecalho
@@ -81,14 +92,18 @@ export default async function PaginaNovoProduto({ searchParams }: PageProps<"/pr
           }}
           icone={PackagePlus}
           titulo="Novo produto"
-          descricao="A conta veio da proposta. Complete os códigos e salve — o item passa a ser este produto."
+          descricao={
+            conta
+              ? "A conta veio da proposta. Complete os códigos e salve — o item passa a ser este produto."
+              : "A proposta guardou só a descrição e o preço. Digite as medidas e os códigos e salve — o item passa a ser este produto."
+          }
         />
         <FormularioProduto
           fornecedores={fornecedores}
           clientes={clientes}
           valores={{
             ...VALORES_VAZIOS,
-            ...conta,
+            ...(conta ?? contaDaLinha(item)),
             fornecedorId: item.orcamento.fornecedorId,
             clienteId: item.orcamento.clienteId ?? "",
             descricao: item.descricao,

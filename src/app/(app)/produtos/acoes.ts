@@ -9,9 +9,10 @@ import {
   falhou,
   type EstadoFormulario,
 } from "@/lib/erro-formulario";
+import { recusaExcluirProduto } from "@/lib/recusa-exclusao";
 import { escopoAtual, exigirAdmin } from "@/lib/sessao";
 
-import { dadosDoFormulario, lerAditivos } from "./leitura";
+import { contaDoProduto, dadosDoFormulario, lerAditivos } from "./leitura";
 
 export type { EstadoFormulario };
 
@@ -239,13 +240,28 @@ export async function excluirProduto(
   try {
     const { organizacaoId, db } = await contexto();
 
-    const emPedidos = await db.pedidoItem.count({ where: { produtoId: id } });
-    if (emPedidos > 0) {
-      const onde = emPedidos === 1 ? "1 pedido" : `${emPedidos} itens de pedido`;
-      throw new ErroParaUsuario(
-        `Este produto está em ${onde} e não pode ser excluído. Se não é mais vendido, use ` +
-          `“Marcar como inativo”: sai das listas e continua nos pedidos antigos.`,
-      );
+    const recusa = recusaExcluirProduto(await db.pedidoItem.count({ where: { produtoId: id } }));
+    if (recusa) throw new ErroParaUsuario(recusa);
+
+    /*
+     * A linha de proposta que usava o produto volta a ser conta, com as
+     * medidas dele — o mesmo que acontece ao apagar o cliente. Sem isso ela
+     * ficava sem produto e sem medida, e a proposta só viraria pedido
+     * redigitando a conta.
+     */
+    const produto = await db.produto.findFirst({
+      where: { id, organizacaoId },
+      include: { aditivos: { select: { aditivoId: true } } },
+    });
+    if (produto) {
+      const { aditivos, ...colunas } = produto;
+      await db.orcamentoItem.updateMany({
+        where: { produtoId: id },
+        data: {
+          produtoId: null,
+          conta: contaDoProduto({ ...colunas, aditivos: aditivos.map((a) => a.aditivoId) }),
+        },
+      });
     }
 
     await db.produto.deleteMany({ where: { id, organizacaoId } });

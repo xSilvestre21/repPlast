@@ -39,6 +39,7 @@ import { mascararMoeda } from "@/lib/mascara";
 import { dividirIgual, lerPrazoEmDias, restanteDaBase, somarDias } from "@/lib/parcelas";
 
 import { ErroGeral, Formulario } from "@/components/formulario";
+import { usePerguntaAntes } from "@/components/pergunta-antes";
 import { campoDaLinha, erroDoCampo } from "@/lib/erro-formulario";
 
 import type { EstadoFormulario } from "./acoes";
@@ -96,6 +97,19 @@ export function EditorParcelas({
   const [estadoDesfazer, enviarDesfazer, desfazendo] = useActionState<EstadoFormulario, FormData>(
     desfazer ?? (async () => ({})),
     {},
+  );
+
+  const perguntaDesfazer = usePerguntaAntes(
+    desfazer
+      ? {
+          titulo: "Desfazer o parcelamento?",
+          texto:
+            `As ${atuais.length} parcelas são apagadas e o pedido volta a contar inteiro, ` +
+            `${formatarMoeda(Number(venda))}, no mês da entrega. Para parcelar de novo, use ` +
+            "“Parcelar o recebimento” outra vez.",
+          rotulo: "Desfazer",
+        }
+      : undefined,
   );
 
   const sugeridos = lerPrazoEmDias(prazoSugerido);
@@ -330,6 +344,7 @@ export function EditorParcelas({
               <BotaoTexto
                 type="submit"
                 formAction={enviarDesfazer}
+                onClick={perguntaDesfazer.aoClicar}
                 disabled={desfazendo}
                 perigoso
                 className="ml-auto"
@@ -337,6 +352,7 @@ export function EditorParcelas({
                 {desfazendo ? "desfazendo…" : "desfazer parcelamento"}
               </BotaoTexto>
             )}
+            {perguntaDesfazer.janela}
             <BotaoTexto type="button" onClick={aoFechar}>
               cancelar
             </BotaoTexto>

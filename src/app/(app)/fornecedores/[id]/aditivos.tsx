@@ -74,7 +74,16 @@ export function SecaoAditivos({
                   nota={ROTULO_TIPO[aditivo.tipo]}
                 />
                 {editavel && (
-                  <AcaoComRecusa acao={remover}>
+                  <AcaoComRecusa
+                    acao={remover}
+                    confirmar={{
+                      titulo: `Remover o aditivo ${aditivo.nome}?`,
+                      texto:
+                        "Ele deixa de aparecer para marcar nos produtos e nas contas desta " +
+                        "indústria. Esta ação não pode ser desfeita.",
+                      rotulo: "Remover",
+                    }}
+                  >
                     <input type="hidden" name="aditivoId" value={aditivo.id} />
                     <BotaoTexto type="submit" perigoso aria-label={`Remover aditivo ${aditivo.nome}`}>
                       remover

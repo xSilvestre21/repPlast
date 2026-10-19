@@ -2,6 +2,7 @@
 
 import { useActionState, type ComponentProps, type ReactNode } from "react";
 
+import { type Pergunta, usePerguntaAntes } from "@/components/pergunta-antes";
 import type { EstadoFormulario } from "@/lib/erro-formulario";
 
 /**
@@ -17,15 +18,19 @@ export function AcaoComRecusa({
   acao,
   children,
   alinhamento = "fim",
+  confirmar,
   className = "",
   ...props
-}: Omit<ComponentProps<"form">, "action" | "children"> & {
+}: Omit<ComponentProps<"form">, "action" | "children" | "onSubmit"> & {
   acao: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   children: ReactNode;
   /** De que lado a frase se alinha: com o botão no fim da linha, no fim. */
   alinhamento?: "inicio" | "fim";
+  /** A pergunta antes de enviar — toda ação que apaga passa por ela. */
+  confirmar?: Pergunta;
 }) {
   const [estado, enviar] = useActionState(acao, {});
+  const pergunta = usePerguntaAntes(confirmar);
 
   return (
     <form
@@ -34,8 +39,10 @@ export function AcaoComRecusa({
       // meio de um texto (o "todos" do cabeçalho do IPI) não quebra a linha.
       className={`inline-flex flex-col ${alinhamento === "fim" ? "items-end text-right" : "items-start"} ${className}`}
       {...props}
+      onSubmit={pergunta.aoEnviar}
     >
       {children}
+      {pergunta.janela}
       {estado.erro && (
         <p role="alert" className="surgir mt-1.5 max-w-xs text-mini text-perigo">
           {estado.erro}

@@ -51,8 +51,9 @@ vi.mock("next/navigation", () => ({
 
 const { adicionarItem, adicionarItemPorConta, cadastrarProdutosDaProposta, converterEmPedido } =
   await import("./acoes");
-const { criarClienteDaProposta } = await import("../clientes/acoes");
-const { criarProdutoDoItem } = await import("../produtos/acoes");
+const { criarClienteDaProposta, excluirCliente } = await import("../clientes/acoes");
+const { criarProdutoDoItem, excluirProduto } = await import("../produtos/acoes");
+const { excluirFornecedor } = await import("../fornecedores/acoes");
 
 let fornecedorId = "";
 let aditivoId = "";
@@ -269,6 +270,182 @@ describe("depois de cadastrar o cliente", () => {
     expect(pedido.clienteId).toBe(clienteId);
     expect(pedido.itens.every((i) => i.produtoId !== null)).toBe(true);
   });
+
+  it("o cliente que já tem pedido não pode ser apagado", async () => {
+    const estado = await excluirCliente(clienteId, {}, new FormData());
+    expect(estado.erro).toMatch(/1 pedido/);
+    expect(await admin.cliente.count({ where: { id: clienteId } })).toBe(1);
+  });
+});
+
+describe("linha vinda do SICOV, sem conta guardada", () => {
+  it("vira produto pelo Novo produto e o item passa a ser ele", async () => {
+    const cliente = await admin.cliente.create({
+      data: { organizacaoId: sessao.organizacaoId, apelido: "CAIO", razaoSocial: "CAIO LTDA" },
+    });
+    const proposta = await admin.orcamento.create({
+      data: {
+        organizacaoId: sessao.organizacaoId,
+        fornecedorId,
+        clienteId: cliente.id,
+        numero: 3,
+        itens: {
+          create: {
+            ordem: 1,
+            familia: "STRETCH",
+            descricao: "Filme Stretch 500x17",
+            unidade: "KG",
+            quantidade: "100",
+            precoUnitario: "17.98",
+            totalSemIpi: "1798",
+            valorIpi: "0",
+            total: "1798",
+          },
+        },
+      },
+      include: { itens: true },
+    });
+    const [item] = proposta.itens;
+    expect(item.conta).toBeNull();
+
+    const salvar = criarProdutoDoItem(
+      item.id,
+      {},
+      formulario({
+        familia: "STRETCH",
+        material: "Stretch",
+        precoKg: "17,98",
+        descricao: item.descricao,
+        fornecedorId,
+        clienteId: cliente.id,
+      }),
+    );
+    await expect(salvar).rejects.toMatchObject({ destino: `/orcamentos/${proposta.id}` });
+
+    const ligado = await admin.orcamentoItem.findUniqueOrThrow({
+      where: { id: item.id },
+      include: { produto: true },
+    });
+    expect(ligado.produto?.clienteId).toBe(cliente.id);
+    expect(ligado.produto?.precoKg?.toString()).toBe("17.98");
+  });
+});
+
+describe("apagar o cliente cadastrado pela proposta", () => {
+  let propostaId = "";
+  let clienteId = "";
+
+  beforeAll(async () => {
+    const proposta = await admin.orcamento.create({
+      data: {
+        organizacaoId: sessao.organizacaoId,
+        fornecedorId,
+        clienteAvulsoNome: "DU QUIMICA",
+        clienteAvulsoMunicipio: "Rio Claro",
+        numero: 4,
+      },
+    });
+    propostaId = proposta.id;
+
+    const estado = await adicionarItemPorConta(propostaId, {}, formulario(SACO, [aditivoId]));
+    expect(estado.erro).toBeUndefined();
+
+    const cadastro = criarClienteDaProposta(
+      propostaId,
+      {},
+      formulario({
+        apelido: "DU QUIMICA",
+        razaoSocial: "DU QUIMICA LTDA",
+        municipio: "Rio Claro",
+        cnpj: "",
+      }),
+    );
+    await expect(cadastro).rejects.toMatchObject({ destino: `/orcamentos/${propostaId}` });
+    const ligada = await admin.orcamento.findUniqueOrThrow({ where: { id: propostaId } });
+    clienteId = ligada.clienteId!;
+
+    const todos = await cadastrarProdutosDaProposta(propostaId, {}, new FormData());
+    expect(todos.erro).toBeUndefined();
+  });
+
+  it("a proposta volta a ser de quem não é cliente, com nome e cidade", async () => {
+    const apagar = excluirCliente(clienteId, {}, new FormData());
+    await expect(apagar).rejects.toMatchObject({ destino: "/clientes" });
+
+    const proposta = await admin.orcamento.findUniqueOrThrow({
+      where: { id: propostaId },
+      include: { itens: true },
+    });
+    expect(proposta.clienteId).toBeNull();
+    expect(proposta.clienteAvulsoNome).toBe("DU QUIMICA");
+    expect(proposta.clienteAvulsoMunicipio).toBe("Rio Claro");
+
+    // A linha volta a ser conta, com as medidas do produto que foi apagado.
+    const [item] = proposta.itens;
+    expect(item.produtoId).toBeNull();
+    expect(item.conta).toMatchObject({
+      familia: "SACO",
+      espessuraMm: "0,06",
+      fatorKg: "14,00",
+      aditivos: [aditivoId],
+    });
+    expect(item.precoUnitario.toString()).toBe("108");
+
+    expect(await admin.cliente.count({ where: { id: clienteId } })).toBe(0);
+    expect(await admin.produto.count({ where: { clienteId } })).toBe(0);
+  });
+
+  it("e recadastrar o cliente refaz o produto com Cadastrar todos", async () => {
+    const cadastro = criarClienteDaProposta(
+      propostaId,
+      {},
+      formulario({ apelido: "DU QUIMICA", razaoSocial: "DU QUIMICA LTDA", cnpj: "" }),
+    );
+    await expect(cadastro).rejects.toMatchObject({ destino: `/orcamentos/${propostaId}` });
+
+    const todos = await cadastrarProdutosDaProposta(propostaId, {}, new FormData());
+    expect(todos.erro).toBeUndefined();
+
+    const item = await admin.orcamentoItem.findFirstOrThrow({
+      where: { orcamentoId: propostaId },
+      include: { produto: { include: { aditivos: true } } },
+    });
+    expect(item.produto?.espessuraMm?.toString()).toBe("0.06");
+    expect(item.produto?.fatorKg?.toString()).toBe("14");
+    expect(item.produto?.aditivos.map((a) => a.aditivoId)).toEqual([aditivoId]);
+  });
+
+  it("excluir o produto devolve a linha à conta, com as medidas dele", async () => {
+    const antes = await admin.orcamentoItem.findFirstOrThrow({ where: { orcamentoId: propostaId } });
+
+    const apagar = excluirProduto(antes.produtoId!, {}, new FormData());
+    await expect(apagar).rejects.toMatchObject({ destino: "/produtos" });
+
+    const depois = await admin.orcamentoItem.findUniqueOrThrow({ where: { id: antes.id } });
+    expect(depois.produtoId).toBeNull();
+    expect(depois.conta).toMatchObject({ espessuraMm: "0,06", aditivos: [aditivoId] });
+    expect(depois.precoUnitario.toString()).toBe("108");
+  });
+});
+
+describe("excluir indústria", () => {
+  it("com proposta, recusa dizendo por quê — em vez do erro do banco", async () => {
+    const industria = await admin.fornecedor.create({
+      data: { organizacaoId: sessao.organizacaoId, nome: "SÓ COM PROPOSTA" },
+    });
+    await admin.orcamento.create({
+      data: {
+        organizacaoId: sessao.organizacaoId,
+        fornecedorId: industria.id,
+        clienteAvulsoNome: "ALGUÉM",
+        numero: 6,
+      },
+    });
+
+    const estado = await excluirFornecedor(industria.id, {}, new FormData());
+    expect(estado.erro).toMatch(/1 proposta e não pode ser excluída/);
+    expect(await admin.fornecedor.count({ where: { id: industria.id } })).toBe(1);
+  });
 });
 
 describe("saco vendido por quilo", () => {
@@ -278,7 +455,7 @@ describe("saco vendido por quilo", () => {
         organizacaoId: sessao.organizacaoId,
         fornecedorId,
         clienteAvulsoNome: "QUEM COMPRA A PESO",
-        numero: 2,
+        numero: 5,
       },
     });
 

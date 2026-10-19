@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Excluir um registro, com a pergunta antes.
+ * Excluir um registro, com a pergunta antes (`usePerguntaAntes`).
  *
  * Existia três vezes — clientes, produtos e indústrias —, com trinta e quatro
  * linhas idênticas em cada e diferindo só no rótulo do botão. A terceira cópia
@@ -36,6 +36,7 @@ export function BotaoExcluir({
   rotulo,
   nome,
   aviso,
+  impedimento,
   acao,
 }: {
   /** O que o botão diz: "Excluir cliente", "Excluir indústria". */
@@ -44,14 +45,21 @@ export function BotaoExcluir({
   nome: string;
   /** O que mais vai junto. Só onde a exclusão leva outra coisa embora. */
   aviso?: string;
+  /** Por que não dá para excluir — a janela diz isso em vez de perguntar. */
+  impedimento?: string | null;
   acao: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
 }) {
+  // "Excluir cliente" pergunta "Excluir…?"; "Apagar" pergunta "Apagar…?".
+  const verbo = rotulo.split(" ")[0];
+
   return (
     <AcaoComRecusa
       acao={acao}
-      onSubmit={(evento) => {
-        const pergunta = aviso ? `Excluir "${nome}"? ${aviso}` : `Excluir "${nome}"?`;
-        if (!confirm(pergunta)) evento.preventDefault();
+      confirmar={{
+        titulo: `${verbo} “${nome}”?`,
+        texto: aviso ? `${aviso} Esta ação não pode ser desfeita.` : undefined,
+        rotulo: verbo,
+        impedimento,
       }}
     >
       <Submissao rotulo={rotulo} />

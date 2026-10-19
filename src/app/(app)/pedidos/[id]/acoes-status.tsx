@@ -78,7 +78,8 @@ export function AcaoPedido({
   rotulo: string;
   rotuloOcupado: string;
   variante?: Variante;
-  confirmacao?: string;
+  /** A pergunta antes de disparar; o botão da janela repete o rótulo. */
+  confirmacao?: { titulo: string; texto: string };
   icone?: NomeDeIcone;
   acao: AcaoDeStatus;
 }) {
@@ -86,9 +87,15 @@ export function AcaoPedido({
     <AcaoComRecusa
       acao={acao}
       alinhamento="inicio"
-      onSubmit={(evento) => {
-        if (confirmacao && !confirm(confirmacao)) evento.preventDefault();
-      }}
+      confirmar={
+        confirmacao
+          ? {
+              ...confirmacao,
+              rotulo,
+              perigo: variante === "perigo",
+            }
+          : undefined
+      }
     >
       <Submissao
         rotulo={rotulo}

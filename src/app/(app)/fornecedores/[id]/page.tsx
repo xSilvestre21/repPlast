@@ -30,6 +30,8 @@ import { Check, CircleCheck, CircleOff, Factory, Pencil } from "lucide-react";
 import { Pagina } from "@/components/pagina";
 import { nomeCompleto } from "@/lib/nome-usuario";
 import { soIndustriasMarcadas } from "@/lib/industrias-do-ator";
+import { emFrase, quantos } from "@/lib/quantos";
+import { recusaExcluirIndustria } from "@/lib/recusa-exclusao";
 
 export default async function PaginaFornecedor({
   params,
@@ -68,6 +70,30 @@ export default async function PaginaFornecedor({
    * cadastro, não mexe nele.
    */
   const editavel = ehAdmin && parametros.editar === "1";
+
+  // Se dá para excluir, e o que a exclusão leva junto — dito antes do clique.
+  const [produtosDela, pedidosDela, propostasDela] = ehAdmin
+    ? await Promise.all([
+        db.produto.count({ where: { organizacaoId, fornecedorId: id } }),
+        db.pedido.count({ where: { organizacaoId, fornecedorId: id } }),
+        db.orcamento.count({ where: { organizacaoId, fornecedorId: id } }),
+      ])
+    : [0, 0, 0];
+  const impedimentoExclusao = recusaExcluirIndustria({
+    produtos: produtosDela,
+    pedidos: pedidosDela,
+    propostas: propostasDela,
+  });
+  const vaiJunto = [
+    fornecedor.contatos.length > 0 && quantos(fornecedor.contatos.length, "contato", "contatos"),
+    fornecedor.materiais.length > 0 &&
+      quantos(fornecedor.materiais.length, "material com a tabela de preço", "materiais com a tabela de preço"),
+    fornecedor.aditivos.length > 0 && quantos(fornecedor.aditivos.length, "aditivo", "aditivos"),
+    fornecedor.logoTipo !== null && "o logo",
+  ].filter((parte): parte is string => typeof parte === "string");
+  const avisoExclusao =
+    (vaiJunto.length > 0 ? `Vão junto: ${emFrase(vaiJunto)}. ` : "") +
+    "Ela some das listas e não pode mais ser escolhida em pedidos e propostas.";
 
   /*
    * A seção de quem atende só faz sentido para o administrador de um escritório
@@ -125,7 +151,8 @@ export default async function PaginaFornecedor({
             <BotaoExcluir
               rotulo="Excluir indústria"
               nome={fornecedor.nome}
-              aviso="Os aditivos dela serão removidos junto."
+              aviso={avisoExclusao}
+              impedimento={impedimentoExclusao}
               acao={excluirFornecedor.bind(null, fornecedor.id)}
             />
           </div>
