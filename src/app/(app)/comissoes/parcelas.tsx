@@ -15,6 +15,10 @@
  *     sobra, então diminuir uma empurra a diferença para frente sem a pessoa
  *     fazer conta.
  *
+ * E quando a indústria paga: no mês do vencimento, ou só no mês seguinte ao
+ * faturamento que fecha num dia — aí cada linha diz em que mês a comissão
+ * dela entra. Abre com a sugestão da indústria e é deste pedido: há exceção.
+ *
  * As contas são as de `lib/parcelas.ts`, as mesmas que o servidor confere ao
  * gravar.
  */
@@ -36,13 +40,20 @@ import {
 } from "@/components/ui";
 import { ratearComissao } from "@/lib/comissao";
 import { mascararMoeda } from "@/lib/mascara";
-import { dividirIgual, lerPrazoEmDias, restanteDaBase, somarDias } from "@/lib/parcelas";
+import {
+  dividirIgual,
+  lerPrazoEmDias,
+  mesDoRecebimento,
+  restanteDaBase,
+  somarDias,
+} from "@/lib/parcelas";
 
 import { ErroGeral, Formulario } from "@/components/formulario";
 import { usePerguntaAntes } from "@/components/pergunta-antes";
 import { campoDaLinha, erroDoCampo } from "@/lib/erro-formulario";
 
 import type { EstadoFormulario } from "./acoes";
+import { usePagamentoComissao } from "./pagamento-comissao";
 
 type Acao = (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
 
@@ -66,12 +77,14 @@ function mesDe(iso: string): string {
   return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? MES.format(new Date(`${iso}T00:00:00Z`)) : "";
 }
 
+
 export function EditorParcelas({
   venda,
   percentual,
   percentualPreposto,
   dataBase,
   prazoSugerido,
+  fechamento,
   atuais,
   salvar,
   desfazer,
@@ -86,6 +99,11 @@ export function EditorParcelas({
   /** "AAAA-MM-DD" de onde os dias contam: a entrega prevista. */
   dataBase: string;
   prazoSugerido: string | null;
+  /**
+   * O dia em que a indústria fecha o faturamento, "30" — o do pedido, que
+   * nasce com o da indústria. Vazio: mês do vencimento.
+   */
+  fechamento: string;
   /** As parcelas que o pedido já tem. Vazio: parcelamento novo. */
   atuais: Linha[];
   salvar: Acao;
@@ -105,7 +123,8 @@ export function EditorParcelas({
           titulo: "Desfazer o parcelamento?",
           texto:
             `As ${atuais.length} parcelas são apagadas e o pedido volta a contar inteiro, ` +
-            `${formatarMoeda(Number(venda))}, no mês da entrega. Para parcelar de novo, use ` +
+            `${formatarMoeda(Number(venda))}, no mês da entrega (ou no seguinte, se a indústria só paga ` +
+            "depois de faturar). Para parcelar de novo, use " +
             "“Parcelar o recebimento” outra vez.",
           rotulo: "Desfazer",
         }
@@ -122,6 +141,7 @@ export function EditorParcelas({
   const [geracao, setGeracao] = useState(0);
   const [erroDias, setErroDias] = useState<string | null>(null);
   const idDias = useId();
+  const { fechaNoDia, campos: camposPagamento } = usePagamentoComissao(fechamento);
 
   // Fecha ao salvar sem erro — o mesmo ajuste de estado do acerto e da meta.
   const [estadoVisto, setEstadoVisto] = useState(estado);
@@ -234,11 +254,20 @@ export function EditorParcelas({
 
       {linhas.length > 0 && (
         <Formulario estado={estado} action={enviar} className="space-y-3">
+          {/*
+            Antes das parcelas, porque muda o mês de todas: há indústria que
+            fatura até um dia e só paga a comissão no mês seguinte.
+          */}
+          {camposPagamento}
+
           <ol className="space-y-2">
             {linhas.map((linha, i) => {
               const ultima = i === linhas.length - 1;
               const valor = ultima ? restante : paraDecimal(linha.valor);
               const rende = restanteInvalido ? null : comissao(valor);
+              const vence = /^\d{4}-\d{2}-\d{2}$/.test(linha.vencimento) ? linha.vencimento : null;
+              const recebe =
+                vence && fechaNoDia !== null ? mesDoRecebimento(vence, fechaNoDia) : null;
               // O erro desta parcela — data ou valor —, dito logo embaixo dela.
               const erroDaLinha =
                 erroDoCampo(estado, campoDaLinha("vencimento", i)) ??
@@ -289,7 +318,16 @@ export function EditorParcelas({
                   )}
 
                   <span className="text-mini text-tinta-3 leading-snug">
-                    {mesDe(linha.vencimento)}
+                    {recebe ? (
+                      <>
+                        vence {mesDe(linha.vencimento)}
+                        <span className="block text-carimbo font-semibold">
+                          → recebe {mesDe(`${recebe}-01`)}
+                        </span>
+                      </>
+                    ) : (
+                      mesDe(linha.vencimento)
+                    )}
                     {rende && (
                       <>
                         <span className="block numerico">comissão {rende.total}</span>
@@ -360,7 +398,7 @@ export function EditorParcelas({
 
           <p className="text-mini text-tinta-3 leading-relaxed">
             Venda de {formatarMoeda(Number(venda))}. Mude o valor de qualquer parcela: a última fica
-            com o restante. Cada parcela conta na comissão do mês em que vence.
+            com o restante. Cada parcela conta na comissão do mês em que a indústria a paga.
           </p>
         </Formulario>
       )}

@@ -890,7 +890,7 @@ async function gerarPedido(orcamentoId: string): Promise<string> {
     include: {
       itens: { orderBy: { ordem: "asc" } },
       cliente: { select: { apelido: true, observacoes: true } },
-      fornecedor: { select: { comissaoPercentual: true } },
+      fornecedor: { select: { comissaoPercentual: true, diaFechamentoComissao: true } },
     },
   });
 
@@ -964,6 +964,8 @@ async function gerarPedido(orcamentoId: string): Promise<string> {
       // O IPI vem da proposta, não do cadastro: é a alíquota que o cliente viu.
       ipiPercentual: orcamento.ipiPercentual,
       comissaoPercentual: orcamento.fornecedor.comissaoPercentual,
+      // Nasce com o fechamento da indústria, como no pedido lançado direto.
+      diaFechamentoComissao: orcamento.fornecedor.diaFechamentoComissao,
       prazoPagamento: orcamento.prazoPagamento,
       /*
        * As observações são as do CLIENTE, e não as da proposta.

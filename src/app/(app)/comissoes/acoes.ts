@@ -88,21 +88,30 @@ export async function definirMeta(
  *
  * O mesmo formulário serve ao pedido inteiro e a cada parcela, então a leitura
  * é uma só — as duas formas de acertar não podem aceitar coisas diferentes.
+ *
+ * O botão "desfazer acerto" envia o mesmo formulário com `desfazer=sim`: o
+ * valor e o % saem, seja o que for que esteja nos campos, e a data de entrega
+ * fica como está nela.
  */
 function lerAcerto(formData: FormData): {
   valor: string | null;
   percentual: string | null;
   entregueEm: Date | null;
 } {
-  const valor = exigirNumero(formData, "valorRecebido", "o valor recebido", {
-    min: 0,
-    exemplo: "1.250,00",
-  });
-  const percentual = exigirNumero(formData, "comissaoPercentualRecebido", "o percentual", {
-    min: 0,
-    max: 100,
-    exemplo: "5",
-  });
+  const desfazer = formData.get("desfazer") === "sim";
+  const valor = desfazer
+    ? null
+    : exigirNumero(formData, "valorRecebido", "o valor recebido", {
+        min: 0,
+        exemplo: "1.250,00",
+      });
+  const percentual = desfazer
+    ? null
+    : exigirNumero(formData, "comissaoPercentualRecebido", "o percentual", {
+        min: 0,
+        max: 100,
+        exemplo: "5",
+      });
 
   // Meio acerto não é acerto: sem os dois, a comissão recebida não existe. A
   // frase vai para o campo que ficou vazio.
@@ -110,8 +119,8 @@ function lerAcerto(formData: FormData): {
     throw new ErroDeCampo(
       valor === null ? "valorRecebido" : "comissaoPercentualRecebido",
       valor === null
-        ? "Informe também o valor recebido — o acerto precisa dos dois. Para desfazer o acerto, apague os dois."
-        : "Informe também o percentual — o acerto precisa dos dois. Para desfazer o acerto, apague os dois.",
+        ? "Informe também o valor recebido — o acerto precisa dos dois. Para desfazer um acerto, use “desfazer acerto”."
+        : "Informe também o percentual — o acerto precisa dos dois. Para desfazer um acerto, use “desfazer acerto”.",
     );
   }
 
@@ -133,6 +142,25 @@ function lerAcerto(formData: FormData): {
 }
 
 /**
+ * Quando a indústria paga a comissão, como veio da escolha da tela
+ * (`pagamento-comissao.tsx`): o dia do fechamento, `null` para o mês do
+ * vencimento, ou `undefined` quando o formulário não traz a escolha — aí o
+ * Prisma não mexe no que está gravado.
+ */
+function lerFechamento(formData: FormData): number | null | undefined {
+  const pagamento = formData.get("pagamento");
+  if (pagamento === null) return undefined;
+  if (pagamento !== "seguinte") return null;
+  return exigirNumero(formData, "diaFechamentoComissao", "o dia em que a indústria fecha o faturamento", {
+    obrigatorio: true,
+    inteiro: true,
+    min: 1,
+    max: 31,
+    exemplo: "30",
+  });
+}
+
+/**
  * Lança o acerto da comissão de um pedido: o que a indústria pagou de fato.
  *
  * Os campos se apagam juntos: deixar tudo em branco desfaz o acerto e o pedido
@@ -151,6 +179,7 @@ export async function salvarAcerto(
     const { organizacaoId, db } = await escopoAtual();
 
     const acerto = lerAcerto(formData);
+    const diaFechamento = lerFechamento(formData);
 
     if ((await db.parcelaRecebimento.count({ where: { pedidoId } })) > 0) {
       throw new ErroParaUsuario(
@@ -165,6 +194,7 @@ export async function salvarAcerto(
         valorRecebido: acerto.valor,
         comissaoPercentualRecebido: acerto.percentual,
         entregueEm: acerto.entregueEm,
+        diaFechamentoComissao: diaFechamento,
       },
     });
 
@@ -246,6 +276,9 @@ export async function salvarAcertoParcela(
  *
  * Recusa o pedido que já tem acerto lançado nele inteiro: parcelar por cima
  * esconderia esse acerto, que deixaria de contar sem ninguém ter desfeito.
+ *
+ * Grava junto quando a indústria paga estas parcelas (`lerFechamento`). É do
+ * pedido, que nasce com o da indústria e pode trocar.
  */
 export async function salvarParcelas(
   pedidoId: string,
@@ -281,6 +314,8 @@ export async function salvarParcelas(
       });
       return { numero: i + 1, vencimento, base: base.toFixed(2) };
     });
+
+    const diaFechamento = lerFechamento(formData);
 
     const pedido = await db.pedido.findFirst({
       where: { id: pedidoId, organizacaoId },
@@ -324,6 +359,7 @@ export async function salvarParcelas(
     await db.pedido.update({
       where: { id: pedidoId, organizacaoId },
       data: {
+        diaFechamentoComissao: diaFechamento,
         parcelas: {
           deleteMany: { numero: { gt: parcelas.length } },
           upsert: parcelas.map((p) => ({
@@ -343,7 +379,9 @@ export async function salvarParcelas(
 }
 
 /**
- * Desfaz o parcelamento: o pedido volta a contar inteiro no mês da entrega.
+ * Desfaz o parcelamento: o pedido volta a contar inteiro no mês da entrega —
+ * ou no seguinte, se a indústria só paga depois de faturar: o fechamento é do
+ * pedido, não das parcelas, e fica.
  *
  * Só sem acerto em nenhuma parcela — apagar uma parcela paga apagaria o
  * registro do que a indústria pagou.

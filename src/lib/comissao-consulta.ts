@@ -13,7 +13,6 @@
 import Decimal from "decimal.js";
 
 import {
-  competenciaDoPedido,
   deslocarCompetencia,
   intervaloDaCompetenciaUtc,
   mesesDeMetaBatida,
@@ -25,6 +24,7 @@ import {
 } from "./comissao";
 import type { DbOrganizacao } from "./db";
 import { nomeCompleto } from "./nome-usuario";
+import { mesDoRecebimento } from "./parcelas";
 
 export interface PedidoDaComissao {
   id: string;
@@ -46,10 +46,16 @@ export interface PedidoDaComissao {
   fornecedor: { id: string; nome: string; comissaoPercentual: { toString(): string } };
   /** "28/35/42" — de onde o editor de parcelas tira os dias sugeridos. */
   prazoPagamento: string | null;
+  /**
+   * O dia em que a indústria fecha o faturamento deste pedido: com ele, o
+   * pedido (ou cada parcela) conta no mês em que ela paga (`mesDoRecebimento`).
+   */
+  diaFechamentoComissao: number | null;
 
   /**
-   * O mês em que ESTE item conta. Para o pedido inteiro, a entrega; para uma
-   * parcela, o vencimento dela. É por aqui que tudo agrupa por mês — não mais
+   * O mês em que ESTE item conta: o da entrega (pedido inteiro) ou o do
+   * vencimento (parcela) — ou depois dele, quando a indústria só paga após
+   * faturar (`mesDoRecebimento`). É por aqui que tudo agrupa por mês — não mais
    * por `competenciaDoPedido`, que não sabe de parcela.
    */
   competencia: string;
@@ -58,7 +64,14 @@ export interface PedidoDaComissao {
    * `subtotalSemIpi` e o acerto deixam de ser os do pedido e passam a ser os
    * dela (ver `expandirParcelas`).
    */
-  parcela: { id: string; numero: number; total: number; vencimento: Date } | null;
+  parcela: {
+    id: string;
+    numero: number;
+    total: number;
+    vencimento: Date;
+    /** "AAAA-MM" em que a indústria paga — igual a `competencia`. */
+    recebimento: string;
+  } | null;
   /** A venda inteira do pedido, mesmo quando o item é só uma parcela dela. */
   vendaDoPedido: { toString(): string };
   /** Todas as parcelas do pedido — o editor reabre com elas. Vazio sem parcelas. */
@@ -85,8 +98,8 @@ type PedidoBruto = Omit<
  * parcela.
  *
  * É aqui — e só aqui — que o parcelamento acontece. Cada parcela sai com a
- * base e o acerto DELA no lugar dos do pedido, e com o mês do vencimento como
- * competência; daí para frente `resumirComissao`, a meta, os gráficos e o CSV
+ * base e o acerto DELA no lugar dos do pedido, e com o mês em que a indústria
+ * a paga como competência (o do vencimento, sem fechamento no pedido); daí para frente `resumirComissao`, a meta, os gráficos e o CSV
  * somam itens sem saber que existe parcela. Fosse cada tela a tratar, bastaria
  * uma esquecer para o mês somar o pedido inteiro e a parcela juntos.
  *
@@ -103,7 +116,10 @@ export function expandirParcelas(
     return [
       {
         ...pedido,
-        competencia: competenciaDoPedido(pedido.prazoEntrega, pedido.criadoEm),
+        competencia: mesDoRecebimento(
+          (pedido.prazoEntrega ?? pedido.criadoEm).toISOString().slice(0, 10),
+          pedido.diaFechamentoComissao,
+        ),
         parcela: null,
         vendaDoPedido: pedido.subtotalSemIpi,
         parcelasDoPedido: [],
@@ -111,16 +127,28 @@ export function expandirParcelas(
     ];
   }
 
-  return ordenadas.map((p) => ({
-    ...pedido,
-    subtotalSemIpi: p.base,
-    valorRecebido: p.valorRecebido,
-    comissaoPercentualRecebido: p.comissaoPercentualRecebido,
-    competencia: competenciaDoPedido(p.vencimento, p.vencimento),
-    parcela: { id: p.id, numero: p.numero, total: ordenadas.length, vencimento: p.vencimento },
-    vendaDoPedido: pedido.subtotalSemIpi,
-    parcelasDoPedido: ordenadas,
-  }));
+  return ordenadas.map((p) => {
+    const recebimento = mesDoRecebimento(
+      p.vencimento.toISOString().slice(0, 10),
+      pedido.diaFechamentoComissao,
+    );
+    return {
+      ...pedido,
+      subtotalSemIpi: p.base,
+      valorRecebido: p.valorRecebido,
+      comissaoPercentualRecebido: p.comissaoPercentualRecebido,
+      competencia: recebimento,
+      parcela: {
+        id: p.id,
+        numero: p.numero,
+        total: ordenadas.length,
+        vencimento: p.vencimento,
+        recebimento,
+      },
+      vendaDoPedido: pedido.subtotalSemIpi,
+      parcelasDoPedido: ordenadas,
+    };
+  });
 }
 
 /** Quantos PEDIDOS há numa lista de itens — duas parcelas do mesmo são um. */
@@ -222,6 +250,7 @@ const CAMPOS_DA_COMISSAO = {
   cliente: { select: { id: true, apelido: true } },
   fornecedor: { select: { id: true, nome: true, comissaoPercentual: true } },
   prazoPagamento: true,
+  diaFechamentoComissao: true,
 } as const;
 
 /**
@@ -309,17 +338,19 @@ async function itensEnviadosEntre(
   ateCompetencia: string,
   apenasDoPreposto?: string | null,
 ): Promise<PedidoDaComissao[]> {
-  const { de } = intervaloDaCompetenciaUtc(deCompetencia);
   const { ate } = intervaloDaCompetenciaUtc(ateCompetencia);
+  // Pedido e parcela contam até dois meses depois da data (`mesDoRecebimento`):
+  // o entregue em setembro com fechamento pode ser de novembro, e precisa vir.
+  const { de: desde } = intervaloDaCompetenciaUtc(deslocarCompetencia(deCompetencia, -2));
 
   const brutos = await db.pedido.findMany({
     where: {
       organizacaoId,
       status: "ENVIADO",
       OR: [
-        { prazoEntrega: { gte: de, lt: ate } },
-        { prazoEntrega: null, criadoEm: { gte: de, lt: ate } },
-        { parcelas: { some: { vencimento: { gte: de, lt: ate } } } },
+        { prazoEntrega: { gte: desde, lt: ate } },
+        { prazoEntrega: null, criadoEm: { gte: desde, lt: ate } },
+        { parcelas: { some: { vencimento: { gte: desde, lt: ate } } } },
       ],
       ...(apenasDoPreposto ? { representanteId: apenasDoPreposto } : {}),
     },
@@ -408,8 +439,11 @@ export async function canceladosDaCompetencia(
   });
 
   // Inteiro, sem abrir parcela: o cancelado está na lista para ser visto, não
-  // somado, e parcela de pedido cancelado não vence.
-  return (await comRepresentante(db, pedidos)).flatMap((p) => expandirParcelas(p, []));
+  // somado, e parcela de pedido cancelado não vence. Nem o fechamento o muda
+  // de mês — a indústria não paga o que não faturou, e ele fica no da entrega.
+  return (await comRepresentante(db, pedidos)).flatMap((p) =>
+    expandirParcelas({ ...p, diaFechamentoComissao: null }, []),
+  );
 }
 
 /**

@@ -20,6 +20,7 @@ import {
   Clock,
   Scissors,
   TriangleAlert,
+  Undo2,
   User,
 } from "lucide-react";
 import Link from "next/link";
@@ -38,14 +39,18 @@ import {
   formatarPercentual,
 } from "@/components/ui";
 import { ErroGeral, Formulario } from "@/components/formulario";
+import { usePerguntaAntes } from "@/components/pergunta-antes";
 import { pontualidadeEntrega } from "@/lib/comissao";
+import { mesDoRecebimento } from "@/lib/parcelas";
 
 import type { EstadoFormulario } from "./acoes";
 import { BolinhaPreposto } from "@/components/bolinha-preposto";
 import { colunasDaComissao } from "./colunas";
+import { usePagamentoComissao } from "./pagamento-comissao";
 import { EditorParcelas } from "./parcelas";
 
 const DATA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "UTC" });
+const MES = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" });
 // Sem o ano: a parcela está na lista do mês em que vence, o ano é o da tela.
 const DIA_MES = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" });
 
@@ -87,14 +92,22 @@ export type LinhaPedido = {
 
   /**
    * Preenchido quando a linha é UMA parcela do pedido. Aí base, previsto e
-   * acerto acima são os dela, e o vencimento é a data que decide o mês.
+   * acerto acima são os dela. O mês dela é o `recebimento` ("AAAA-MM"): o do
+   * vencimento, ou depois dele quando a indústria só paga após o faturamento.
    */
-  parcela: { numero: number; total: number; vencimento: string } | null;
+  parcela: { numero: number; total: number; vencimento: string; recebimento: string } | null;
   /** A venda sem IPI do pedido inteiro, "9765.00" — o que as parcelas dividem. */
   venda: string;
   prazoPagamento: string | null;
   /** "AAAA-MM-DD" de onde os dias das parcelas contam: a entrega prevista. */
   dataBaseParcelas: string;
+  /**
+   * O dia em que a indústria fecha o faturamento deste pedido ("30"); vazio,
+   * paga no mês do vencimento. Vale para o pedido inteiro e para as parcelas.
+   */
+  fechamento: string;
+  /** "AAAA-MM-DD" que decide o mês do pedido inteiro: a entrega, ou a criação. */
+  dataCompetencia: string;
   /** As parcelas do pedido, para o editor reabrir com elas. */
   parcelasAtuais: { vencimento: string; valor: string }[];
   /**
@@ -198,6 +211,38 @@ export function LinhaComissao({
     if (!estado.erro) setAberto(false);
   }
 
+  /*
+   * Quando a indústria paga o pedido inteiro. Só no pedido sem parcelas: no
+   * parcelado, a escolha mora no editor de parcelas, que muda o mês de todas.
+   */
+  const pagamento = usePagamentoComissao(pedido.fechamento);
+  const mesDaComissao = mesDoRecebimento(pedido.dataCompetencia, pagamento.fechaNoDia);
+  const fechamentoGravado = pedido.fechamento ? Number(pedido.fechamento) : null;
+  const pagaAposFaturar =
+    !pedido.parcela &&
+    mesDoRecebimento(pedido.dataCompetencia, fechamentoGravado) !== pedido.dataCompetencia.slice(0, 7);
+
+  /*
+   * Desfazer o acerto lançado errado. Antes, o único caminho era apagar o
+   * valor e o % e salvar — e o % já vem preenchido, então quem apagava só o
+   * valor recebia um erro e achava que não tinha volta.
+   */
+  const perguntaDesfazer = usePerguntaAntes(
+    acertado
+      ? {
+          titulo: pedido.parcela
+            ? `Desfazer o acerto da parcela ${pedido.parcela.numero} do pedido #${pedido.numero}?`
+            : `Desfazer o acerto do pedido #${pedido.numero}?`,
+          texto:
+            `O valor recebido (${formatarMoeda(pedido.recebido!)}) e o % do acerto são apagados, e ` +
+            `${pedido.parcela ? "a parcela" : "o pedido"} volta a contar só como previsto, ` +
+            `${formatarMoeda(pedido.previsto)}. A data de entrega continua como está. Depois, ` +
+            "lance o valor certo e salve.",
+          rotulo: "Desfazer acerto",
+        }
+      : undefined,
+  );
+
   const diferenca = acertado ? pedido.recebido! - pedido.previsto : 0;
   const colunas = colunasDaComissao(comPercentual).length;
 
@@ -245,14 +290,18 @@ export function LinhaComissao({
             A marca da parcela, e o porquê de a linha estar NESTE mês: ela cai no mês em que
             vence, não no da entrega. Antes, o vencimento ocupava a coluna do
             prazo com a palavra "vencimento" embaixo, e a linha parecia um
-            pedido com prazo diferente.
+            pedido com prazo diferente. Quando a indústria só paga depois de
+            faturar, a linha está num mês seguinte ao do vencimento — a data
+            vai com o ano, que pode ser outro, e a frase diz o porquê.
           */}
           {pedido.parcela && (
             <span className="flex items-center gap-1 text-mini text-carimbo mt-0.5 min-w-0">
               <CalendarClock size={11} strokeWidth={2} aria-hidden="true" className="shrink-0" />
               <span className="truncate">
                 Parcela {pedido.parcela.numero} de {pedido.parcela.total} · vence{" "}
-                {DIA_MES.format(paraData(pedido.parcela.vencimento)!)}
+                {pedido.parcela.recebimento === pedido.parcela.vencimento.slice(0, 7)
+                  ? DIA_MES.format(paraData(pedido.parcela.vencimento)!)
+                  : `${DATA.format(paraData(pedido.parcela.vencimento)!)} · paga após faturar`}
               </span>
             </span>
           )}
@@ -287,6 +336,10 @@ export function LinhaComissao({
             DATA.format(paraData(pedido.prazoEntrega)!)
           ) : (
             TRACO
+          )}
+          {/* Por que o pedido está num mês depois do da entrega. */}
+          {pagaAposFaturar && (
+            <span className="block text-mini text-carimbo mt-0.5">paga após faturar</span>
           )}
         </Celula>
 
@@ -380,6 +433,7 @@ export function LinhaComissao({
                 percentualPreposto={pedido.percentualPreposto}
                 dataBase={pedido.dataBaseParcelas}
                 prazoSugerido={pedido.prazoPagamento}
+                fechamento={pedido.fechamento}
                 atuais={pedido.parcelasAtuais}
                 salvar={salvarParcelas}
                 desfazer={pedido.parcela ? desfazerParcelas : null}
@@ -427,6 +481,19 @@ export function LinhaComissao({
                 </div>
               </div>
 
+              {!pedido.parcela && (
+                <div className="space-y-1.5">
+                  {pagamento.campos}
+                  <p className="text-mini text-tinta-3">
+                    A comissão deste pedido conta em{" "}
+                    <span className="font-semibold text-tinta-2">
+                      {MES.format(new Date(`${mesDaComissao}-01T00:00:00Z`))}
+                    </span>
+                    .
+                  </p>
+                </div>
+              )}
+
               <p className="text-mini text-tinta-3 leading-relaxed">
                 {pedido.parcela
                   ? `Parcela ${pedido.parcela.numero} de ${pedido.parcela.total}: `
@@ -434,10 +501,27 @@ export function LinhaComissao({
                 {formatarMoeda(pedido.base)} × {formatarPercentual(pedido.percentual)} ={" "}
                 <span className="numerico">{formatarMoeda(pedido.previsto)}</span>.
                 {pedido.prazoEntrega && ` Entrega prometida para ${DATA.format(paraData(pedido.prazoEntrega)!)}.`}
-                {" "}Deixe os dois primeiros campos em branco para desfazer o acerto.
               </p>
 
               <ErroGeral />
+
+              {acertado && (
+                <div>
+                  <BotaoTexto
+                    type="submit"
+                    name="desfazer"
+                    value="sim"
+                    onClick={perguntaDesfazer.aoClicar}
+                    disabled={salvando}
+                    perigoso
+                    className="inline-flex items-center gap-1"
+                  >
+                    <Undo2 size={12} aria-hidden="true" />
+                    desfazer acerto
+                  </BotaoTexto>
+                  {perguntaDesfazer.janela}
+                </div>
+              )}
 
               {/*
                 Parcelar mora aqui, no acerto: é conferindo com a indústria que
@@ -451,8 +535,7 @@ export function LinhaComissao({
                 <div className="flex flex-wrap items-center gap-3 border-t border-filete pt-3">
                   {pedido.parcelarExigeDesfazerAcerto ? (
                     <p className="text-mini text-tinta-3">
-                      Para parcelar o recebimento, desfaça o acerto antes: deixe o valor e o % em
-                      branco e salve.
+                      Para parcelar o recebimento, use “desfazer acerto” antes.
                     </p>
                   ) : (
                     <>
@@ -469,8 +552,8 @@ export function LinhaComissao({
                       </Botao>
                       <span className="text-mini text-tinta-3">
                         {pedido.parcela
-                          ? "Mude datas e valores; cada parcela conta no mês em que vence."
-                          : "A indústria paga em partes? Cada parcela conta no mês em que vence."}
+                          ? "Mude datas e valores; cada parcela conta no mês em que a indústria a paga."
+                          : "A indústria paga em partes? Cada parcela conta no mês em que ela a paga."}
                       </span>
                     </>
                   )}

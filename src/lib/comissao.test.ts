@@ -553,6 +553,7 @@ describe("o dono do escritório não é preposto de si mesmo", () => {
     cliente: { id: "cli-x", apelido: "X" },
     fornecedor: { id: "f1", nome: "F", comissaoPercentual: "5" },
     prazoPagamento: null,
+    diaFechamentoComissao: null,
     competencia: "2026-09",
     parcela: null,
     vendaDoPedido: "1000",
@@ -676,6 +677,7 @@ describe("parcelas viram itens da comissão", () => {
     cliente: { id: "c", apelido: "C" },
     fornecedor: { id: "f", nome: "F", comissaoPercentual: "5" },
     prazoPagamento: "28/35/42",
+    diaFechamentoComissao: null,
   };
 
   const parcela = (numero: number, vencimento: string, base: string, recebido?: string) => ({
@@ -723,6 +725,26 @@ describe("parcelas viram itens da comissão", () => {
     const r = resumirComissao(itens);
     expect(r.acertados).toBe(1);
     expect(r.recebido.toFixed(2)).toBe("150.00");
+  });
+
+  it("com fechamento, a parcela conta no mês em que a indústria paga", () => {
+    // Fatura até o dia 20 e paga no mês seguinte: 10/out é de novembro, e
+    // 25/out entra no faturamento de novembro e é paga em dezembro.
+    const itens = expandirParcelas({ ...pedido, diaFechamentoComissao: 20 }, [
+      parcela(1, "2026-10-10", "5000"),
+      parcela(2, "2026-10-25", "4765"),
+    ]);
+
+    expect(itens.map((i) => [i.competencia, i.parcela?.recebimento])).toEqual([
+      ["2026-11", "2026-11"],
+      ["2026-12", "2026-12"],
+    ]);
+  });
+
+  it("sem parcela, o fechamento leva o pedido inteiro para o mês em que a indústria paga", () => {
+    // Entregue em 27/07: com fechamento 30, conta em agosto; com 20, em setembro.
+    expect(expandirParcelas({ ...pedido, diaFechamentoComissao: 30 }, [])[0].competencia).toBe("2026-08");
+    expect(expandirParcelas({ ...pedido, diaFechamentoComissao: 20 }, [])[0].competencia).toBe("2026-09");
   });
 
   it("duas parcelas no mesmo mês são um pedido só na contagem", () => {

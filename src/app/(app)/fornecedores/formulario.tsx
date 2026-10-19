@@ -116,6 +116,14 @@ export function FormularioFornecedor({
               defaultValue={valores.fatorKgPadrao}
               placeholder="13,50"
             />
+            <Campo
+              name="diaFechamentoComissao"
+              rotulo="Só paga a comissão após faturar até o dia"
+              inputMode="numeric"
+              dica="Os pedidos novos já nascem com esse dia: o que vence ou é entregue até ele conta na comissão do mês seguinte. Em branco, conta no próprio mês. A exceção se troca no acerto do pedido."
+              defaultValue={valores.diaFechamentoComissao}
+              placeholder="30"
+            />
           </div>
         </SecaoCartao>
 

@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   dividirIgual,
   lerPrazoEmDias,
+  mesDoRecebimento,
   problemaNasParcelas,
   restanteDaBase,
   somarDias,
@@ -52,6 +53,36 @@ describe("somarDias", () => {
   it("vira o mês e o ano sem escorregar pelo fuso", () => {
     expect(somarDias("2026-10-10", 20)).toBe("2026-10-30");
     expect(somarDias("2026-12-20", 15)).toBe("2027-01-04");
+  });
+});
+
+describe("mesDoRecebimento", () => {
+  it("sem fechamento, conta no mês do vencimento", () => {
+    expect(mesDoRecebimento("2026-10-25", null)).toBe("2026-10");
+  });
+
+  it("fechamento no fim do mês: o mês inteiro conta no seguinte", () => {
+    expect(mesDoRecebimento("2026-10-01", 30)).toBe("2026-11");
+    expect(mesDoRecebimento("2026-10-30", 30)).toBe("2026-11");
+    // 31/out passou do dia 30: entra no faturamento de novembro.
+    expect(mesDoRecebimento("2026-10-31", 30)).toBe("2026-12");
+  });
+
+  it("depois do fechamento, cai no faturamento seguinte", () => {
+    expect(mesDoRecebimento("2026-10-20", 20)).toBe("2026-11");
+    expect(mesDoRecebimento("2026-10-25", 20)).toBe("2026-12");
+  });
+
+  it("fechamento 31 é o último dia de qualquer mês", () => {
+    expect(mesDoRecebimento("2026-02-28", 31)).toBe("2026-03");
+    expect(mesDoRecebimento("2026-11-30", 31)).toBe("2026-12");
+    // Fechamento 30 em fevereiro também fecha no último dia.
+    expect(mesDoRecebimento("2028-02-29", 30)).toBe("2028-03");
+  });
+
+  it("vira o ano", () => {
+    expect(mesDoRecebimento("2026-12-10", 30)).toBe("2027-01");
+    expect(mesDoRecebimento("2026-12-25", 20)).toBe("2027-02");
   });
 });
 

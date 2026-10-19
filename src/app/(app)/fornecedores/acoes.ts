@@ -96,6 +96,14 @@ function dadosDoFormulario(formData: FormData) {
     ipiPercentual: lerPercentual(formData, "ipiPercentual", "o IPI"),
     comissaoPercentual: lerPercentual(formData, "comissaoPercentual", "a comissão"),
     fatorKgPadrao: fatorKgPadrao === null ? null : String(fatorKgPadrao),
+    // O padrão dos pedidos NOVOS, que o copiam ao nascer: cada pedido decide
+    // o seu depois, e mudar aqui não move pedido já lançado.
+    diaFechamentoComissao: exigirNumero(
+      formData,
+      "diaFechamentoComissao",
+      "o dia em que a indústria fecha o faturamento",
+      { inteiro: true, min: 1, max: 31, exemplo: "30" },
+    ),
   } as const;
 }
 

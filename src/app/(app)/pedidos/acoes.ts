@@ -326,7 +326,7 @@ export async function criarPedido(
       }),
       db.fornecedor.findFirst({
         where: { id: fornecedorId, organizacaoId, ...soIndustriasMarcadas({ ehAdmin, usuarioId }) },
-        select: { id: true, ipiPercentual: true, comissaoPercentual: true },
+        select: { id: true, ipiPercentual: true, comissaoPercentual: true, diaFechamentoComissao: true },
       }),
       db.usuario.findUnique({
         where: { id: usuarioId },
@@ -378,6 +378,9 @@ export async function criarPedido(
         // envio vira o número definitivo daquele pedido. É isso que mantém a
         // comissão de um mês fechado estável quando a indústria reajusta.
         comissaoPercentual: fornecedor.comissaoPercentual,
+        // Quando a indústria só paga depois de faturar, o pedido já nasce com
+        // o dia dela — a exceção se troca no acerto, na tela de Comissões.
+        diaFechamentoComissao: fornecedor.diaFechamentoComissao,
         // As observações do cliente já entram preenchidas — são recados que se
         // repetem em todo pedido dele.
         observacoes: cliente.observacoes,
@@ -1104,6 +1107,7 @@ async function copiarPedido(pedidoId: string): Promise<string> {
       ...preposto,
       ipiPercentual: origem.ipiPercentual,
       comissaoPercentual: origem.comissaoPercentual,
+      diaFechamentoComissao: origem.diaFechamentoComissao,
       // Não copiamos: número da ordem de compra do cliente e prazo de entrega,
       // que são desta compra e não da próxima.
       itens: {

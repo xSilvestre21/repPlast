@@ -594,6 +594,12 @@ model Fornecedor {
   /// Percentual de comissão desta indústria. Cada pedido nasce com ele e pode
   /// ser ajustado enquanto estiver aberto.
   comissaoPercentual Decimal @default(0) @db.Decimal(6, 3)
+  /// O dia em que a indústria fecha o faturamento, para quem só paga a
+  /// comissão no mês seguinte: o vencimento até esse dia conta no mês seguinte,
+  /// depois dele no outro. É o PADRÃO, que cada pedido copia ao ser criado —
+  /// quem decide é o pedido (`Pedido.diaFechamentoComissao`), porque há
+  /// exceção. `null`: paga no mês do vencimento.
+  diaFechamentoComissao Int?
 
   /// Fator kg sugerido ao cadastrar um produto novo. O valor que vale é o do produto.
   fatorKgPadrao Decimal? @db.Decimal(12, 4)
@@ -899,6 +905,13 @@ model Pedido {
 
   /// Percentual acordado NO ACERTO. Nasce igual ao do pedido e pode ser mudado.
   comissaoPercentualRecebido Decimal? @db.Decimal(6, 3)
+
+  /// O dia de fechamento do faturamento deste pedido (ver `mesDoRecebimento`,
+  /// em `lib/parcelas.ts`): o pedido inteiro, ou cada parcela, conta no mês em
+  /// que a indústria paga, não no da entrega ou do vencimento. Copiado da
+  /// indústria na criação e trocado no acerto ou no parcelamento. `null`: o
+  /// próprio mês — é como ficam os pedidos de antes, que não mudam sozinhos.
+  diaFechamentoComissao Int?
 
   /// Data em que a entrega aconteceu de verdade. Existe para comparar com
   /// `prazoEntrega` e mostrar se atrasou, adiantou ou saiu no dia.

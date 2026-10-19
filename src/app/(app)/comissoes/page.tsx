@@ -551,6 +551,7 @@ function paraLinha(
           numero: pedido.parcela.numero,
           total: pedido.parcela.total,
           vencimento: iso(pedido.parcela.vencimento)!,
+          recebimento: pedido.parcela.recebimento,
         }
       : null,
     venda: pedido.vendaDoPedido.toString(),
@@ -558,6 +559,10 @@ function paraLinha(
     // Os dias das parcelas contam da entrega prevista, como no SICOV; o pedido
     // sem prazo marcado conta do envio, que é o que decide o mês dele também.
     dataBaseParcelas: iso(pedido.prazoEntrega ?? pedido.enviadoEm ?? pedido.criadoEm)!,
+    // Vazio: a indústria paga no mês do vencimento (ou da entrega).
+    fechamento: String(pedido.diaFechamentoComissao ?? ""),
+    // A data que decide o mês do pedido inteiro, como em `expandirParcelas`.
+    dataCompetencia: iso(pedido.prazoEntrega ?? pedido.criadoEm)!,
     parcelasAtuais: pedido.parcelasDoPedido.map((p) => ({
       vencimento: iso(p.vencimento)!,
       valor: escreverNumeroBr(p.base.toString(), 2, 2),

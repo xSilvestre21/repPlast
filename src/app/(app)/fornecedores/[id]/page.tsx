@@ -196,6 +196,7 @@ export default async function PaginaFornecedor({
               ? escreverNumeroBr(fornecedor.fatorKgPadrao.toString(), 2)
               : "",
             ultimoNumeroPedido: String(fornecedor.proximoNumeroPedido - 1),
+            diaFechamentoComissao: fornecedor.diaFechamentoComissao?.toString() ?? "",
           }}
         />
 

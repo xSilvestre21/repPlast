@@ -23,6 +23,8 @@ export type ValoresFornecedor = {
   ipiPercentual: string;
   comissaoPercentual: string;
   fatorKgPadrao: string;
+  /** "30", ou vazio quando a indústria paga no mês do vencimento. */
+  diaFechamentoComissao: string;
   /** Último pedido emitido para esta indústria — o próximo sai com ele + 1. */
   ultimoNumeroPedido: string;
 };
@@ -41,5 +43,6 @@ export const VALORES_VAZIOS: ValoresFornecedor = {
   ipiPercentual: "",
   comissaoPercentual: "",
   fatorKgPadrao: "",
+  diaFechamentoComissao: "",
   ultimoNumeroPedido: "",
 };

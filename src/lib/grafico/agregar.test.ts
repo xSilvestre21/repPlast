@@ -43,6 +43,7 @@ function pedido(dados: Partial<PedidoDaComissao> & { id: string }): PedidoDaComi
     cliente: { id: "c1", apelido: "ALBRAS" },
     fornecedor: { id: "f1", nome: "QUALYPLAST", comissaoPercentual: "5" },
     prazoPagamento: null,
+    diaFechamentoComissao: null,
     competencia: "2026-10",
     parcela: null,
     vendaDoPedido: "1000",

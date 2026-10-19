@@ -12,6 +12,8 @@
 
 import Decimal from "decimal.js";
 
+import { deslocarCompetencia } from "@/lib/comissao";
+
 /**
  * "28/35/42" → [28, 35, 42]: os dias, a partir da entrega, em que cada parcela
  * vence. É a forma em que o prazo de pagamento já vive no cliente e no pedido.
@@ -48,6 +50,25 @@ export function lerPrazoEmDias(texto: string | null | undefined): number[] | nul
 export function somarDias(iso: string, dias: number): string {
   const [ano, mes, dia] = iso.split("-").map(Number);
   return new Date(Date.UTC(ano, mes - 1, dia + dias)).toISOString().slice(0, 10);
+}
+
+/**
+ * O mês ("AAAA-MM") em que a indústria paga a comissão de uma parcela que
+ * vence em `vencimento` — e, por isso, o mês em que ela conta.
+ *
+ * Sem fechamento (`null`), é o próprio mês do vencimento. Com ele, a indústria
+ * fatura até o dia `diaFechamento` e paga no mês seguinte: o que vence até
+ * esse dia conta no mês seguinte, o que vence depois cai no fechamento
+ * seguinte e conta dois meses à frente. Fechamento 20: 25/out conta em
+ * dezembro. Fechamento 31 num mês de 30 dias é o último dia dele.
+ */
+export function mesDoRecebimento(vencimento: string, diaFechamento: number | null): string {
+  const [ano, mes, dia] = vencimento.split("-").map(Number);
+  const competencia = `${ano}-${String(mes).padStart(2, "0")}`;
+  if (diaFechamento === null) return competencia;
+
+  const ultimoDia = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
+  return deslocarCompetencia(competencia, dia <= Math.min(diaFechamento, ultimoDia) ? 1 : 2);
 }
 
 /**
