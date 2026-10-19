@@ -9,6 +9,18 @@
  * Opções: --pular a@b.com,c@d.com   não inscreve esses como preposto
  *         --arquivo caminho.json.gz  outro backup
  *         --forcar                   importa mesmo com o escritório já povoado
+ *         --substituir               APAGA o escritório (menos o admin) e importa
+ *                                    por cima, na mesma transação
+ *         --conferir                 só compara o que está gravado com o backup
+ *                                    (repita o --pular da importação)
+ *
+ * O `--substituir` guarda o logo de cada indústria (o backup só tem o caminho
+ * de um arquivo do sistema antigo) e devolve-o à indústria de mesmo nome. A
+ * limpeza mora na transação da importação: no ensaio ela também é desfeita, e
+ * se a importação falhar nada terá sido apagado.
+ *
+ * No fim, a importação é CONFERIDA contra o backup dentro da mesma transação —
+ * valores, status, comissão, parcelas, vínculos. Uma divergência aborta tudo.
  *
  * O ENSAIO NÃO É SIMULAÇÃO. Ele executa a importação inteira de verdade —
  * passando por RLS, CHECKs, chaves únicas e triggers — e no fim desfaz tudo
@@ -36,6 +48,7 @@ import { randomBytes, scrypt as scryptCb } from "node:crypto";
 import { promisify } from "node:util";
 
 import { PrismaPg } from "@prisma/adapter-pg";
+import Decimal from "decimal.js";
 
 import { PrismaClient } from "../src/generated/prisma/client";
 
@@ -58,8 +71,15 @@ const arg = (nome: string): string | null => {
 const tem = (nome: string) => argv.includes(`--${nome}`);
 
 const NOME_ESCRITORIO = arg("escritorio");
-const ARQUIVO = arg("arquivo") ?? "referencia/sicov-backup-2026-09-13-18h30.json.gz";
+const ARQUIVO = arg("arquivo") ?? "referencia/sicov-backup-2026-10-19-08h54.json.gz";
 const GRAVAR = tem("gravar");
+const SUBSTITUIR = tem("substituir");
+const SO_CONFERIR = tem("conferir");
+
+if (SO_CONFERIR && (GRAVAR || SUBSTITUIR)) {
+  console.error("\n--conferir só lê: não combina com --gravar nem com --substituir.\n");
+  process.exit(1);
+}
 
 /**
  * E-mails que NÃO devem virar preposto, separados por vírgula.
@@ -129,6 +149,33 @@ const texto = (v: unknown): string | null => {
 const numero = (v: unknown) => (v === null || v === undefined || v === "" ? null : String(v));
 
 const data = (v: unknown) => (v ? new Date(v as string) : null);
+
+/**
+ * "Maria Augusta Ferraz" → nome "Maria", sobrenome "Augusta Ferraz".
+ *
+ * A mesma regra da migration `usuario_sobrenome_telefone`, que separou os
+ * nomes que já existiam: a primeira palavra é o nome, o resto o sobrenome.
+ */
+function separarNome(completo: string): { nome: string; sobrenome: string | null } {
+  const limpo = completo.trim().replace(/\s+/g, " ");
+  const espaco = limpo.indexOf(" ");
+  if (espaco < 0) return { nome: limpo, sobrenome: null };
+  return { nome: limpo.slice(0, espaco), sobrenome: limpo.slice(espaco + 1) };
+}
+
+/**
+ * As observações do cliente, com o que o SICOV guardava em campo próprio e
+ * aqui não tem coluna: a transportadora de costume e o endereço de cobrança.
+ * Ficam escritos, onde quem lança o pedido lê, em vez de sumir.
+ */
+function observacoesDoCliente(c: any): string | null {
+  const partes = [
+    texto(c.notes),
+    texto(c.carrier) && `Transportadora: ${texto(c.carrier)}`,
+    texto(c.billingAddress) && `Endereço de cobrança: ${texto(c.billingAddress)}`,
+  ].filter(Boolean);
+  return partes.length ? partes.join("\n") : null;
+}
 
 /** Hash de senha no mesmo formato de src/lib/senha.ts. */
 async function gerarHashSenha(senha: string) {
@@ -287,6 +334,31 @@ function partesDoNome(
   return { sanfona, complemento: texto(resto.replace(/\s+/g, " ")) };
 }
 
+/**
+ * A densidade com que o saco entra.
+ *
+ * Quatro sacos da SELPACK, editados no SICOV em 15/10, guardam a densidade da
+ * tabela (0,0944 / 0,0922) mas têm o preço calculado com 0,1 — o divisor 10 que
+ * era fixo: 40,5 × 60,5 × 0,04 × 0,1 × 18 = 176,418, o preço gravado. Com a
+ * densidade gravada, o pedido novo sairia 5% a 8% mais barato do que o SICOV
+ * mostrava. Decisão do usuário: vale o preço do SICOV, então quando o preço só
+ * fecha com 0,1, a densidade entra 0,1.
+ */
+function densidadeDoSaco(p: any): { densidade: number | null; ajustada: boolean } {
+  const m = p.technicalData?.measurements ?? {};
+  const c = p.commercialData ?? {};
+  const gravada = c.density ?? null;
+  if (!m.width || !m.length || !m.thickness || !c.factorKg || c.basePrice == null || !gravada) {
+    return { densidade: gravada, ajustada: false };
+  }
+
+  const preco = (d: number) => m.width * m.length * m.thickness * d * c.factorKg;
+  if (Math.abs(preco(gravada) - c.basePrice) > 0.01 && Math.abs(preco(0.1) - c.basePrice) <= 0.01) {
+    return { densidade: 0.1, ajustada: true };
+  }
+  return { densidade: gravada, ajustada: false };
+}
+
 const UNIDADE: Record<string, string> = { thousand: "MIL", kg: "KG", unit: "UN", box: "CX" };
 const TIPO_ADITIVO: Record<string, string> = {
   per_kg: "POR_KG",
@@ -317,7 +389,15 @@ const avisar = (m: string) => relatorio.avisos.push(m);
 
 class Rollback extends Error {}
 
-async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
+/** O logo que a indústria já tinha aqui, guardado antes da limpeza. */
+type Logo = { logo: Uint8Array; logoTipo: string | null };
+
+async function importar(
+  tx: any,
+  sicov: any,
+  emailsOcupados: Set<string>,
+  logos: Map<string, Logo>,
+) {
   /* --- 1. O escritório e o administrador ---------------------------------- */
 
   const escritorio = await tx.organizacao.findFirst({
@@ -334,17 +414,12 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
   if (jaTem > 0 && !tem("forcar")) {
     throw new Error(
       `O escritório já tem ${jaTem} cliente(s). Importar por cima duplicaria tudo.\n` +
-        "Use --forcar se for mesmo isso que você quer.",
+        "Use --substituir para apagar e importar de novo, ou --forcar para somar.",
     );
   }
 
-  if (escritorio.plano !== "PLUS") {
-    await tx.organizacao.update({
-      where: { id: escritorio.id },
-      data: { plano: "PLUS" },
-    });
-    contar("escritório promovido a Plus");
-  }
+  // O plano PLUS é ligado em `main`, antes da troca de papel: sob o papel da
+  // aplicação o trigger `app_cobranca_so_administrativa` recusa mexer nele.
 
   const orgId = escritorio.id;
 
@@ -366,11 +441,19 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
   const usuarios = new Map<string, string>();
 
   // O texto padrão de "Condições" é de cada usuário agora — o do SICOV era do
-  // escritório inteiro, então vai para quem ocupa o lugar do admin dele.
-  await tx.usuario.update({
-    where: { id: admin.id },
-    data: { observacoesPadrao: texto(sicov.settings[0]?.defaultObservations) },
-  });
+  // escritório inteiro, então vai para quem ocupa o lugar do admin dele. Só
+  // quando ele ainda não tem um: o que ele já escreveu aqui é configuração
+  // dele, e reimportar não a desfaz.
+  if (!texto(admin.observacoesPadrao)) {
+    await tx.usuario.update({
+      where: { id: admin.id },
+      data: { observacoesPadrao: texto(sicov.settings[0]?.defaultObservations) },
+    });
+  }
+
+  /** O id daqui de um usuário do SICOV — o admin dele inclusive. */
+  const idDoUsuario = (sicovId: unknown): string | null =>
+    sicovId === valquiria._id ? admin.id : (usuarios.get(String(sicovId)) ?? null);
 
   for (const u of sicov.users as any[]) {
     if (u._id === valquiria._id) continue;
@@ -406,9 +489,11 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
     const criado = await tx.usuario.create({
       data: {
         organizacaoId: orgId,
-        nome: u.name,
+        ...separarNome(u.name),
         email: u.email.toLowerCase(),
         senhaHash: await gerarHashSenha(senha),
+        // Escolhida aqui, não por ele: o sistema sugere a troca no 1º acesso.
+        senhaProvisoria: true,
         papel: "REPRESENTANTE",
         ativo: u.active !== false,
         comissaoPercentualPadrao: numero(u.defaultCommissionPercentage ?? 0),
@@ -423,6 +508,22 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
   /* --- 3. Indústrias, materiais e aditivos -------------------------------- */
 
   const fornecedores = new Map<string, string>();
+
+  /*
+   * As indústrias que cada preposto atende (`FornecedorPreposto`).
+   *
+   * A regra daqui é estrita: sem marca, o preposto não vê indústria nenhuma
+   * (migration `industria_so_do_preposto_marcado`). A marca vem do
+   * `allowedRepresentatives` do SICOV e, como na migration, de todo pedido,
+   * proposta ou produto que já liga o preposto à indústria — senão a Maria
+   * Augusta, que não estava na lista de ninguém, perderia de vista a indústria
+   * dos próprios 29 pedidos. As linhas são gravadas no fim.
+   */
+  const marcas = new Map<string, Set<string>>();
+  const industriasDoPreposto = (usuarioId: string) => {
+    if (!marcas.has(usuarioId)) marcas.set(usuarioId, new Set());
+    return marcas.get(usuarioId)!;
+  };
 
   /*
    * O percentual que cada indústria costuma pagar.
@@ -446,10 +547,17 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
   const aditivosPorNome = new Map<string, string>();
 
   for (const s of sicov.suppliers as any[]) {
+    const nomeIndustria = texto(s.tradeName) ?? s.name;
+    const logo = logos.get(nomeIndustria);
+
     const f = await tx.fornecedor.create({
       data: {
         organizacaoId: orgId,
-        nome: texto(s.tradeName) ?? s.name,
+        nome: nomeIndustria,
+        // O logo que já estava aqui volta; o `logoUrl` do SICOV é o caminho de
+        // um arquivo do sistema antigo, sem a imagem.
+        logo: logo?.logo ?? null,
+        logoTipo: logo?.logoTipo ?? null,
         razaoSocial: texto(s.name),
         cnpj: documento(s.cnpj),
         endereco: texto(s.address),
@@ -485,6 +593,23 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
 
     fornecedores.set(s._id, f.id);
     contar("indústrias");
+    if (logo) contar("logos preservados");
+
+    for (const r of (s.allowedRepresentatives ?? []) as any[]) {
+      const usuarioId = usuarios.get(String(r));
+      if (usuarioId) industriasDoPreposto(usuarioId).add(f.id);
+    }
+
+    // O que a ficha do SICOV tinha e a indústria daqui não tem onde guardar.
+    if (!logo && texto(s.logoUrl)) {
+      avisar(`${nomeIndustria}: sem logo — o backup só traz o caminho "${s.logoUrl}".`);
+    }
+    if (texto(s.stateRegistration)) {
+      avisar(`${nomeIndustria}: IE ${s.stateRegistration} não importada — a indústria não tem campo de IE.`);
+    }
+    if (texto(s.notes)) {
+      avisar(`${nomeIndustria}: anotação não importada (sem campo) — "${texto(s.notes)!.replace(/\s+/g, " ")}"`);
+    }
 
     // A tabela de preço vira material + faixas. O mesmo material aparece
     // várias vezes quando a indústria cobra por faixa de peso (SELPACK).
@@ -563,6 +688,20 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
 
   const clientes = new Map<string, string>();
 
+  /**
+   * Quem atende o cliente — o `representativeId` dele no SICOV, quando é um
+   * preposto que entrou. O cliente da Valquiria fica sem vínculo: é do
+   * escritório, e o dono não é preposto de si mesmo.
+   */
+  const prepostoDoCliente = new Map<string, string>();
+  const vincularPreposto = async (clienteId: string, sicovRepresentante: unknown) => {
+    const usuarioId = usuarios.get(String(sicovRepresentante));
+    if (!usuarioId) return;
+    await tx.clientePreposto.create({ data: { clienteId, usuarioId } });
+    prepostoDoCliente.set(clienteId, usuarioId);
+    contar("clientes com preposto");
+  };
+
   for (const c of sicov.clients as any[]) {
     const criado = await tx.cliente.create({
       data: {
@@ -581,14 +720,16 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
         // O SICOV tem um e-mail só; ele serve de contato e de destino da NF-e.
         emailNfe: texto(c.email),
         prazoPagamento: texto(c.paymentTerm),
-        observacoes: texto(c.notes),
+        observacoes: observacoesDoCliente(c),
         ativo: c.active !== false,
-        representanteId: usuarios.get(c.representativeId) ?? null,
+        // Cadastro é do administrador (migration `cadastros_so_do_admin`).
+        criadoPorId: admin.id,
       },
     });
 
     clientes.set(c._id, criado.id);
     contar("clientes");
+    await vincularPreposto(criado.id, c.representativeId);
   }
 
   /* --- 5. Produtos -------------------------------------------------------- */
@@ -635,12 +776,20 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
         pular(`produto ${p.name}`, "saco sem medidas ou sem fator kg");
         continue;
       }
+      const { densidade, ajustada } = densidadeDoSaco(p);
+      if (ajustada) {
+        avisar(
+          `Produto "${p.name}": entra com densidade 0,1 (o SICOV guardava ${com.density}) para ` +
+            `manter o preço de R$ ${com.basePrice} que o SICOV mostrava.`,
+        );
+        contar("sacos com densidade 0,1 pelo preço do SICOV");
+      }
       Object.assign(dados, {
         larguraCm: numero(med.width),
         comprimentoCm: numero(med.length),
         espessuraMm: numero(med.thickness),
         fatorKg: numero(com.factorKg),
-        densidade: numero(com.density),
+        densidade: numero(densidade),
         sanfona,
       });
     } else if (familia === "FITA") {
@@ -699,6 +848,15 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
     produtos.set(p._id, criado.id);
     contar("produtos");
 
+    const atendeProduto = prepostoDoCliente.get(dados.clienteId as string);
+    if (atendeProduto) industriasDoPreposto(atendeProduto).add(fornecedorId);
+
+    // O produto não tem campo de anotação, e o complemento sai impresso no
+    // pedido — não é lugar para "Comissão 4%". Fica no relatório.
+    if (texto(p.notes)) {
+      avisar(`Produto "${p.name}": anotação não importada — "${texto(p.notes)!.replace(/\s+/g, " ")}"`);
+    }
+
     // Os extras que ESTE produto leva. O preço só muda no SACO — é a única
     // família cuja fórmula soma aditivo (ver produto-preco.ts).
     for (const e of (p.selectedExtras ?? []) as any[]) {
@@ -717,6 +875,7 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
   /* --- 6. Pedidos --------------------------------------------------------- */
 
   const pedidos = new Map<string, string>();
+  const { comissaoPrincipal, parcelasDoSicov } = comissoesPorPedido(sicov);
 
   for (const o of sicov.orders as any[]) {
     const fornecedorId = fornecedores.get(o.supplierId);
@@ -761,10 +920,12 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
           // O snapshot não guarda o prazo; o que sobrou dele é o do próprio pedido.
           prazoPagamento: texto(snap.paymentTerm) ?? texto(o.paymentTerm),
           observacoes: texto(snap.notes),
-          representanteId: usuarios.get(o.representativeId) ?? null,
+          criadoPorId: admin.id,
         },
       });
 
+      // O snapshot não diz quem atendia; quem dividiu a comissão do pedido, sim.
+      await vincularPreposto(recriado.id, comissaoPrincipal.get(o._id)?.representativeId);
       clienteId = recriado.id;
       clientes.set(o.clientId, clienteId!);
       avisar(
@@ -774,9 +935,29 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
       contar("clientes recriados de pedido");
     }
 
-    const cancelado = o.status === "cancelled";
-    const enviadoEm = data(o.sentToSupplierAt) ?? data(o.createdAt);
-    const dono = usuarios.get(o.representativeId) ?? null;
+    const comissao = comissaoPrincipal.get(o._id);
+    const situacao = situacaoDoPedido(o, comissao);
+    const acerto = acertoDaComissao(comissao);
+
+    /*
+     * Com quem a comissão DESTE pedido é dividida.
+     *
+     * Não é `o.representativeId`: no SICOV todo pedido é da Valquiria, que é
+     * quem lança. A fatia do preposto vive na comissão — Maria Augusta a 50%,
+     * Luiz e Ed a 60% —, e lida do pedido ela some.
+     */
+    const prepostoDaComissao =
+      comissao && Number(comissao.representativePercentage) > 0
+        ? (usuarios.get(String(comissao.representativeId)) ?? null)
+        : null;
+    if (comissao && Number(comissao.representativePercentage) > 0 && !prepostoDaComissao) {
+      avisar(
+        `Pedido ${o.orderNumber}: a fatia de ${comissao.representativePercentage}% de ` +
+          `${comissao.representativeName} fica com o escritório — ele não entrou como preposto.`,
+      );
+    }
+
+    const parcelas = parcelasDoPedido(o, comissao, parcelasDoSicov.get(o._id) ?? []);
 
     // O peso de cada linha, para somar no cabeçalho depois de montar os itens.
     const pesos = ((o.items ?? []) as any[]).map((i: any) =>
@@ -793,7 +974,9 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
         clienteId,
         fornecedorId,
         numero: o.orderNumber,
-        status: cancelado ? "CANCELADO" : "ENVIADO",
+        status: situacao.status,
+        // Pedido importado está pronto: abri-lo "em montagem" diria que está pela metade.
+        emElaboracao: false,
         pedidoDoCliente: texto(o.customerPurchaseOrder),
         prazoPagamento: texto(o.paymentTerm),
         prazoEntrega: data(o.deliveryDate),
@@ -805,10 +988,21 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
         valorIpi: numero(o.ipiValue ?? 0),
         totalGeral: numero(o.total ?? 0),
         pesoTotalKg: pesos.reduce((a, b) => a + b, 0).toFixed(3),
-        representanteId: dono,
+        // A comissão como o SICOV a guardava, por pedido. Sem a comissão, o
+        // percentual fica nulo e vale o da indústria (`percentualDoPedido`).
+        comissaoPercentual: numero(comissao?.adminPercentage),
+        comissaoPercentualPreposto: numero(comissao?.representativePercentage),
+        representanteId: prepostoDaComissao,
+        // Quem digitou: nulo é o escritório, e todo pedido do SICOV foi lançado por ele.
+        criadoPorId: null,
+        // Com parcelas o acerto mora em cada uma (`expandirParcelas` ignora o do pedido).
+        valorRecebido: parcelas.length ? null : (acerto?.valorRecebido ?? null),
+        comissaoPercentualRecebido: parcelas.length ? null : (acerto?.percentual ?? null),
+        entregueEm: data(comissao?.realDeliveryDate),
         criadoEm: data(o.createdAt) ?? undefined,
-        enviadoEm: cancelado ? null : enviadoEm,
-        canceladoEm: cancelado ? data(o.updatedAt) : null,
+        enviadoEm: situacao.enviadoEm,
+        canceladoEm: situacao.status === "CANCELADO" ? data(o.updatedAt) : null,
+        parcelas: { create: parcelas },
         itens: {
           create: ((o.items ?? []) as any[]).map((i: any, indice: number) => {
             const snap = i.productSnapshot ?? {};
@@ -839,7 +1033,20 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
 
     pedidos.set(o._id, criado.id);
     contar("pedidos");
+    contar(`pedidos ${situacao.status}`);
     contar("itens de pedido", (o.items ?? []).length);
+    if (parcelas.length) contar("parcelas de recebimento", parcelas.length);
+    if (acerto && !parcelas.length) contar("acertos de comissão");
+    if (situacao.status === "ENVIADO" && !o.sentToSupplier) {
+      avisar(
+        `Pedido ${o.orderNumber}: o SICOV nunca o marcou como enviado, mas ele foi entregue ` +
+          "e acertado — entra como ENVIADO na data da entrega.",
+      );
+    }
+
+    if (prepostoDaComissao) industriasDoPreposto(prepostoDaComissao).add(fornecedorId);
+    const atende = prepostoDoCliente.get(clienteId!);
+    if (atende) industriasDoPreposto(atende).add(fornecedorId);
   }
 
   /* --- 7. Orçamentos ------------------------------------------------------ */
@@ -847,7 +1054,8 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
   let numeroOrcamento = 1;
 
   for (const q of sicov.quotations as any[]) {
-    const fornecedorId = fornecedores.get(q.supplierId);
+    const fornecedorId =
+      fornecedores.get(q.supplierId) ?? industriaRecriada(sicov, fornecedores, q, avisar);
 
     if (!fornecedorId) {
       pular(`orçamento de ${(q.clientSnapshot ?? {}).name ?? "?"}`, "indústria não existe mais");
@@ -871,6 +1079,8 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
     }
 
     const ipi = Number(q.supplierSnapshot?.ipi ?? 0);
+    const autor = usuarios.get(String(q.representativeId)) ?? null;
+    const edicoes = ((q.editHistory ?? []) as any[]).filter((e) => data(e.editedAt));
 
     await tx.orcamento.create({
       data: {
@@ -882,16 +1092,27 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
         numero: numeroOrcamento++,
         // O SICOV não tinha desfecho: tudo que veio de lá entra como aberto.
         status: "ABERTO",
+        emElaboracao: false,
         attn: texto(q.attn),
-        prazoPagamento: texto(q.paymentTerm),
+        // A proposta do SICOV não tem prazo próprio: o que ela levava era o do cliente.
+        prazoPagamento: texto(q.paymentTerm) ?? texto(q.clientSnapshot?.paymentTerm),
         observacoes: texto(q.observations),
         vendedor: texto(q.sellerName),
         ipiPercentual: numero(ipi),
         subtotalSemIpi: numero(q.subtotal ?? 0),
         valorIpi: numero(q.ipiValue ?? 0),
         totalGeral: numero(q.total ?? 0),
-        representanteId: usuarios.get(q.representativeId) ?? null,
+        representanteId: autor,
+        // Quem a digitou: é o que deixa o preposto ver a proposta que ele fez.
+        criadoPorId: autor,
         criadoEm: data(q.createdAt) ?? undefined,
+        // O "Orçamento atualizado" do SICOV é o log de edição daqui.
+        edicoes: {
+          create: edicoes.map((e) => ({
+            usuarioId: idDoUsuario(e.editedBy),
+            editadoEm: data(e.editedAt)!,
+          })),
+        },
         itens: {
           create: ((q.items ?? []) as any[]).map((i: any, indice: number) => {
             const snap = i.productSnapshot ?? {};
@@ -920,6 +1141,11 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
 
     contar("orçamentos");
     contar("itens de orçamento", (q.items ?? []).length);
+    if (edicoes.length) contar("edições de orçamento", edicoes.length);
+
+    if (autor) industriasDoPreposto(autor).add(fornecedorId);
+    const atende = clienteId ? prepostoDoCliente.get(clienteId) : undefined;
+    if (atende) industriasDoPreposto(atende).add(fornecedorId);
   }
 
   await tx.organizacao.update({
@@ -927,46 +1153,170 @@ async function importar(tx: any, sicov: any, emailsOcupados: Set<string>) {
     data: { proximoNumeroOrcamento: numeroOrcamento },
   });
 
-  /* --- 8. Comissões: viram o acerto do pedido ----------------------------- */
+  /* --- 8. As indústrias de cada preposto ---------------------------------- */
 
-  for (const c of sicov.commissions as any[]) {
-    // Parcela projetada não é acerto: é previsão de recebimento, e o RepPlast
-    // não tem parcelamento de comissão.
-    if (c.projected || c.realReceivedValue === null || c.realReceivedValue === undefined) continue;
-
-    const pedidoId = pedidos.get(c.orderId);
-    if (!pedidoId) {
-      pular(`comissão do pedido ${c.orderNumber}`, "pedido não importado");
-      continue;
+  // A comissão e o acerto já entraram com o pedido (seção 6).
+  for (const [usuarioId, industrias] of marcas) {
+    for (const fornecedorId of industrias) {
+      await tx.fornecedorPreposto.create({ data: { fornecedorId, usuarioId } });
+      contar("indústrias marcadas para prepostos");
     }
-
-    await tx.pedido.update({
-      where: { id: pedidoId },
-      data: {
-        valorRecebido: numero(c.realReceivedValue),
-        comissaoPercentualRecebido: numero(c.adminPercentage ?? 0),
-        entregueEm: data(c.realDeliveryDate),
-      },
-    });
-    contar("acertos de comissão");
-  }
-
-  // O percentual da indústria e a fatia do preposto vêm das comissões, que no
-  // SICOV guardavam os dois por pedido.
-  for (const c of sicov.commissions as any[]) {
-    const pedidoId = pedidos.get(c.orderId);
-    if (!pedidoId || c.projected) continue;
-
-    await tx.pedido.update({
-      where: { id: pedidoId },
-      data: {
-        comissaoPercentual: numero(c.adminPercentage ?? 0),
-        comissaoPercentualPreposto: numero(c.representativePercentage ?? 0),
-      },
-    });
   }
 
   return orgId;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Comissão, situação e parcelas do pedido                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * As comissões do SICOV, separadas por pedido.
+ *
+ * Cada pedido tem UMA comissão principal (a sem `parentOrderId`) e, se o
+ * recebimento foi dividido, as parcelas como comissões filhas — `installmentIndex`
+ * 1, 2, 3, com `dueDate` própria. Os percentuais saem da principal MESMO quando
+ * ela é `projected`: é o que o pai de um parcelado vira, e o laço antigo que a
+ * pulava deixava os 7 parcelados sem percentual e sem acerto.
+ */
+function comissoesPorPedido(sicov: any) {
+  const comissaoPrincipal = new Map<string, any>();
+  const parcelasDoSicov = new Map<string, any[]>();
+
+  for (const c of sicov.commissions as any[]) {
+    const pedido = String(c.orderId);
+    if (c.parentOrderId) {
+      if (!parcelasDoSicov.has(pedido)) parcelasDoSicov.set(pedido, []);
+      parcelasDoSicov.get(pedido)!.push(c);
+    } else if (comissaoPrincipal.has(pedido)) {
+      throw new Error(`Pedido ${c.orderNumber}: duas comissões principais no backup.`);
+    } else {
+      comissaoPrincipal.set(pedido, c);
+    }
+  }
+
+  for (const lista of parcelasDoSicov.values()) {
+    lista.sort((a, b) => a.installmentIndex - b.installmentIndex);
+  }
+
+  return { comissaoPrincipal, parcelasDoSicov };
+}
+
+/**
+ * A indústria de um documento cujo fornecedor foi apagado no SICOV — quando
+ * existe outra de MESMO nome (sem distinguir maiúsculas) no backup.
+ *
+ * A FAMYPACK foi excluída e cadastrada de novo como "Famypack", e três
+ * propostas (uma de R$ 113 mil para a MAC SANTOS) ficaram apontando para a
+ * antiga. O snapshot delas guarda o nome; sem casar por ele, as três sumiam
+ * caladas como "indústria não existe mais".
+ */
+function industriaRecriada(
+  sicov: any,
+  fornecedores: Map<string, string>,
+  doc: any,
+  aviso?: (m: string) => void,
+): string | undefined {
+  const nome = texto(doc.supplierSnapshot?.tradeName)?.toLowerCase();
+  if (!nome) return undefined;
+  const mesma = (sicov.suppliers as any[]).find(
+    (s) => (texto(s.tradeName) ?? s.name).toLowerCase() === nome,
+  );
+  const id = mesma && fornecedores.get(mesma._id);
+  if (id) {
+    aviso?.(
+      `Proposta de ${doc.createdAt?.slice(0, 10)} para ${doc.clientSnapshot?.name}: a indústria ` +
+        `"${doc.supplierSnapshot.tradeName}" foi apagada no SICOV — ligada à "${mesma.tradeName}", de mesmo nome.`,
+    );
+  }
+  return id;
+}
+
+/** O acerto de uma comissão: base que a indústria pagou e o percentual. */
+function acertoDaComissao(c: any): { valorRecebido: string; percentual: string } | null {
+  if (!c || c.realReceivedValue === null || c.realReceivedValue === undefined) return null;
+  return {
+    valorRecebido: numero(c.realReceivedValue)!,
+    percentual: numero(c.adminPercentage ?? 0)!,
+  };
+}
+
+/**
+ * Status e data de envio.
+ *
+ * O SICOV tinha "enviado" à parte do status, e 7 pedidos ativos nunca foram
+ * marcados — mas foram entregues e a indústria pagou a comissão deles: saíram
+ * por fora do sistema. Como ABERTO, R$ 102 mil e a comissão já recebida
+ * sumiriam da tela de Comissões, que só soma o ENVIADO. Entram como ENVIADO
+ * na data da entrega (decisão do usuário). Só o que não foi enviado NEM
+ * entregue NEM acertado fica ABERTO.
+ */
+function situacaoDoPedido(
+  o: any,
+  comissao: any,
+): { status: "ABERTO" | "ENVIADO" | "CANCELADO"; enviadoEm: Date | null } {
+  if (o.status === "cancelled") return { status: "CANCELADO", enviadoEm: null };
+
+  if (o.sentToSupplier) {
+    return { status: "ENVIADO", enviadoEm: data(o.sentToSupplierAt) ?? data(o.createdAt) };
+  }
+
+  const entregue = data(comissao?.realDeliveryDate);
+  if (entregue || acertoDaComissao(comissao)) {
+    return { status: "ENVIADO", enviadoEm: entregue ?? data(o.createdAt) };
+  }
+
+  return { status: "ABERTO", enviadoEm: null };
+}
+
+/**
+ * As parcelas de recebimento do pedido, no formato de `ParcelaRecebimento`.
+ *
+ * No SICOV, parcelar um pedido já parcialmente pago deixa o pago no PAI (o
+ * `realReceivedValue` dele) e cria os filhos com o RESTANTE: o 2181 recebeu
+ * 4.950 em julho e ganhou uma filha de 48.675 para agosto — 53.625 no total.
+ * Aqui não há pai: o pago vira a parcela 1, no mês da entrega, já acertada, e
+ * as filhas vêm depois. Sem nada pago, as filhas são as parcelas.
+ *
+ * A soma tem de fechar no centavo com a venda (`problemaNasParcelas`); se não
+ * fechar, a importação para — uma parcela que somasse diferente inventaria ou
+ * apagaria comissão.
+ */
+function parcelasDoPedido(o: any, principal: any, filhas: any[]) {
+  if (filhas.length === 0) return [];
+
+  const linhas: { vencimento: Date; base: string; acerto: ReturnType<typeof acertoDaComissao> }[] = [];
+  const pago = acertoDaComissao(principal);
+
+  if (pago) {
+    const entrega = data(principal.realDeliveryDate) ?? data(o.deliveryDate) ?? data(o.createdAt);
+    linhas.push({ vencimento: entrega!, base: pago.valorRecebido, acerto: pago });
+  }
+
+  for (const f of filhas) {
+    const vencimento = data(f.dueDate);
+    if (!vencimento) throw new Error(`Pedido ${o.orderNumber}: parcela sem vencimento no backup.`);
+    linhas.push({
+      vencimento,
+      base: new Decimal(f.orderValueWithoutIpi).toFixed(2),
+      acerto: acertoDaComissao(f),
+    });
+  }
+
+  const soma = linhas.reduce((t, l) => t.plus(l.base), new Decimal(0));
+  if (!soma.equals(new Decimal(o.subtotal).toDecimalPlaces(2))) {
+    throw new Error(
+      `Pedido ${o.orderNumber}: as parcelas somam ${soma.toFixed(2)} e a venda é ${o.subtotal}.`,
+    );
+  }
+
+  return linhas.map((l, i) => ({
+    numero: i + 1,
+    vencimento: l.vencimento,
+    base: l.base,
+    valorRecebido: l.acerto?.valorRecebido ?? null,
+    comissaoPercentualRecebido: l.acerto?.percentual ?? null,
+  }));
 }
 
 /* -------------------------------------------------------------------------- */
@@ -993,7 +1343,8 @@ function conferirPrecos(sicov: any) {
     if (!m.width || !m.length || !m.thickness || !c.density || !c.factorKg) continue;
     if (c.basePrice === undefined || c.basePrice === null) continue;
 
-    const nosso = m.width * m.length * m.thickness * c.density * c.factorKg;
+    // Com a densidade com que o saco ENTRA — ver `densidadeDoSaco`.
+    const nosso = m.width * m.length * m.thickness * densidadeDoSaco(p).densidade! * c.factorKg;
     conferidos++;
 
     if (Math.abs(nosso - c.basePrice) > 0.01) {
@@ -1004,6 +1355,452 @@ function conferirPrecos(sicov: any) {
   }
 
   return { conferidos, problemas };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Limpeza (--substituir)                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Esvazia o escritório, menos o administrador, e devolve os logos das
+ * indústrias por nome para a importação regravá-los.
+ *
+ * Roda como DONO do banco e antes da troca de papel: sob o RLS o admin não vê a
+ * meta nem a caixa de e-mail dos prepostos, e uma limpeza pela metade deixaria
+ * lixo pendurado. O `app.bypass_rls` é ligado só aqui dentro — os triggers de
+ * cadastro e de acerto respeitam ele — e desligado antes de devolver: com ele
+ * ligado, o papel restrito que vem depois enxergaria tudo.
+ *
+ * A ordem respeita as chaves `Restrict`: pedido e orçamento antes de cliente e
+ * indústria, produto antes de indústria. Itens, parcelas, envios, edições,
+ * vínculos, materiais e aditivos vão em cascata.
+ */
+async function limparEscritorio(tx: any, orgId: string, adminId: string) {
+  await tx.$executeRaw`SELECT set_config('app.bypass_rls', 'on', TRUE)`;
+
+  const comLogo = await tx.fornecedor.findMany({
+    where: { organizacaoId: orgId, logo: { not: null } },
+    select: { nome: true, logo: true, logoTipo: true },
+  });
+  const logos = new Map<string, Logo>(
+    comLogo.map((f: any) => [f.nome, { logo: f.logo, logoTipo: f.logoTipo }]),
+  );
+
+  const doEscritorio = { where: { organizacaoId: orgId } };
+  const apagados: Record<string, number> = {
+    pedidos: (await tx.pedido.deleteMany(doEscritorio)).count,
+    orçamentos: (await tx.orcamento.deleteMany(doEscritorio)).count,
+    compromissos: (await tx.compromisso.deleteMany(doEscritorio)).count,
+    produtos: (await tx.produto.deleteMany(doEscritorio)).count,
+    clientes: (await tx.cliente.deleteMany(doEscritorio)).count,
+    indústrias: (await tx.fornecedor.deleteMany(doEscritorio)).count,
+    metas: (await tx.metaComissao.deleteMany(doEscritorio)).count,
+    repasses: (await tx.repassePreposto.deleteMany(doEscritorio)).count,
+    "caixas de e-mail": (await tx.contaEmail.deleteMany(doEscritorio)).count,
+    usuários: (
+      await tx.usuario.deleteMany({ where: { organizacaoId: orgId, id: { not: adminId } } })
+    ).count,
+  };
+
+  await tx.$executeRaw`SELECT set_config('app.bypass_rls', 'off', TRUE)`;
+
+  console.log("\nLimpeza do escritório (antes da importação):");
+  for (const [o, n] of Object.entries(apagados)) console.log(`  ${String(n).padStart(5)}  ${o}`);
+  console.log(`  ${String(logos.size).padStart(5)}  logos guardados (${[...logos.keys()].join(", ")})`);
+
+  return logos;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Conferência da importação                                                  */
+/* -------------------------------------------------------------------------- */
+
+const dia = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null);
+const centavos = (v: unknown) =>
+  v === null || v === undefined ? null : new Decimal(String(v)).toFixed(2);
+const pct = (v: unknown) =>
+  v === null || v === undefined ? null : new Decimal(String(v)).toFixed(3);
+
+/**
+ * Relê o escritório e compara com o backup, pedido a pedido.
+ *
+ * Casa tudo por chave NATURAL — indústria pelo nome, pedido por indústria e
+ * número, proposta pela data de criação, preposto pelo e-mail —, e não pelos
+ * mapas da importação: assim a mesma função confere logo depois de importar e,
+ * com `--conferir`, o que já está gravado há dias.
+ *
+ * Lança com a lista de divergências; dentro da transação, isso desfaz tudo.
+ */
+async function conferir(tx: any, sicov: any, orgId: string) {
+  const problemas: string[] = [];
+  const falha = (m: string) => problemas.push(m);
+  const igual = (oQue: string, esperado: unknown, achado: unknown) => {
+    if (String(esperado) !== String(achado)) falha(`${oQue}: esperado ${esperado}, gravado ${achado}`);
+  };
+
+  const pulados = SEM_PREPOSTO;
+  const usuarioSicov = new Map((sicov.users as any[]).map((u) => [u._id, u]));
+  const clienteSicov = new Map((sicov.clients as any[]).map((c) => [c._id, c]));
+  const fornecedorSicov = new Map((sicov.suppliers as any[]).map((s) => [s._id, s]));
+  const nomeDaIndustria = (s: any) => texto(s.tradeName) ?? s.name;
+  /** O e-mail do preposto que entrou — `null` para o admin e para quem ficou de fora. */
+  const emailDoPreposto = (sicovId: unknown) => {
+    const u = usuarioSicov.get(String(sicovId));
+    if (!u || u.profile === "admin" || pulados.has(u.email.toLowerCase())) return null;
+    return u.email.toLowerCase();
+  };
+
+  /* --- Usuários ----------------------------------------------------------- */
+
+  const usuarios = await tx.usuario.findMany({ where: { organizacaoId: orgId } });
+  const usuarioPorId = new Map(usuarios.map((u: any) => [u.id, u]));
+  const prepostosEsperados = (sicov.users as any[]).filter((u) => emailDoPreposto(u._id));
+  const prepostos = usuarios.filter((u: any) => u.papel === "REPRESENTANTE");
+  igual("prepostos", prepostosEsperados.length, prepostos.length);
+
+  for (const u of prepostosEsperados) {
+    const p: any = prepostos.find((x: any) => x.email === u.email.toLowerCase());
+    if (!p) {
+      falha(`preposto ${u.email} não está no escritório`);
+      continue;
+    }
+    const { nome, sobrenome } = separarNome(u.name);
+    igual(`preposto ${u.email} · nome`, `${nome}|${sobrenome}`, `${p.nome}|${p.sobrenome}`);
+    igual(`preposto ${u.email} · % padrão`, pct(u.defaultCommissionPercentage ?? 0), pct(p.comissaoPercentualPadrao));
+    igual(`preposto ${u.email} · senha provisória`, true, p.senhaProvisoria);
+    igual(`preposto ${u.email} · ativo`, u.active !== false, p.ativo);
+  }
+
+  /* --- Indústrias --------------------------------------------------------- */
+
+  const industrias = await tx.fornecedor.findMany({ where: { organizacaoId: orgId } });
+  const industriaPorNome = new Map(industrias.map((f: any) => [f.nome, f]));
+  igual("indústrias", sicov.suppliers.length, industrias.length);
+
+  /* --- Clientes ----------------------------------------------------------- */
+
+  const clientes = await tx.cliente.findMany({
+    where: { organizacaoId: orgId },
+    include: { prepostos: true },
+  });
+  const recriados = new Set(
+    (sicov.orders as any[]).filter((o) => !clienteSicov.has(o.clientId)).map((o) => o.clientId),
+  );
+  igual("clientes", sicov.clients.length + recriados.size, clientes.length);
+
+  const clientesPorRazao = Map.groupBy(clientes, (c: any) => c.razaoSocial);
+  for (const c of sicov.clients as any[]) {
+    const candidatos: any[] = clientesPorRazao.get(c.name) ?? [];
+    const k = candidatos.find((x) => x.cnpj === documento(c.cnpj) && x.municipio === texto(c.city));
+    if (!k) {
+      falha(`cliente ${c.name} (${c.cnpj}) não encontrado com o mesmo CNPJ e município`);
+      continue;
+    }
+    igual(`cliente ${c.name} · prazo`, texto(c.paymentTerm), k.prazoPagamento);
+    igual(`cliente ${c.name} · ativo`, c.active !== false, k.ativo);
+    const esperado = emailDoPreposto(c.representativeId);
+    const achados = k.prepostos.map((v: any) => (usuarioPorId.get(v.usuarioId) as any)?.email).join(",");
+    igual(`cliente ${c.name} · preposto`, esperado ?? "", achados);
+  }
+
+  /* --- Pedidos ------------------------------------------------------------ */
+
+  const pedidos = await tx.pedido.findMany({
+    where: { organizacaoId: orgId },
+    include: { itens: true, parcelas: { orderBy: { numero: "asc" } }, cliente: true },
+  });
+  igual("pedidos", sicov.orders.length, pedidos.length);
+
+  const nomeIndustriaPorId = new Map(industrias.map((f: any) => [f.id, f.nome]));
+  const pedidoPorChave = new Map(
+    pedidos.map((p: any) => [`${nomeIndustriaPorId.get(p.fornecedorId)}|${p.numero}`, p]),
+  );
+  const { comissaoPrincipal, parcelasDoSicov } = comissoesPorPedido(sicov);
+  const statusContados: Record<string, number> = {};
+
+  for (const o of sicov.orders as any[]) {
+    const industria = nomeDaIndustria(fornecedorSicov.get(o.supplierId));
+    const p: any = pedidoPorChave.get(`${industria}|${o.orderNumber}`);
+    const rotulo = `pedido ${o.orderNumber} (${industria})`;
+    if (!p) {
+      falha(`${rotulo} não foi gravado`);
+      continue;
+    }
+
+    const c = comissaoPrincipal.get(o._id);
+    const situacao = situacaoDoPedido(o, c);
+    statusContados[p.status] = (statusContados[p.status] ?? 0) + 1;
+
+    igual(`${rotulo} · cliente`, clienteSicov.get(o.clientId)?.name ?? o.clientSnapshot?.name, p.cliente.razaoSocial);
+    igual(`${rotulo} · status`, situacao.status, p.status);
+    igual(`${rotulo} · enviado em`, dia(situacao.enviadoEm), dia(p.enviadoEm));
+    igual(`${rotulo} · em elaboração`, false, p.emElaboracao);
+    igual(`${rotulo} · subtotal`, centavos(o.subtotal ?? 0), centavos(p.subtotalSemIpi));
+    igual(`${rotulo} · IPI`, centavos(o.ipiValue ?? 0), centavos(p.valorIpi));
+    igual(`${rotulo} · total`, centavos(o.total ?? 0), centavos(p.totalGeral));
+    igual(`${rotulo} · % IPI`, pct(o.supplierSnapshot?.ipi ?? 0), pct(p.ipiPercentual));
+    igual(`${rotulo} · entrega prevista`, dia(data(o.deliveryDate)), dia(p.prazoEntrega));
+    igual(`${rotulo} · pedido do cliente`, texto(o.customerPurchaseOrder), p.pedidoDoCliente);
+    igual(`${rotulo} · itens`, (o.items ?? []).length, p.itens.length);
+
+    // A soma das linhas fecha com o subtotal: cada linha arredonda a 2 casas,
+    // então a folga é de meio centavo por linha.
+    const somaItens = p.itens.reduce((t: Decimal, i: any) => t.plus(i.totalSemIpi.toString()), new Decimal(0));
+    if (somaItens.minus(p.subtotalSemIpi.toString()).abs().greaterThan(0.005 * Math.max(1, p.itens.length))) {
+      falha(`${rotulo} · Σ itens ${somaItens.toFixed(2)} ≠ subtotal ${centavos(p.subtotalSemIpi)}`);
+    }
+
+    // Comissão
+    igual(`${rotulo} · % da indústria`, pct(c?.adminPercentage), pct(p.comissaoPercentual));
+    igual(`${rotulo} · % do preposto`, pct(c?.representativePercentage), pct(p.comissaoPercentualPreposto));
+    const donoEsperado =
+      c && Number(c.representativePercentage) > 0 ? emailDoPreposto(c.representativeId) : null;
+    igual(`${rotulo} · preposto da comissão`, donoEsperado ?? "", (usuarioPorId.get(p.representanteId) as any)?.email ?? "");
+    igual(`${rotulo} · criado por`, "", p.criadoPorId ?? "");
+    igual(`${rotulo} · entregue em`, dia(data(c?.realDeliveryDate)), dia(p.entregueEm));
+
+    const parcelasEsperadas = parcelasDoPedido(o, c, parcelasDoSicov.get(o._id) ?? []);
+    const acerto = parcelasEsperadas.length ? null : acertoDaComissao(c);
+    igual(`${rotulo} · base recebida`, centavos(acerto?.valorRecebido), centavos(p.valorRecebido));
+    igual(`${rotulo} · % recebido`, pct(acerto?.percentual), pct(p.comissaoPercentualRecebido));
+    igual(`${rotulo} · parcelas`, parcelasEsperadas.length, p.parcelas.length);
+
+    for (const [i, e] of parcelasEsperadas.entries()) {
+      const g = p.parcelas[i];
+      if (!g) break;
+      const r = `${rotulo} · parcela ${e.numero}`;
+      igual(`${r} · número`, e.numero, g.numero);
+      igual(`${r} · vencimento`, dia(e.vencimento), dia(g.vencimento));
+      igual(`${r} · base`, centavos(e.base), centavos(g.base));
+      igual(`${r} · recebido`, centavos(e.valorRecebido), centavos(g.valorRecebido));
+      igual(`${r} · % recebido`, pct(e.comissaoPercentualRecebido), pct(g.comissaoPercentualRecebido));
+    }
+    if (p.parcelas.length) {
+      const soma = p.parcelas.reduce((t: Decimal, x: any) => t.plus(x.base.toString()), new Decimal(0));
+      igual(`${rotulo} · Σ parcelas`, centavos(p.subtotalSemIpi), soma.toFixed(2));
+    }
+  }
+
+  /* --- Contadores --------------------------------------------------------- */
+
+  for (const s of sicov.suppliers as any[]) {
+    const f: any = industriaPorNome.get(nomeDaIndustria(s));
+    if (!f) continue;
+    const maior = Math.max(
+      0,
+      ...pedidos.filter((p: any) => p.fornecedorId === f.id).map((p: any) => p.numero),
+    );
+    if (f.proximoNumeroPedido <= maior) {
+      falha(`${f.nome} · próximo número ${f.proximoNumeroPedido} repetiria o pedido ${maior}`);
+    }
+  }
+
+  /* --- Preço do saco, pela conta da própria aplicação --------------------- */
+
+  /*
+   * O milheiro que um pedido NOVO vai cobrar — `precoUnitario` sobre o que foi
+   * gravado — contra o `basePrice` do SICOV. O saco com aditivo fica de fora:
+   * o `basePrice` do SICOV não inclui o extra, que ele somava no pedido, e
+   * aqui o aditivo já entra no milheiro.
+   */
+  const { precoUnitario, paraPrecificavel } = await import("../src/lib/produto-preco");
+  const produtos = await tx.produto.findMany({
+    where: { organizacaoId: orgId, familia: "SACO" },
+    include: { aditivos: { include: { aditivo: true } }, cliente: true },
+  });
+  const produtosPorChave = Map.groupBy(
+    produtos,
+    (p: any) => `${nomeIndustriaPorId.get(p.fornecedorId)}|${p.cliente?.razaoSocial ?? ""}|${p.descricao}`,
+  );
+  let sacosConferidos = 0;
+
+  for (const p of sicov.products as any[]) {
+    if (familiaDoProduto(p) !== "SACO" || p.commercialData?.basePrice == null) continue;
+    if ((p.selectedExtras ?? []).length || p.calculationMode !== "dimensions_density_factor") continue;
+
+    const chave =
+      `${nomeDaIndustria(fornecedorSicov.get(p.supplierId))}|` +
+      `${clienteSicov.get(p.clientId)?.name ?? ""}|${p.name}`;
+    const candidatos: any[] = produtosPorChave.get(chave) ?? [];
+    if (!candidatos.length) {
+      falha(`saco "${p.name}" não foi gravado`);
+      continue;
+    }
+
+    const esperado = new Decimal(p.commercialData.basePrice);
+    const algumBate = candidatos.some((g) => {
+      const preco = precoUnitario(paraPrecificavel(g), "MIL");
+      return preco !== null && preco.minus(esperado).abs().lessThanOrEqualTo(0.01);
+    });
+    if (!algumBate) {
+      const preco = precoUnitario(paraPrecificavel(candidatos[0]), "MIL");
+      falha(`saco "${p.name}" · milheiro: SICOV ${esperado.toFixed(3)}, aqui ${preco?.toFixed(3)}`);
+    }
+    sacosConferidos++;
+  }
+
+  /* --- Orçamentos --------------------------------------------------------- */
+
+  const orcamentos = await tx.orcamento.findMany({
+    where: { organizacaoId: orgId },
+    include: { itens: true, edicoes: true },
+  });
+  igual("orçamentos", sicov.quotations.length, orcamentos.length);
+
+  const orcamentoPorData = Map.groupBy(orcamentos, (q: any) => q.criadoEm.toISOString());
+  for (const q of sicov.quotations as any[]) {
+    const candidatos: any[] = orcamentoPorData.get(new Date(q.createdAt).toISOString()) ?? [];
+    const industriaDoBackup =
+      fornecedorSicov.get(q.supplierId) ??
+      (sicov.suppliers as any[]).find(
+        (s) =>
+          nomeDaIndustria(s).toLowerCase() === texto(q.supplierSnapshot?.tradeName)?.toLowerCase(),
+      );
+    const industriaId = industriaDoBackup
+      ? (industriaPorNome.get(nomeDaIndustria(industriaDoBackup)) as any)?.id
+      : undefined;
+    const g = candidatos.find((x) => x.fornecedorId === industriaId);
+    const rotulo = `orçamento de ${q.createdAt.slice(0, 10)} (${q.clientSnapshot?.name})`;
+    if (!g) {
+      falha(`${rotulo} não foi gravado`);
+      continue;
+    }
+    igual(`${rotulo} · total`, centavos(q.total ?? 0), centavos(g.totalGeral));
+    igual(`${rotulo} · itens`, (q.items ?? []).length, g.itens.length);
+    igual(`${rotulo} · edições`, (q.editHistory ?? []).length, g.edicoes.length);
+    igual(`${rotulo} · em elaboração`, false, g.emElaboracao);
+    const autor = emailDoPreposto(q.representativeId);
+    igual(`${rotulo} · criado por`, autor ?? "", (usuarioPorId.get(g.criadoPorId) as any)?.email ?? "");
+  }
+
+  const escritorio = await tx.organizacao.findUnique({ where: { id: orgId } });
+  const maiorOrcamento = Math.max(0, ...orcamentos.map((q: any) => q.numero));
+  igual("próximo número de orçamento", maiorOrcamento + 1, escritorio.proximoNumeroOrcamento);
+  igual("plano", "PLUS", escritorio.plano);
+
+  /* --- Indústrias de cada preposto ---------------------------------------- */
+
+  const marcas = await tx.fornecedorPreposto.findMany({
+    where: { usuario: { organizacaoId: orgId } },
+  });
+  for (const u of prepostosEsperados) {
+    const p: any = prepostos.find((x: any) => x.email === u.email.toLowerCase());
+    if (!p) continue;
+    const dele = new Set(marcas.filter((m: any) => m.usuarioId === p.id).map((m: any) => m.fornecedorId));
+    // Toda indústria em que ele tem pedido com comissão precisa estar marcada.
+    for (const ped of pedidos as any[]) {
+      if (ped.representanteId === p.id && !dele.has(ped.fornecedorId)) {
+        falha(`preposto ${p.email} não vê a indústria do pedido ${ped.numero}`);
+      }
+    }
+  }
+
+  /* --- Comissão por mês, pela conta da própria aplicação ------------------ */
+
+  /*
+   * O que a tela de Comissões vai mostrar, mês a mês, calculado pelo mesmo
+   * `expandirParcelas` + `resumirComissao` que ela usa — e o que o backup diz
+   * que devia ser. Bater aqui é a prova de que a aplicação LÊ o dado como foi
+   * gravado (competência pela entrega, parcela pelo vencimento).
+   */
+  const { expandirParcelas, resumirComissao } = await import("../src/lib/comissao-consulta");
+  const { comissaoDoPedido } = await import("../src/lib/comissao");
+  const industriaPorId = new Map(industrias.map((f: any) => [f.id, f]));
+
+  const itensDaTela = pedidos
+    .filter((p: any) => p.status === "ENVIADO")
+    .flatMap((p: any) =>
+      expandirParcelas(
+        {
+          ...p,
+          representante: p.representanteId
+            ? { id: p.representanteId, nome: "", papel: (usuarioPorId.get(p.representanteId) as any)?.papel }
+            : null,
+          fornecedor: industriaPorId.get(p.fornecedorId) as any,
+        },
+        p.parcelas,
+      ),
+    );
+  const telaPorMes = new Map(
+    [...Map.groupBy(itensDaTela, (i: any) => i.competencia)].map(([mes, itens]) => [
+      mes,
+      resumirComissao(itens as any),
+    ]),
+  );
+
+  const backupPorMes = new Map<string, { previsto: Decimal; recebido: Decimal }>();
+  for (const o of sicov.orders as any[]) {
+    const c = comissaoPrincipal.get(o._id);
+    if (situacaoDoPedido(o, c).status !== "ENVIADO") continue;
+
+    // Sem comissão no backup, vale o da indústria — o `percentualDoPedido` da tela.
+    const percentual =
+      c?.adminPercentage ??
+      (industriaPorNome.get(nomeDaIndustria(fornecedorSicov.get(o.supplierId))) as any)
+        ?.comissaoPercentual.toString();
+    const parcelas = parcelasDoPedido(o, c, parcelasDoSicov.get(o._id) ?? []);
+    const pedacos = parcelas.length
+      ? parcelas.map((x) => ({
+          mes: dia(x.vencimento)!.slice(0, 7),
+          base: x.base,
+          acerto: x.valorRecebido
+            ? { base: x.valorRecebido, percentual: x.comissaoPercentualRecebido! }
+            : null,
+        }))
+      : [
+          {
+            mes: dia(data(o.deliveryDate) ?? data(o.createdAt))!.slice(0, 7),
+            base: new Decimal(o.subtotal).toFixed(2),
+            acerto: acertoDaComissao(c)
+              ? { base: acertoDaComissao(c)!.valorRecebido, percentual: acertoDaComissao(c)!.percentual }
+              : null,
+          },
+        ];
+
+    for (const x of pedacos) {
+      const m = backupPorMes.get(x.mes) ?? { previsto: new Decimal(0), recebido: new Decimal(0) };
+      m.previsto = m.previsto.plus(comissaoDoPedido(x.base, percentual));
+      if (x.acerto) m.recebido = m.recebido.plus(comissaoDoPedido(x.acerto.base, x.acerto.percentual));
+      backupPorMes.set(x.mes, m);
+    }
+  }
+
+  const meses = [...new Set([...telaPorMes.keys(), ...backupPorMes.keys()])].sort();
+  const quadro: string[] = [];
+  for (const mes of meses) {
+    const tela = telaPorMes.get(mes);
+    const backup = backupPorMes.get(mes);
+    const previstoTela = tela?.valor.toFixed(2) ?? "0.00";
+    const recebidoTela = tela?.recebido.toFixed(2) ?? "0.00";
+    igual(`comissão prevista de ${mes}`, backup?.previsto.toFixed(2) ?? "0.00", previstoTela);
+    igual(`comissão recebida de ${mes}`, backup?.recebido.toFixed(2) ?? "0.00", recebidoTela);
+    quadro.push(
+      `  ${mes}   prevista R$ ${previstoTela.padStart(10)}   recebida R$ ${recebidoTela.padStart(10)}` +
+        `   (preposto: R$ ${(tela?.previstoDoPreposto.toFixed(2) ?? "0.00").padStart(8)})`,
+    );
+  }
+
+  /* --- Resultado ---------------------------------------------------------- */
+
+  console.log("\nConferência contra o backup:");
+  console.log(
+    `  ${prepostos.length} prepostos · ${industrias.length} indústrias · ${clientes.length} clientes · ` +
+      `${pedidos.length} pedidos · ${orcamentos.length} orçamentos`,
+  );
+  console.log(`  pedidos por status: ${JSON.stringify(statusContados)}`);
+  console.log(`  ${sacosConferidos} sacos com o milheiro igual ao do SICOV, pela fórmula da aplicação`);
+  console.log(`  logos: ${industrias.filter((f: any) => f.logo).map((f: any) => f.nome).join(", ") || "nenhum"}`);
+  console.log("\n  Comissão do escritório por competência (como a tela de Comissões calcula):");
+  console.log(quadro.join("\n"));
+
+  if (problemas.length) {
+    console.log(`\n  ✗ ${problemas.length} DIVERGÊNCIA(S):`);
+    for (const p of problemas.slice(0, 40)) console.log(`    · ${p}`);
+    if (problemas.length > 40) console.log(`    … e mais ${problemas.length - 40}`);
+    throw new Error(`A conferência achou ${problemas.length} divergência(s).`);
+  }
+
+  console.log("\n  ✓ Tudo bate com o backup.");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1053,9 +1850,20 @@ async function main() {
         if (!admin) throw new Error("O escritório não tem administrador.");
 
         /*
-         * Tudo que precisa enxergar ALÉM deste escritório tem de ser lido
-         * antes da troca de papel — daqui em diante o RLS está valendo.
+         * O que tem de acontecer como dono do banco, antes da troca de papel:
+         * a limpeza (o RLS esconderia parte do que apagar), o plano (um
+         * trigger o recusa ao papel da aplicação) e a lista de e-mails em uso
+         * — que tem de ser lida DEPOIS da limpeza, senão os prepostos de hoje
+         * contariam como "ocupados" e ficariam de fora.
          */
+        const logos =
+          SUBSTITUIR ? await limparEscritorio(tx, escritorio.id, admin.id) : new Map<string, Logo>();
+
+        if (!SO_CONFERIR && escritorio.plano !== "PLUS") {
+          await tx.organizacao.update({ where: { id: escritorio.id }, data: { plano: "PLUS" } });
+          contar("escritório promovido a Plus");
+        }
+
         const todos = await tx.usuario.findMany({ select: { email: true } });
         const emailsOcupados = new Set(todos.map((u: { email: string }) => u.email.toLowerCase()));
 
@@ -1069,7 +1877,10 @@ async function main() {
                                     set_config('app.usuario_id', ${admin.id}, TRUE),
                                     set_config('app.papel', 'ADMIN', TRUE)`;
 
-        orgId = await importar(tx, sicov, emailsOcupados);
+        if (!SO_CONFERIR) orgId = await importar(tx, sicov, emailsOcupados, logos);
+
+        // Sob o papel restrito, como o admin veria: é a leitura da aplicação.
+        await conferir(tx, sicov, escritorio.id);
 
         if (!GRAVAR) throw new Rollback();
       },
@@ -1077,11 +1888,20 @@ async function main() {
     );
   } catch (erro: any) {
     if (!(erro instanceof Rollback)) {
-      console.error("\n✗ A importação FALHOU e nada foi gravado.\n");
+      console.error(
+        SO_CONFERIR
+          ? "\n✗ A conferência FALHOU.\n"
+          : "\n✗ A importação FALHOU e nada foi gravado (nem apagado).\n",
+      );
       console.error(erro.message ?? erro);
       await prisma.$disconnect();
       process.exit(1);
     }
+  }
+
+  if (SO_CONFERIR) {
+    await prisma.$disconnect();
+    return;
   }
 
   /* --- relatório --------------------------------------------------------- */
