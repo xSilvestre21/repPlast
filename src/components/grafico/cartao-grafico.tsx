@@ -11,7 +11,9 @@
  *
  * Dois botões no canto: tela cheia (o mapa de calor e o mês a mês ganham muito
  * com espaço) e baixar a imagem — o PNG sai do próprio canvas do ECharts, com
- * o fundo do cartão, então é o gráfico exatamente como está na tela.
+ * o fundo do cartão, então é o gráfico exatamente como está na tela. Na visão
+ * de tabela ou de lista não há canvas, e o botão nem aparece: antes ele ficava
+ * lá e o clique não fazia nada.
  */
 
 import { Download, Maximize2, Minimize2, type LucideIcon } from "lucide-react";
@@ -52,6 +54,20 @@ export function CartaoGrafico({
   const [cheia, setCheia] = useState(false);
   const corpo = useRef<HTMLDivElement>(null);
   const cores = useTemaGrafico();
+  const [temGrafico, setTemGrafico] = useState(false);
+
+  // Se há um gráfico no corpo agora. Observado no DOM, e não por prop, porque
+  // a troca para tabela/lista acontece no cartão que chama este, cada um com
+  // as suas visões.
+  useEffect(() => {
+    const elemento = corpo.current;
+    if (!elemento) return;
+    const conferir = () => setTemGrafico(elemento.querySelector("[data-grafico]") !== null);
+    conferir();
+    const observador = new MutationObserver(conferir);
+    observador.observe(elemento, { childList: true, subtree: true });
+    return () => observador.disconnect();
+  }, [cheia]);
 
   // Esc fecha a tela cheia, como qualquer sobreposição.
   useEffect(() => {
@@ -102,7 +118,7 @@ export function CartaoGrafico({
           </div>
 
           <div className="shrink-0 flex items-center gap-0.5">
-            {!vazio && (
+            {!vazio && temGrafico && (
               <button type="button" onClick={baixar} className={BOTAO} aria-label="Baixar imagem">
                 <Download size={15} strokeWidth={2} aria-hidden="true" />
               </button>
