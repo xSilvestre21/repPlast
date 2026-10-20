@@ -15,9 +15,9 @@ const PNG = "data:image/png;base64,iVBORw0KGgo=";
 // O formato que o Gmail entrega ao copiar a assinatura da página de configurações.
 const DO_GMAIL =
   '<div dir="ltr"><table cellpadding="0" style="color:#333;font-family:Arial"><tbody><tr>' +
-  '<td><img src="https://ci3.googleusercontent.com/logo.png" width="96" alt="Val &amp; Amaral"></td>' +
-  '<td style="padding-left:12px"><b>Valquiria Silvestre</b><br>Representante comercial<br>' +
-  '<a href="tel:+5516999990000">(16) 99999-0000</a> · <a href="https://valeamaral.com.br">valeamaral.com.br</a>' +
+  '<td><img src="https://ci3.googleusercontent.com/logo.png" width="96" alt="Val &amp; Assis"></td>' +
+  '<td style="padding-left:12px"><b>Renata Prado</b><br>Representante comercial<br>' +
+  '<a href="tel:+5516999990000">(16) 99999-0000</a> · <a href="https://veraeassis.com.br">veraeassis.com.br</a>' +
   "</td></tr></tbody></table></div>";
 
 describe("limparAssinatura", () => {
@@ -27,20 +27,20 @@ describe("limparAssinatura", () => {
     expect(imagensPerdidas).toBe(0);
     expect(html).toContain('src="https://ci3.googleusercontent.com/logo.png"');
     expect(html).toContain('href="tel:+5516999990000"');
-    expect(html).toContain("<b>Valquiria Silvestre</b>");
+    expect(html).toContain("<b>Renata Prado</b>");
     expect(html).toContain("color:#333");
     expect(html).toContain("padding-left:12px");
   });
 
   it("tira o que roda código", () => {
     const { html } = limparAssinatura(
-      '<p onclick="roubar()">Valquiria<script>alert(1)</script></p>' +
+      '<p onclick="roubar()">Renata<script>alert(1)</script></p>' +
         '<a href="javascript:alert(1)">clique</a>' +
         '<span style="background:url(https://x.test/rastreio.gif);color:red">oi</span>',
     );
 
     expect(html).not.toMatch(/script|onclick|javascript|url\(/i);
-    expect(html).toContain("Valquiria");
+    expect(html).toContain("Renata");
     expect(html).toContain("color:red");
   });
 
@@ -68,7 +68,7 @@ describe("limparAssinatura", () => {
 describe("texto da assinatura", () => {
   it("uma linha por bloco, sem tags nem entidades", () => {
     expect(textoDaAssinatura(limparAssinatura(DO_GMAIL).html!)).toBe(
-      "Valquiria Silvestre\nRepresentante comercial\n(16) 99999-0000 · valeamaral.com.br",
+      "Renata Prado\nRepresentante comercial\n(16) 99999-0000 · veraeassis.com.br",
     );
   });
 

@@ -15,7 +15,7 @@
  * campo quanto do FormData.
  *
  * O formato de saída não foi inventado aqui: é o que já está gravado nos
- * clientes cadastrados — "(17) 3321-5900" e "09.507.378/0001-50".
+ * clientes cadastrados — "(11) 3456-7890" e "12.345.678/0001-95".
  */
 
 import { ErroDeCampo } from "@/lib/erro-formulario";
@@ -83,7 +83,7 @@ export function mascararDocumentoCobranca(valor: string): string {
 }
 
 /**
- * Telefone brasileiro com DDD: "(17) 3321-5900" ou "(17) 99687-3399".
+ * Telefone brasileiro com DDD: "(11) 3456-7890" ou "(11) 91234-5678".
  *
  * O corte entre prefixo e sufixo depende do total: 11 dígitos é celular e o
  * prefixo tem 5; 10 é fixo e o prefixo tem 4. Enquanto se digita, o número
@@ -111,7 +111,7 @@ export function mascararTelefone(valor: string): string {
   return `(${ddd}) ${numero.slice(0, prefixo)}-${numero.slice(prefixo)}`;
 }
 
-/** CEP: "14781-160". */
+/** CEP: "12345-678". */
 export function mascararCep(valor: string): string {
   const digitos = somenteDigitos(valor).slice(0, DIGITOS_CEP);
 
@@ -163,7 +163,7 @@ export function normalizarDocumento(valor: string, campo = "cnpj"): string | nul
     throw new ErroDeCampo(
       campo,
       `Faltam ou sobram números: ${digitos.length === 1 ? "foi digitado 1" : `foram digitados ${digitos.length}`}. ` +
-        `O CNPJ tem ${DIGITOS_CNPJ} números (como 09.507.378/0001-50) e o CPF tem ${DIGITOS_CPF} ` +
+        `O CNPJ tem ${DIGITOS_CNPJ} números (como 12.345.678/0001-95) e o CPF tem ${DIGITOS_CPF} ` +
         `(como 123.456.789-09).`,
     );
   }
@@ -184,7 +184,7 @@ export function normalizarCep(valor: string, campo = "cep"): string | null {
   if (digitos.length !== DIGITOS_CEP) {
     throw new ErroDeCampo(
       campo,
-      `O CEP tem ${DIGITOS_CEP} números, como 14781-160 — ${digitos.length === 1 ? "foi digitado 1" : `foram digitados ${digitos.length}`}.`,
+      `O CEP tem ${DIGITOS_CEP} números, como 12345-678 — ${digitos.length === 1 ? "foi digitado 1" : `foram digitados ${digitos.length}`}.`,
     );
   }
 

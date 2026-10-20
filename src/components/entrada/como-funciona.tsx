@@ -294,7 +294,7 @@ function montarExemplo(estado: Estado) {
     razaoSocialCliente: "EMBALAGENS EXEMPLO LTDA",
     cnpjCliente: "12.345.678/0001-90",
     pedidoDoCliente: "4512",
-    vendedor: "Carlos Mendes",
+    vendedor: "Ana Souza",
   });
   const anexo = nomeArquivoPedido({
     numero: 2254,

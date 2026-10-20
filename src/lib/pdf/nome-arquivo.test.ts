@@ -14,45 +14,45 @@ describe("nome do arquivo do pedido", () => {
     expect(
       nomeArquivoPedido({
         numero: 2253,
-        apelidoCliente: "MARIOL",
+        apelidoCliente: "ORION",
         pedidoDoCliente: "228156",
         prazoEntrega: emUtc("2026-10-09"),
       }),
-    ).toBe("2253-MARIOL-PC-228156-09-10-2026.pdf");
+    ).toBe("2253-ORION-PC-228156-09-10-2026.pdf");
 
     expect(
       nomeArquivoPedido({
         numero: 2256,
-        apelidoCliente: "LEMEPACK",
+        apelidoCliente: "VEGAPACK",
         pedidoDoCliente: null,
         prazoEntrega: emUtc("2026-09-30"),
       }),
-    ).toBe("2256-LEMEPACK-30-09-2026.pdf");
+    ).toBe("2256-VEGAPACK-30-09-2026.pdf");
 
     expect(
       nomeArquivoPedido({
         numero: 133,
-        apelidoCliente: "CASTRO-MACHI",
+        apelidoCliente: "COSTA-MELO",
         pedidoDoCliente: null,
         prazoEntrega: emUtc("2026-06-12"),
       }),
-    ).toBe("133-CASTRO-MACHI-12-06-2026.pdf");
+    ).toBe("133-COSTA-MELO-12-06-2026.pdf");
 
     expect(
       nomeArquivoPedido({
         numero: 146,
-        apelidoCliente: "AN-PARAFUSOS",
+        apelidoCliente: "JK-PARAFUSOS",
         pedidoDoCliente: null,
         prazoEntrega: emUtc("2026-08-25"),
       }),
-    ).toBe("146-AN-PARAFUSOS-25-08-2026.pdf");
+    ).toBe("146-JK-PARAFUSOS-25-08-2026.pdf");
   });
 
   it("usa a data de ENTREGA, não a de emissão", () => {
     // No pedido 2253 a emissão foi 10/09 e a entrega 09/10 — o nome traz a entrega.
     const nome = nomeArquivoPedido({
       numero: 2253,
-      apelidoCliente: "MARIOL",
+      apelidoCliente: "ORION",
       pedidoDoCliente: null,
       prazoEntrega: emUtc("2026-10-09"),
     });

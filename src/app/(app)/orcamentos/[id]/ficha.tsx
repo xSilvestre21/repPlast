@@ -91,7 +91,7 @@ export function FichaProposta({
             rotulo="Aos cuidados de"
             disabled={!editavel}
             dica="A pessoa no cliente. Sai abaixo do nome da empresa."
-            placeholder="Sr. Marcelo"
+            placeholder="Sr. João"
             defaultValue={valores.attn}
           />
           <CampoData
@@ -120,7 +120,7 @@ export function FichaProposta({
             rotulo="Cidade"
             disabled={!editavel}
             dica="Abre o cabeçalho, antes da data. Vem da sua ficha em Configurações."
-            placeholder="Americana"
+            placeholder="Sua cidade"
             defaultValue={valores.cidade}
           />
         </div>

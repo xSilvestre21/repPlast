@@ -110,7 +110,7 @@ export function SecaoContatos({
                       name="nome"
                       value={linha.nome}
                       onChange={(e) => mudar(linha.chave, "nome", e.target.value)}
-                      placeholder={linha.id ? "" : "Marcos"}
+                      placeholder={linha.id ? "" : "João"}
                       className={CLASSE_CONTROLE}
                     />
                   </label>

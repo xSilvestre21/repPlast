@@ -3,9 +3,9 @@
  *
  * Reproduz o padrão dos pedidos reais em `referencia/`:
  *
- *     2253-MARIOL-PC-228156-09-10-2026.pdf
- *     2256-LEMEPACK-30-09-2026.pdf
- *     133-CASTRO-MACHI-12-06-2026.pdf
+ *     2253-ORION-PC-228156-09-10-2026.pdf
+ *     2256-VEGAPACK-30-09-2026.pdf
+ *     133-COSTA-MELO-12-06-2026.pdf
  *
  * Número, apelido do cliente, o pedido de compra dele quando houver, e a data
  * de ENTREGA — não a de emissão. Isso não é detalhe estético: quem recebe

@@ -22,7 +22,7 @@ const PEDIDO: LinhaPedido = {
   numero: 142,
   status: "ENVIADO",
   motivoCancelamento: "",
-  apelidoCliente: "MARIOL",
+  apelidoCliente: "ORION",
   prazoEntrega: "2026-10-15",
   entregueEm: null,
   base: "1000",

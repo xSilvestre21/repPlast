@@ -30,14 +30,14 @@ export function FormCidade({
     <SecaoCartao
       icone={MapPin}
       titulo="Sua cidade"
-      descricao="Abre o cabeçalho da proposta, antes da data: “Americana, 16 de Setembro de 2026”."
+      descricao="Abre o cabeçalho da proposta, antes da data: “Sua Cidade, 16 de Setembro de 2026”."
     >
       <Formulario estado={estado} action={enviar} className="space-y-4">
         <Campo
           name="municipio"
           rotulo="Cidade"
           defaultValue={valor}
-          placeholder="Americana"
+          placeholder="Sua cidade"
           className="max-w-xs"
           dica="Entra preenchida em todo orçamento novo. Dá para trocar em cada proposta — quem viaja muda ali, sem mexer neste padrão."
         />

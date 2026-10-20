@@ -74,7 +74,7 @@ function dinheiro(valor: string) {
   return `R$ ${MOEDA.format(Number(valor))}`;
 }
 
-/** "Americana, 16 de Setembro de 2026" — a abertura de uma carta, não de um formulário. */
+/** "Monte Claro, 16 de Setembro de 2026" — a abertura de uma carta, não de um formulário. */
 function dataPorExtenso(cidade: string | null, data: Date) {
   const dia = data.getDate();
   const texto = `${dia} de ${MES[data.getMonth()]} de ${data.getFullYear()}`;
@@ -99,10 +99,10 @@ const e = StyleSheet.create({
   /*
    * Altura FIXA, e é o que segura o cabeçalho de pé.
    *
-   * Cada indústria manda o logo com a moldura que quiser: o da QualyPlast tem
-   * a marca num terço da altura do arquivo, o da Eripack ocupa quase tudo.
+   * Cada indústria manda o logo com a moldura que quiser: o da AlfaPlast tem
+   * a marca num terço da altura do arquivo, o da Betapack ocupa quase tudo.
    * Fosse a altura livre, o destinatário subiria ou desceria conforme o
-   * arquivo — na Eripack ele chegou a encostar no logo. Com a caixa fixa, cada
+   * arquivo — na Betapack ele chegou a encostar no logo. Com a caixa fixa, cada
    * logo cresce até onde couber e o resto do documento não se mexe.
    */
   topo: {
@@ -115,7 +115,7 @@ const e = StyleSheet.create({
    * A largura é que manda aqui, e a altura só existe como trava.
    *
    * O arquivo que a indústria manda costuma vir com moldura transparente em
-   * volta da arte — o da QualyPlast tem 1600x869 e a marca ocupa um terço da
+   * volta da arte — o da AlfaPlast tem 1600x869 e a marca ocupa um terço da
    * altura. Limitando pela altura, o `contain` encolhe a MOLDURA até caber e a
    * marca some junto; limitando pela largura, ela sai do tamanho do modelo
    * impresso e a moldura vira só espaço em branco, que é o que ela é.

@@ -133,7 +133,7 @@ export async function buscarProdutos(
     /*
      * A busca alcança o CLIENTE e a INDÚSTRIA, não só a descrição.
      *
-     * É como se procura na prática — "o que eu vendo para a Flexopet?" — e era
+     * É como se procura na prática — "o que eu vendo para a Titanpet?" — e era
      * o comportamento do sistema anterior. Sem isso, um catálogo com quatro
      * linhas `90x160x0,055 SF 12 PEAD` não tem como ser desempatado.
      */

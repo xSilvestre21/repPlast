@@ -78,13 +78,13 @@ export function problemaNoDocumento(documento: string): string | null {
     return cnpjValido(documento)
       ? null
       : "Este CNPJ não existe — os dois últimos números não conferem com os outros. Confira se " +
-          "digitou certo, como 09.507.378/0001-50.";
+          "digitou certo, como 12.345.678/0001-95.";
   }
 
   const contagem =
     documento.length === 1 ? "foi digitado 1 caractere" : `foram digitados ${documento.length} caracteres`;
   return (
     `Faltam ou sobram caracteres: ${contagem}. O CPF tem 11 números (como 123.456.789-09) e o ` +
-    "CNPJ tem 14 (como 09.507.378/0001-50)."
+    "CNPJ tem 14 (como 12.345.678/0001-95)."
   );
 }

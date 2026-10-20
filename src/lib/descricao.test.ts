@@ -3,9 +3,9 @@
  *
  * Todas as fixtures vêm de pedidos reais, em `referencia/`:
  *
- *   2253 / 2256  QUALYPLAST — sacos plásticos
- *   133          ERIPACK    — fita adesiva
- *   146          ERIPACK    — film stretch
+ *   2253 / 2256  ALFAPLAST — sacos plásticos
+ *   133          BETAPACK    — fita adesiva
+ *   146          BETAPACK    — film stretch
  *
  * A descrição é o que o cliente e a indústria leem no papel. Se ela sair
  * diferente do que a indústria está acostumada a receber, o pedido gera
@@ -85,7 +85,7 @@ describe("saco plástico — pedidos 2253 e 2256", () => {
   });
 });
 
-describe("fita — pedido 133 da ERIPACK", () => {
+describe("fita — pedido 133 da BETAPACK", () => {
   it("reproduz a descrição do pedido real", () => {
     expect(
       descricaoFita({
@@ -111,7 +111,7 @@ describe("fita — pedido 133 da ERIPACK", () => {
   });
 });
 
-describe("stretch e bobina — pedido 146 da ERIPACK", () => {
+describe("stretch e bobina — pedido 146 da BETAPACK", () => {
   it("reproduz as duas descrições do pedido real", () => {
     expect(
       descricaoRolo({

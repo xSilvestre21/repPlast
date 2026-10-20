@@ -82,10 +82,10 @@ export function FormularioNovoOrcamento({
                   name="clienteAvulsoNome"
                   rotulo="Para quem é a proposta"
                   required
-                  placeholder="Himaflex"
+                  placeholder="Nome do cliente"
                   dica="Só o nome basta. O cadastro vem depois, se o negócio acontecer."
                 />
-                <Campo name="clienteAvulsoMunicipio" rotulo="Cidade" placeholder="Limeira" />
+                <Campo name="clienteAvulsoMunicipio" rotulo="Cidade" placeholder="Cidade do cliente" />
               </>
             )}
 

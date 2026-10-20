@@ -23,8 +23,8 @@ import { EntregaEnviado } from "./entrega-enviado";
 function abrir() {
   return render(
     <EntregaEnviado
-      titulo="Pedido enviado para a QUALYPLAST"
-      para={["compras@qualyplast.com.br"]}
+      titulo="Pedido enviado para a ALFAPLAST"
+      para={["compras@alfaplast.com.br"]}
       cc={[]}
       fechar={() => {}}
     />,

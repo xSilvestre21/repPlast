@@ -83,11 +83,11 @@ export function FormularioPreposto({
           descricao="Nome e sobrenome assinam o rodapé das propostas dele e aparecem em Comissões."
         >
           <div className="grid gap-4 sm:grid-cols-2">
-            <Campo name="nome" rotulo="Nome" required placeholder="Maria" defaultValue={atuais.nome} />
+            <Campo name="nome" rotulo="Nome" required placeholder="Ana" defaultValue={atuais.nome} />
             <Campo
               name="sobrenome"
               rotulo="Sobrenome"
-              placeholder="Augusta Ferraz"
+              placeholder="Souza"
               defaultValue={atuais.sobrenome}
             />
           </div>
@@ -105,7 +105,7 @@ export function FormularioPreposto({
               // nem vai no envio, que de todo jeito não o lê na edição.
               disabled={!novo}
               autoComplete="off"
-              placeholder="maria@exemplo.com.br"
+              placeholder="ana@exemplo.com.br"
               defaultValue={atuais.email}
               dica={novo ? "É com ele que o preposto entra no sistema." : "É o login dele — não muda por aqui."}
             />

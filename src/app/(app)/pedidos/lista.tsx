@@ -11,7 +11,7 @@
  *
  * O que muda aqui: até agora esta tela paginava por URL (`?pagina=3`), com links
  * de verdade. Com busca e três filtros, ninguém mais pensa em número de página —
- * pensa em "o pedido da MARIOL" — e manter as duas listas com interações
+ * pensa em "o pedido da ORION" — e manter as duas listas com interações
  * diferentes custava mais do que o link para a página 3 valia.
  */
 

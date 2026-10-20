@@ -33,7 +33,7 @@ async function main() {
     await db.usuario.create({
       data: {
         organizacaoId,
-        nome: "Valquiria Silvestre",
+        nome: "Renata Prado",
         email,
         senhaHash: await gerarHashSenha("repplast123"),
       },
@@ -42,14 +42,14 @@ async function main() {
   }
 
   // --- Indústria ---------------------------------------------------------
-  const qualyplast =
+  const alfaplast =
     (await db.fornecedor.findFirst({
-      where: { organizacaoId, nome: "QUALYPLAST EMBALAGENS" },
+      where: { organizacaoId, nome: "ALFAPLAST EMBALAGENS" },
     })) ??
     (await db.fornecedor.create({
       data: {
         organizacaoId,
-        nome: "QUALYPLAST EMBALAGENS",
+        nome: "ALFAPLAST EMBALAGENS",
         ipiPercentual: "9.75",
         comissaoPercentual: "3",
         fatorKgPadrao: "13.50",
@@ -60,11 +60,11 @@ async function main() {
 
   const deslizante =
     (await db.aditivo.findFirst({
-      where: { fornecedorId: qualyplast.id, nome: "Deslizante" },
+      where: { fornecedorId: alfaplast.id, nome: "Deslizante" },
     })) ??
     (await db.aditivo.create({
       data: {
-        fornecedorId: qualyplast.id,
+        fornecedorId: alfaplast.id,
         nome: "Deslizante",
         sufixoDescricao: "C/ DESLIZANTE",
         tipo: "POR_KG",
@@ -82,9 +82,9 @@ async function main() {
   // agora é propriedade do material. Com ela o pedido 2253 fecha em 1.774,872,
   // igual ao PDF que a indústria emitiu.
   await db.material.upsert({
-    where: { fornecedorId_nome: { fornecedorId: qualyplast.id, nome: "PEAD" } },
+    where: { fornecedorId_nome: { fornecedorId: alfaplast.id, nome: "PEAD" } },
     create: {
-      fornecedorId: qualyplast.id,
+      fornecedorId: alfaplast.id,
       nome: "PEAD",
       precoKg: "13.50",
       densidade: "0.1",
@@ -93,41 +93,41 @@ async function main() {
   });
 
   // --- Clientes ----------------------------------------------------------
-  const mariol =
-    (await db.cliente.findFirst({ where: { organizacaoId, apelido: "MARIOL" } })) ??
+  const orion =
+    (await db.cliente.findFirst({ where: { organizacaoId, apelido: "ORION" } })) ??
     (await db.cliente.create({
       data: {
         organizacaoId,
-        apelido: "MARIOL",
-        razaoSocial: "MARIOL EMBALAGENS LTDA",
-        cnpj: "09.507.378/0001-50",
-        ie: "204.222.524.111",
+        apelido: "ORION",
+        razaoSocial: "ORION EMBALAGENS LTDA",
+        cnpj: "12.345.678/0001-95",
+        ie: "111.111.111.111",
         uf: "SP",
-        endereco: "Av. Mario de Oliveira, 505",
-        bairro: "Distrito Industrial II",
-        cep: "14781-160",
-        municipio: "Barretos",
-        telefone: "(17) 3321-5900",
-        emailNfe: "nfe@mariolembalagens.com.br",
+        endereco: "Avenida das Indústrias, 100",
+        bairro: "Distrito Industrial",
+        cep: "12345-678",
+        municipio: "Monte Claro",
+        telefone: "(11) 3456-7890",
+        emailNfe: "nfe@orionembalagens.com.br",
       },
     }));
 
-  const lemepack =
-    (await db.cliente.findFirst({ where: { organizacaoId, apelido: "LEMEPACK" } })) ??
+  const vegapack =
+    (await db.cliente.findFirst({ where: { organizacaoId, apelido: "VEGAPACK" } })) ??
     (await db.cliente.create({
       data: {
         organizacaoId,
-        apelido: "LEMEPACK",
-        razaoSocial: "LEMEPACK SOLUÇÕES EM EMBALAGENS LTDA",
-        cnpj: "41.938.265/0001-12",
-        ie: "415.198.612.112",
+        apelido: "VEGAPACK",
+        razaoSocial: "VEGAPACK SOLUÇÕES EM EMBALAGENS LTDA",
+        cnpj: "98.765.432/0001-98",
+        ie: "222.222.222.222",
         uf: "SP",
-        endereco: "Rua Carlos Fatuto, 170",
-        bairro: "Jardim do Bosque",
-        cep: "13613-110",
-        municipio: "Leme",
-        telefone: "(15) 98116-0572",
-        emailNfe: "administrativo@lemepack.com.br",
+        endereco: "Rua das Palmeiras, 200",
+        bairro: "Jardim Exemplo",
+        cep: "12345-679",
+        municipio: "Lagoa Azul",
+        telefone: "(15) 98765-4321",
+        emailNfe: "administrativo@vegapack.com.br",
       },
     }));
 
@@ -144,7 +144,7 @@ async function main() {
       material: "PEAD",
       fatorKg: "13.50",
       aditivos: [] as string[],
-      clienteId: mariol.id,
+      clienteId: orion.id,
       codigoCliente: "121010011",
     },
     {
@@ -156,7 +156,7 @@ async function main() {
       material: "PEAD",
       fatorKg: "13.50",
       aditivos: [] as string[],
-      clienteId: mariol.id,
+      clienteId: orion.id,
       codigoCliente: "121010014",
     },
     {
@@ -170,7 +170,7 @@ async function main() {
       aditivos: [deslizante.id],
       // Dono sim, código não: nem todo cliente numera o que compra, e o
       // produto é dele do mesmo jeito.
-      clienteId: mariol.id,
+      clienteId: orion.id,
       codigoCliente: null as string | null,
     },
   ];
@@ -186,7 +186,7 @@ async function main() {
     });
 
     const existente = await db.produto.findFirst({
-      where: { organizacaoId, fornecedorId: qualyplast.id, codigoFornecedor: p.codigoFornecedor },
+      where: { organizacaoId, fornecedorId: alfaplast.id, codigoFornecedor: p.codigoFornecedor },
     });
 
     const produto =
@@ -194,7 +194,7 @@ async function main() {
       (await db.produto.create({
         data: {
           organizacaoId,
-          fornecedorId: qualyplast.id,
+          fornecedorId: alfaplast.id,
           familia: "SACO",
           codigoFornecedor: p.codigoFornecedor,
           clienteId: p.clienteId,
@@ -220,30 +220,30 @@ async function main() {
     console.log(`  produto ${p.codigoFornecedor}: ${descricao}`);
   }
 
-  await semearEripack(organizacaoId);
+  await semearBetapack(organizacaoId);
 
   console.log(`\nOrganização: ${organizacao.nome} (${organizacaoId})`);
-  console.log(`Fornecedores: ${qualyplast.nome} (IPI 9,75%), ERIPACK (IPI 15%)`);
-  console.log(`Clientes:     ${mariol.apelido}, ${lemepack.apelido}, CASTRO-MACHI, AN-PARAFUSOS`);
+  console.log(`Fornecedores: ${alfaplast.nome} (IPI 9,75%), BETAPACK (IPI 15%)`);
+  console.log(`Clientes:     ${orion.apelido}, ${vegapack.apelido}, COSTA-MELO, JK-PARAFUSOS`);
 }
 
 /**
  * Segunda indústria, dos pedidos 133 e 146.
  *
  * Vale a pena estar no seed por dois motivos: prova que o IPI é mesmo por
- * fornecedor (15% aqui contra 9,75% da QUALYPLAST) e traz as famílias fita e
- * stretch, que não aparecem nos pedidos da QUALYPLAST.
+ * fornecedor (15% aqui contra 9,75% da ALFAPLAST) e traz as famílias fita e
+ * stretch, que não aparecem nos pedidos da ALFAPLAST.
  */
-async function semearEripack(organizacaoId: string) {
-  const eripack =
-    (await db.fornecedor.findFirst({ where: { organizacaoId, nome: "ERIPACK" } })) ??
+async function semearBetapack(organizacaoId: string) {
+  const betapack =
+    (await db.fornecedor.findFirst({ where: { organizacaoId, nome: "BETAPACK" } })) ??
     (await db.fornecedor.create({
       data: {
         organizacaoId,
-        nome: "ERIPACK",
-        razaoSocial: "ERIPACK EMBALAGENS INDUSTRIAIS",
+        nome: "BETAPACK",
+        razaoSocial: "BETAPACK EMBALAGENS INDUSTRIAIS",
         ipiPercentual: "15",
-        // O percentual de comissão da ERIPACK não consta nos pedidos de
+        // O percentual de comissão da BETAPACK não consta nos pedidos de
         // referência — fica zero até o usuário informar.
         comissaoPercentual: "0",
         proximoNumeroPedido: 147,
@@ -252,30 +252,30 @@ async function semearEripack(organizacaoId: string) {
 
   const clientes = [
     {
-      apelido: "CASTRO-MACHI",
-      razaoSocial: "CASTRO & MACHI INDUSTRIA E COMERCIO LTDA",
-      cnpj: "45.592.600/0001-24",
-      ie: "606.369.999.114",
+      apelido: "COSTA-MELO",
+      razaoSocial: "COSTA & MELO INDUSTRIA E COMERCIO LTDA",
+      cnpj: "11.222.333/0001-81",
+      ie: "333.333.333.333",
       uf: "SP",
-      endereco: "Rua Ricardo Fracassi, 590",
+      endereco: "Rua dos Ipês, 300",
       bairro: "Distrito Industrial",
-      cep: "13457-209",
-      municipio: "Santa Barbara D'Oeste",
-      telefone: "(19) 99687-3399",
-      emailNfe: "castro.machi.ind@gmail.com",
+      cep: "12345-680",
+      municipio: "Sao Bento D'Oeste",
+      telefone: "(11) 91234-5678",
+      emailNfe: "financeiro@costamelo.com.br",
     },
     {
-      apelido: "AN-PARAFUSOS",
-      razaoSocial: "AN PARAFUSOS LTDA -EPP",
-      cnpj: "10.781.464/0001-36",
-      ie: "286.299.251.116",
+      apelido: "JK-PARAFUSOS",
+      razaoSocial: "JK PARAFUSOS LTDA -EPP",
+      cnpj: "11.444.777/0001-61",
+      ie: "444.444.444.444",
       uf: "SP",
-      endereco: "Av. Dom Pedro I 1154",
-      bairro: "Vila Conceição",
-      cep: "09991-000",
-      municipio: "Diadema",
-      telefone: "(11) 4043-1468",
-      emailNfe: "financeiro@anparafusos.com.br",
+      endereco: "Avenida Central, 400",
+      bairro: "Centro",
+      cep: "01234-000",
+      municipio: "Vale Verde",
+      telefone: "(11) 4567-8901",
+      emailNfe: "financeiro@jkparafusos.com.br",
     },
   ];
 
@@ -318,16 +318,16 @@ async function semearEripack(organizacaoId: string) {
     const descricao = p.familia === "FITA" ? descricaoFita(p) : descricaoRolo(p);
 
     const existente = await db.produto.findFirst({
-      where: { organizacaoId, fornecedorId: eripack.id, descricao },
+      where: { organizacaoId, fornecedorId: betapack.id, descricao },
     });
 
     if (!existente) {
       await db.produto.create({
-        data: { organizacaoId, fornecedorId: eripack.id, descricao, ...p },
+        data: { organizacaoId, fornecedorId: betapack.id, descricao, ...p },
       });
     }
 
-    console.log(`  produto ERIPACK: ${descricao}`);
+    console.log(`  produto BETAPACK: ${descricao}`);
   }
 }
 

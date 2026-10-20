@@ -162,7 +162,7 @@ function Pontualidade({ prazo, entregue }: { prazo: string | null; entregue: str
   );
 }
 
-/** "Luiz R$ 12,00" e "casa R$ 30,00", uma em cima da outra, sob o valor. */
+/** "Davi R$ 12,00" e "casa R$ 30,00", uma em cima da outra, sob o valor. */
 function Fatias({ nome, rateio }: { nome: string | null; rateio: LinhaPedido["rateio"] }) {
   if (!rateio) return null;
 

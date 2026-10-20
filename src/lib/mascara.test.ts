@@ -26,8 +26,8 @@ import {
 
 describe("mascararDocumento", () => {
   it("monta o CNPJ", () => {
-    expect(mascararDocumento("09507378000150")).toBe("09.507.378/0001-50");
-    expect(mascararDocumento("10781464000136")).toBe("10.781.464/0001-36");
+    expect(mascararDocumento("12345678000195")).toBe("12.345.678/0001-95");
+    expect(mascararDocumento("11444777000161")).toBe("11.444.777/0001-61");
   });
 
   it("monta o CPF", () => {
@@ -49,24 +49,24 @@ describe("mascararDocumento", () => {
   });
 
   it("ignora a pontuação já digitada — colar um valor formatado não duplica nada", () => {
-    expect(mascararDocumento("09.507.378/0001-50")).toBe("09.507.378/0001-50");
+    expect(mascararDocumento("12.345.678/0001-95")).toBe("12.345.678/0001-95");
     expect(mascararDocumento("123.456.789-09")).toBe("123.456.789-09");
   });
 
   it("descarta o que passa de 14 dígitos", () => {
-    expect(mascararDocumento("095073780001509999")).toBe("09.507.378/0001-50");
+    expect(mascararDocumento("123456780001959999")).toBe("12.345.678/0001-95");
   });
 });
 
 describe("mascararTelefone", () => {
   it("monta o fixo com 10 dígitos", () => {
-    expect(mascararTelefone("1733215900")).toBe("(17) 3321-5900");
-    expect(mascararTelefone("1140431468")).toBe("(11) 4043-1468");
+    expect(mascararTelefone("1134567890")).toBe("(11) 3456-7890");
+    expect(mascararTelefone("1145678901")).toBe("(11) 4567-8901");
   });
 
   it("monta o celular com 11 dígitos", () => {
-    expect(mascararTelefone("19996873399")).toBe("(19) 99687-3399");
-    expect(mascararTelefone("15981160572")).toBe("(15) 98116-0572");
+    expect(mascararTelefone("11912345678")).toBe("(11) 91234-5678");
+    expect(mascararTelefone("15987654321")).toBe("(15) 98765-4321");
   });
 
   it("acompanha a digitação", () => {
@@ -81,15 +81,15 @@ describe("mascararTelefone", () => {
 
   it("move o corte quando o 11º dígito chega", () => {
     expect(mascararTelefone("1999687339")).toBe("(19) 9968-7339");
-    expect(mascararTelefone("19996873399")).toBe("(19) 99687-3399");
+    expect(mascararTelefone("11912345678")).toBe("(11) 91234-5678");
   });
 
   it("ignora a pontuação já digitada", () => {
-    expect(mascararTelefone("(17) 3321-5900")).toBe("(17) 3321-5900");
+    expect(mascararTelefone("(11) 3456-7890")).toBe("(11) 3456-7890");
   });
 
   it("descarta o que passa de 11 dígitos", () => {
-    expect(mascararTelefone("199968733990000")).toBe("(19) 99687-3399");
+    expect(mascararTelefone("119123456780000")).toBe("(11) 91234-5678");
   });
 
   it("sai da frente quando começa com zero — nenhum DDD começa assim", () => {
@@ -100,8 +100,8 @@ describe("mascararTelefone", () => {
 
 describe("mascararCep", () => {
   it("monta o CEP", () => {
-    expect(mascararCep("14781160")).toBe("14781-160");
-    expect(mascararCep("09991000")).toBe("09991-000");
+    expect(mascararCep("12345678")).toBe("12345-678");
+    expect(mascararCep("01234000")).toBe("01234-000");
   });
 
   it("acompanha a digitação", () => {
@@ -112,8 +112,8 @@ describe("mascararCep", () => {
   });
 
   it("ignora a pontuação já digitada e descarta o que passa de 8 dígitos", () => {
-    expect(mascararCep("14781-160")).toBe("14781-160");
-    expect(mascararCep("147811609999")).toBe("14781-160");
+    expect(mascararCep("12345-678")).toBe("12345-678");
+    expect(mascararCep("123456789999")).toBe("12345-678");
   });
 });
 
@@ -159,9 +159,9 @@ describe("mascararMoeda", () => {
 
 describe("normalizarCep", () => {
   it("grava sempre pontuado", () => {
-    expect(normalizarCep("14781160")).toBe("14781-160");
-    expect(normalizarCep("14781-160")).toBe("14781-160");
-    expect(normalizarCep(" 14.781-160 ")).toBe("14781-160");
+    expect(normalizarCep("12345678")).toBe("12345-678");
+    expect(normalizarCep("12345-678")).toBe("12345-678");
+    expect(normalizarCep(" 12.345-678 ")).toBe("12345-678");
   });
 
   it("devolve null quando o campo veio vazio", () => {
@@ -176,9 +176,9 @@ describe("normalizarCep", () => {
 
 describe("normalizarDocumento", () => {
   it("grava sempre pontuado, venha como vier", () => {
-    expect(normalizarDocumento("09507378000150")).toBe("09.507.378/0001-50");
-    expect(normalizarDocumento("09.507.378/0001-50")).toBe("09.507.378/0001-50");
-    expect(normalizarDocumento("  09 507 378 0001 50 ")).toBe("09.507.378/0001-50");
+    expect(normalizarDocumento("12345678000195")).toBe("12.345.678/0001-95");
+    expect(normalizarDocumento("12.345.678/0001-95")).toBe("12.345.678/0001-95");
+    expect(normalizarDocumento("  12 345 678 0001 95 ")).toBe("12.345.678/0001-95");
   });
 
   it("aceita CPF", () => {
@@ -191,15 +191,15 @@ describe("normalizarDocumento", () => {
   });
 
   it("recusa contagem que não fecha — o documento sai impresso no pedido", () => {
-    expect(() => normalizarDocumento("0950737800015")).toThrow(/CNPJ|CPF/);
+    expect(() => normalizarDocumento("1234567800019")).toThrow(/CNPJ|CPF/);
     expect(() => normalizarDocumento("123456789")).toThrow(/CNPJ|CPF/);
   });
 });
 
 describe("normalizarTelefone", () => {
   it("padroniza fixo e celular", () => {
-    expect(normalizarTelefone("1733215900")).toBe("(17) 3321-5900");
-    expect(normalizarTelefone("19996873399")).toBe("(19) 99687-3399");
+    expect(normalizarTelefone("1134567890")).toBe("(11) 3456-7890");
+    expect(normalizarTelefone("11912345678")).toBe("(11) 91234-5678");
   });
 
   it("devolve null quando o campo veio vazio", () => {
@@ -209,15 +209,15 @@ describe("normalizarTelefone", () => {
 
   it("preserva o que não cabe na máscara em vez de remontar errado", () => {
     expect(normalizarTelefone("0800 704 1234")).toBe("0800 704 1234");
-    expect(normalizarTelefone("(17) 3321-5900 ramal 12")).toBe("(17) 3321-5900 ramal 12");
+    expect(normalizarTelefone("(11) 3456-7890 ramal 12")).toBe("(11) 3456-7890 ramal 12");
     expect(normalizarTelefone("+1 555 0100")).toBe("+1 555 0100");
   });
 });
 
 describe("somenteDigitos", () => {
   it("tira tudo que não é dígito", () => {
-    expect(somenteDigitos("09.507.378/0001-50")).toBe("09507378000150");
-    expect(somenteDigitos("(17) 3321-5900")).toBe("1733215900");
+    expect(somenteDigitos("12.345.678/0001-95")).toBe("12345678000195");
+    expect(somenteDigitos("(11) 3456-7890")).toBe("1134567890");
     expect(somenteDigitos("nenhum")).toBe("");
   });
 });

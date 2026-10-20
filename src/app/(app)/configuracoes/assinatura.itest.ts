@@ -49,7 +49,7 @@ beforeAll(async () => {
   const usuario = await admin.usuario.create({
     data: {
       organizacaoId: org,
-      nome: "Valquiria",
+      nome: "Renata",
       email: `val-${org}@exemplo.test`,
       senhaHash: "x",
       papel: "ADMIN",
@@ -66,7 +66,7 @@ function conta(assinatura: string, senha = "abcd efgh ijkl mnop") {
   const formData = new FormData();
   formData.set("provedor", "GMAIL");
   formData.set("email", "val@gmail.com");
-  formData.set("nomeExibicao", "Valquiria");
+  formData.set("nomeExibicao", "Renata");
   formData.set("host", "smtp.gmail.com");
   formData.set("porta", "465");
   formData.set("seguranca", "ssl");
@@ -86,21 +86,21 @@ describe("assinatura da conta", () => {
       {},
       conta(
         '<table><tr><td><img src="https://ci3.googleusercontent.com/logo.png"></td>' +
-          '<td onclick="x()"><b>Valquiria</b><script>alert(1)</script></td></tr></table>',
+          '<td onclick="x()"><b>Renata</b><script>alert(1)</script></td></tr></table>',
       ),
     );
     expect(estado.erro).toBeUndefined();
 
     const { assinaturaHtml } = await gravada();
     expect(assinaturaHtml).toContain('src="https://ci3.googleusercontent.com/logo.png"');
-    expect(assinaturaHtml).toContain("<b>Valquiria</b>");
+    expect(assinaturaHtml).toContain("<b>Renata</b>");
     expect(assinaturaHtml).not.toMatch(/script|onclick/);
   });
 
   it("o envio encontra a assinatura da caixa", async () => {
     const { id } = await gravada();
     const paraEnvio = await contaParaEnvio(dbParaOrganizacao(org, ator), ator.usuarioId, id);
-    expect(paraEnvio?.assinaturaHtml).toContain("<b>Valquiria</b>");
+    expect(paraEnvio?.assinaturaHtml).toContain("<b>Renata</b>");
   });
 
   it("colar nada é remover", async () => {

@@ -18,7 +18,7 @@ const admin = dbAdministrativo();
 let organizacaoId = "";
 let adminId = "";
 let ana = "";
-let bruno = "";
+let heitor = "";
 let soDaAna = "";
 let dosDois = "";
 let semPreposto = "";
@@ -46,18 +46,18 @@ beforeAll(async () => {
   const [a, b, c, d, e, f] = await Promise.all([
     usuario("Dona", "ADMIN"),
     usuario("Ana", "REPRESENTANTE", "40"),
-    usuario("Bruno", "REPRESENTANTE", "25"),
+    usuario("Heitor", "REPRESENTANTE", "25"),
     cliente("SO-ANA"),
     cliente("DOS-DOIS"),
     cliente("SEM"),
   ]);
-  [adminId, ana, bruno, soDaAna, dosDois, semPreposto] = [a.id, b.id, c.id, d.id, e.id, f.id];
+  [adminId, ana, heitor, soDaAna, dosDois, semPreposto] = [a.id, b.id, c.id, d.id, e.id, f.id];
 
   await admin.clientePreposto.createMany({
     data: [
       { clienteId: soDaAna, usuarioId: ana },
       { clienteId: dosDois, usuarioId: ana },
-      { clienteId: dosDois, usuarioId: bruno },
+      { clienteId: dosDois, usuarioId: heitor },
     ],
   });
 });
@@ -97,16 +97,16 @@ describe("preposto de um pedido novo", () => {
     const r = await prepostoDoNovoPedido(admin, {
       organizacaoId,
       clienteId: dosDois,
-      usuarioId: bruno,
+      usuarioId: heitor,
       ehAdmin: false,
     });
-    expect(r.representanteId).toBe(bruno);
+    expect(r.representanteId).toBe(heitor);
     expect(Number(r.comissaoPercentualPreposto)).toBe(25);
   });
 
   it("a proposta cotada por um preposto credita ele, mesmo convertida pelo administrador", async () => {
-    const r = await peloAdmin(dosDois, bruno);
-    expect(r.representanteId).toBe(bruno);
+    const r = await peloAdmin(dosDois, heitor);
+    expect(r.representanteId).toBe(heitor);
     expect(Number(r.comissaoPercentualPreposto)).toBe(25);
   });
 });

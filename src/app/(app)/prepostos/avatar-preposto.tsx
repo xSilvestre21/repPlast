@@ -4,7 +4,7 @@ import { iniciaisDe } from "@/components/ui";
  * O disco com as iniciais do preposto, na cor dele.
  *
  * É a mesma cor da linha dele em Comissões e da fatia dele nos gráficos: quem
- * vê "MA" em lilás aqui reconhece a Maria lá, sem ler o nome.
+ * vê "MA" em lilás aqui reconhece a Iara lá, sem ler o nome.
  */
 export function AvatarPreposto({
   nome,

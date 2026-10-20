@@ -49,13 +49,13 @@ describe("caixa da assinatura", () => {
 
     colar(
       caixa,
-      '<img src="https://ci3.googleusercontent.com/logo.png"><b onclick="x()">Valquiria</b>' +
+      '<img src="https://ci3.googleusercontent.com/logo.png"><b onclick="x()">Renata</b>' +
         '<script>alert(1)</script><a href="javascript:alert(1)">site</a>',
     );
 
-    await expect.element(page.getByText("Valquiria")).toBeVisible();
+    await expect.element(page.getByText("Renata")).toBeVisible();
     expect(campo.value).toContain('src="https://ci3.googleusercontent.com/logo.png"');
-    expect(campo.value).toContain("<b>Valquiria</b>");
+    expect(campo.value).toContain("<b>Renata</b>");
     expect(campo.value).not.toMatch(/script|onclick|javascript/);
   });
 
@@ -68,9 +68,9 @@ describe("caixa da assinatura", () => {
   });
 
   test("reabre com a assinatura guardada, e “Remover assinatura” esvazia", async () => {
-    const { campo } = await abrir("<p><b>Valquiria</b></p>");
+    const { campo } = await abrir("<p><b>Renata</b></p>");
 
-    await expect.element(page.getByText("Valquiria")).toBeVisible();
+    await expect.element(page.getByText("Renata")).toBeVisible();
     await page.getByRole("button", { name: "Remover assinatura" }).click();
 
     expect(campo.value).toBe("");

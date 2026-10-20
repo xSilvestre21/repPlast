@@ -48,7 +48,7 @@ export function erroNomeEmUso(campo: string, nome: string): ErroDeCampo {
   return new ErroDeCampo(
     campo,
     `Já existe um escritório chamado “${nome}”. Escolha outro — por exemplo, junte a cidade: ` +
-      `“${nome} Americana”.`,
+      `“${nome} (sua cidade)”.`,
   );
 }
 

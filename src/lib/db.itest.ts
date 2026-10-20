@@ -154,9 +154,9 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
   let escritorio = "";
   let dono: Ator;
   let ana: Ator;
-  let bruno: Ator;
+  let heitor: Ator;
   let clienteDaAna = "";
-  let clienteDoBruno = "";
+  let clienteDoHeitor = "";
   let pedidoDaAna = "";
 
   beforeAll(async () => {
@@ -180,7 +180,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
 
     dono = await criarUsuario("Dono", "ADMIN");
     ana = await criarUsuario("Ana", "REPRESENTANTE");
-    bruno = await criarUsuario("Bruno", "REPRESENTANTE");
+    heitor = await criarUsuario("Heitor", "REPRESENTANTE");
 
     // Quem atende o cliente é a tabela `cliente_preposto`; nenhum é do escritório.
     const criarCliente = async (apelido: string, prepostoId: string | null) => {
@@ -196,7 +196,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     };
 
     clienteDaAna = await criarCliente("DA-ANA", ana.usuarioId);
-    clienteDoBruno = await criarCliente("DO-BRUNO", bruno.usuarioId);
+    clienteDoHeitor = await criarCliente("DO-HEITOR", heitor.usuarioId);
     // Sem dono: é do escritório, e aparece para todo mundo.
     await criarCliente("DA-CASA", null);
 
@@ -205,7 +205,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     });
     // Os dois trabalham com ela: o preposto só vê a indústria marcada para ele.
     await admin.fornecedorPreposto.createMany({
-      data: [ana, bruno].map((a) => ({ fornecedorId: fornecedor.id, usuarioId: a.usuarioId })),
+      data: [ana, heitor].map((a) => ({ fornecedorId: fornecedor.id, usuarioId: a.usuarioId })),
     });
 
     const p = await admin.pedido.create({
@@ -237,25 +237,25 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
       await dbParaOrganizacao(escritorio, dono).cliente.findMany({ orderBy: { apelido: "asc" } })
     ).map((c) => c.apelido);
 
-    expect(apelidos).toEqual(["DA-ANA", "DA-CASA", "DO-BRUNO"]);
+    expect(apelidos).toEqual(["DA-ANA", "DA-CASA", "DO-HEITOR"]);
   });
 
   it("buscar pelo id do cliente do colega não devolve nada", async () => {
     const db = dbParaOrganizacao(escritorio, ana);
 
-    expect(await db.cliente.findUnique({ where: { id: clienteDoBruno } })).toBeNull();
+    expect(await db.cliente.findUnique({ where: { id: clienteDoHeitor } })).toBeNull();
   });
 
   it("não deixa alterar o cliente do colega", async () => {
     const { count } = await dbParaOrganizacao(escritorio, ana).cliente.updateMany({
-      where: { id: clienteDoBruno },
+      where: { id: clienteDoHeitor },
       data: { apelido: "SEQUESTRADO" },
     });
 
     expect(count).toBe(0);
 
-    const intacto = await admin.cliente.findUnique({ where: { id: clienteDoBruno } });
-    expect(intacto?.apelido).toBe("DO-BRUNO");
+    const intacto = await admin.cliente.findUnique({ where: { id: clienteDoHeitor } });
+    expect(intacto?.apelido).toBe("DO-HEITOR");
   });
 
   it("não deixa cadastrar cliente em nome do colega", async () => {
@@ -266,7 +266,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
             organizacaoId: escritorio,
             apelido: "INVASOR",
             razaoSocial: "Invasor LTDA",
-            criadoPorId: bruno.usuarioId,
+            criadoPorId: heitor.usuarioId,
           },
         ],
       }),
@@ -382,12 +382,12 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
           organizacaoId: escritorio,
           apelido: "DOS-DOIS",
           razaoSocial: "Dos Dois LTDA",
-          prepostos: { create: [{ usuarioId: ana.usuarioId }, { usuarioId: bruno.usuarioId }] },
+          prepostos: { create: [{ usuarioId: ana.usuarioId }, { usuarioId: heitor.usuarioId }] },
         },
       })
     ).id;
 
-    for (const ator of [ana, bruno]) {
+    for (const ator of [ana, heitor]) {
       expect(await dbParaOrganizacao(escritorio, ator).cliente.findUnique({ where: { id } })).not.toBeNull();
     }
     // Cada um lê só o próprio vínculo; quem mais atende é assunto do escritório.
@@ -402,7 +402,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
   });
 
   it("o pedido segue o mesmo corte", async () => {
-    expect(await dbParaOrganizacao(escritorio, bruno).pedido.findMany()).toHaveLength(0);
+    expect(await dbParaOrganizacao(escritorio, heitor).pedido.findMany()).toHaveLength(0);
     expect(await dbParaOrganizacao(escritorio, ana).pedido.findMany()).toHaveLength(1);
     expect(await dbParaOrganizacao(escritorio, dono).pedido.findMany()).toHaveLength(1);
   });
@@ -423,7 +423,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
       },
     });
 
-    expect(await dbParaOrganizacao(escritorio, bruno).pedidoItem.findMany()).toHaveLength(0);
+    expect(await dbParaOrganizacao(escritorio, heitor).pedidoItem.findMany()).toHaveLength(0);
     expect(await dbParaOrganizacao(escritorio, ana).pedidoItem.findMany()).toHaveLength(1);
   });
 
@@ -439,7 +439,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
       },
     });
 
-    expect(await dbParaOrganizacao(escritorio, bruno).envioPedido.findMany()).toHaveLength(0);
+    expect(await dbParaOrganizacao(escritorio, heitor).envioPedido.findMany()).toHaveLength(0);
     expect(await dbParaOrganizacao(escritorio, ana).envioPedido.findMany()).toHaveLength(1);
     expect(await dbParaOrganizacao(escritorio, dono).envioPedido.findMany()).toHaveLength(1);
   });
@@ -454,18 +454,18 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
       },
     });
 
-    expect(await dbParaOrganizacao(escritorio, bruno).parcelaRecebimento.findMany()).toHaveLength(0);
+    expect(await dbParaOrganizacao(escritorio, heitor).parcelaRecebimento.findMany()).toHaveLength(0);
     expect(await dbParaOrganizacao(escritorio, ana).parcelaRecebimento.findMany()).toHaveLength(1);
     expect(await dbParaOrganizacao(escritorio, dono).parcelaRecebimento.findMany()).toHaveLength(1);
 
     // Nem lançar acerto, nem parcelar o pedido do colega.
-    const { count } = await dbParaOrganizacao(escritorio, bruno).parcelaRecebimento.updateMany({
+    const { count } = await dbParaOrganizacao(escritorio, heitor).parcelaRecebimento.updateMany({
       data: { valorRecebido: "1", comissaoPercentualRecebido: "1" },
     });
     expect(count).toBe(0);
 
     await expect(
-      dbParaOrganizacao(escritorio, bruno).parcelaRecebimento.create({
+      dbParaOrganizacao(escritorio, heitor).parcelaRecebimento.create({
         data: {
           pedidoId: pedidoDaAna,
           numero: 2,
@@ -534,7 +534,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
       },
     });
 
-    expect(await dbParaOrganizacao(escritorio, bruno).envioOrcamento.findMany()).toHaveLength(0);
+    expect(await dbParaOrganizacao(escritorio, heitor).envioOrcamento.findMany()).toHaveLength(0);
     expect(await dbParaOrganizacao(escritorio, ana).envioOrcamento.findMany()).toHaveLength(1);
     expect(await dbParaOrganizacao(escritorio, dono).envioOrcamento.findMany()).toHaveLength(1);
   });
@@ -542,7 +542,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
   it("o histórico de edições herda o corte do pedido", async () => {
     await admin.pedidoEdicao.create({ data: { pedidoId: pedidoDaAna, usuarioId: ana.usuarioId } });
 
-    expect(await dbParaOrganizacao(escritorio, bruno).pedidoEdicao.findMany()).toHaveLength(0);
+    expect(await dbParaOrganizacao(escritorio, heitor).pedidoEdicao.findMany()).toHaveLength(0);
     expect(await dbParaOrganizacao(escritorio, ana).pedidoEdicao.findMany()).toHaveLength(1);
     expect(await dbParaOrganizacao(escritorio, dono).pedidoEdicao.findMany()).toHaveLength(1);
   });
@@ -568,7 +568,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     const daAna = (await dbParaOrganizacao(escritorio, ana).pedido.findMany()).map((p) => p.id);
     // `pedidoDaAna` paga a Ana: lançado para a carteira dela, sem autor.
     expect(daAna.sort()).toEqual([pedidoDaAna, digitadoPelaAna.id].sort());
-    expect(await dbParaOrganizacao(escritorio, bruno).pedido.findMany()).toHaveLength(0);
+    expect(await dbParaOrganizacao(escritorio, heitor).pedido.findMany()).toHaveLength(0);
     expect(await dbParaOrganizacao(escritorio, dono).pedido.findMany()).toHaveLength(3);
 
     await admin.pedido.deleteMany({ where: { id: { in: [doEscritorio.id, digitadoPelaAna.id] } } });
@@ -637,7 +637,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     ).rejects.toThrow();
     await expect(
       comoAna.orcamento.create({
-        data: { organizacaoId: escritorio, fornecedorId, numero: 301, criadoPorId: bruno.usuarioId },
+        data: { organizacaoId: escritorio, fornecedorId, numero: 301, criadoPorId: heitor.usuarioId },
       }),
     ).rejects.toThrow();
   });
@@ -666,9 +666,9 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
         criadoPorId: ana.usuarioId,
       },
     });
-    // Passa da Ana para o Bruno.
+    // Passa da Ana para o Heitor.
     await admin.clientePreposto.deleteMany({ where: { clienteId: cliente.id } });
-    await admin.clientePreposto.create({ data: { clienteId: cliente.id, usuarioId: bruno.usuarioId } });
+    await admin.clientePreposto.create({ data: { clienteId: cliente.id, usuarioId: heitor.usuarioId } });
 
     const comoAna = dbParaOrganizacao(escritorio, ana);
     const lido = await comoAna.pedido.findUniqueOrThrow({
@@ -709,7 +709,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     });
 
     expect(await dbParaOrganizacao(escritorio, ana).contaEmail.findMany()).toHaveLength(1);
-    expect(await dbParaOrganizacao(escritorio, bruno).contaEmail.findMany()).toHaveLength(0);
+    expect(await dbParaOrganizacao(escritorio, heitor).contaEmail.findMany()).toHaveLength(0);
     expect(await dbParaOrganizacao(escritorio, dono).contaEmail.findMany()).toHaveLength(0);
 
     const { count } = await dbParaOrganizacao(escritorio, dono).contaEmail.updateMany({
@@ -720,7 +720,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
 
   it("não deixa cadastrar caixa de e-mail em nome do colega", async () => {
     await expect(
-      dbParaOrganizacao(escritorio, bruno).contaEmail.create({
+      dbParaOrganizacao(escritorio, heitor).contaEmail.create({
         data: {
           organizacaoId: escritorio,
           usuarioId: ana.usuarioId,
@@ -748,7 +748,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     });
 
     expect(await dbParaOrganizacao(escritorio, ana).metaComissao.findMany()).toHaveLength(1);
-    expect(await dbParaOrganizacao(escritorio, bruno).metaComissao.findMany()).toHaveLength(0);
+    expect(await dbParaOrganizacao(escritorio, heitor).metaComissao.findMany()).toHaveLength(0);
     expect(await dbParaOrganizacao(escritorio, dono).metaComissao.findMany()).toHaveLength(0);
 
     const { count } = await dbParaOrganizacao(escritorio, dono).metaComissao.updateMany({
@@ -759,7 +759,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
 
   it("não deixa definir meta em nome do colega", async () => {
     await expect(
-      dbParaOrganizacao(escritorio, bruno).metaComissao.create({
+      dbParaOrganizacao(escritorio, heitor).metaComissao.create({
         data: { organizacaoId: escritorio, usuarioId: ana.usuarioId, competencia: "2026-11", valor: "1" },
       }),
     ).rejects.toThrow();
@@ -783,7 +783,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
 
     expect(await dbParaOrganizacao(escritorio, dono).repassePreposto.findMany()).toHaveLength(1);
     expect(await dbParaOrganizacao(escritorio, ana).repassePreposto.findMany()).toHaveLength(1);
-    expect(await dbParaOrganizacao(escritorio, bruno).repassePreposto.findMany()).toHaveLength(0);
+    expect(await dbParaOrganizacao(escritorio, heitor).repassePreposto.findMany()).toHaveLength(0);
     expect(await dbParaOrganizacao(orgA, DONO).repassePreposto.findMany()).toHaveLength(0);
   });
 
@@ -841,7 +841,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
       );
 
     expect(await titulos(ana)).toEqual(["Pessoal da Ana", "Reunião do escritório"]);
-    expect(await titulos(bruno)).toEqual(["Reunião do escritório"]);
+    expect(await titulos(heitor)).toEqual(["Reunião do escritório"]);
     expect(await titulos(dono)).toEqual(["Reunião do escritório"]);
     expect(await dbParaOrganizacao(orgA, DONO).compromisso.findMany()).toHaveLength(0);
   });
@@ -856,7 +856,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     expect(apagados.count).toBe(0);
 
     await expect(
-      dbParaOrganizacao(escritorio, bruno).compromisso.create({
+      dbParaOrganizacao(escritorio, heitor).compromisso.create({
         data: {
           organizacaoId: escritorio,
           autorId: ana.usuarioId,
@@ -872,19 +872,19 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
   });
 
   it("o lembrar depois é de cada um", async () => {
-    const [compartilhado] = await dbParaOrganizacao(escritorio, bruno).compromisso.findMany();
+    const [compartilhado] = await dbParaOrganizacao(escritorio, heitor).compromisso.findMany();
     const ate = new Date(Date.now() + 60_000);
 
-    // Bruno adia o aviso do compromisso compartilhado da Ana — só para ele.
-    await dbParaOrganizacao(escritorio, bruno).avisoAdiado.create({
-      data: { usuarioId: bruno.usuarioId, compromissoId: compartilhado.id, ate },
+    // Heitor adia o aviso do compromisso compartilhado da Ana — só para ele.
+    await dbParaOrganizacao(escritorio, heitor).avisoAdiado.create({
+      data: { usuarioId: heitor.usuarioId, compromissoId: compartilhado.id, ate },
     });
 
-    expect(await dbParaOrganizacao(escritorio, bruno).avisoAdiado.findMany()).toHaveLength(1);
+    expect(await dbParaOrganizacao(escritorio, heitor).avisoAdiado.findMany()).toHaveLength(1);
     expect(await dbParaOrganizacao(escritorio, ana).avisoAdiado.findMany()).toHaveLength(0);
 
     await expect(
-      dbParaOrganizacao(escritorio, bruno).avisoAdiado.create({
+      dbParaOrganizacao(escritorio, heitor).avisoAdiado.create({
         data: { usuarioId: ana.usuarioId, compromissoId: compartilhado.id, ate },
       }),
     ).rejects.toThrow();
@@ -898,7 +898,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
       data: { fornecedorId: industria.id, email: "pcp@industria.local" },
     });
 
-    expect(await dbParaOrganizacao(escritorio, bruno).contatoFornecedor.findMany()).toHaveLength(1);
+    expect(await dbParaOrganizacao(escritorio, heitor).contatoFornecedor.findMany()).toHaveLength(1);
     expect(await dbParaOrganizacao(orgA, DONO).contatoFornecedor.findMany()).toHaveLength(0);
     await expect(
       dbParaOrganizacao(orgA, DONO).contatoFornecedor.create({
@@ -908,7 +908,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
   });
 
   it("o preposto vê a indústria marcada para ele", async () => {
-    const nomes = (await dbParaOrganizacao(escritorio, bruno).fornecedor.findMany()).map(
+    const nomes = (await dbParaOrganizacao(escritorio, heitor).fornecedor.findMany()).map(
       (f) => f.nome,
     );
 
@@ -922,11 +922,11 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     });
 
     await admin.fornecedorPreposto.delete({
-      where: { fornecedorId_usuarioId: { fornecedorId: industria.id, usuarioId: bruno.usuarioId } },
+      where: { fornecedorId_usuarioId: { fornecedorId: industria.id, usuarioId: heitor.usuarioId } },
     });
 
     expect(await dbParaOrganizacao(escritorio, ana).fornecedor.findMany()).toHaveLength(1);
-    expect(await dbParaOrganizacao(escritorio, bruno).fornecedor.findMany()).toHaveLength(0);
+    expect(await dbParaOrganizacao(escritorio, heitor).fornecedor.findMany()).toHaveLength(0);
 
     // Sem linha nenhuma, ninguém vê — a ausência não abre para o escritório.
     // (Uma indústria nova: a desta suíte tem pedido da Ana, e isso a deixa legível.)
@@ -941,7 +941,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
 
     await admin.fornecedor.delete({ where: { id: outra.id } });
     await admin.fornecedorPreposto.create({
-      data: { fornecedorId: industria.id, usuarioId: bruno.usuarioId },
+      data: { fornecedorId: industria.id, usuarioId: heitor.usuarioId },
     });
   });
 
@@ -1006,10 +1006,10 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
       }),
     ).rejects.toThrow();
 
-    // Bruno não vê o pedido da Ana — e por ele, continua lendo só pela marca.
+    // Heitor não vê o pedido da Ana — e por ele, continua lendo só pela marca.
     expect(
-      await dbParaOrganizacao(escritorio, bruno).fornecedor.findMany({
-        where: soIndustriasMarcadas({ ehAdmin: false, usuarioId: bruno.usuarioId }),
+      await dbParaOrganizacao(escritorio, heitor).fornecedor.findMany({
+        where: soIndustriasMarcadas({ ehAdmin: false, usuarioId: heitor.usuarioId }),
       }),
     ).toHaveLength(1);
 
@@ -1046,7 +1046,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     });
 
     await admin.fornecedorPreposto.delete({
-      where: { fornecedorId_usuarioId: { fornecedorId: industria!.id, usuarioId: bruno.usuarioId } },
+      where: { fornecedorId_usuarioId: { fornecedorId: industria!.id, usuarioId: heitor.usuarioId } },
     });
 
     await admin.produto.create({
@@ -1060,10 +1060,10 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     });
 
     expect(await dbParaOrganizacao(escritorio, ana).produto.findMany()).toHaveLength(1);
-    expect(await dbParaOrganizacao(escritorio, bruno).produto.findMany()).toHaveLength(0);
+    expect(await dbParaOrganizacao(escritorio, heitor).produto.findMany()).toHaveLength(0);
 
     await admin.fornecedorPreposto.create({
-      data: { fornecedorId: industria!.id, usuarioId: bruno.usuarioId },
+      data: { fornecedorId: industria!.id, usuarioId: heitor.usuarioId },
     });
     await admin.produto.deleteMany({ where: { organizacaoId: escritorio } });
   });
@@ -1095,7 +1095,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
       });
 
     await criarProduto("DA-ANA stretch", clienteDaAna);
-    await criarProduto("DO-BRUNO stretch", clienteDoBruno);
+    await criarProduto("DO-HEITOR stretch", clienteDoHeitor);
     // Sem dono: item de catálogo do escritório, visível a todos.
     await criarProduto("DA-CASA stretch", null);
 
@@ -1107,11 +1107,11 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
       ).map((p) => p.descricao);
 
     expect(await vistosPor(ana)).toEqual(["DA-ANA stretch", "DA-CASA stretch"]);
-    expect(await vistosPor(bruno)).toEqual(["DA-CASA stretch", "DO-BRUNO stretch"]);
+    expect(await vistosPor(heitor)).toEqual(["DA-CASA stretch", "DO-HEITOR stretch"]);
     expect(await vistosPor(dono)).toEqual([
       "DA-ANA stretch",
       "DA-CASA stretch",
-      "DO-BRUNO stretch",
+      "DO-HEITOR stretch",
     ]);
 
     await admin.produto.deleteMany({ where: { organizacaoId: escritorio } });
@@ -1128,7 +1128,7 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
         data: {
           organizacaoId: escritorio,
           fornecedorId: industria!.id,
-          clienteId: clienteDoBruno,
+          clienteId: clienteDoHeitor,
           familia: "STRETCH",
           descricao: "invasão",
           precoKg: "10",

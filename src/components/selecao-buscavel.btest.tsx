@@ -23,7 +23,7 @@ import {
   type OpcaoBuscavel,
 } from "./selecao-buscavel";
 
-/** Os sete da AKILAH, que é o caso que deu origem a este arquivo. */
+/** Os sete da LYRA, que é o caso que deu origem a este arquivo. */
 const PRODUTOS: OpcaoBuscavel[] = [
   { id: "1", rotulo: "135x125x0,05 SF 10 CANELA (Caixa)", detalhe: "3840" },
   { id: "2", rotulo: "71x150x0,05 SF 7 PEAD (Potes)", detalhe: "4053" },
@@ -182,14 +182,14 @@ describe("digitar para filtrar", () => {
 
   test("ignora acento e caixa", async () => {
     const { tela, lista } = await abrir("rodape", [
-      { id: "a", rotulo: "CASTRO & MACHI", detalhe: "Santa Barbara D'Oeste/SP" },
-      { id: "b", rotulo: "FRASCO LIFE", detalhe: "Santa Bárbara D'Oeste/SP" },
-      { id: "c", rotulo: "TRIEX", detalhe: "Sertãozinho/SP" },
+      { id: "a", rotulo: "COSTA & MELO", detalhe: "Sao Bento D'Oeste/SP" },
+      { id: "b", rotulo: "FRASCO VIVA", detalhe: "São Bento D'Oeste/SP" },
+      { id: "c", rotulo: "KAPPEX", detalhe: "Conceição/SP" },
     ]);
 
-    await tela.getByRole("combobox").fill("barbara");
+    await tela.getByRole("combobox").fill("sao bento");
 
-    // "Bárbara" com acento tem de casar com "barbara" sem — ninguém procura
+    // "São" com acento tem de casar com "sao" sem — ninguém procura
     // cliente com o acento certo.
     await expect.poll(() => lista.querySelectorAll("li").length).toBe(2);
   });

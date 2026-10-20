@@ -80,10 +80,10 @@ describe("link de redefinição", () => {
   });
 
   it("link vencido não serve", async () => {
-    const caio = await usuario("caio");
-    const envio = await criarRedefinicao({ email: caio.email, ip: ipDe("caio") });
+    const igor = await usuario("igor");
+    const envio = await criarRedefinicao({ email: igor.email, ip: ipDe("igor") });
     await admin.redefinicaoSenha.updateMany({
-      where: { usuarioId: caio.id },
+      where: { usuarioId: igor.id },
       data: { expiraEm: new Date(Date.now() - 1000) },
     });
 

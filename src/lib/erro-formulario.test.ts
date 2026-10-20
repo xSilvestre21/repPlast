@@ -27,7 +27,7 @@ afterEach(() => vi.restoreAllMocks());
 describe("falhou", () => {
   it("leva o erro de campo ao campo, com o que foi digitado", () => {
     const dados = formulario([
-      ["nome", "QUALYPLAST"],
+      ["nome", "ALFAPLAST"],
       ["ultimoNumeroPedido", "10"],
     ]);
     const estado = falhou(new ErroDeCampo("ultimoNumeroPedido", "Número baixo."), dados);
@@ -35,7 +35,7 @@ describe("falhou", () => {
     expect(estado).toEqual({
       erro: "Número baixo.",
       campo: "ultimoNumeroPedido",
-      valores: expect.objectContaining({ nome: "QUALYPLAST", ultimoNumeroPedido: "10" }),
+      valores: expect.objectContaining({ nome: "ALFAPLAST", ultimoNumeroPedido: "10" }),
     });
   });
 

@@ -22,7 +22,7 @@ import { Dialogo } from "@/components/dialogo";
 import { Botao } from "@/components/ui";
 
 export type Pergunta = {
-  /** "Excluir “DELTA PACK”?" — com o nome, para a pessoa conferir que é este. */
+  /** "Excluir “SIGMA PACK”?" — com o nome, para a pessoa conferir que é este. */
   titulo: string;
   /** O que mais acontece. Sem ele, avisa que não dá para desfazer. */
   texto?: string;
@@ -90,7 +90,7 @@ export function usePerguntaAntes(pergunta: Pergunta | undefined, aoConfirmar?: (
     <Dialogo
       aberto={aberta}
       aoFechar={() => setAberta(false)}
-      // "Excluir “SELPACK”?" vira "Não é possível excluir “SELPACK”".
+      // "Excluir “GAMAPACK”?" vira "Não é possível excluir “GAMAPACK”".
       titulo={`Não é possível ${pergunta.titulo.charAt(0).toLowerCase()}${pergunta.titulo.slice(1).replace(/\?$/, "")}`}
       estreito
     >

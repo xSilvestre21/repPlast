@@ -158,7 +158,7 @@ export function CampoDocumento(props: PropsCampo) {
     <CampoMascarado
       inputMode="numeric"
       autoComplete="off"
-      placeholder="09.507.378/0001-50"
+      placeholder="12.345.678/0001-95"
       {...props}
       mascara={mascararDocumento}
     />
@@ -189,7 +189,7 @@ export function CampoTelefone(props: PropsCampo) {
     <CampoMascarado
       inputMode="tel"
       autoComplete="tel"
-      placeholder="(17) 3321-5900"
+      placeholder="(11) 3456-7890"
       {...props}
       mascara={mascararTelefone}
     />
@@ -222,7 +222,7 @@ export function CampoCep(props: PropsCampo) {
     <CampoMascarado
       inputMode="numeric"
       autoComplete="postal-code"
-      placeholder="14781-160"
+      placeholder="12345-678"
       {...props}
       mascara={mascararCep}
     />

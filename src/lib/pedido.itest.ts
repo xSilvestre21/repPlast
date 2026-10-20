@@ -96,7 +96,7 @@ beforeAll(async () => {
   clienteId = cliente.id;
 
   const fornecedorDaBusca = await admin.fornecedor.create({
-    data: { organizacaoId: buscaOrganizacaoId, nome: "SELPACK" },
+    data: { organizacaoId: buscaOrganizacaoId, nome: "GAMAPACK" },
   });
 
   buscaFornecedorId = fornecedorDaBusca.id;
@@ -110,7 +110,7 @@ afterAll(async () => {
 
 describe("numeração do pedido", () => {
   it("cada indústria tem a própria sequência", async () => {
-    // É o caso real: a ERIPACK estava no 133 enquanto a QUALYPLAST estava no 2253.
+    // É o caso real: a BETAPACK estava no 133 enquanto a ALFAPLAST estava no 2253.
     const primeiroA = await criar(fornecedorA);
     const primeiroB = await criar(fornecedorB);
     const segundoA = await criar(fornecedorA);
@@ -216,8 +216,8 @@ describe("busca da lista de pedidos", () => {
     const cliente = await admin.cliente.create({
       data: {
         organizacaoId: buscaOrganizacaoId,
-        apelido: "HIMAFLEX",
-        razaoSocial: "HIMAFLEX EMBALAGENS LTDA",
+        apelido: "SIRIFLEX",
+        razaoSocial: "SIRIFLEX EMBALAGENS LTDA",
       },
     });
 
@@ -256,7 +256,7 @@ describe("busca da lista de pedidos", () => {
   });
 
   it("acha pelo apelido do cliente", async () => {
-    expect(await procurar("himaflex")).toHaveLength(3);
+    expect(await procurar("siriflex")).toHaveLength(3);
   });
 
   it("acha pela razão social", async () => {
@@ -264,7 +264,7 @@ describe("busca da lista de pedidos", () => {
   });
 
   it("acha pela indústria", async () => {
-    expect(await procurar("selpack")).toHaveLength(3);
+    expect(await procurar("gamapack")).toHaveLength(3);
   });
 
   it("acha pela ordem de compra do cliente", async () => {
@@ -311,6 +311,6 @@ describe("filtro de status do pedido", () => {
   });
 
   it("o filtro combina com a busca", async () => {
-    expect(await procurar("himaflex", "cancelado")).toEqual([99]);
+    expect(await procurar("siriflex", "cancelado")).toEqual([99]);
   });
 });

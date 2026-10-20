@@ -18,7 +18,7 @@ import type { EstadoFormulario } from "./acoes";
 import { type DadosRepasse, LinhaRepasse } from "./repasse";
 
 const DADOS: DadosRepasse = {
-  nome: "Maria Augusta",
+  nome: "Iara Celina",
   cor: null,
   pedidos: 3,
   previsto: 1000,
@@ -34,7 +34,7 @@ function abrir(registrar: () => Promise<EstadoFormulario>) {
   render(<LinhaRepasse dados={DADOS} registrar={registrar} sugestao="1.000,00" hoje="2026-10-19" />);
 }
 
-const seta = () => page.getByRole("button", { name: "Extrato e pagamentos de Maria Augusta" });
+const seta = () => page.getByRole("button", { name: "Extrato e pagamentos de Iara Celina" });
 
 describe("registrar pagamento", () => {
   test("gravou: o painel fecha sozinho", async () => {

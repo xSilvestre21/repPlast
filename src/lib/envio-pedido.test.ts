@@ -13,20 +13,20 @@ import {
   variaveisDesconhecidas,
 } from "./envio-pedido";
 
-const PDF = { nome: "2276-AKILAH-28-10-2026.pdf", tamanho: 80_000 };
+const PDF = { nome: "2276-LYRA-28-10-2026.pdf", tamanho: 80_000 };
 
 describe("destinatários do envio", () => {
   it("junta contatos e avulsos no para, e as cópias no cc", () => {
     expect(
       montarDestinatarios({
         contatos: ["pcp@qualy.com.br"],
-        avulsos: ["marcos@qualy.com.br"],
-        copiaCliente: "compras@akilah.com.br",
-        copiaParaMim: "valquiria@gmail.com",
+        avulsos: ["diego@qualy.com.br"],
+        copiaCliente: "compras@lyra.com.br",
+        copiaParaMim: "renata@gmail.com",
       }),
     ).toEqual({
-      para: ["pcp@qualy.com.br", "marcos@qualy.com.br"],
-      cc: ["compras@akilah.com.br", "valquiria@gmail.com"],
+      para: ["pcp@qualy.com.br", "diego@qualy.com.br"],
+      cc: ["compras@lyra.com.br", "renata@gmail.com"],
     });
   });
 
@@ -103,22 +103,22 @@ describe("texto padrão", () => {
   it("monta assunto e corpo, pulando o que o pedido não tem", () => {
     const { assunto, corpo } = textoPadraoDoEnvio({
       numero: 2276,
-      razaoSocialCliente: "AKILAH EMBALAGENS LTDA",
+      razaoSocialCliente: "LYRA EMBALAGENS LTDA",
       cnpjCliente: null,
       pedidoDoCliente: "2356",
-      vendedor: "Valquiria Silvestre",
+      vendedor: "Renata Prado",
     });
 
-    expect(assunto).toBe("Pedido nº 2276 — AKILAH EMBALAGENS LTDA");
+    expect(assunto).toBe("Pedido nº 2276 — LYRA EMBALAGENS LTDA");
     expect(corpo).toBe(
-      "Segue em anexo o pedido nº 2276.\n\nCliente: AKILAH EMBALAGENS LTDA\n" +
-        "Pedido do cliente: 2356\n\nValquiria Silvestre",
+      "Segue em anexo o pedido nº 2276.\n\nCliente: LYRA EMBALAGENS LTDA\n" +
+        "Pedido do cliente: 2356\n\nRenata Prado",
     );
   });
 
   const PEDIDO = {
     numero: 2276,
-    razaoSocialCliente: "AKILAH EMBALAGENS LTDA",
+    razaoSocialCliente: "LYRA EMBALAGENS LTDA",
     cnpjCliente: null,
     pedidoDoCliente: "2356",
     vendedor: null,
@@ -131,7 +131,7 @@ describe("texto padrão", () => {
     });
 
     expect(assunto).toBe("PC 2356 / nosso 2276");
-    expect(corpo).toBe("Bom dia!\nPedido 2276 de AKILAH EMBALAGENS LTDA.\n\nAtt,");
+    expect(corpo).toBe("Bom dia!\nPedido 2276 de LYRA EMBALAGENS LTDA.\n\nAtt,");
   });
 
   it("volta ao texto de sempre quando o modelo está vazio", () => {
@@ -149,7 +149,7 @@ describe("texto padrão", () => {
 describe("trecho condicional", () => {
   const COM = {
     numero: 2278,
-    razaoSocialCliente: "AKILAH EMBALAGENS LTDA",
+    razaoSocialCliente: "LYRA EMBALAGENS LTDA",
     cnpjCliente: null,
     pedidoDoCliente: "PC-4512",
     vendedor: "Ana",

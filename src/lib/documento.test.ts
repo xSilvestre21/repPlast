@@ -15,7 +15,7 @@ describe("cpfValido", () => {
 
 describe("cnpjValido", () => {
   it("aceita CNPJ numérico", () => {
-    expect(cnpjValido("09507378000150")).toBe(true);
+    expect(cnpjValido("12345678000195")).toBe(true);
     expect(cnpjValido("11222333000181")).toBe(true);
   });
 
@@ -24,7 +24,7 @@ describe("cnpjValido", () => {
   });
 
   it("recusa verificador errado, letra no verificador e repetidos", () => {
-    expect(cnpjValido("09507378000151")).toBe(false);
+    expect(cnpjValido("12345678000196")).toBe(false);
     expect(cnpjValido("12ABC34501DE3A")).toBe(false);
     expect(cnpjValido("00000000000000")).toBe(false);
   });
@@ -38,7 +38,7 @@ describe("problemaNoDocumento", () => {
 
   it("diz qual dos dois não confere", () => {
     expect(problemaNoDocumento("12345678900")).toMatch(/Este CPF não existe/);
-    expect(problemaNoDocumento("09507378000151")).toMatch(/Este CNPJ não existe/);
+    expect(problemaNoDocumento("12345678000196")).toMatch(/Este CNPJ não existe/);
   });
 
   it("conta os caracteres quando o tamanho não fecha", () => {

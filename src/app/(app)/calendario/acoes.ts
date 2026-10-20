@@ -29,7 +29,7 @@ const Compromisso = z.object({
   titulo: z
     .string()
     .trim()
-    .min(1, "Dê um título ao compromisso — por exemplo, “Ligar para a FLEXOPET”.")
+    .min(1, "Dê um título ao compromisso — por exemplo, “Ligar para o comprador”.")
     .max(200, "O título pode ter até 200 letras. Passe os detalhes para a anotação."),
   data: z.string().refine(dataValida, "Escolha o dia do compromisso no calendário."),
   hora: z

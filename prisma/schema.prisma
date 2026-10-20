@@ -199,10 +199,10 @@ model EventoAsaas {
 model Usuario {
   id            String   @id @default(uuid()) @db.Uuid
   organizacaoId String   @db.Uuid
-  /// O primeiro nome — "Maria". O nome inteiro, como aparece no sistema e sai
+  /// O primeiro nome — "Iara". O nome inteiro, como aparece no sistema e sai
   /// impresso, é `nomeCompleto()` (`lib/nome-usuario.ts`): nome + sobrenome.
   nome          String
-  /// "Augusta Ferraz". Nulo em quem nunca teve sobrenome cadastrado.
+  /// "Celina Rocha". Nulo em quem nunca teve sobrenome cadastrado.
   sobrenome     String?
   email         String   @unique
   /// Telefone de contato — o preposto é gente que se liga. Guardado como
@@ -254,7 +254,7 @@ model Usuario {
   /// não do escritório: representantes diferentes costumam usar texto diferente.
   observacoesPadrao String?
 
-  /// De onde ele escreve. Abre o cabeçalho da proposta: "Americana, 16 de
+  /// De onde ele escreve. Abre o cabeçalho da proposta: "Monte Claro, 16 de
   /// Setembro de 2026".
   ///
   /// É de cada usuário pelo mesmo motivo das condições acima — prepostos moram
@@ -497,7 +497,7 @@ model Cliente {
   id            String @id @default(uuid()) @db.Uuid
   organizacaoId String @db.Uuid
 
-  /// Nome curto usado nas listas e no nome do arquivo PDF, ex.: MARIOL.
+  /// Nome curto usado nas listas e no nome do arquivo PDF, ex.: ORION.
   apelido     String
   razaoSocial String
   cnpj        String?
@@ -649,7 +649,7 @@ model ContatoFornecedor {
 /// Tabela de preços do material, por indústria.
 ///
 /// É POR FORNECEDOR pelo mesmo motivo que o aditivo e o IPI são: o preço é da
-/// indústria. O PEAD da QUALYPLAST não custa o que custa o da ERIPACK, e uma
+/// indústria. O PEAD da ALFAPLAST não custa o que custa o da BETAPACK, e uma
 /// lista única do escritório não teria onde guardar essa diferença.
 ///
 /// O preço e a densidade aqui são SUGESTÃO, não fonte viva: ao cadastrar um
@@ -703,7 +703,7 @@ model Material {
 
 /// Preço por faixa de peso do pedido.
 ///
-/// Algumas indústrias cobram mais barato quanto maior a compra — a SELPACK tem
+/// Algumas indústrias cobram mais barato quanto maior a compra — a GAMAPACK tem
 /// quatro faixas por material. A tabela é OPCIONAL: material sem faixa nenhuma
 /// usa `Material.precoKg`, e é assim que a maioria funciona.
 ///
@@ -1310,7 +1310,7 @@ model ContaEmail {
   usuarioId     String        @db.Uuid
   provedor      ProvedorEmail
   email         String
-  /// O nome que aparece no "De:" — "Valquiria Silvestre".
+  /// O nome que aparece no "De:" — "Renata Prado".
   nomeExibicao  String
   host          String
   porta         Int

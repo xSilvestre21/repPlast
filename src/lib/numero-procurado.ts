@@ -21,7 +21,7 @@ const MAIOR_INT = 2_147_483_647;
  *
  * No PEDIDO um número pode casar com mais de uma linha, e isso é correto: a
  * numeração dele é por indústria (`@@unique([fornecedorId, numero])`), então o
- * 133 da ERIPACK e o 133 de outra convivem. A lista mostra a indústria ao lado
+ * 133 da BETAPACK e o 133 de outra convivem. A lista mostra a indústria ao lado
  * justamente para desempatar.
  */
 export function numeroProcurado(texto: string): number | null {

@@ -7,7 +7,7 @@ describe("problemaNoEmail", () => {
     for (const email of [
       "ana@gmail.com",
       "ana.souza+repplast@escritorio.com.br",
-      "contato@val-amaral.com.br",
+      "contato@val-assis.com.br",
       "x@ymail.com",
     ]) {
       expect(problemaNoEmail(email), email).toBeNull();

@@ -34,7 +34,7 @@ export function CampoNomeEscritorio({
         name="escritorio"
         rotulo="Nome do escritório"
         dica={dica}
-        placeholder="Representação Silvestre"
+        placeholder="Representações Exemplo"
         defaultValue={valorInicial}
         maxLength={TAMANHO_MAXIMO_ESCRITORIO}
         onInput={(evento) => setNome(evento.currentTarget.value)}

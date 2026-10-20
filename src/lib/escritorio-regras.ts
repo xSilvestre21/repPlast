@@ -89,7 +89,7 @@ export function problemaNoNomeEscritorio(nome: string): string | null {
     return (
       `O nome do escritório pode ter até ${TAMANHO_MAXIMO_ESCRITORIO} caracteres — este tem ` +
       `${nome.length}. Use o nome pelo qual os clientes conhecem a representação, ` +
-      "como “Representação Silvestre”."
+      "como “Representação Prado”."
     );
   }
   if (!cabeNoTopo(nome)) {

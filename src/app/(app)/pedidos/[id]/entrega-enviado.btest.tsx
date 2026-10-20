@@ -15,7 +15,7 @@ import { EntregaEnviado } from "@/components/entrega-enviado";
 import { BotaoEnviarEmail } from "./envio";
 
 const BASE = {
-  titulo: "Pedido enviado para a QUALYPLAST EMBALAGENS",
+  titulo: "Pedido enviado para a ALFAPLAST EMBALAGENS",
   para: ["compras@exemplo.com.br", "pcp@exemplo.com.br"],
   cc: ["voce@exemplo.com"],
 };
@@ -30,7 +30,7 @@ describe("onde aparece", () => {
     await render(<EntregaEnviado {...BASE} fechar={() => {}} />);
     const cartao = document.querySelector('[role="status"]') as HTMLElement;
 
-    expect(cartao.textContent).toContain("Pedido enviado para a QUALYPLAST EMBALAGENS");
+    expect(cartao.textContent).toContain("Pedido enviado para a ALFAPLAST EMBALAGENS");
     expect(cartao.textContent).toContain("compras@exemplo.com.br, pcp@exemplo.com.br");
     expect(cartao.textContent).toContain("cópia para voce@exemplo.com");
 
@@ -119,8 +119,8 @@ describe("fechar o diálogo no meio do envio", () => {
         acao={acao}
         contas={[{ id: "c1", email: "eu@exemplo.com", nomeExibicao: "Eu", padrao: true, assinaturaHtml: null }]}
         contatos={[{ id: "k1", nome: "Compras", setor: null, email: "compras@exemplo.com", padrao: true }]}
-        fornecedor={{ id: "f1", nome: "QUALYPLAST" }}
-        cliente={{ apelido: "AKILAH", email: null }}
+        fornecedor={{ id: "f1", nome: "ALFAPLAST" }}
+        cliente={{ apelido: "LYRA", email: null }}
         textoPadrao={{ assunto: "Pedido 1", corpo: "Segue." }}
         nomeArquivoPdf="1.pdf"
       />
@@ -203,8 +203,8 @@ describe("edição de preposto antes de enviar", () => {
         acao={async () => ({ enviado: true })}
         contas={[{ id: "c1", email: "eu@exemplo.com", nomeExibicao: "Eu", padrao: true, assinaturaHtml: null }]}
         contatos={[{ id: "k1", nome: "Compras", setor: null, email: "compras@exemplo.com", padrao: true }]}
-        fornecedor={{ id: "f1", nome: "QUALYPLAST" }}
-        cliente={{ apelido: "AKILAH", email: null }}
+        fornecedor={{ id: "f1", nome: "ALFAPLAST" }}
+        cliente={{ apelido: "LYRA", email: null }}
         textoPadrao={{ assunto: "Pedido 1", corpo: "Segue." }}
         nomeArquivoPdf="1.pdf"
       />,
@@ -220,11 +220,11 @@ describe("edição de preposto antes de enviar", () => {
 
   test("mostra quem editou e trava o envio até marcar que conferiu", async () => {
     const { dialogo, enviar, conferido } = await abrirDialogo([
-      { id: "e1", quem: "Marcos", quando: "29/09/2026, 14:20" },
+      { id: "e1", quem: "Diego", quando: "29/09/2026, 14:20" },
     ]);
 
     expect(dialogo.textContent).toContain("Um preposto editou este pedido");
-    expect(dialogo.textContent).toContain("Marcos");
+    expect(dialogo.textContent).toContain("Diego");
     expect(enviar.disabled).toBe(true);
 
     conferido!.click();

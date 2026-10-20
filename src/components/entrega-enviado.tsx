@@ -128,7 +128,7 @@ export function EntregaEnviado({
   aviso,
   fechar,
 }: {
-  /** "Pedido enviado para a QUALYPLAST", "Proposta enviada para a AKILAH". */
+  /** "Pedido enviado para a ALFAPLAST", "Proposta enviada para a LYRA". */
   titulo: string;
   para: string[];
   cc: string[];

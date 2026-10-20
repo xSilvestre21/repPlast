@@ -17,7 +17,7 @@
  * Quantos caracteres cabem.
  *
  * Generoso para caber uma frase inteira ("pediram 12% e a indústria só deu 5,
- * fecharam com a Selpack"), curto o bastante para não virar depósito de texto
+ * fecharam com a Gamapack"), curto o bastante para não virar depósito de texto
  * num campo que a lista mostra inteiro.
  */
 export const LIMITE_DO_MOTIVO = 280;

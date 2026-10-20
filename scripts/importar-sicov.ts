@@ -3,8 +3,8 @@
  *
  * COMO RODAR
  *
- *   npm run db:importar -- --escritorio "Val & Amaral"            # ensaio
- *   npm run db:importar -- --escritorio "Val & Amaral" --gravar
+ *   npm run db:importar -- --escritorio "Vera & Assis"            # ensaio
+ *   npm run db:importar -- --escritorio "Vera & Assis" --gravar
  *
  * Opções: --pular a@b.com,c@d.com   não inscreve esses como preposto
  *         --arquivo caminho.json.gz  outro backup
@@ -95,7 +95,7 @@ const SEM_PREPOSTO = new Set(
 if (!NOME_ESCRITORIO) {
   console.error(
     "\nInforme o escritório de destino:\n" +
-      '  node scripts/importar-sicov.mjs --escritorio "Val & Amaral"\n',
+      '  node scripts/importar-sicov.mjs --escritorio "Vera & Assis"\n',
   );
   process.exit(1);
 }
@@ -151,7 +151,7 @@ const numero = (v: unknown) => (v === null || v === undefined || v === "" ? null
 const data = (v: unknown) => (v ? new Date(v as string) : null);
 
 /**
- * "Maria Augusta Ferraz" → nome "Maria", sobrenome "Augusta Ferraz".
+ * "Iara Celina Rocha" → nome "Iara", sobrenome "Celina Rocha".
  *
  * A mesma regra da migration `usuario_sobrenome_telefone`, que separou os
  * nomes que já existiam: a primeira palavra é o nome, o resto o sobrenome.
@@ -192,7 +192,7 @@ async function gerarHashSenha(senha: string) {
  * O fornecedor do SICOV não tem campo de comissão — o percentual nasce em cada
  * comissão (`adminPercentage`), a partir de `DEFAULT_ADMIN_PERCENTAGE = 5`
  * (`orderController.js:11`). A moda é a leitura honesta do "padrão da casa":
- * a QUALYPLAST pagou 5% em 149 pedidos e 3% em 14 — quem lança o próximo espera
+ * a ALFAPLAST pagou 5% em 149 pedidos e 3% em 14 — quem lança o próximo espera
  * ver 5. Empate resolve pelo maior, que é o que menos surpreende quem confere.
  */
 function modaDoPercentualPorFornecedor(sicov: any): Map<string, number> {
@@ -337,7 +337,7 @@ function partesDoNome(
 /**
  * A densidade com que o saco entra.
  *
- * Quatro sacos da SELPACK, editados no SICOV em 15/10, guardam a densidade da
+ * Quatro sacos da GAMAPACK, editados no SICOV em 15/10, guardam a densidade da
  * tabela (0,0944 / 0,0922) mas têm o preço calculado com 0,1 — o divisor 10 que
  * era fixo: 40,5 × 60,5 × 0,04 × 0,1 × 18 = 176,418, o preço gravado. Com a
  * densidade gravada, o pedido novo sairia 5% a 8% mais barato do que o SICOV
@@ -437,7 +437,7 @@ async function importar(
    * Sem mapeamento, as 91 carteiras e os 193 pedidos dele ficam SEM DONO — que
    * é exatamente como o sistema grava o que o administrador cadastra.
    */
-  const valquiria = sicov.users.find((u: any) => u.profile === "admin");
+  const renata = sicov.users.find((u: any) => u.profile === "admin");
   const usuarios = new Map<string, string>();
 
   // O texto padrão de "Condições" é de cada usuário agora — o do SICOV era do
@@ -453,10 +453,10 @@ async function importar(
 
   /** O id daqui de um usuário do SICOV — o admin dele inclusive. */
   const idDoUsuario = (sicovId: unknown): string | null =>
-    sicovId === valquiria._id ? admin.id : (usuarios.get(String(sicovId)) ?? null);
+    sicovId === renata._id ? admin.id : (usuarios.get(String(sicovId)) ?? null);
 
   for (const u of sicov.users as any[]) {
-    if (u._id === valquiria._id) continue;
+    if (u._id === renata._id) continue;
 
     /*
      * O e-mail é único no SISTEMA, não no escritório: é a chave do login.
@@ -515,8 +515,8 @@ async function importar(
    * A regra daqui é estrita: sem marca, o preposto não vê indústria nenhuma
    * (migration `industria_so_do_preposto_marcado`). A marca vem do
    * `allowedRepresentatives` do SICOV e, como na migration, de todo pedido,
-   * proposta ou produto que já liga o preposto à indústria — senão a Maria
-   * Augusta, que não estava na lista de ninguém, perderia de vista a indústria
+   * proposta ou produto que já liga o preposto à indústria — senão a Iara
+   * Celina, que não estava na lista de ninguém, perderia de vista a indústria
    * dos próprios 29 pedidos. As linhas são gravadas no fim.
    */
   const marcas = new Map<string, Set<string>>();
@@ -529,7 +529,7 @@ async function importar(
    * O percentual que cada indústria costuma pagar.
    *
    * O SICOV não tinha esse campo no fornecedor — ele nascia em cada comissão.
-   * A moda é a melhor leitura do "padrão da casa": a QUALYPLAST pagou 5% em 149
+   * A moda é a melhor leitura do "padrão da casa": a ALFAPLAST pagou 5% em 149
    * pedidos e 3% em 14, e é 5 que deve aparecer preenchido ao lançar o próximo.
    * O percentual REAL de cada pedido continua congelado no pedido, então
    * nenhuma comissão histórica depende desta escolha.
@@ -612,7 +612,7 @@ async function importar(
     }
 
     // A tabela de preço vira material + faixas. O mesmo material aparece
-    // várias vezes quando a indústria cobra por faixa de peso (SELPACK).
+    // várias vezes quando a indústria cobra por faixa de peso (GAMAPACK).
     const porMaterial = new Map<string, any[]>();
     for (const linha of s.priceTable ?? []) {
       const nome = texto(linha.material)?.toUpperCase();
@@ -690,7 +690,7 @@ async function importar(
 
   /**
    * Quem atende o cliente — o `representativeId` dele no SICOV, quando é um
-   * preposto que entrou. O cliente da Valquiria fica sem vínculo: é do
+   * preposto que entrou. O cliente da Renata fica sem vínculo: é do
    * escritório, e o dono não é preposto de si mesmo.
    */
   const prepostoDoCliente = new Map<string, string>();
@@ -942,9 +942,9 @@ async function importar(
     /*
      * Com quem a comissão DESTE pedido é dividida.
      *
-     * Não é `o.representativeId`: no SICOV todo pedido é da Valquiria, que é
-     * quem lança. A fatia do preposto vive na comissão — Maria Augusta a 50%,
-     * Luiz e Ed a 60% —, e lida do pedido ela some.
+     * Não é `o.representativeId`: no SICOV todo pedido é da Renata, que é
+     * quem lança. A fatia do preposto vive na comissão — Iara Celina a 50%,
+     * Davi e Leo a 60% —, e lida do pedido ela some.
      */
     const prepostoDaComissao =
       comissao && Number(comissao.representativePercentage) > 0
@@ -1206,8 +1206,8 @@ function comissoesPorPedido(sicov: any) {
  * A indústria de um documento cujo fornecedor foi apagado no SICOV — quando
  * existe outra de MESMO nome (sem distinguir maiúsculas) no backup.
  *
- * A FAMYPACK foi excluída e cadastrada de novo como "Famypack", e três
- * propostas (uma de R$ 113 mil para a MAC SANTOS) ficaram apontando para a
+ * A SIGMAPACK foi excluída e cadastrada de novo como "Sigmapack", e três
+ * propostas (uma de R$ 113 mil para a ARGOS) ficaram apontando para a
  * antiga. O snapshot delas guarda o nome; sem casar por ele, as três sumiam
  * caladas como "indústria não existe mais".
  */

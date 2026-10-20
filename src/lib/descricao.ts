@@ -83,7 +83,7 @@ function juntar(partes: (string | null | undefined)[]): string {
 /* -------------------------------------------------------------------------- */
 /* Demais famílias                                                            */
 /*                                                                            */
-/* Formatos extraídos dos pedidos reais 133 e 146 (indústria ERIPACK):        */
+/* Formatos extraídos dos pedidos reais 133 e 146 (indústria BETAPACK):        */
 /*                                                                            */
 /*     Fita adesiva 45x100 transparente                                       */
 /*     FILM STRETCH 500X25 BOBINA 4KG PESO LÍQUIDO                            */

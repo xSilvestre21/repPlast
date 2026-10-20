@@ -95,7 +95,7 @@ export function FormularioCompromisso({
         required
         maxLength={200}
         defaultValue={compromisso?.titulo ?? ""}
-        placeholder="Visita à AKILAH, reunião com a QUALYPLAST…"
+        placeholder="Visita a um cliente, reunião na indústria…"
         // Os dois, de propósito. `data-autofocus`: quando o formulário abre
         // junto com a janela, o `showModal()` rouba o foco e o `Dialogo` o
         // devolve aqui. `autoFocus`: quando ele monta com a janela já aberta

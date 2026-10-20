@@ -875,13 +875,13 @@ export function Selo({
 /**
  * Iniciais de um nome, para o avatar.
  *
- * Numa lista de razões sociais parecidas ("MARIOL EMBALAGENS", "MARIPLAST"),
+ * Numa lista de razões sociais parecidas ("ORION EMBALAGENS", "ORIONPLAST"),
  * duas letras em destaque dão à linha uma âncora visual que o texto corrido
  * não dá.
  *
- * O hífen separa tanto quanto o espaço: "AN-PARAFUSOS" são duas palavras para
+ * O hífen separa tanto quanto o espaço: "JK-PARAFUSOS" são duas palavras para
  * quem lê, e cortar só no espaço devolveria um "A" solitário. Partículas ficam
- * de fora porque "Val & Amaral" deve dar VA, e não V&.
+ * de fora porque "Vera & Assis" deve dar VA, e não V&.
  *
  * Nome de uma palavra só rende as duas primeiras letras — uma letra sozinha
  * repete demais numa lista e deixa de distinguir qualquer coisa.

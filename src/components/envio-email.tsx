@@ -69,7 +69,7 @@ export type DocumentoEnvio = {
   /** "Enviar pedido por e-mail", "Reenviar proposta por e-mail". */
   titulo: string;
   descricao: string;
-  /** "Para — QUALYPLAST", "Para — AKILAH". */
+  /** "Para — ALFAPLAST", "Para — LYRA". */
   rotuloPara: string;
   /** O que dizer quando não há contato nenhum para marcar. */
   semContatos: ReactNode;

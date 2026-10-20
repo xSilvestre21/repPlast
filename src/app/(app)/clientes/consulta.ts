@@ -30,8 +30,8 @@ export function situacaoDoParametro(valor: unknown): FiltroSituacaoCliente {
 /**
  * Os dígitos digitados, com a máscara do CNPJ aplicada do começo.
  *
- * O CNPJ é guardado como se lê — "39.843.059/0001-87" —, e quem cola ou digita
- * só os números ("39843059") não acharia nada procurando o texto cru. Quase
+ * O CNPJ é guardado como se lê — "12.345.678/0001-95" —, e quem cola ou digita
+ * só os números ("98765432") não acharia nada procurando o texto cru. Quase
  * sempre se digita do começo, então a máscara é aplicada a partir do primeiro
  * dígito: "3984305" vira "39.843.05".
  */
@@ -50,7 +50,7 @@ export type ClienteDaLista = {
   apelido: string;
   razaoSocial: string;
   cnpj: string;
-  /** "Iracemápolis/SP", ou vazio. */
+  /** "Lagoa Azul/SP", ou vazio. */
   local: string;
   pedidos: number;
   ativo: boolean;

@@ -75,7 +75,7 @@ export function EnderecoCobranca({ documento }: { documento: ReactNode }) {
           onChange={aoDigitarCep}
           erro={
             busca.tipo === "inexistente"
-              ? "Não achamos este CEP. Confira os números, como 14781-160."
+              ? "Não achamos este CEP. Confira os números, como 12345-678."
               : undefined
           }
           dica={

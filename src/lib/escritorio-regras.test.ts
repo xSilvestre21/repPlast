@@ -9,7 +9,7 @@ import {
 
 describe("cabeNoTopo", () => {
   it("aceita nomes que cabem em duas linhas no menor espaço do topo", () => {
-    expect(cabeNoTopo("Representação Silvestre")).toBe(true);
+    expect(cabeNoTopo("Representação Prado")).toBe(true);
     expect(cabeNoTopo("Moreira & Guimarães Representações Ltda")).toBe(true);
     expect(cabeNoTopo("QUALIPLAST REP. COMERCIAIS")).toBe(true);
   });
@@ -26,24 +26,24 @@ describe("cabeNoTopo", () => {
   });
 
   it("ignora espaços repetidos e nas pontas, como o navegador", () => {
-    expect(cabeNoTopo("  Representação    Silvestre  ")).toBe(cabeNoTopo("Representação Silvestre"));
+    expect(cabeNoTopo("  Representação    Prado  ")).toBe(cabeNoTopo("Representação Prado"));
   });
 
   it("conta caractere fora da tabela como o mais largo", () => {
-    expect(cabeNoTopo("Representação Silvestre")).toBe(true);
+    expect(cabeNoTopo("Representação Prado")).toBe(true);
     expect(cabeNoTopo("代表代表代表代表代表代表代表代表代表代表代表代表代表代表")).toBe(false);
   });
 });
 
 describe("normalizarNomeEscritorio", () => {
   it("tira espaço das pontas e junta os repetidos", () => {
-    expect(normalizarNomeEscritorio("  Val   &  Amaral ")).toBe("Val & Amaral");
+    expect(normalizarNomeEscritorio("  Vera   &  Assis ")).toBe("Vera & Assis");
   });
 });
 
 describe("problemaNoNomeEscritorio", () => {
   it("aceita nome que cabe", () => {
-    expect(problemaNoNomeEscritorio("Val & Amaral")).toBeNull();
+    expect(problemaNoNomeEscritorio("Vera & Assis")).toBeNull();
   });
 
   it("recusa vazio, comprido demais e o que não cabe no topo", () => {

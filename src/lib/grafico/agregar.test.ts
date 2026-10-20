@@ -23,7 +23,7 @@ import {
 import type { ItemGrafico } from "./base";
 import { centavos, itemDoGrafico } from "./item";
 
-const MARIA = { id: "u1", nome: "Maria", papel: "REPRESENTANTE" };
+const IARA = { id: "u1", nome: "Iara", papel: "REPRESENTANTE" };
 
 function pedido(dados: Partial<PedidoDaComissao> & { id: string }): PedidoDaComissao {
   return {
@@ -40,8 +40,8 @@ function pedido(dados: Partial<PedidoDaComissao> & { id: string }): PedidoDaComi
     representante: null,
     valorRecebido: null,
     comissaoPercentualRecebido: null,
-    cliente: { id: "c1", apelido: "ALBRAS" },
-    fornecedor: { id: "f1", nome: "QUALYPLAST", comissaoPercentual: "5" },
+    cliente: { id: "c1", apelido: "ATLAS" },
+    fornecedor: { id: "f1", nome: "ALFAPLAST", comissaoPercentual: "5" },
     prazoPagamento: null,
     diaFechamentoComissao: null,
     competencia: "2026-10",
@@ -60,7 +60,7 @@ const PEDIDOS: PedidoDaComissao[] = [
     subtotalSemIpi: "1234.57",
     comissaoPercentual: "3.75",
     comissaoPercentualPreposto: "33.33",
-    representante: MARIA,
+    representante: IARA,
     valorRecebido: "1200.01",
     comissaoPercentualRecebido: "3.5",
     cliente: { id: "c2", apelido: "JVC" },
@@ -69,8 +69,8 @@ const PEDIDOS: PedidoDaComissao[] = [
     id: "p3",
     subtotalSemIpi: "987.65",
     comissaoPercentualPreposto: "50",
-    representante: MARIA,
-    fornecedor: { id: "f2", nome: "LEMEPACK", comissaoPercentual: "4" },
+    representante: IARA,
+    fornecedor: { id: "f2", nome: "VEGAPACK", comissaoPercentual: "4" },
     comissaoPercentual: "4",
   }),
 ];
@@ -154,7 +154,7 @@ describe("rankings e hierarquia", () => {
   it("por cliente, do maior para o menor, contando pedidos", () => {
     const ranking = porCliente(itens, "previsto");
 
-    expect(ranking[0].rotulo).toBe("ALBRAS");
+    expect(ranking[0].rotulo).toBe("ATLAS");
     expect(ranking.map((f) => f.valor)).toEqual(
       [...ranking.map((f) => f.valor)].sort((a, b) => b - a),
     );
@@ -163,7 +163,7 @@ describe("rankings e hierarquia", () => {
 
   it("recebido conta zero para quem não tem acerto", () => {
     const ranking = porCliente(itens, "recebido");
-    expect(ranking.find((f) => f.rotulo === "ALBRAS")?.valor).toBe(0);
+    expect(ranking.find((f) => f.rotulo === "ATLAS")?.valor).toBe(0);
   });
 
   it("a árvore soma nos clientes o mesmo que na indústria", () => {
@@ -179,18 +179,18 @@ describe("fluxo indústria → cliente", () => {
   const arvore = [
     {
       id: "qualy",
-      name: "QUALYPLAST",
+      name: "ALFAPLAST",
       value: 1000,
       children: [
         { id: "qualy:ana", name: "ANA", value: 600 },
         { id: "qualy:bia", name: "BIA", value: 300 },
-        { id: "qualy:caio", name: "CAIO", value: 60 },
+        { id: "qualy:igor", name: "IGOR", value: 60 },
         { id: "qualy:davi", name: "DAVI", value: 40 },
       ],
     },
     {
       id: "eri",
-      name: "ERIPACK",
+      name: "BETAPACK",
       value: 250,
       children: [
         { id: "eri:ana", name: "ANA", value: 200 },

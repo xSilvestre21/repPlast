@@ -5,7 +5,7 @@
  * sistema, porque erro aqui vira dinheiro errado no pedido e na comissão.
  *
  * A fórmula do saco foi extraída por engenharia reversa de pedidos reais
- * (2253/MARIOL e 2256/LEMEPACK, indústria QUALYPLAST) e confirmada pelo usuário.
+ * (2253/ORION e 2256/VEGAPACK, indústria ALFAPLAST) e confirmada pelo usuário.
  * Os testes em `precificacao.test.ts` usam esses pedidos como fixtures.
  */
 
@@ -177,7 +177,7 @@ export interface FaixaDePreco {
  * que contém o peso vence; não havendo nenhuma, vale `precoPadrao` — que é o
  * `Material.precoKg`, o caso da esmagadora maioria dos materiais.
  *
- * O peso pode cair num BURACO entre faixas: a tabela real da SELPACK vai até
+ * O peso pode cair num BURACO entre faixas: a tabela real da GAMAPACK vai até
  * 300 e recomeça em 301, então 300,5 kg não pertence a faixa alguma. Cair no
  * preço padrão nesse caso é deliberado — inventar a faixa "mais próxima" seria
  * o sistema decidir um preço que ninguém cadastrou.

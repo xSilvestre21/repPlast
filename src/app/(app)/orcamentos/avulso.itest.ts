@@ -97,7 +97,7 @@ beforeAll(async () => {
   sessao.usuarioId = dono.id;
 
   const fornecedor = await admin.fornecedor.create({
-    data: { organizacaoId: organizacao.id, nome: "QUALYPLAST" },
+    data: { organizacaoId: organizacao.id, nome: "ALFAPLAST" },
   });
   fornecedorId = fornecedor.id;
 
@@ -116,8 +116,8 @@ beforeAll(async () => {
     data: {
       organizacaoId: organizacao.id,
       fornecedorId,
-      clienteAvulsoNome: "HIMAFLEX",
-      clienteAvulsoMunicipio: "Limeira",
+      clienteAvulsoNome: "SIRIFLEX",
+      clienteAvulsoMunicipio: "Vale Verde",
       numero: 1,
     },
   });
@@ -199,7 +199,7 @@ describe("depois de cadastrar o cliente", () => {
     const cadastro = criarClienteDaProposta(
       orcamentoId,
       {},
-      formulario({ apelido: "HIMAFLEX", razaoSocial: "HIMAFLEX LTDA", cnpj: "" }),
+      formulario({ apelido: "SIRIFLEX", razaoSocial: "SIRIFLEX LTDA", cnpj: "" }),
     );
     await expect(cadastro).rejects.toMatchObject({ destino: `/orcamentos/${orcamentoId}` });
 
@@ -281,7 +281,7 @@ describe("depois de cadastrar o cliente", () => {
 describe("linha vinda do SICOV, sem conta guardada", () => {
   it("vira produto pelo Novo produto e o item passa a ser ele", async () => {
     const cliente = await admin.cliente.create({
-      data: { organizacaoId: sessao.organizacaoId, apelido: "CAIO", razaoSocial: "CAIO LTDA" },
+      data: { organizacaoId: sessao.organizacaoId, apelido: "IGOR", razaoSocial: "IGOR LTDA" },
     });
     const proposta = await admin.orcamento.create({
       data: {
@@ -340,7 +340,7 @@ describe("apagar o cliente cadastrado pela proposta", () => {
       data: {
         organizacaoId: sessao.organizacaoId,
         fornecedorId,
-        clienteAvulsoNome: "DU QUIMICA",
+        clienteAvulsoNome: "ZETA QUIMICA",
         clienteAvulsoMunicipio: "Rio Claro",
         numero: 4,
       },
@@ -354,8 +354,8 @@ describe("apagar o cliente cadastrado pela proposta", () => {
       propostaId,
       {},
       formulario({
-        apelido: "DU QUIMICA",
-        razaoSocial: "DU QUIMICA LTDA",
+        apelido: "ZETA QUIMICA",
+        razaoSocial: "ZETA QUIMICA LTDA",
         municipio: "Rio Claro",
         cnpj: "",
       }),
@@ -377,7 +377,7 @@ describe("apagar o cliente cadastrado pela proposta", () => {
       include: { itens: true },
     });
     expect(proposta.clienteId).toBeNull();
-    expect(proposta.clienteAvulsoNome).toBe("DU QUIMICA");
+    expect(proposta.clienteAvulsoNome).toBe("ZETA QUIMICA");
     expect(proposta.clienteAvulsoMunicipio).toBe("Rio Claro");
 
     // A linha volta a ser conta, com as medidas do produto que foi apagado.
@@ -399,7 +399,7 @@ describe("apagar o cliente cadastrado pela proposta", () => {
     const cadastro = criarClienteDaProposta(
       propostaId,
       {},
-      formulario({ apelido: "DU QUIMICA", razaoSocial: "DU QUIMICA LTDA", cnpj: "" }),
+      formulario({ apelido: "ZETA QUIMICA", razaoSocial: "ZETA QUIMICA LTDA", cnpj: "" }),
     );
     await expect(cadastro).rejects.toMatchObject({ destino: `/orcamentos/${propostaId}` });
 

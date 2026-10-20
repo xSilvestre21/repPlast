@@ -1,7 +1,7 @@
 /**
  * Testes da comissão e da meta pessoal.
  *
- * Os valores partem do pedido real 2253: base R$ 21.989,23 e 3% da QUALYPLAST.
+ * Os valores partem do pedido real 2253: base R$ 21.989,23 e 3% da ALFAPLAST.
  */
 
 import { describe, expect, it } from "vitest";
@@ -563,16 +563,16 @@ describe("o dono do escritório não é preposto de si mesmo", () => {
   it("devolve o preposto quando o pedido é de um", () => {
     const p = prepostoDoPedido({
       ...base,
-      representante: { id: "u1", nome: "Maria Augusta", papel: "REPRESENTANTE" },
+      representante: { id: "u1", nome: "Iara Celina", papel: "REPRESENTANTE" },
     });
 
-    expect(p?.nome).toBe("Maria Augusta");
+    expect(p?.nome).toBe("Iara Celina");
   });
 
   it("devolve null quando quem consta é um administrador", () => {
     const p = prepostoDoPedido({
       ...base,
-      representante: { id: "u2", nome: "Valquiria", papel: "ADMIN" },
+      representante: { id: "u2", nome: "Renata", papel: "ADMIN" },
     });
 
     expect(p).toBeNull();
@@ -585,7 +585,7 @@ describe("o dono do escritório não é preposto de si mesmo", () => {
       {
         ...base,
         comissaoPercentualPreposto: "50",
-        representante: { id: "u2", nome: "Valquiria", papel: "ADMIN" },
+        representante: { id: "u2", nome: "Renata", papel: "ADMIN" },
       },
     ]);
 
@@ -598,7 +598,7 @@ describe("o dono do escritório não é preposto de si mesmo", () => {
       {
         ...base,
         comissaoPercentualPreposto: "50",
-        representante: { id: "u1", nome: "Maria Augusta", papel: "REPRESENTANTE" },
+        representante: { id: "u1", nome: "Iara Celina", papel: "REPRESENTANTE" },
       },
     ]);
 

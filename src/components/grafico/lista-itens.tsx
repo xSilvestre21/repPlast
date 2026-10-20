@@ -19,7 +19,7 @@ import { AreaRolavel } from "./area-rolavel";
 export interface ItemDaLista {
   chave: string;
   href: string;
-  /** "#2283 AKILAH" — o que identifica a linha. */
+  /** "#2283 LYRA" — o que identifica a linha. */
   titulo: ReactNode;
   /** À direita do título: valor, dias, situação. */
   destaque?: ReactNode;

@@ -69,7 +69,7 @@ describe("pergunta antes de excluir", () => {
       <AcaoComRecusa
         acao={acao}
         confirmar={{
-          titulo: "Excluir “SELPACK”?",
+          titulo: "Excluir “GAMAPACK”?",
           rotulo: "Excluir",
           impedimento: "Esta indústria tem 12 produtos cadastrados e não pode ser excluída.",
         }}
@@ -79,7 +79,7 @@ describe("pergunta antes de excluir", () => {
     );
 
     await page.getByRole("button", { name: "Excluir indústria" }).click();
-    await expect.element(page.getByText("Não é possível excluir “SELPACK”")).toBeVisible();
+    await expect.element(page.getByText("Não é possível excluir “GAMAPACK”")).toBeVisible();
     await expect.element(page.getByText(/12 produtos cadastrados/)).toBeVisible();
     await expect.element(page.getByRole("button", { name: "Excluir", exact: true })).not.toBeInTheDocument();
 

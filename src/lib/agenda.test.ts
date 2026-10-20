@@ -64,7 +64,7 @@ describe("eventos automáticos", () => {
       {
         id: "p1",
         numero: 2287,
-        cliente: "AKILAH",
+        cliente: "LYRA",
         prazoEntrega: new Date("2026-10-10T00:00:00Z"),
         entregueEm: null,
       },
@@ -107,7 +107,7 @@ describe("eventos automáticos", () => {
   });
 
   it("cliente sumido aparece 60 dias depois da última compra", () => {
-    const e = eventoDeSumido({ id: "c1", apelido: "ALBRAS", ultimaCompra: new Date(2026, 7, 1, 15) });
+    const e = eventoDeSumido({ id: "c1", apelido: "ATLAS", ultimaCompra: new Date(2026, 7, 1, 15) });
     expect(e.dia).toBe("2026-09-30");
   });
 });

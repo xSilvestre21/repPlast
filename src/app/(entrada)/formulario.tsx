@@ -151,7 +151,7 @@ export function FormularioCadastro({
         name="nome"
         rotulo="Seu nome"
         dica="Nome e sobrenome — é assim que você assina o rodapé das propostas."
-        placeholder="Valquiria Silvestre"
+        placeholder="João da Silva"
         autoComplete="name"
         required
       />
@@ -165,7 +165,7 @@ export function FormularioCadastro({
       <CampoTelefone
         name="telefone"
         rotulo="Celular"
-        placeholder="(17) 99687-3399"
+        placeholder="(11) 91234-5678"
         dica="Com DDD. O pagamento da assinatura pede um telefone de contato."
         required
       />

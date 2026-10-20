@@ -372,7 +372,7 @@ export async function cadastrar(
     if (restoDoNome.length === 0) {
       throw new ErroDeCampo(
         "nome",
-        "Informe também o sobrenome, como Valquiria Silvestre — o pagamento pede o nome completo.",
+        "Informe também o sobrenome, como João da Silva — o pagamento pede o nome completo.",
       );
     }
     if (!email) throw new ErroDeCampo("email", "Informe o seu e-mail — é com ele que você vai entrar.");
@@ -385,8 +385,8 @@ export async function cadastrar(
       throw new ErroDeCampo(
         "telefone",
         telefone === ""
-          ? "Informe um celular com DDD, como (17) 99687-3399."
-          : "Este telefone não está completo. Digite o DDD e o número, como (17) 99687-3399.",
+          ? "Informe um celular com DDD, como (11) 91234-5678."
+          : "Este telefone não está completo. Digite o DDD e o número, como (11) 91234-5678.",
       );
     }
 
@@ -400,7 +400,7 @@ export async function cadastrar(
     if (problemaNoDoc) throw new ErroDeCampo("documento", problemaNoDoc);
 
     const cep = normalizarCep(lerTexto(formData.get("cep")), "cep");
-    if (!cep) throw new ErroDeCampo("cep", "Informe o CEP de quem paga, como 14781-160.");
+    if (!cep) throw new ErroDeCampo("cep", "Informe o CEP de quem paga, como 12345-678.");
 
     const endereco = lerTexto(formData.get("endereco"));
     if (!endereco) {
@@ -436,7 +436,7 @@ export async function cadastrar(
       );
     }
     if (cepExiste === "inexistente") {
-      throw new ErroDeCampo("cep", "Este CEP não existe. Confira os números, como 14781-160.");
+      throw new ErroDeCampo("cep", "Este CEP não existe. Confira os números, como 12345-678.");
     }
 
     // Antes de gravar qualquer coisa: conta criada sem como pagar fica presa

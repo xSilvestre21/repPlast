@@ -35,7 +35,7 @@ function Cartao({ inicial }: { inicial: "grafico" | "tabela" }) {
         <table>
           <tbody>
             <tr>
-              <td>DELTA PACK</td>
+              <td>SIGMA PACK</td>
             </tr>
           </tbody>
         </table>
@@ -54,7 +54,7 @@ describe("baixar imagem do cartão", () => {
 
   test("na tabela, o botão nem aparece; volta junto com o gráfico", async () => {
     render(<Cartao inicial="tabela" />);
-    await expect.element(page.getByText("DELTA PACK")).toBeVisible();
+    await expect.element(page.getByText("SIGMA PACK")).toBeVisible();
     await expect.element(baixar()).not.toBeInTheDocument();
 
     await page.getByRole("button", { name: "trocar visão" }).click();

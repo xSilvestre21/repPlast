@@ -99,7 +99,7 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
    * A soma é dos ENVIADOS, e só deles.
    *
    * O cancelado desce junto para a lista mais abaixo, porque a pergunta "cadê o
-   * pedido da FLEXOPET deste mês?" merece a resposta "foi cancelado" em vez do
+   * pedido da TITANPET deste mês?" merece a resposta "foi cancelado" em vez do
    * silêncio de uma linha que sumiu. Mas ele não passa por aqui: `resumirComissao`
    * vê apenas `pedidos`, e é esta variável que alimenta as quatro caixas, a meta
    * e o rateio por preposto.

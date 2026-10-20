@@ -36,8 +36,8 @@ const LARGURAS = [320, 360, 640, 767, 768, 1024, 1279, 1280, 1366];
 const COM_ABAS = LARGURAS.filter((largura) => largura >= 768);
 
 const NOMES = [
-  "Representação Silvestre",
-  "REPRESENTAÇÕES COMERCIAIS SILVESTRE LTDA",
+  "Representação Prado",
+  "REPRESENTAÇÕES COMERCIAIS PRADO LTDA",
   "MOREIRA & GUIMARÃES REPRESENTAÇÕES LTDA",
   "Moreira & Guimarães Representações Ltda",
   "COMÉRCIO E REPRESENTAÇÕES WM MAIA LTDA",
@@ -45,9 +45,9 @@ const NOMES = [
   "MW EMBALAGENS PLÁSTICAS REPRESENTAÇÕES",
   "QUALIPLAST REPRESENTAÇÕES COMERCIAIS",
   "QUALIPLAST REP. COMERCIAIS",
-  "Representações Comerciais Silvestre",
-  "SILVESTRE & FILHOS REPRESENTAÇÕES",
-  "Rep. Silvestre Ltda",
+  "Representações Comerciais Prado",
+  "PRADO & FILHOS REPRESENTAÇÕES",
+  "Rep. Prado Ltda",
   "WWW MMM WWW MMM WWW MMM WWW MMM",
   "Representações Comerciais de Embalagens Plásticas Ltda",
 ];
@@ -58,7 +58,7 @@ beforeAll(async () => {
 });
 
 async function noTopo(nome: string) {
-  const tela = await render(<Navegacao nomeUsuario="Ana Silvestre" nomeOrganizacao={nome} />);
+  const tela = await render(<Navegacao nomeUsuario="Ana Prado" nomeOrganizacao={nome} />);
   const elemento = document.querySelector<HTMLElement>("header [data-nome-escritorio]")!;
   return { tela, elemento };
 }
@@ -125,7 +125,7 @@ describe("nome do escritório no topo", () => {
 
   test("nome curto fica no tamanho cheio, numa linha", async () => {
     await page.viewport(1024, 720);
-    const { tela, elemento } = await noTopo("Silvestre Rep.");
+    const { tela, elemento } = await noTopo("Prado Rep.");
 
     expect(elemento.style.fontSize).toBe("18px");
     expect(elemento.dataset.linhas).toBe("1");
@@ -136,7 +136,7 @@ describe("nome do escritório no topo", () => {
     await page.viewport(largura, 720);
     const centros: number[] = [];
 
-    for (const nome of ["Val & Amaral", "Moreira & Guimarães Representações Ltda", "X".repeat(80)]) {
+    for (const nome of ["Vera & Assis", "Moreira & Guimarães Representações Ltda", "X".repeat(80)]) {
       const { tela } = await noTopo(nome);
       const abas = document.querySelector<HTMLElement>("header nav ul")!.getBoundingClientRect();
       const linha = document.querySelector<HTMLElement>("header nav")!.parentElement!.getBoundingClientRect();
@@ -149,7 +149,7 @@ describe("nome do escritório no topo", () => {
 
   test("nome comprido encolhe na janela estreita e cresce de volta na larga", async () => {
     await page.viewport(1280, 720);
-    const { tela, elemento } = await noTopo("Representações Silvestre");
+    const { tela, elemento } = await noTopo("Representações Prado");
     const tamanho = () => parseFloat(elemento.style.fontSize);
     const naEstreita = tamanho();
     expect(elemento.dataset.linhas).toBe("2");

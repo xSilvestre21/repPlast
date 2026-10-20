@@ -185,7 +185,7 @@ export async function inscreverPreposto(
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       throw new ErroDeCampo(
         "email",
-        "Este e-mail parece incompleto. Confira se tem o @ e o final, como maria@exemplo.com.br.",
+        "Este e-mail parece incompleto. Confira se tem o @ e o final, como ana@exemplo.com.br.",
       );
     }
 

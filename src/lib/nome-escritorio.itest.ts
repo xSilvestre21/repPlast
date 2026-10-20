@@ -49,7 +49,7 @@ async function falhaPorNome(promessa: Promise<unknown>) {
 let val: { id: string; usuarioId: string };
 
 beforeAll(async () => {
-  val = await escritorio(nome("Val & Amaral"));
+  val = await escritorio(nome("Vera & Assis"));
 });
 
 afterAll(async () => {
@@ -58,7 +58,7 @@ afterAll(async () => {
 
 describe("nome único do escritório", () => {
   it("recusa o mesmo nome com outras maiúsculas, acentos e espaços", async () => {
-    await falhaPorNome(escritorio(nome("VÁL  &  amaral")));
+    await falhaPorNome(escritorio(nome("VÉRA  &  assis")));
   });
 
   it("aceita o nome de um escritório desativado", async () => {
@@ -68,13 +68,13 @@ describe("nome único do escritório", () => {
   });
 
   it("nomeEmUso enxerga os outros escritórios, mesmo pelo papel restrito", async () => {
-    const outro = await escritorio(nome("Rep. Silvestre"));
+    const outro = await escritorio(nome("Rep. Prado"));
     const db = comoEscritorio(outro);
 
-    expect(await nomeEmUso(db, nome("val & AMARAL"))).toBe(true);
+    expect(await nomeEmUso(db, nome("vera & ASSIS"))).toBe(true);
     expect(await nomeEmUso(db, nome("Ninguém Usa Este"))).toBe(false);
     // O próprio nome não conta como "de outro".
-    expect(await nomeEmUso(db, nome("Rep. Silvestre"), { exceto: outro.id })).toBe(false);
+    expect(await nomeEmUso(db, nome("Rep. Prado"), { exceto: outro.id })).toBe(false);
   });
 
   it("troca A → B → A, e outro escritório pega o nome enquanto está livre", async () => {

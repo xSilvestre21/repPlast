@@ -87,7 +87,7 @@ beforeAll(async () => {
   const [fornecedor, fornecedorDaBusca] = await Promise.all([
     admin.fornecedor.create({ data: { organizacaoId, nome: "Indústria" } }),
     admin.fornecedor.create({
-      data: { organizacaoId: buscaOrganizacaoId, nome: "SELPACK" },
+      data: { organizacaoId: buscaOrganizacaoId, nome: "GAMAPACK" },
     }),
   ]);
 
@@ -134,7 +134,7 @@ async function orcamentoDaBusca(numero: number, nome: string) {
 describe("busca da lista", () => {
   beforeAll(async () => {
     await Promise.all([
-      orcamentoDaBusca(7, "HIMAFLEX EMBALAGENS"),
+      orcamentoDaBusca(7, "SIRIFLEX EMBALAGENS"),
       orcamentoDaBusca(70, "OUTRA EMPRESA"),
     ]);
   });
@@ -156,11 +156,11 @@ describe("busca da lista", () => {
   });
 
   it("continua achando pelo nome de quem pediu o preço", async () => {
-    expect(await procurar("himaflex")).toEqual([7]);
+    expect(await procurar("siriflex")).toEqual([7]);
   });
 
   it("continua achando pela indústria", async () => {
-    expect(await procurar("selpack")).toHaveLength(2);
+    expect(await procurar("gamapack")).toHaveLength(2);
   });
 
   it("texto que não é número não quebra a consulta", async () => {

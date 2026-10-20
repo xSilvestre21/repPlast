@@ -4,23 +4,23 @@ import { problemaNoModeloDaProposta, textoPadraoDoOrcamento } from "./envio-orca
 
 const COMPLETA = {
   numero: 193,
-  cliente: "AKILAH EMBALAGENS LTDA",
+  cliente: "LYRA EMBALAGENS LTDA",
   attn: "Sr. Marcelo",
   // Coluna `date`: meia-noite UTC. Em São Paulo seria 29/10 — o texto diz 30.
   validoAte: new Date("2026-10-30T00:00:00.000Z"),
   prazoPagamento: "28/35/42",
-  vendedor: "Valquiria Silvestre",
+  vendedor: "Renata Prado",
 };
 
 describe("texto padrão da proposta", () => {
   it("preenche tudo com a proposta completa", () => {
     const { assunto, corpo } = textoPadraoDoOrcamento(COMPLETA);
 
-    expect(assunto).toBe("Proposta nº 193 — AKILAH EMBALAGENS LTDA");
+    expect(assunto).toBe("Proposta nº 193 — LYRA EMBALAGENS LTDA");
     expect(corpo).toBe(
       "A/C Sr. Marcelo\n\nSegue em anexo nossa proposta nº 193.\n" +
         "Preços válidos até 30/10/2026.\nPrazo de pagamento: 28/35/42\n\n" +
-        "Fico à disposição para qualquer dúvida.\n\nValquiria Silvestre",
+        "Fico à disposição para qualquer dúvida.\n\nRenata Prado",
     );
   });
 

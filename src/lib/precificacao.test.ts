@@ -1,8 +1,8 @@
 /**
  * Testes do motor de preço.
  *
- * As fixtures NÃO são inventadas: são os itens dos pedidos 2253 (MARIOL) e
- * 2256 (LEMEPACK), emitidos pela QUALYPLAST, com os valores exatos que constam
+ * As fixtures NÃO são inventadas: são os itens dos pedidos 2253 (ORION) e
+ * 2256 (VEGAPACK), emitidos pela ALFAPLAST, com os valores exatos que constam
  * nos PDFs em `referencia/`. Se um destes testes quebrar, o sistema passou a
  * calcular diferente do que a indústria recebeu na vida real.
  */
@@ -22,12 +22,12 @@ import {
 } from "./precificacao";
 import { calcularTotaisPedido, totalItemBruto } from "./totais";
 
-const IPI_QUALYPLAST = 9.75;
+const IPI_ALFAPLAST = 9.75;
 
-/** Itens reais do pedido 2253 — MARIOL EMBALAGENS. */
+/** Itens reais do pedido 2253 — ORION EMBALAGENS. */
 const ITEM_2253_A = { larguraCm: 99, comprimentoCm: 166, espessuraMm: 0.08, fatorKg: 13.5 };
 const ITEM_2253_B = { larguraCm: 105, comprimentoCm: 100, espessuraMm: 0.08, fatorKg: 13.5 };
-/** Item real do pedido 2256 — LEMEPACK, com aditivo deslizante. */
+/** Item real do pedido 2256 — VEGAPACK, com aditivo deslizante. */
 const ITEM_2256 = { larguraCm: 77, comprimentoCm: 150, espessuraMm: 0.05, fatorKg: 15.6 };
 
 const dinheiro = (v: Decimal) => arredondarDinheiro(v).toFixed(2);
@@ -138,7 +138,7 @@ describe("pedido 2253 — fechamento completo", () => {
       { precoUnitario: precoMilheiroSaco(ITEM_2253_A), quantidade: 6 },
       { precoUnitario: precoMilheiroSaco(ITEM_2253_B), quantidade: 10 },
     ],
-    IPI_QUALYPLAST,
+    IPI_ALFAPLAST,
   );
 
   it("totaliza cada item como no PDF", () => {
@@ -158,7 +158,7 @@ describe("pedido 2253 — fechamento completo", () => {
 describe("pedido 2256 — fechamento completo", () => {
   const totais = calcularTotaisPedido(
     [{ precoUnitario: precoMilheiroSaco(ITEM_2256), quantidade: 6 }],
-    IPI_QUALYPLAST,
+    IPI_ALFAPLAST,
   );
 
   it("fecha subtotal, IPI e total geral como no PDF", () => {
@@ -174,7 +174,7 @@ describe("pedidos sem IPI", () => {
     // do pedido saiu, e quem decide é cada item.
     const totais = calcularTotaisPedido(
       [{ precoUnitario: precoMilheiroSaco(ITEM_2253_B), quantidade: 10, comIpi: false }],
-      IPI_QUALYPLAST,
+      IPI_ALFAPLAST,
     );
 
     expect(totais.ipi.toFixed(2)).toBe("0.00");
@@ -190,7 +190,7 @@ describe("IPI por item — um item isento no meio de um pedido tributado", () =>
   ];
 
   it("cobra IPI só da linha tributada", () => {
-    const totais = calcularTotaisPedido(DUAS_LINHAS, IPI_QUALYPLAST);
+    const totais = calcularTotaisPedido(DUAS_LINHAS, IPI_ALFAPLAST);
 
     expect(totais.itens[0].ipi.toFixed(2)).toBe("1105.65");
     expect(totais.itens[1].ipi.toFixed(2)).toBe("0.00");
@@ -199,7 +199,7 @@ describe("IPI por item — um item isento no meio de um pedido tributado", () =>
   });
 
   it("o subtotal ignora a isenção — ela só muda o imposto", () => {
-    const totais = calcularTotaisPedido(DUAS_LINHAS, IPI_QUALYPLAST);
+    const totais = calcularTotaisPedido(DUAS_LINHAS, IPI_ALFAPLAST);
 
     expect(totais.subtotalSemIpi.toFixed(2)).toBe("22680.00");
     expect(totais.totalGeral.toFixed(2)).toBe("23785.65");
@@ -208,11 +208,11 @@ describe("IPI por item — um item isento no meio de um pedido tributado", () =>
   it("item sem a marca é tributado, que é o padrão de quem não opina", () => {
     const semMarca = calcularTotaisPedido(
       [{ precoUnitario: precoMilheiroSaco(ITEM_2253_B), quantidade: 10 }],
-      IPI_QUALYPLAST,
+      IPI_ALFAPLAST,
     );
     const comMarca = calcularTotaisPedido(
       [{ precoUnitario: precoMilheiroSaco(ITEM_2253_B), quantidade: 10, comIpi: true }],
-      IPI_QUALYPLAST,
+      IPI_ALFAPLAST,
     );
 
     expect(semMarca.ipi.toFixed(2)).toBe(comMarca.ipi.toFixed(2));
@@ -221,7 +221,7 @@ describe("IPI por item — um item isento no meio de um pedido tributado", () =>
   it("todas as linhas isentas zeram o IPI do pedido", () => {
     const totais = calcularTotaisPedido(
       DUAS_LINHAS.map((l) => ({ ...l, comIpi: false })),
-      IPI_QUALYPLAST,
+      IPI_ALFAPLAST,
     );
 
     expect(totais.ipi.toFixed(2)).toBe("0.00");
@@ -280,17 +280,17 @@ describe("aditivos", () => {
 });
 
 /**
- * Pedidos da ERIPACK. Servem para dois propósitos: confirmar que o IPI é mesmo
- * uma configuração por fornecedor (15% aqui, contra 9,75% da QUALYPLAST) e que
+ * Pedidos da BETAPACK. Servem para dois propósitos: confirmar que o IPI é mesmo
+ * uma configuração por fornecedor (15% aqui, contra 9,75% da ALFAPLAST) e que
  * a totalização funciona para as famílias de preço de tabela, sem fórmula.
  */
-const IPI_ERIPACK = 15;
+const IPI_BETAPACK = 15;
 
 describe("pedido 133 — fita, preço de tabela por caixa", () => {
   it("fecha como no PDF", () => {
     const totais = calcularTotaisPedido(
       [{ precoUnitario: "368.76", quantidade: 5 }],
-      IPI_ERIPACK,
+      IPI_BETAPACK,
     );
 
     expect(totais.subtotalSemIpi.toFixed(2)).toBe("1843.80");
@@ -306,7 +306,7 @@ describe("pedido 146 — stretch, preço por quilo", () => {
         { precoUnitario: "17.40", quantidade: 750 },
         { precoUnitario: "17.40", quantidade: 250 },
       ],
-      IPI_ERIPACK,
+      IPI_BETAPACK,
     );
 
     expect(totais.itens[0].total.toFixed(2)).toBe("13050.00");
@@ -324,10 +324,10 @@ describe("pedido 146 — stretch, preço por quilo", () => {
 
 describe("faixas de peso", () => {
   /*
-   * A tabela real da SELPACK para o PEAD, do backup do SICOV. Repare no buraco
+   * A tabela real da GAMAPACK para o PEAD, do backup do SICOV. Repare no buraco
    * entre 300 e 301: é assim que está cadastrado lá.
    */
-  const SELPACK_PEAD = [
+  const GAMAPACK_PEAD = [
     { pesoAteKg: 300, precoKg: 35.2 },
     { pesoDeKg: 301, pesoAteKg: 499, precoKg: 34.1 },
     { pesoDeKg: 500, pesoAteKg: 999, precoKg: 33.25 },
@@ -335,21 +335,21 @@ describe("faixas de peso", () => {
   ];
 
   it("um pedido de 400 kg cai na segunda faixa", () => {
-    expect(precoDaFaixa(SELPACK_PEAD, 400, 99).toNumber()).toBe(34.1);
+    expect(precoDaFaixa(GAMAPACK_PEAD, 400, 99).toNumber()).toBe(34.1);
   });
 
   it("percorre a escada inteira", () => {
-    expect(precoDaFaixa(SELPACK_PEAD, 1, 99).toNumber()).toBe(35.2);
-    expect(precoDaFaixa(SELPACK_PEAD, 300, 99).toNumber()).toBe(35.2);
-    expect(precoDaFaixa(SELPACK_PEAD, 301, 99).toNumber()).toBe(34.1);
-    expect(precoDaFaixa(SELPACK_PEAD, 999, 99).toNumber()).toBe(33.25);
-    expect(precoDaFaixa(SELPACK_PEAD, 1000, 99).toNumber()).toBe(32.75);
-    expect(precoDaFaixa(SELPACK_PEAD, 50000, 99).toNumber()).toBe(32.75);
+    expect(precoDaFaixa(GAMAPACK_PEAD, 1, 99).toNumber()).toBe(35.2);
+    expect(precoDaFaixa(GAMAPACK_PEAD, 300, 99).toNumber()).toBe(35.2);
+    expect(precoDaFaixa(GAMAPACK_PEAD, 301, 99).toNumber()).toBe(34.1);
+    expect(precoDaFaixa(GAMAPACK_PEAD, 999, 99).toNumber()).toBe(33.25);
+    expect(precoDaFaixa(GAMAPACK_PEAD, 1000, 99).toNumber()).toBe(32.75);
+    expect(precoDaFaixa(GAMAPACK_PEAD, 50000, 99).toNumber()).toBe(32.75);
   });
 
   it("peso no buraco entre faixas cai no preço padrão", () => {
     // 300,5 não pertence a faixa nenhuma na tabela como ela está cadastrada.
-    expect(precoDaFaixa(SELPACK_PEAD, 300.5, 99).toNumber()).toBe(99);
+    expect(precoDaFaixa(GAMAPACK_PEAD, 300.5, 99).toNumber()).toBe(99);
   });
 
   it("material sem faixa usa o preço padrão", () => {

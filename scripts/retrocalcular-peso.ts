@@ -3,8 +3,8 @@
  *
  * COMO RODAR
  *
- *   npm run db:peso -- --escritorio "Val & Amaral"            # ensaio
- *   npm run db:peso -- --escritorio "Val & Amaral" --gravar
+ *   npm run db:peso -- --escritorio "Vera & Assis"            # ensaio
+ *   npm run db:peso -- --escritorio "Vera & Assis" --gravar
  *
  * POR QUE EXISTE
  *
@@ -42,7 +42,7 @@ const ARQUIVO = arg("arquivo") ?? "referencia/sicov-backup-2026-09-13-18h30.json
 const GRAVAR = argv.includes("--gravar");
 
 if (!ESCRITORIO) {
-  console.error('\nInforme o escritório:  --escritorio "Val & Amaral"\n');
+  console.error('\nInforme o escritório:  --escritorio "Vera & Assis"\n');
   process.exit(1);
 }
 

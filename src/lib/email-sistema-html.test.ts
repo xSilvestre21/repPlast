@@ -5,7 +5,7 @@ import { CID_LOGO, montarEmailSistema } from "./email-sistema-html";
 const LINK = "https://repplast.com.br/redefinir-senha/abc_DEF-123";
 
 const exemplo = {
-  nome: "Valquiria Silvestre",
+  nome: "Renata Prado",
   paragrafos: ["Recebemos um pedido para criar uma senha nova."],
   botao: { rotulo: "Criar senha nova", url: LINK },
   notas: ["Este link vale por 60 minutos e funciona uma vez só.", "Se não foi você, ignore este e-mail."],
@@ -31,7 +31,7 @@ describe("montarEmailSistema", () => {
 
   it("o texto puro diz o mesmo que o HTML", () => {
     const { texto } = montarEmailSistema(exemplo);
-    expect(texto).toContain("Olá, Valquiria Silvestre!");
+    expect(texto).toContain("Olá, Renata Prado!");
     expect(texto).toContain(`Criar senha nova:\n${LINK}`);
     for (const nota of exemplo.notas) expect(texto).toContain(nota);
     expect(texto).not.toMatch(/<[a-z]/i);

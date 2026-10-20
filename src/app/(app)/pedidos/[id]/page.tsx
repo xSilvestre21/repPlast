@@ -188,7 +188,7 @@ export default async function PaginaPedido({
           {temItens && (
             <>
               {/*
-                Baixa direto, com o nome que a rota já monta (`2276-AKILAH-…pdf`),
+                Baixa direto, com o nome que a rota já monta (`2276-LYRA-…pdf`),
                 como no orçamento. O `download` faz o Link deixar o clique com o
                 navegador em vez de tentar navegar para a rota do arquivo.
               */}

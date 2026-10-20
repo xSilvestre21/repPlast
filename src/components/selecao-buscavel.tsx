@@ -5,8 +5,8 @@
  *
  * O `<select>` nativo dá conta de dez opções e atrapalha em oitenta: achar um
  * cliente no meio da carteira inteira exigia rolar até ele, e a busca por tecla
- * do navegador só casa o COMEÇO do nome — quem lembra "Santa Bárbara" e não
- * "CASTRO & MACHI" não chega lá. Aqui a pessoa digita qualquer pedaço, de
+ * do navegador só casa o COMEÇO do nome — quem lembra "São Bento" e não
+ * "COSTA & MELO" não chega lá. Aqui a pessoa digita qualquer pedaço, de
  * qualquer palavra, e a lista encolhe junto.
  *
  * O que sai no formulário continua sendo o `id`, num input escondido: a Server
@@ -33,8 +33,8 @@ export type OpcaoBuscavel = {
 /**
  * Sem acento e sem caixa.
  *
- * "Sertãozinho" tem de aparecer para quem digitou "sertaozinho", e "CEPÊRA"
- * para quem digitou "cepera" — ninguém procura cliente com acento certo.
+ * "Conceição" tem de aparecer para quem digitou "conceicao", e "PÉROLA"
+ * para quem digitou "perola" — ninguém procura cliente com acento certo.
  */
 export function achatar(texto: string): string {
   return texto
@@ -46,7 +46,7 @@ export function achatar(texto: string): string {
 /**
  * Casa quando TODOS os pedaços digitados aparecem, em qualquer ordem.
  *
- * É o que faz "albras embu" achar a ALBRAS de Embu sem obrigar a pessoa a
+ * É o que faz "atlas serra" achar a ATLAS de Serra sem obrigar a pessoa a
  * lembrar como o nome e a cidade estão escritos um em relação ao outro.
  */
 function casa(opcao: OpcaoBuscavel, termos: string[]): boolean {

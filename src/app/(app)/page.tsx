@@ -61,7 +61,7 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
 
   const { organizacaoId, db, ehAdmin, usuarioId } = await escopoAtual();
 
-  // O primeiro nome, como se cumprimenta alguém: "Olá, Luiz!", e não o nome
+  // O primeiro nome, como se cumprimenta alguém: "Olá, Davi!", e não o nome
   // inteiro do cadastro. `sessaoAtual` é memoizada por requisição — a mesma
   // leitura que o `escopoAtual` acabou de fazer, sem ida nova ao banco.
   const sessao = await sessaoAtual();

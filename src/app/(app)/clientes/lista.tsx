@@ -10,7 +10,7 @@
  * novas chegarem, e a URL continua contando a verdade por `replaceState`.
  *
  * Até aqui a tela paginava por URL, só com os ativos. Com 107 clientes na
- * carteira de referência, ninguém procura "a página 5": procura "a ALBRAS".
+ * carteira de referência, ninguém procura "a página 5": procura "a ATLAS".
  */
 
 import { Loader2, Search, UserRoundPlus, Users, X } from "lucide-react";

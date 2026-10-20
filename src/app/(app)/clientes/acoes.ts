@@ -104,7 +104,7 @@ function dadosDoFormulario(formData: FormData) {
   if (!apelido) {
     throw new ErroDeCampo(
       "apelido",
-      "Informe o nome curto — é como o cliente aparece nas listas, como MARIOL.",
+      "Informe o nome curto — é como o cliente aparece nas listas, como ORION.",
     );
   }
 

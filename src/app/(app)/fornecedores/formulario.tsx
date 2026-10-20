@@ -39,7 +39,7 @@ export function FormularioFornecedor({
               rotulo="Nome da indústria"
               required
               defaultValue={valores.nome}
-              placeholder="QUALYPLAST EMBALAGENS"
+              placeholder="INDÚSTRIA EXEMPLO"
               className="sm:col-span-2"
             />
             <Campo

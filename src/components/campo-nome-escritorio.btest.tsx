@@ -30,13 +30,13 @@ describe("prévia do nome do escritório", () => {
     const tela = await render(<CampoNomeEscritorio dica="dica" />);
     expect(nomeNaPrevia().textContent).toBe("Seu escritório");
 
-    await page.getByRole("textbox").fill("Val & Amaral");
-    await expect.poll(() => nomeNaPrevia().textContent).toBe("Val & Amaral");
+    await page.getByRole("textbox").fill("Vera & Assis");
+    await expect.poll(() => nomeNaPrevia().textContent).toBe("Vera & Assis");
     await expect.poll(() => nomeNaPrevia().style.fontSize).toBe("18px");
     await tela.unmount();
   });
 
-  test.each(["Val & Amaral", "Moreira Rep.", "Amaral & Cia", "Grupo Moreira"])(
+  test.each(["Vera & Assis", "Moreira Rep.", "Assis & Cia", "Grupo Moreira"])(
     "“%s” (até uns 12 caracteres) fica no tamanho cheio, mesmo no pior caso",
     async (nome) => {
       const tela = await render(<CampoNomeEscritorio valorInicial={nome} dica="dica" />);

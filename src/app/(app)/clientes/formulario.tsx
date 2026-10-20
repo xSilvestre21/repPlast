@@ -52,14 +52,14 @@ export function FormularioCliente({
               rotulo="Nome curto"
               required
               dica="Usado nas listas e no nome do arquivo PDF."
-              placeholder="MARIOL"
+              placeholder="EXEMPLO"
               defaultValue={valores.apelido}
             />
             <Campo
               name="razaoSocial"
               rotulo="Razão social"
               required
-              placeholder="MARIOL EMBALAGENS LTDA"
+              placeholder="EMBALAGENS EXEMPLO LTDA"
               defaultValue={valores.razaoSocial}
             />
             <CampoDocumento
@@ -72,7 +72,7 @@ export function FormularioCliente({
               name="ie"
               rotulo="Inscrição estadual"
               defaultValue={valores.ie}
-              placeholder="204.222.524.111"
+              placeholder="123.456.789.012"
             />
           </div>
         </SecaoCartao>
