@@ -22,8 +22,18 @@ export type PresetProvedor = {
   tlsDireto: boolean;
   /** Onde a pessoa consegue a senha certa, e o que fazer lá. */
   ajuda: string;
+  /**
+   * O mesmo, em passos numerados, para quem nunca fez — com os nomes que
+   * aparecem nas telas do serviço (e no vídeo, quando há).
+   */
+  passos?: string[];
   /** Link da página de ajuda, quando existe uma boa. */
   link?: string;
+  /**
+   * O vídeo de "Ver como fazer", em `public/ajuda/`. Só se preenche quando o
+   * arquivo existe: sem ele, o botão nem aparece.
+   */
+  video?: { src: string; duracao: string };
 };
 
 export const PRESETS: Record<Provedor, PresetProvedor> = {
@@ -32,10 +42,13 @@ export const PRESETS: Record<Provedor, PresetProvedor> = {
     host: "smtp.gmail.com",
     porta: 465,
     tlsDireto: true,
-    ajuda:
-      "O Gmail não aceita a sua senha normal aqui. Ative a verificação em duas etapas na " +
-      "Conta Google e crie uma senha de app (16 letras) em Segurança → Senhas de app. " +
-      "Cole essa senha abaixo.",
+    ajuda: "O Gmail não aceita a sua senha normal aqui: ele pede uma senha de app, feita só para isto.",
+    passos: [
+      "Clique em “Abrir a página” e entre na sua conta Google. Se aparecer que a página não está " +
+        "disponível, ative antes a “Verificação em duas etapas” e volte aqui.",
+      "Em “Nome do app”, escreva RepPlast e clique em “Criar”.",
+      "O Google mostra uma senha de 16 letras. Copie e cole no campo “Senha de app”, acima.",
+    ],
     link: "https://myaccount.google.com/apppasswords",
   },
   OUTLOOK: {

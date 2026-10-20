@@ -22,7 +22,7 @@ export async function contaParaEnvio(
   db: DbOrganizacao,
   usuarioId: string,
   contaId: string,
-): Promise<(ContaSmtp & { id: string }) | null> {
+): Promise<(ContaSmtp & { id: string; assinaturaHtml: string | null }) | null> {
   const conta = await db.contaEmail.findFirst({ where: { id: contaId, usuarioId } });
   if (!conta) return null;
 
@@ -35,6 +35,7 @@ export async function contaParaEnvio(
     tlsDireto: conta.tlsDireto,
     usuarioSmtp: conta.usuarioSmtp,
     senha: decifrar(conta.senhaCifrada),
+    assinaturaHtml: conta.assinaturaHtml,
   };
 }
 
@@ -50,4 +51,5 @@ export const CAMPOS_PUBLICOS_CONTA = {
   usuarioSmtp: true,
   padrao: true,
   testadaEm: true,
+  assinaturaHtml: true,
 } as const;

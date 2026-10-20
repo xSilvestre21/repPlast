@@ -117,7 +117,7 @@ describe("fechar o diálogo no meio do envio", () => {
       <BotaoEnviarEmail
         jaEnviado={false}
         acao={acao}
-        contas={[{ id: "c1", email: "eu@exemplo.com", nomeExibicao: "Eu", padrao: true }]}
+        contas={[{ id: "c1", email: "eu@exemplo.com", nomeExibicao: "Eu", padrao: true, assinaturaHtml: null }]}
         contatos={[{ id: "k1", nome: "Compras", setor: null, email: "compras@exemplo.com", padrao: true }]}
         fornecedor={{ id: "f1", nome: "QUALYPLAST" }}
         cliente={{ apelido: "AKILAH", email: null }}
@@ -201,7 +201,7 @@ describe("edição de preposto antes de enviar", () => {
         jaEnviado={false}
         aConferir={aConferir}
         acao={async () => ({ enviado: true })}
-        contas={[{ id: "c1", email: "eu@exemplo.com", nomeExibicao: "Eu", padrao: true }]}
+        contas={[{ id: "c1", email: "eu@exemplo.com", nomeExibicao: "Eu", padrao: true, assinaturaHtml: null }]}
         contatos={[{ id: "k1", nome: "Compras", setor: null, email: "compras@exemplo.com", padrao: true }]}
         fornecedor={{ id: "f1", nome: "QUALYPLAST" }}
         cliente={{ apelido: "AKILAH", email: null }}

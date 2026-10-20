@@ -25,6 +25,7 @@ import {
 import { Dialogo } from "./dialogo";
 import { EntregaEnviado } from "./entrega-enviado";
 import { ErroGeral, Formulario } from "./formulario";
+import { PreviaAssinatura } from "./previa-assinatura";
 import {
   AreaTexto,
   Botao,
@@ -47,7 +48,14 @@ import {
 /** Uma edição de preposto que o administrador ainda não conferiu. */
 export type EdicaoAConferir = { id: string; quem: string; quando: string };
 
-export type ContaEnvio = { id: string; email: string; nomeExibicao: string; padrao: boolean };
+export type ContaEnvio = {
+  id: string;
+  email: string;
+  nomeExibicao: string;
+  padrao: boolean;
+  /** A assinatura desta caixa, já limpa. Vazia: o e-mail sai sem. */
+  assinaturaHtml: string | null;
+};
 export type ContatoEnvio = {
   id: string;
   nome: string | null;
@@ -225,6 +233,7 @@ function FormEnvio({
   const [avulsos, setAvulsos] = useState("");
   const [copiaCliente, setCopiaCliente] = useState(false);
   const [copiaParaMim, setCopiaParaMim] = useState(true);
+  const [incluirAssinatura, setIncluirAssinatura] = useState(true);
   const [anexos, setAnexos] = useState<File[]>([]);
 
   // O input que vai no formulário. Os arquivos moram no estado — assim dá para
@@ -429,6 +438,26 @@ function FormEnvio({
 
       <Campo name="assunto" rotulo="Assunto" required defaultValue={textoPadrao.assunto} />
       <AreaTexto name="corpo" rotulo="Mensagem" rows={7} defaultValue={textoPadrao.corpo} />
+
+      {/*
+        A assinatura da caixa escolhida, como ela vai sair. Desmarcar tira só
+        deste envio — a assinatura continua guardada em Configurações.
+      */}
+      {conta?.assinaturaHtml && (
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-corpo">
+            <input
+              type="checkbox"
+              name="incluirAssinatura"
+              checked={incluirAssinatura}
+              onChange={(e) => setIncluirAssinatura(e.target.checked)}
+              className="size-4 accent-carimbo"
+            />
+            Incluir a minha assinatura no fim
+          </label>
+          {incluirAssinatura && <PreviaAssinatura html={conta.assinaturaHtml} />}
+        </div>
+      )}
 
       <div className="space-y-2">
         <Rotulo>Anexos</Rotulo>

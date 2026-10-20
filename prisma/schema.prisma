@@ -1321,6 +1321,10 @@ model ContaEmail {
   padrao        Boolean       @default(false)
   /// Última vez que um teste ou envio passou. Vazio: nunca confirmada.
   testadaEm     DateTime?
+  /// A assinatura desta caixa, em HTML já limpo (`limparAssinatura`): a que a
+  /// pessoa copiou do Gmail/Outlook e colou, com logo e links. Vai no fim de
+  /// todo e-mail de pedido e de proposta. Vazio: sem assinatura.
+  assinaturaHtml String?
 
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt

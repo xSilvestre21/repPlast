@@ -26,9 +26,11 @@ import {
 import { PRESETS, PROVEDORES, type Provedor } from "@/lib/provedores-email";
 
 import { AcaoComRecusa } from "@/components/acao-com-recusa";
+import { VideoAjuda } from "@/components/video-ajuda";
 import { ErroGeral, Formulario } from "@/components/formulario";
 
 import type { EstadoConta } from "./acoes";
+import { CampoAssinatura } from "./campo-assinatura";
 
 /** Os campos que moram dentro do bloco recolhido "Servidor". */
 const CAMPOS_DO_SERVIDOR = ["host", "porta", "seguranca", "usuarioSmtp"];
@@ -46,6 +48,8 @@ export type ContaVisivel = {
   usuarioSmtp: string;
   padrao: boolean;
   testadaEm: string | null;
+  /** Já limpa no servidor; vazia, os e-mails desta caixa saem sem assinatura. */
+  assinaturaHtml: string | null;
   salvar: AcaoConta;
   testar: AcaoConta;
   tornarPadrao: AcaoConta;
@@ -160,6 +164,7 @@ function LinhaConta({ conta }: { conta: ContaVisivel }) {
           </div>
           <div className="text-mini text-tinta-3">
             {conta.nomeExibicao} · {PRESETS[conta.provedor].rotulo}
+            {conta.assinaturaHtml && " · com assinatura"}
             {conta.testadaEm && ` · funcionou em ${DATA_HORA.format(new Date(conta.testadaEm))}`}
           </div>
         </div>
@@ -292,19 +297,47 @@ function FormConta({
         />
       </div>
 
-      <p className="text-mini text-tinta-2 leading-relaxed">
-        {preset.ajuda}{" "}
-        {preset.link && (
-          <a
-            href={preset.link}
-            target="_blank"
-            rel="noreferrer"
-            className="text-carimbo font-medium hover:underline"
-          >
-            Abrir a página
-          </a>
+      {/*
+        A ajuda do serviço: a frase, os passos numerados para quem nunca fez,
+        e o link e o vídeo lado a lado — o vídeo começa clicando neste link.
+      */}
+      <div className="text-mini text-tinta-2 leading-relaxed space-y-1.5">
+        <p>{preset.ajuda}</p>
+        {preset.passos && (
+          <ol className="list-decimal pl-5 space-y-0.5">
+            {preset.passos.map((passo) => (
+              <li key={passo}>{passo}</li>
+            ))}
+          </ol>
         )}
-      </p>
+        {(preset.link || preset.video) && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            {preset.link && (
+              <a
+                href={preset.link}
+                target="_blank"
+                rel="noreferrer"
+                className="text-carimbo font-medium hover:underline"
+              >
+                Abrir a página
+              </a>
+            )}
+            {preset.video && (
+              <VideoAjuda
+                src={preset.video.src}
+                duracao={preset.video.duracao}
+                titulo={`Como criar a senha de app — ${preset.rotulo}`}
+              />
+            )}
+          </div>
+        )}
+      </div>
+
+      <CampoAssinatura
+        inicial={inicial.assinaturaHtml ?? ""}
+        erro={estado.campo === "assinatura" ? estado.erro : undefined}
+        provedor={provedor}
+      />
 
       {/*
         Servidor e porta ficam à vista mesmo com o preset: quando um provedor

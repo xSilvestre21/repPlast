@@ -28,6 +28,7 @@ import {
   unidadesDaFamilia,
 } from "@/lib/produto-preco";
 import { contaParaEnvio } from "@/lib/conta-email";
+import { corpoDoEmail } from "@/lib/assinatura-email";
 import { enviarEmail } from "@/lib/email";
 import { CONTATO_EMAIL, CONTATO_NFE } from "@/lib/envio-orcamento";
 import {
@@ -1235,7 +1236,17 @@ export async function enviarOrcamentoPorEmail(
       )),
     ];
 
-    const resultado = await enviarEmail({ conta, para, cc, assunto, texto: corpo, anexos });
+    // A assinatura da caixa vai embaixo, a não ser que a pessoa a desmarque
+    // neste envio (a caixa só existe na tela quando há assinatura).
+    const assinatura = formData.get("incluirAssinatura") === "on" ? conta.assinaturaHtml : null;
+    const resultado = await enviarEmail({
+      conta,
+      para,
+      cc,
+      assunto,
+      ...corpoDoEmail(corpo, assinatura),
+      anexos,
+    });
     // `motivo` já vem em português e com o próximo passo (`explicarErro`).
     if (!resultado.enviado) throw new ErroParaUsuario(resultado.motivo);
 

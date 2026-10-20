@@ -164,6 +164,12 @@ export async function enviarEmail(mensagem: {
       subject: mensagem.assunto,
       text: mensagem.texto,
       html: mensagem.html,
+      // A imagem da assinatura embutida (`data:`) vira anexo com `cid`: o logo
+      // chega dentro do e-mail, e não como um texto enorme que muitos leitores
+      // recusam. E o HTML colado nunca faz o servidor ler arquivo nem URL.
+      attachDataUrls: true,
+      disableFileAccess: true,
+      disableUrlAccess: true,
       attachments: mensagem.anexos?.map((anexo) => ({
         filename: anexo.nome,
         content: anexo.conteudo,

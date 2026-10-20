@@ -82,7 +82,7 @@ export default async function PaginaPedido({
     db.contaEmail.findMany({
       where: { usuarioId },
       orderBy: [{ padrao: "desc" }, { criadoEm: "asc" }],
-      select: { id: true, email: true, nomeExibicao: true, padrao: true },
+      select: { id: true, email: true, nomeExibicao: true, padrao: true, assinaturaHtml: true },
     }),
     // O texto também é de quem envia, pelo mesmo motivo.
     db.usuario.findUnique({

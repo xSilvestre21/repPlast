@@ -7,6 +7,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { limparAssinatura } from "@/lib/assinatura-email";
 import { contaParaEnvio } from "@/lib/conta-email";
 import { cifrar, decifrar } from "@/lib/cripto";
 import { testarConta } from "@/lib/email";
@@ -277,6 +278,9 @@ function lerCampo(formData: FormData, nome: string): string {
  *
  * Na edição, senha em branco quer dizer "mantenha a que está": a senha nunca
  * volta para o formulário, então a pessoa não teria como reenviá-la.
+ *
+ * A assinatura chega como o HTML que a pessoa colou e é gravada limpa
+ * (`limparAssinatura`). Vazia, é "sem assinatura" — é assim que se remove.
  */
 export async function salvarContaEmail(
   contaId: string | null,
@@ -325,6 +329,7 @@ export async function salvarContaEmail(
     // Senha de app do Gmail aparece em quatro blocos com espaço; o servidor
     // quer as dezesseis letras juntas.
     const senhaDigitada = lerCampo(formData, "senha").replace(/\s+/g, "");
+    const { html: assinaturaHtml } = limparAssinatura(lerCampo(formData, "assinatura"));
 
     const existente = contaId
       ? await db.contaEmail.findFirst({ where: { id: contaId, usuarioId } })
@@ -373,6 +378,7 @@ export async function salvarContaEmail(
       senhaCifrada: senhaDigitada ? cifrar(senhaDigitada) : existente!.senhaCifrada,
       padrao,
       testadaEm: new Date(),
+      assinaturaHtml,
     };
 
     if (existente) {

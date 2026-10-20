@@ -82,7 +82,7 @@ export default async function PaginaOrcamento({
     db.contaEmail.findMany({
       where: { usuarioId },
       orderBy: [{ padrao: "desc" }, { criadoEm: "asc" }],
-      select: { id: true, email: true, nomeExibicao: true, padrao: true },
+      select: { id: true, email: true, nomeExibicao: true, padrao: true, assinaturaHtml: true },
     }),
     db.usuario.findUnique({
       where: { id: usuarioId },
