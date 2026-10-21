@@ -274,48 +274,38 @@ export async function criarOrcamento(
       );
     }
 
-    /*
-     * Numeração POR ESCRITÓRIO, e não por indústria como a do pedido: o
-     * orçamento é documento do representante para o cliente, e a indústria nem
-     * fica sabendo dele. O `increment` vira um UPDATE atômico, então duas
-     * propostas simultâneas nunca pegam o mesmo número.
-     */
-    const contador = await db.organizacao.update({
-      where: { id: organizacaoId },
-      data: { proximoNumeroOrcamento: { increment: 1 } },
-      select: { proximoNumeroOrcamento: true },
-    });
-
-    const orcamento = await db.orcamento.create({
-      data: {
-        organizacaoId,
-        clienteId: cliente?.id ?? null,
-        clienteAvulsoNome: cliente ? null : avulsoNome,
-        clienteAvulsoMunicipio: cliente
-          ? null
-          : lerTexto(formData.get("clienteAvulsoMunicipio")),
-        fornecedorId,
-        numero: contador.proximoNumeroOrcamento - 1,
-        // Congelado na criação, como no pedido.
-        ipiPercentual: fornecedor.ipiPercentual,
-        // As condições que se repetem em toda proposta entram preenchidas —
-        // com o padrão de quem está criando, não do escritório.
-        observacoes: usuario?.observacoesPadrao ?? cliente?.observacoes ?? null,
-        // Quem assina embaixo é quem está criando — dá para trocar na ficha.
-        vendedor: usuario ? nomeCompleto(usuario) : null,
-        // E de onde ele escreve, que abre o cabeçalho. Congelada aqui pelo mesmo
-        // motivo que o nome: reimprimir a proposta de março tem de sair igual ao
-        // papel que o cliente recebeu.
-        cidade: usuario?.municipio ?? null,
-        // Com quem a comissão se divide se virar pedido. O preposto que cota é
-        // o dono da proposta; a do administrador nasce do escritório, e o
-        // preposto se escolhe no pedido — nem todo pedido é dividido.
-        representanteId: ehAdmin ? null : usuarioId,
-        // Quem digitou — é o que decide quem vê a proposta.
-        criadoPorId: usuarioId,
-      },
-      select: { id: true },
-    });
+    const orcamento = await comProximoNumero(db, organizacaoId, (numero) =>
+      db.orcamento.create({
+        data: {
+          organizacaoId,
+          clienteId: cliente?.id ?? null,
+          clienteAvulsoNome: cliente ? null : avulsoNome,
+          clienteAvulsoMunicipio: cliente
+            ? null
+            : lerTexto(formData.get("clienteAvulsoMunicipio")),
+          fornecedorId,
+          numero,
+          // Congelado na criação, como no pedido.
+          ipiPercentual: fornecedor.ipiPercentual,
+          // As condições que se repetem em toda proposta entram preenchidas —
+          // com o padrão de quem está criando, não do escritório.
+          observacoes: usuario?.observacoesPadrao ?? cliente?.observacoes ?? null,
+          // Quem assina embaixo é quem está criando — dá para trocar na ficha.
+          vendedor: usuario ? nomeCompleto(usuario) : null,
+          // E de onde ele escreve, que abre o cabeçalho. Congelada aqui pelo mesmo
+          // motivo que o nome: reimprimir a proposta de março tem de sair igual ao
+          // papel que o cliente recebeu.
+          cidade: usuario?.municipio ?? null,
+          // Com quem a comissão se divide se virar pedido. O preposto que cota é
+          // o dono da proposta; a do administrador nasce do escritório, e o
+          // preposto se escolhe no pedido — nem todo pedido é dividido.
+          representanteId: ehAdmin ? null : usuarioId,
+          // Quem digitou — é o que decide quem vê a proposta.
+          criadoPorId: usuarioId,
+        },
+        select: { id: true },
+      }),
+    );
 
     destino = `/orcamentos/${orcamento.id}`;
   } catch (erro) {
@@ -324,6 +314,60 @@ export async function criarOrcamento(
 
   revalidatePath("/orcamentos");
   redirect(destino);
+}
+
+/** Quantos números já ocupados a criação pula antes de desistir. */
+const TENTATIVAS_DE_NUMERO = 50;
+
+/**
+ * Cria a proposta com o próximo número do escritório.
+ *
+ * Numeração POR ESCRITÓRIO, e não por indústria como a do pedido: o orçamento
+ * é documento do representante para o cliente, e a indústria nem fica sabendo
+ * dele. O `increment` vira um UPDATE atômico, então duas propostas simultâneas
+ * nunca pegam o mesmo número.
+ *
+ * O contador pode estar ATRÁS de um número já usado — proposta gravada direto
+ * no banco, por carga de dados ou script, sem passar por ele. Antes, cada nova
+ * proposta batia no índice único e a tela dizia "já existe um cadastro com
+ * esses mesmos dados", para sempre, qualquer que fosse o cliente. Por isso:
+ *
+ * 1. o contador sobe até depois do maior número que esta pessoa enxerga — o
+ *    administrador vê o escritório inteiro, e o conserto é de uma vez;
+ * 2. o preposto só enxerga as dele (RLS), então um número ocupado por proposta
+ *    de outro ainda pode aparecer: aí o número é pulado e a próxima tentativa
+ *    pega o seguinte. O contador só anda para a frente, nunca devolve número.
+ */
+async function comProximoNumero<T>(
+  db: DbOrganizacao,
+  organizacaoId: string,
+  criar: (numero: number) => Promise<T>,
+): Promise<T> {
+  const maior = await db.orcamento.aggregate({
+    where: { organizacaoId },
+    _max: { numero: true },
+  });
+  const piso = (maior._max.numero ?? 0) + 1;
+  await db.organizacao.updateMany({
+    where: { id: organizacaoId, proximoNumeroOrcamento: { lt: piso } },
+    data: { proximoNumeroOrcamento: piso },
+  });
+
+  for (let tentativa = 1; ; tentativa++) {
+    const contador = await db.organizacao.update({
+      where: { id: organizacaoId },
+      data: { proximoNumeroOrcamento: { increment: 1 } },
+      select: { proximoNumeroOrcamento: true },
+    });
+
+    try {
+      return await criar(contador.proximoNumeroOrcamento - 1);
+    } catch (erro) {
+      const numeroOcupado =
+        typeof erro === "object" && erro !== null && "code" in erro && erro.code === "P2002";
+      if (!numeroOcupado || tentativa >= TENTATIVAS_DE_NUMERO) throw erro;
+    }
+  }
 }
 
 /**
