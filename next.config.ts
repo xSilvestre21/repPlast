@@ -10,6 +10,16 @@ const nextConfig: NextConfig = {
   // 127.0.0.1 — e sem isto os planos de /comecar nem aparecem (são revelados
   // por JavaScript, que o Next bloqueava).
   allowedDevOrigins: ["192.168.15.129", "127.0.0.1"],
+  // Arquivos que o servidor lê do disco na hora (`readFile`, `Font.register`),
+  // e não por `import`: sem isto, numa hospedagem serverless eles ficam fora do
+  // pacote da função. As fontes do PDF de gráficos e o logo do e-mail do
+  // sistema (`lib/pdf/documento-graficos.tsx`, `lib/email-sistema.ts`).
+  outputFileTracingIncludes: {
+    "/**/*": [
+      "./node_modules/@fontsource/plus-jakarta-sans/files/plus-jakarta-sans-latin-*-normal.woff",
+      "./public/email/**/*",
+    ],
+  },
   experimental: {
     // Uploads passam por server action, e o padrão do Next é 1 MB. O maior é o
     // envio do pedido por e-mail: a aplicação valida 20 MB de anexos (ver
