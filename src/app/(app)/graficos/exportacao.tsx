@@ -42,12 +42,12 @@ export function BotoesExportacao({ competencia }: { competencia: string }) {
     `/graficos/exportar/${formato}?mes=${competencia}&meses=${janela}&dias=${dias}`;
 
   /*
-   * O CSV leva os PEDIDOS, não o gráfico: todo cartão desta aba é uma soma
+   * A planilha leva os PEDIDOS, não o gráfico: todo cartão desta aba é uma soma
    * dessas linhas, então quem as tem no Excel refaz qualquer um deles — e
    * também os cruzamentos que a tela não mostra.
    */
-  const csv = (escopo: "mes" | "janela") =>
-    `/graficos/exportar/csv?mes=${competencia}&escopo=${escopo}&meses=${janela}`;
+  const planilha = (escopo: "mes" | "janela") =>
+    `/graficos/exportar/planilha?mes=${competencia}&escopo=${escopo}&meses=${janela}`;
 
   /*
    * `prefetch={false}` nos três: são rotas que GERAM arquivo (PDF, planilha).
@@ -66,11 +66,11 @@ export function BotoesExportacao({ competencia }: { competencia: string }) {
       >
         Relatório PDF
       </BotaoLink>
-      <BotaoLink href={csv("mes")} target="_blank" prefetch={false} variante="secundaria" icone={Sheet}>
-        CSV do mês
+      <BotaoLink href={planilha("mes")} target="_blank" prefetch={false} variante="secundaria" icone={Sheet}>
+        Planilha do mês
       </BotaoLink>
-      <BotaoLink href={csv("janela")} target="_blank" prefetch={false} variante="secundaria" icone={Sheet}>
-        CSV de {janela} meses
+      <BotaoLink href={planilha("janela")} target="_blank" prefetch={false} variante="secundaria" icone={Sheet}>
+        Planilha de {janela} meses
       </BotaoLink>
     </div>
   );

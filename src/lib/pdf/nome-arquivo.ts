@@ -51,10 +51,10 @@ function semAcento(texto: string): string {
 }
 
 /**
- * Nome do arquivo do relatório dos gráficos (PDF, HTML e CSV).
+ * Nome do arquivo do relatório dos gráficos (PDF, HTML e planilha).
  *
  *     Relatorio-Representacao-Modelo-09-2026.pdf   ← período "2026-09"
- *     Relatorio-Representacao-Modelo-2026.csv      ← período "2026"
+ *     Relatorio-Representacao-Modelo-2026.xlsx     ← período "2026"
  *
  * O período é uma competência ("AAAA-MM") ou só o ano ("AAAA"), e sai na
  * ordem de leitura: mês antes do ano, como as datas dos outros arquivos.

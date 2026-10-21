@@ -319,8 +319,8 @@ export const MESES_DA_BASE = 24;
 /**
  * Tudo que a página de gráficos manda ao navegador, numa ida ao banco.
  *
- * `carregarDadosDosGraficos` (acima) continua existindo para o PDF, o HTML e o
- * CSV, que ainda são montados no servidor com o mês e a janela fixos.
+ * `carregarDadosDosGraficos` (acima) continua existindo para o PDF, o HTML e a
+ * planilha, que ainda são montados no servidor com o mês e a janela fixos.
  *
  * Cada item sai pela visão de quem olha (`itemDoGrafico`), com a conta da
  * tela de Comissões — é o que faz os totais baterem com os de lá.
