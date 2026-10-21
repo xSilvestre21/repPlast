@@ -80,6 +80,11 @@ try {
     );
   }
 
+  // A aplicação conecta como o dono e entra no papel com SET ROLE, o que exige
+  // ser membro dele. No Postgres 16+ quem cria o papel sem ser superusuário
+  // (o dono no Neon) não vira membro sozinho: sem isto, "permission denied to
+  // set role".
+  await tentar("membro do papel", `GRANT ${PAPEL} TO CURRENT_USER`);
   await tentar("uso do schema", `GRANT USAGE ON SCHEMA public TO ${PAPEL}`);
   await tentar(
     "tabelas existentes",
