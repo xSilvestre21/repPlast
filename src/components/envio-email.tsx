@@ -53,8 +53,8 @@ export type ContaEnvio = {
   email: string;
   nomeExibicao: string;
   padrao: boolean;
-  /** A assinatura desta caixa, já limpa. Vazia: o e-mail sai sem. */
-  assinaturaHtml: string | null;
+  /** As assinaturas desta caixa, já limpas, a padrão primeiro. Vazia: o e-mail sai sem. */
+  assinaturas: { id: string; nome: string; html: string; padrao: boolean }[];
 };
 export type ContatoEnvio = {
   id: string;
@@ -233,7 +233,9 @@ function FormEnvio({
   const [avulsos, setAvulsos] = useState("");
   const [copiaCliente, setCopiaCliente] = useState(false);
   const [copiaParaMim, setCopiaParaMim] = useState(true);
-  const [incluirAssinatura, setIncluirAssinatura] = useState(true);
+  // A assinatura escolhida em cada caixa: trocar o "De" e voltar não perde a
+  // escolha. Sem escolha ainda, vale a padrão daquela caixa.
+  const [assinaturaPorConta, setAssinaturaPorConta] = useState<Record<string, string>>({});
   const [anexos, setAnexos] = useState<File[]>([]);
 
   // O input que vai no formulário. Os arquivos moram no estado — assim dá para
@@ -247,6 +249,10 @@ function FormEnvio({
   }, [anexos]);
 
   const conta = contas.find((c) => c.id === contaId);
+  const assinaturas = conta?.assinaturas ?? [];
+  const assinaturaId =
+    assinaturaPorConta[contaId] ?? (assinaturas.find((a) => a.padrao) ?? assinaturas[0])?.id ?? "";
+  const assinatura = assinaturas.find((a) => a.id === assinaturaId);
   const { para, cc } = montarDestinatarios({
     contatos: contatos.filter((c) => marcados.has(c.id)).map((c) => c.email),
     avulsos: lerListaEmails(avulsos),
@@ -440,22 +446,26 @@ function FormEnvio({
       <AreaTexto name="corpo" rotulo="Mensagem" rows={7} defaultValue={textoPadrao.corpo} />
 
       {/*
-        A assinatura da caixa escolhida, como ela vai sair. Desmarcar tira só
-        deste envio — a assinatura continua guardada em Configurações.
+        A assinatura da caixa escolhida, como ela vai sair. Trocar aqui vale só
+        para este envio — a padrão continua a mesma em Configurações.
       */}
-      {conta?.assinaturaHtml && (
+      {assinaturas.length > 0 && (
         <div className="space-y-2">
-          <label className="flex items-center gap-2 text-corpo">
-            <input
-              type="checkbox"
-              name="incluirAssinatura"
-              checked={incluirAssinatura}
-              onChange={(e) => setIncluirAssinatura(e.target.checked)}
-              className="size-4 accent-carimbo"
-            />
-            Incluir a minha assinatura no fim
-          </label>
-          {incluirAssinatura && <PreviaAssinatura html={conta.assinaturaHtml} />}
+          <Selecao
+            name="assinaturaId"
+            rotulo="Assinatura"
+            value={assinaturaId}
+            onChange={(e) => setAssinaturaPorConta((atual) => ({ ...atual, [contaId]: e.target.value }))}
+            dica={assinaturas.length > 1 ? undefined : "Outras assinaturas se cadastram em Configurações."}
+          >
+            {assinaturas.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.nome}
+              </option>
+            ))}
+            <option value="">Sem assinatura</option>
+          </Selecao>
+          {assinatura && <PreviaAssinatura html={assinatura.html} />}
         </div>
       )}
 

@@ -385,7 +385,7 @@ export function EstadoVazio({
  * `name`) e as classes da caixa em `controle.ts` (usadas dos dois lados). O
  * reexport mantém `@/components/ui` como a porta de entrada de sempre.
  */
-export { AreaTexto, Campo, EspacoDoRotulo, RodapeCampo, Rotulo, Selecao } from "./campos";
+export { AreaTexto, Campo, CampoSenha, EspacoDoRotulo, RodapeCampo, Rotulo, Selecao } from "./campos";
 export { CLASSE_CONTROLE, CLASSE_CONTROLE_CELULA, CLASSE_ERRO } from "./controle";
 
 /**

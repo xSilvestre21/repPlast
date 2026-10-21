@@ -90,3 +90,24 @@ export const PRESETS: Record<Provedor, PresetProvedor> = {
 export function ehProvedor(valor: unknown): valor is Provedor {
   return typeof valor === "string" && (PROVEDORES as readonly string[]).includes(valor);
 }
+
+/** Domínios que dizem sozinhos qual é o serviço. O resto é da empresa: a pessoa escolhe. */
+const DOMINIOS: Record<string, Provedor> = {
+  "gmail.com": "GMAIL",
+  "googlemail.com": "GMAIL",
+  "hotmail.com": "OUTLOOK",
+  "hotmail.com.br": "OUTLOOK",
+  "outlook.com": "OUTLOOK",
+  "outlook.com.br": "OUTLOOK",
+  "live.com": "OUTLOOK",
+  "msn.com": "OUTLOOK",
+};
+
+/**
+ * O serviço que o próprio endereço entrega — "@gmail.com" é Gmail. `null`
+ * quando o final não diz (e-mail da empresa, que pode estar em qualquer lugar).
+ */
+export function provedorDoEmail(email: string): Provedor | null {
+  const dominio = email.trim().toLowerCase().split("@")[1];
+  return (dominio && DOMINIOS[dominio]) || null;
+}

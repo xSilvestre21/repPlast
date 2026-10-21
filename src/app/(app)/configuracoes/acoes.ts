@@ -31,6 +31,10 @@ import { escopoAtual, exigirAdmin } from "@/lib/sessao";
 
 export type { EstadoFormulario };
 
+const ASSINATURA_SUMIU =
+  "Esta assinatura não foi encontrada — ela pode ter sido excluída em outra tela. " +
+  "Recarregue a página.";
+
 const CONTA_SUMIU =
   "Esta conta de e-mail não foi encontrada — ela pode ter sido excluída em outra tela. " +
   "Recarregue a página.";
@@ -279,8 +283,8 @@ function lerCampo(formData: FormData, nome: string): string {
  * Na edição, senha em branco quer dizer "mantenha a que está": a senha nunca
  * volta para o formulário, então a pessoa não teria como reenviá-la.
  *
- * A assinatura chega como o HTML que a pessoa colou e é gravada limpa
- * (`limparAssinatura`). Vazia, é "sem assinatura" — é assim que se remove.
+ * As assinaturas não passam por aqui: têm as ações delas, logo abaixo, e
+ * mexer numa não pede testar a conexão de novo.
  */
 export async function salvarContaEmail(
   contaId: string | null,
@@ -329,7 +333,6 @@ export async function salvarContaEmail(
     // Senha de app do Gmail aparece em quatro blocos com espaço; o servidor
     // quer as dezesseis letras juntas.
     const senhaDigitada = lerCampo(formData, "senha").replace(/\s+/g, "");
-    const { html: assinaturaHtml } = limparAssinatura(lerCampo(formData, "assinatura"));
 
     const existente = contaId
       ? await db.contaEmail.findFirst({ where: { id: contaId, usuarioId } })
@@ -378,7 +381,6 @@ export async function salvarContaEmail(
       senhaCifrada: senhaDigitada ? cifrar(senhaDigitada) : existente!.senhaCifrada,
       padrao,
       testadaEm: new Date(),
-      assinaturaHtml,
     };
 
     if (existente) {
@@ -491,5 +493,147 @@ export async function excluirContaEmail(
   } catch (erro) {
     return falhou(erro);
   }
+  return {};
+}
+
+/* -------------------------------------------------------------------------- */
+/* Assinaturas de cada conta                                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Cria ou edita uma assinatura da caixa `contaId`.
+ *
+ * Chega o HTML que a pessoa colou, e é gravado limpo (`limparAssinatura`).
+ * Caixa vazia é recusada: o jeito de tirar uma assinatura é "Excluir", e
+ * gravar uma vazia deixaria na lista do envio um nome que manda nada.
+ *
+ * A primeira da caixa é a padrão sem perguntar, como a primeira conta.
+ */
+export async function salvarAssinaturaEmail(
+  contaId: string,
+  assinaturaId: string | null,
+  _estado: EstadoConta,
+  formData: FormData,
+): Promise<EstadoConta> {
+  try {
+    const { usuarioId, organizacaoId, db } = await escopoAtual();
+
+    const conta = await db.contaEmail.findFirst({ where: { id: contaId, usuarioId }, select: { id: true } });
+    if (!conta) throw new ErroParaUsuario(CONTA_SUMIU);
+
+    const existente = assinaturaId
+      ? await db.assinaturaEmail.findFirst({ where: { id: assinaturaId, contaId, usuarioId } })
+      : null;
+    if (assinaturaId && !existente) throw new ErroParaUsuario(ASSINATURA_SUMIU);
+
+    const nome = lerCampo(formData, "nome");
+    if (!nome) {
+      throw new ErroDeCampo(
+        "nome",
+        "Dê um nome para reconhecer esta assinatura na hora de enviar, como “Completa” ou “Curta”.",
+      );
+    }
+
+    const repetida = await db.assinaturaEmail.findFirst({
+      where: { contaId, usuarioId, nome, NOT: assinaturaId ? { id: assinaturaId } : undefined },
+      select: { id: true },
+    });
+    if (repetida) {
+      throw new ErroDeCampo(
+        "nome",
+        "Este e-mail já tem uma assinatura com este nome. Use outro, como “Curta” ou o nome da indústria.",
+      );
+    }
+
+    const { html } = limparAssinatura(lerCampo(formData, "assinatura"));
+    if (!html) {
+      throw new ErroDeCampo(
+        "assinatura",
+        "A caixa da assinatura está vazia. Cole a sua assinatura nela (Ctrl+V) ou escreva uma. " +
+          "Para tirar esta assinatura, use “Excluir”, na lista.",
+      );
+    }
+
+    const quantas = await db.assinaturaEmail.count({ where: { contaId, usuarioId } });
+    const padrao = formData.get("padrao") === "on" || quantas === 0 || (existente?.padrao ?? false);
+    if (padrao) {
+      await db.assinaturaEmail.updateMany({ where: { contaId, usuarioId }, data: { padrao: false } });
+    }
+
+    if (existente) {
+      await db.assinaturaEmail.updateMany({
+        where: { id: existente.id, usuarioId },
+        data: { nome, html, padrao },
+      });
+    } else {
+      await db.assinaturaEmail.create({
+        data: { organizacaoId, usuarioId, contaId, nome, html, padrao },
+      });
+    }
+  } catch (erro) {
+    return falhou(erro, formData);
+  }
+
+  revalidatePath("/configuracoes");
+  return { ok: "Assinatura salva." };
+}
+
+/** A assinatura que já vem escolhida no envio por esta caixa. */
+export async function definirAssinaturaPadrao(
+  assinaturaId: string,
+  _estado: EstadoFormulario,
+  _formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    const { usuarioId, db } = await escopoAtual();
+
+    const assinatura = await db.assinaturaEmail.findFirst({ where: { id: assinaturaId, usuarioId } });
+    if (!assinatura) throw new ErroParaUsuario(ASSINATURA_SUMIU);
+
+    await db.assinaturaEmail.updateMany({
+      where: { contaId: assinatura.contaId, usuarioId },
+      data: { padrao: false },
+    });
+    await db.assinaturaEmail.updateMany({ where: { id: assinaturaId, usuarioId }, data: { padrao: true } });
+  } catch (erro) {
+    return falhou(erro);
+  }
+
+  revalidatePath("/configuracoes");
+  return {};
+}
+
+/**
+ * Tira a assinatura. Se era a padrão, a mais antiga das que sobram assume —
+ * quem tem assinatura continua mandando com uma, sem precisar escolher.
+ */
+export async function excluirAssinaturaEmail(
+  assinaturaId: string,
+  _estado: EstadoFormulario,
+  _formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    const { usuarioId, db } = await escopoAtual();
+
+    const assinatura = await db.assinaturaEmail.findFirst({ where: { id: assinaturaId, usuarioId } });
+    if (!assinatura) return {};
+
+    await db.assinaturaEmail.deleteMany({ where: { id: assinaturaId, usuarioId } });
+
+    if (assinatura.padrao) {
+      const proxima = await db.assinaturaEmail.findFirst({
+        where: { contaId: assinatura.contaId, usuarioId },
+        orderBy: { criadoEm: "asc" },
+        select: { id: true },
+      });
+      if (proxima) {
+        await db.assinaturaEmail.updateMany({ where: { id: proxima.id, usuarioId }, data: { padrao: true } });
+      }
+    }
+  } catch (erro) {
+    return falhou(erro);
+  }
+
+  revalidatePath("/configuracoes");
   return {};
 }

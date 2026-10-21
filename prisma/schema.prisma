@@ -177,6 +177,7 @@ model Organizacao {
   pedidos      Pedido[]
   orcamentos   Orcamento[]
   contasEmail  ContaEmail[]
+  assinaturasEmail AssinaturaEmail[]
   metas        MetaComissao[]
   repasses     RepassePreposto[]
   compromissos Compromisso[]
@@ -287,6 +288,7 @@ model Usuario {
   enviosOrcamento EnvioOrcamento[]
   fornecedores FornecedorPreposto[]
   contasEmail  ContaEmail[]
+  assinaturasEmail AssinaturaEmail[]
   envios       EnvioPedido[]
   metas        MetaComissao[]
   repasses     RepassePreposto[]
@@ -1321,20 +1323,46 @@ model ContaEmail {
   padrao        Boolean       @default(false)
   /// Última vez que um teste ou envio passou. Vazio: nunca confirmada.
   testadaEm     DateTime?
-  /// A assinatura desta caixa, em HTML já limpo (`limparAssinatura`): a que a
-  /// pessoa copiou do Gmail/Outlook e colou, com logo e links. Vai no fim de
-  /// todo e-mail de pedido e de proposta. Vazio: sem assinatura.
-  assinaturaHtml String?
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  organizacao Organizacao       @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  usuario     Usuario           @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  assinaturas AssinaturaEmail[]
+
+  @@unique([usuarioId, email])
+  @@index([organizacaoId])
+  @@map("conta_email")
+}
+
+/// As assinaturas de uma caixa de e-mail — a completa, a curta, a de cada
+/// empresa representada. Cada uma é o HTML já limpo (`limparAssinatura`) do
+/// que a pessoa copiou do Gmail/Outlook e colou, com logo e links.
+///
+/// A `padrao` vem escolhida no envio, e lá se troca por outra ou por "Sem
+/// assinatura". `usuarioId` repete o da conta para a policy ser a mesma dela:
+/// só o dono enxerga.
+model AssinaturaEmail {
+  id            String   @id @default(uuid()) @db.Uuid
+  organizacaoId String   @db.Uuid
+  usuarioId     String   @db.Uuid
+  contaId       String   @db.Uuid
+  /// Só para a pessoa reconhecer na hora de enviar: "Completa", "Curta".
+  nome          String
+  html          String
+  padrao        Boolean  @default(false)
 
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
   organizacao Organizacao @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
   usuario     Usuario     @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  conta       ContaEmail  @relation(fields: [contaId], references: [id], onDelete: Cascade)
 
-  @@unique([usuarioId, email])
+  @@index([contaId])
   @@index([organizacaoId])
-  @@map("conta_email")
+  @@map("assinatura_email")
 }
 
 /// Cada vez que um pedido saiu por e-mail: de quem, para quem, com o quê.

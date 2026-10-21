@@ -12,9 +12,12 @@ import { nomeCompleto } from "@/lib/nome-usuario";
 
 import {
   alternarReduzirAnimacoes,
+  definirAssinaturaPadrao,
   definirContaPadrao,
+  excluirAssinaturaEmail,
   excluirContaEmail,
   renomearEscritorio,
+  salvarAssinaturaEmail,
   salvarCidade,
   salvarContaEmail,
   salvarMensagemEnvioPadrao,
@@ -87,6 +90,13 @@ export default async function PaginaConfiguracoes() {
             testar: testarContaEmail.bind(null, conta.id),
             tornarPadrao: definirContaPadrao.bind(null, conta.id),
             excluir: excluirContaEmail.bind(null, conta.id),
+            adicionarAssinatura: salvarAssinaturaEmail.bind(null, conta.id, null),
+            assinaturas: conta.assinaturas.map((assinatura) => ({
+              ...assinatura,
+              salvar: salvarAssinaturaEmail.bind(null, conta.id, assinatura.id),
+              tornarPadrao: definirAssinaturaPadrao.bind(null, assinatura.id),
+              excluir: excluirAssinaturaEmail.bind(null, assinatura.id),
+            })),
           }))}
         />
 

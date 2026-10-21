@@ -15,7 +15,7 @@ import { useActionState } from "react";
 
 import { CampoTelefone } from "@/components/campo-mascarado";
 import { ErroGeral, Formulario } from "@/components/formulario";
-import { Botao, Campo, SecaoCartao } from "@/components/ui";
+import { Botao, Campo, CampoSenha, SecaoCartao } from "@/components/ui";
 import { valoresDaLista } from "@/lib/erro-formulario";
 
 import type { EstadoFormulario } from "./acoes";
@@ -168,10 +168,9 @@ export function FormularioPreposto({
             descricao="Passe a senha inicial a ele por um canal seguro. No primeiro acesso, o sistema sugere que ele crie uma senha só dele — e daí em diante só ele pode trocá-la. Se ele esquecer, usa “Esqueceu sua senha?” na tela de entrar."
           >
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <Campo
+              <CampoSenha
                 name="senha"
                 rotulo="Senha inicial"
-                type="password"
                 required
                 autoComplete="new-password"
                 dica="Mínimo 8 caracteres."

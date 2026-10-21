@@ -27,7 +27,7 @@ import {
   precoUnitario,
   unidadesDaFamilia,
 } from "@/lib/produto-preco";
-import { contaParaEnvio } from "@/lib/conta-email";
+import { assinaturaEscolhida, contaParaEnvio } from "@/lib/conta-email";
 import { corpoDoEmail } from "@/lib/assinatura-email";
 import { enviarEmail } from "@/lib/email";
 import { CONTATO_EMAIL, CONTATO_NFE } from "@/lib/envio-orcamento";
@@ -1236,9 +1236,9 @@ export async function enviarOrcamentoPorEmail(
       )),
     ];
 
-    // A assinatura da caixa vai embaixo, a não ser que a pessoa a desmarque
-    // neste envio (a caixa só existe na tela quando há assinatura).
-    const assinatura = formData.get("incluirAssinatura") === "on" ? conta.assinaturaHtml : null;
+    // A assinatura escolhida no diálogo (a padrão da caixa já vem marcada) vai
+    // embaixo; "Sem assinatura" manda só o texto.
+    const assinatura = await assinaturaEscolhida(db, usuarioId, conta.id, formData);
     const resultado = await enviarEmail({
       conta,
       para,

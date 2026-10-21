@@ -4,6 +4,7 @@ import { Building2, FileDown, History, Mail, Pencil, ScrollText } from "lucide-r
 
 import { SeloStatus } from "@/components/selo-status";
 import { BotaoLink, Cabecalho, Cartao, Emblema, Painel, SecaoCartao } from "@/components/ui";
+import { ASSINATURAS_DA_CONTA } from "@/lib/conta-email";
 import { textoPadraoDoEnvio } from "@/lib/envio-pedido";
 import { escreverNumeroBr } from "@/lib/numero-br";
 import { unidadeDoRotulo } from "@/lib/produto-preco";
@@ -82,7 +83,13 @@ export default async function PaginaPedido({
     db.contaEmail.findMany({
       where: { usuarioId },
       orderBy: [{ padrao: "desc" }, { criadoEm: "asc" }],
-      select: { id: true, email: true, nomeExibicao: true, padrao: true, assinaturaHtml: true },
+      select: {
+        id: true,
+        email: true,
+        nomeExibicao: true,
+        padrao: true,
+        assinaturas: ASSINATURAS_DA_CONTA,
+      },
     }),
     // O texto também é de quem envia, pelo mesmo motivo.
     db.usuario.findUnique({

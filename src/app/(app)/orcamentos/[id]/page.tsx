@@ -15,6 +15,7 @@ import {
   Painel,
   SecaoCartao,
 } from "@/components/ui";
+import { ASSINATURAS_DA_CONTA } from "@/lib/conta-email";
 import { CONTATO_EMAIL, CONTATO_NFE, textoPadraoDoOrcamento } from "@/lib/envio-orcamento";
 import { escreverNumeroBr } from "@/lib/numero-br";
 import { unidadeDoRotulo } from "@/lib/produto-preco";
@@ -82,7 +83,13 @@ export default async function PaginaOrcamento({
     db.contaEmail.findMany({
       where: { usuarioId },
       orderBy: [{ padrao: "desc" }, { criadoEm: "asc" }],
-      select: { id: true, email: true, nomeExibicao: true, padrao: true, assinaturaHtml: true },
+      select: {
+        id: true,
+        email: true,
+        nomeExibicao: true,
+        padrao: true,
+        assinaturas: ASSINATURAS_DA_CONTA,
+      },
     }),
     db.usuario.findUnique({
       where: { id: usuarioId },

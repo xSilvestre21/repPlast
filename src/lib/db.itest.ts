@@ -718,6 +718,37 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     expect(count).toBe(0);
   });
 
+  it("as assinaturas da caixa seguem a dona dela, como a caixa", async () => {
+    const conta = await dbParaOrganizacao(escritorio, ana).contaEmail.findFirstOrThrow({
+      where: { email: "ana@gmail.com" },
+    });
+    await dbParaOrganizacao(escritorio, ana).assinaturaEmail.create({
+      data: {
+        organizacaoId: escritorio,
+        usuarioId: ana.usuarioId,
+        contaId: conta.id,
+        nome: "Completa",
+        html: "<b>Ana</b>",
+      },
+    });
+
+    expect(await dbParaOrganizacao(escritorio, ana).assinaturaEmail.findMany()).toHaveLength(1);
+    expect(await dbParaOrganizacao(escritorio, heitor).assinaturaEmail.findMany()).toHaveLength(0);
+    expect(await dbParaOrganizacao(escritorio, dono).assinaturaEmail.findMany()).toHaveLength(0);
+
+    await expect(
+      dbParaOrganizacao(escritorio, heitor).assinaturaEmail.create({
+        data: {
+          organizacaoId: escritorio,
+          usuarioId: ana.usuarioId,
+          contaId: conta.id,
+          nome: "Falsa",
+          html: "<b>Ana</b>",
+        },
+      }),
+    ).rejects.toThrow();
+  });
+
   it("não deixa cadastrar caixa de e-mail em nome do colega", async () => {
     await expect(
       dbParaOrganizacao(escritorio, heitor).contaEmail.create({

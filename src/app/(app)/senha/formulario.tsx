@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useActionState } from "react";
 
 import { ErroGeral, Formulario } from "@/components/formulario";
-import { Botao, Campo, Mensagem } from "@/components/ui";
+import { Botao, CampoSenha, Mensagem } from "@/components/ui";
 import { TAMANHO_MINIMO_SENHA } from "@/lib/senha-regras";
 
 import type { EstadoFormulario } from "./acoes";
@@ -25,27 +25,24 @@ export function FormularioSenha({ acao, primeiroAcesso }: { acao: Acao; primeiro
       {primeiroAcesso && <input type="hidden" name="primeiroAcesso" value="1" />}
       <Mensagem tom="verde">{estado.aviso}</Mensagem>
 
-      <Campo
+      <CampoSenha
         name="atual"
         rotulo={primeiroAcesso ? "Senha que você recebeu" : "Senha atual"}
-        type="password"
         autoComplete="current-password"
         required
         autoFocus
       />
-      <Campo
+      <CampoSenha
         name="senha"
         rotulo="Senha nova"
-        type="password"
         autoComplete="new-password"
         minLength={TAMANHO_MINIMO_SENHA}
         dica={`Pelo menos ${TAMANHO_MINIMO_SENHA} caracteres. Só você vai saber.`}
         required
       />
-      <Campo
+      <CampoSenha
         name="confirmacao"
         rotulo="Repita a senha nova"
-        type="password"
         autoComplete="new-password"
         required
       />

@@ -1,6 +1,7 @@
 "use client";
 
-import { useId, type ComponentProps, type ReactNode } from "react";
+import { Eye, EyeOff } from "lucide-react";
+import { useId, useState, type ComponentProps, type ReactNode } from "react";
 
 import { CLASSE_CONTROLE, CLASSE_ERRO } from "./controle";
 import { useCampoDoFormulario } from "./contexto-formulario";
@@ -99,6 +100,7 @@ export function Campo({
   dica,
   erro: erroExplicito,
   sufixo,
+  adorno,
   className = "",
   ...props
 }: ComponentProps<"input"> & {
@@ -106,6 +108,8 @@ export function Campo({
   dica?: string;
   erro?: string;
   sufixo?: string;
+  /** Botão dentro da caixa, à direita — o olho do `CampoSenha`. */
+  adorno?: ReactNode;
 }) {
   const { erro, idRodape, defaultValue } = useControle(props, erroExplicito, dica);
 
@@ -118,7 +122,7 @@ export function Campo({
           defaultValue={defaultValue as ComponentProps<"input">["defaultValue"]}
           aria-invalid={erro ? true : undefined}
           aria-describedby={idRodape}
-          className={`${CLASSE_CONTROLE} ${sufixo ? "pr-11" : ""} ${erro ? CLASSE_ERRO : ""} ${
+          className={`${CLASSE_CONTROLE} ${sufixo || adorno ? "pr-11" : ""} ${erro ? CLASSE_ERRO : ""} ${
             props.type === "number" ? "numerico text-right" : ""
           }`}
         />
@@ -127,9 +131,43 @@ export function Campo({
             {sufixo}
           </span>
         )}
+        {adorno}
       </div>
       <RodapeCampo erro={erro} dica={dica} id={idRodape} />
     </label>
+  );
+}
+
+/**
+ * Campo de senha com o olho: mostra o que foi digitado, para conferir antes de
+ * enviar — a senha de app de 16 letras, sobretudo, é fácil de colar errado.
+ *
+ * O botão vem DEPOIS do input dentro do `<label>`: o rótulo continua
+ * apontando para a caixa, não para o botão.
+ */
+export function CampoSenha(props: Omit<ComponentProps<typeof Campo>, "type" | "sufixo" | "adorno">) {
+  const [visivel, setVisivel] = useState(false);
+  // O ícone mostra o estado: riscado com a senha escondida, aberto com ela à vista.
+  const Icone = visivel ? Eye : EyeOff;
+
+  return (
+    <Campo
+      {...props}
+      type={visivel ? "text" : "password"}
+      adorno={
+        <button
+          type="button"
+          onClick={() => setVisivel((atual) => !atual)}
+          aria-label={visivel ? "Esconder a senha" : "Mostrar a senha"}
+          aria-pressed={visivel}
+          title={visivel ? "Esconder a senha" : "Mostrar a senha"}
+          className="absolute right-1.5 top-1/2 -translate-y-1/2 size-8 grid place-items-center rounded-full
+            text-tinta-3 hover:text-carimbo cursor-pointer"
+        >
+          <Icone size={16} aria-hidden="true" />
+        </button>
+      }
+    />
   );
 }
 
