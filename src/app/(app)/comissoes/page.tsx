@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Factory, HandCoins, PiggyBank, Send, Users } from "lucide-react";
 
 import {
+  BotaoLink,
   Cabecalho,
   Cartao,
   Celula,
@@ -55,10 +56,20 @@ import {
 } from "./acoes";
 import { LinhaComissao, type LinhaPedido } from "./acerto";
 import { colunasDaComissao } from "./colunas";
+import { FiltroIndustria } from "./filtro-industria";
 import { PainelMeta } from "./painel-meta";
 import { LinhaRepasse, ResumoRepasse, ValoresDaLinha, type DadosRepasse } from "./repasse";
 import { Pagina } from "@/components/pagina";
 import { NavegadorMes, nomeDoMes } from "@/components/navegador-mes";
+
+/**
+ * O endereço da tela num mês, com a indústria escolhida — ou sem, em "Todas".
+ * Trocar de mês leva a indústria junto: conferir o extrato da mesma indústria
+ * mês a mês não pede escolher de novo.
+ */
+function endereco(mes: string, fornecedor: string | null): string {
+  return fornecedor ? `/comissoes?mes=${mes}&fornecedor=${encodeURIComponent(fornecedor)}` : `/comissoes?mes=${mes}`;
+}
 
 /** "1 pedido", "8 pedidos" — no lugar do "pedido(s)" de formulário. */
 function plural(n: number, palavra: string): string {
@@ -71,6 +82,10 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
     typeof parametros.mes === "string" && /^\d{4}-\d{2}$/.test(parametros.mes)
       ? parametros.mes
       : competenciaDe(new Date());
+
+  // A indústria das tabelas (`filtro-industria.tsx`). Só filtra o que se vê:
+  // as contas do mês continuam de todas.
+  const pedida = typeof parametros.fornecedor === "string" ? parametros.fornecedor : null;
 
   const { organizacaoId, db, ehAdmin, usuarioId } = await escopoAtual();
 
@@ -146,6 +161,21 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
       resumo: resumirComissao(doFornecedor.filter((p) => p.status === "ENVIADO")),
     }))
     .sort((a, b) => a.fornecedor.nome.localeCompare(b.fornecedor.nome, "pt-BR"));
+
+  /*
+   * A indústria escolhida. Sem pedido neste mês ela não está em `porFornecedor`,
+   * mas continua escolhida — a pessoa trocou de mês olhando a mesma indústria, e
+   * a tela diz que ela não teve pedido em vez de mostrar as outras caladas. O
+   * nome vem do cadastro; id que não é de indústria nenhuma (link velho, URL
+   * mexida à mão) é ignorado e a tela mostra todas.
+   */
+  const noMes = pedida ? porFornecedor.find((g) => g.fornecedor.id === pedida) : undefined;
+  const ausente =
+    pedida && !noMes
+      ? await db.fornecedor.findFirst({ where: { id: pedida, organizacaoId }, select: { id: true, nome: true } })
+      : null;
+  const escolhida = noMes ? noMes.fornecedor.id : (ausente?.id ?? null);
+  const visiveis = escolhida ? porFornecedor.filter((g) => g.fornecedor.id === escolhida) : porFornecedor;
 
   /*
    * Agrupa por preposto. Pedido da casa (sem preposto) fica de fora: ele já
@@ -235,7 +265,7 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
       */}
       <NavegadorMes
         competencia={competencia}
-        href={(mes) => `/comissoes?mes=${mes}`}
+        href={(mes) => endereco(mes, escolhida)}
         destaques={batidos}
         rotuloDestaque="meta batida"
         className="mb-7"
@@ -369,14 +399,40 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
         </Cartao>
       )}
 
-      {porFornecedor.length === 0 ? (
+      {/* Com uma indústria só no mês não há o que escolher — a não ser voltar a
+          "Todas", quando a escolhida não teve pedido. */}
+      {(porFornecedor.length > 1 || escolhida) && (
+        <FiltroIndustria
+          industrias={porFornecedor.map((g) => ({
+            id: g.fornecedor.id,
+            nome: g.fornecedor.nome,
+            pedidos: contarPedidos(g.pedidos),
+          }))}
+          escolhida={escolhida}
+          endereco={(fornecedor) => endereco(competencia, fornecedor)}
+        />
+      )}
+
+      {ausente ? (
+        <EstadoVazio
+          icone={Factory}
+          titulo={`Nenhum pedido da ${ausente.nome} em ${nomeDoMes(competencia).toLowerCase()}`}
+          acao={
+            <BotaoLink href={endereco(competencia, null)} variante="secundaria" tamanho="compacto">
+              Ver todas as indústrias
+            </BotaoLink>
+          }
+        >
+          Troque de mês pelas setas acima — a indústria continua escolhida.
+        </EstadoVazio>
+      ) : porFornecedor.length === 0 ? (
         <EstadoVazio icone={Send}>
           Nenhum pedido enviado neste mês.
           <br />A comissão passa a contar quando você marca o pedido como enviado.
         </EstadoVazio>
       ) : (
         <div className="space-y-5 palco">
-          {porFornecedor.map(({ fornecedor, pedidos: doFornecedor, resumo }) => (
+          {visiveis.map(({ fornecedor, pedidos: doFornecedor, resumo }) => (
             <Cartao key={fornecedor.id} className="p-5 sm:p-6">
               <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
                 <div className="flex items-start gap-3 min-w-0">
