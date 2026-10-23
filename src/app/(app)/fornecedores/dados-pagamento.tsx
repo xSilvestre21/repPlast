@@ -11,14 +11,19 @@
  */
 
 import { Landmark } from "lucide-react";
+import { useRef, useState, type ChangeEvent } from "react";
 
 import { BotaoCopiar } from "@/components/botao-copiar";
-import { CampoDocumento } from "@/components/campo-mascarado";
+import { CampoAgencia, CampoConta, CampoDocumento, CampoMascarado } from "@/components/campo-mascarado";
+import { useCampoDoFormulario } from "@/components/formulario";
 import { AreaTexto, Campo, SecaoCartao, Selecao } from "@/components/ui";
 import {
   TIPOS_CHAVE_PIX,
   TIPOS_CONTA,
+  chaveCabeNaMascara,
   linhasDoPagamento,
+  mascaraDaChavePix,
+  mascaraSoDeNumero,
   textoDoPagamento,
   type DadosPagamento,
 } from "@/lib/dados-pagamento";
@@ -43,10 +48,48 @@ export function SecaoDadosPagamento({
   );
 }
 
+/** Sem máscara (e-mail, chave aleatória): todo caractere é conteúdo, e o cursor fica onde está. */
+const QUALQUER = /[\s\S]/;
+const COMO_ESCRITO = (valor: string) => valor;
+
+/** O exemplo e o teclado do celular de cada tipo de chave. */
+const JEITO_DA_CHAVE: Record<string, { placeholder: string; inputMode: "numeric" | "tel" | "email" | "text" }> = {
+  CNPJ: { placeholder: "12.345.678/0001-95", inputMode: "numeric" },
+  CPF: { placeholder: "123.456.789-09", inputMode: "numeric" },
+  EMAIL: { placeholder: "financeiro@industria.com.br", inputMode: "email" },
+  CELULAR: { placeholder: "(11) 91234-5678", inputMode: "tel" },
+  ALEATORIA: { placeholder: "123e4567-e89b-12d3-a456-426614174000", inputMode: "text" },
+};
+const SEM_TIPO = { placeholder: "A chave que a indústria passou", inputMode: "text" } as const;
+
 function Campos({ pagamento }: { pagamento: DadosPagamento }) {
+  // O tipo escolhido decide a máscara da chave. Recusado o envio, a escolha
+  // volta pelo formulário — e a máscara junto.
+  const { valorDigitado } = useCampoDoFormulario("pagamentoTipoChavePix");
+  const [tipoChave, setTipoChave] = useState(valorDigitado ?? pagamento.tipoChavePix);
+  const chave = useRef<HTMLInputElement>(null);
+  const mascara = mascaraDaChavePix(tipoChave);
+  const jeito = JEITO_DA_CHAVE[tipoChave] ?? SEM_TIPO;
+
+  function aoTrocarTipo(evento: ChangeEvent<HTMLSelectElement>) {
+    const novo = evento.currentTarget.value;
+    setTipoChave(novo);
+    // A chave já escrita ganha a pontuação do tipo novo — só se for número:
+    // um e-mail passado para CNPJ ficaria sem as letras, e quem decide o que
+    // fazer com ele é a pessoa (o servidor recusa com a frase do tipo).
+    const caixa = chave.current;
+    const nova = mascaraDaChavePix(novo);
+    if (caixa && nova && chaveCabeNaMascara(caixa.value)) caixa.value = nova(caixa.value);
+  }
+
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 items-start">
-      <Selecao name="pagamentoTipoChavePix" rotulo="Tipo da chave PIX" defaultValue={pagamento.tipoChavePix}>
+      <Selecao
+        name="pagamentoTipoChavePix"
+        rotulo="Tipo da chave PIX"
+        defaultValue={pagamento.tipoChavePix}
+        onChange={aoTrocarTipo}
+      >
         <option value="">—</option>
         {Object.entries(TIPOS_CHAVE_PIX).map(([valor, rotulo]) => (
           <option key={valor} value={valor}>
@@ -54,13 +97,18 @@ function Campos({ pagamento }: { pagamento: DadosPagamento }) {
           </option>
         ))}
       </Selecao>
-      <Campo
+      <CampoMascarado
+        ref={chave}
         name="pagamentoChavePix"
         rotulo="Chave PIX"
         className="lg:col-span-3"
         autoComplete="off"
-        placeholder="12.345.678/0001-95"
+        spellCheck={false}
+        placeholder={jeito.placeholder}
+        inputMode={jeito.inputMode}
         defaultValue={pagamento.chavePix}
+        mascara={mascara ? mascaraSoDeNumero(mascara) : COMO_ESCRITO}
+        conteudo={mascara ? /\d/ : QUALQUER}
       />
 
       <Campo
@@ -70,19 +118,11 @@ function Campos({ pagamento }: { pagamento: DadosPagamento }) {
         autoComplete="off"
         defaultValue={pagamento.banco}
       />
-      <Campo
-        name="pagamentoAgencia"
-        rotulo="Agência"
-        inputMode="numeric"
-        placeholder="1234"
-        autoComplete="off"
-        defaultValue={pagamento.agencia}
-      />
-      <Campo
+      <CampoAgencia name="pagamentoAgencia" rotulo="Agência" defaultValue={pagamento.agencia} />
+      <CampoConta
         name="pagamentoConta"
         rotulo="Conta"
-        placeholder="56789-0"
-        autoComplete="off"
+        dica="Com o dígito: o traço entra sozinho."
         defaultValue={pagamento.conta}
       />
       <Selecao name="pagamentoTipoConta" rotulo="Tipo da conta" defaultValue={pagamento.tipoConta}>

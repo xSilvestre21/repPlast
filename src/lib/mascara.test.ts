@@ -14,11 +14,15 @@ import { describe, expect, it } from "vitest";
 
 import { lerNumeroBr } from "./numero-br";
 import {
+  mascararAgencia,
   mascararCep,
+  mascararConta,
   mascararDocumento,
   mascararMoeda,
   mascararTelefone,
+  normalizarAgencia,
   normalizarCep,
+  normalizarConta,
   normalizarDocumento,
   normalizarTelefone,
   somenteDigitos,
@@ -211,6 +215,82 @@ describe("normalizarTelefone", () => {
     expect(normalizarTelefone("0800 704 1234")).toBe("0800 704 1234");
     expect(normalizarTelefone("(11) 3456-7890 ramal 12")).toBe("(11) 3456-7890 ramal 12");
     expect(normalizarTelefone("+1 555 0100")).toBe("+1 555 0100");
+  });
+});
+
+describe("mascararAgencia", () => {
+  it("quatro números sem traço; o quinto é o dígito, depois do traço", () => {
+    expect(mascararAgencia("123")).toBe("123");
+    expect(mascararAgencia("1234")).toBe("1234");
+    expect(mascararAgencia("12345")).toBe("1234-5");
+    expect(mascararAgencia("1234-5")).toBe("1234-5");
+  });
+
+  it("para no dígito e ignora o que não é número", () => {
+    expect(mascararAgencia("1234567")).toBe("1234-5");
+    expect(mascararAgencia("ag. 1234")).toBe("1234");
+  });
+
+  it("X só vale como dígito", () => {
+    expect(mascararAgencia("1234x")).toBe("1234-X");
+    expect(mascararAgencia("12X34")).toBe("1234");
+  });
+});
+
+describe("mascararConta", () => {
+  it("o traço fica sempre antes do último caractere, e anda enquanto se digita", () => {
+    expect(mascararConta("5")).toBe("5");
+    expect(mascararConta("56")).toBe("5-6");
+    expect(mascararConta("567")).toBe("56-7");
+    expect(mascararConta("567890")).toBe("56789-0");
+    expect(mascararConta("56789-0")).toBe("56789-0");
+  });
+
+  it("apagar o último volta o traço uma casa", () => {
+    // O que o navegador deixa depois do backspace em "56789-0".
+    expect(mascararConta("56789-")).toBe("5678-9");
+  });
+
+  it("X no fim é dígito; no meio, cai", () => {
+    expect(mascararConta("12345x")).toBe("12345-X");
+    expect(mascararConta("12X34")).toBe("123-4");
+  });
+
+  it("até 13 caracteres, o tamanho da conta da Caixa com a operação", () => {
+    expect(mascararConta("0130001234567")).toBe("013000123456-7");
+    expect(mascararConta("01300012345678")).toBe("013000123456-7");
+  });
+});
+
+describe("normalizarAgencia", () => {
+  it("grava com a máscara, venha como vier", () => {
+    expect(normalizarAgencia("1234")).toBe("1234");
+    expect(normalizarAgencia(" 12345 ")).toBe("1234-5");
+    expect(normalizarAgencia("1234-x")).toBe("1234-X");
+  });
+
+  it("vazio é null", () => {
+    expect(normalizarAgencia("  ")).toBeNull();
+  });
+
+  it.each(["abc", "12a4", "123", "123456", "12X34"])("recusa %s", (texto) => {
+    expect(() => normalizarAgencia(texto, "pagamentoAgencia")).toThrow(/como 1234 ou 1234-5/);
+  });
+});
+
+describe("normalizarConta", () => {
+  it("grava com a máscara, venha como vier", () => {
+    expect(normalizarConta("567890")).toBe("56789-0");
+    expect(normalizarConta("56.789-0")).toBe("56789-0");
+    expect(normalizarConta("12345-x")).toBe("12345-X");
+  });
+
+  it("vazio é null", () => {
+    expect(normalizarConta("")).toBeNull();
+  });
+
+  it.each(["abc", "5", "56a7", "12X34", "01300012345678"])("recusa %s", (texto) => {
+    expect(() => normalizarConta(texto, "pagamentoConta")).toThrow(/como 56789-0/);
   });
 });
 

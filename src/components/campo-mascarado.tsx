@@ -2,7 +2,7 @@
 
 /**
  * Campos que se pontuam sozinhos enquanto a pessoa digita: documento, telefone,
- * CEP e dinheiro.
+ * CEP, dinheiro, agência e conta.
  *
  * Mora fora de `ui.tsx` porque aquele arquivo NÃO é `"use client"` — ele é
  * importado tanto por página de servidor quanto por formulário de cliente, e
@@ -21,7 +21,9 @@ import type { ChangeEvent, ComponentProps, KeyboardEvent } from "react";
 
 import { Campo } from "@/components/ui";
 import {
+  mascararAgencia,
   mascararCep,
+  mascararConta,
   mascararDocumento,
   mascararDocumentoCobranca,
   mascararMoeda,
@@ -56,7 +58,7 @@ function posicaoAposDigitos(texto: string, quantidade: number, conteudo: RegExp)
   return texto.length;
 }
 
-function CampoMascarado({
+export function CampoMascarado({
   mascara,
   defaultValue,
   onChange,
@@ -88,7 +90,14 @@ function CampoMascarado({
     const posicao = alvo.selectionStart ?? alvo.value.length;
     const digitosAteOCursor = contarDigitos(alvo.value.slice(0, posicao), conteudo);
 
-    alvo.value = mascara(alvo.value);
+    const mascarado = mascara(alvo.value);
+    // A máscara não mudou nada: o cursor já está onde o navegador o deixou, e
+    // recontar dígitos o levaria para longe num texto que não é só número.
+    if (mascarado === alvo.value) {
+      onChange?.(evento);
+      return;
+    }
+    alvo.value = mascarado;
 
     const destino = cursorNoFim
       ? alvo.value.length
@@ -213,6 +222,46 @@ export function CampoMoeda(props: PropsCampo) {
       {...props}
       mascara={mascararMoeda}
       cursorNoFim
+    />
+  );
+}
+
+/** O X é dígito verificador em alguns bancos: conta como conteúdo, não pontuação. */
+const EH_DIGITO_OU_X = /[0-9x]/i;
+
+/**
+ * Agência e conta bancária ("1234-5", "56789-0").
+ *
+ * Teclado de texto, e não o numérico, pelo mesmo motivo do CNPJ com letras: o
+ * dígito verificador do Banco do Brasil pode ser X, e o teclado numérico do
+ * celular não tem como digitá-lo.
+ */
+export function CampoAgencia(props: PropsCampo) {
+  return (
+    <CampoMascarado
+      inputMode="text"
+      autoCapitalize="characters"
+      autoComplete="off"
+      spellCheck={false}
+      placeholder="1234"
+      {...props}
+      mascara={mascararAgencia}
+      conteudo={EH_DIGITO_OU_X}
+    />
+  );
+}
+
+export function CampoConta(props: PropsCampo) {
+  return (
+    <CampoMascarado
+      inputMode="text"
+      autoCapitalize="characters"
+      autoComplete="off"
+      spellCheck={false}
+      placeholder="56789-0"
+      {...props}
+      mascara={mascararConta}
+      conteudo={EH_DIGITO_OU_X}
     />
   );
 }

@@ -6,7 +6,7 @@
  */
 
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 import { render } from "vitest-browser-react";
 
 import { PAGAMENTO_VAZIO } from "@/lib/dados-pagamento";
@@ -72,5 +72,64 @@ describe("SecaoDadosPagamento", () => {
     await rerender(<SecaoDadosPagamento pagamento={PAGAMENTO_VAZIO} editavel={false} podeEditar={false} />);
     await expect.element(page.getByText("Nenhum dado de pagamento cadastrado.", { exact: true })).toBeVisible();
     expect(page.getByRole("button").elements()).toHaveLength(0);
+  });
+});
+
+describe("SecaoDadosPagamento — digitando", () => {
+  /** Pelo `name`: a dica embaixo entra no nome acessível do campo. */
+  const campo = (nome: string) => page.elementLocator(document.querySelector(`[name="${nome}"]`)!);
+
+  test("agência e conta se pontuam sozinhas", async () => {
+    await render(<SecaoDadosPagamento pagamento={PAGAMENTO_VAZIO} editavel podeEditar />);
+
+    await userEvent.type(campo("pagamentoAgencia"), "12345");
+    await expect.element(campo("pagamentoAgencia")).toHaveValue("1234-5");
+
+    await userEvent.type(campo("pagamentoConta"), "567890");
+    await expect.element(campo("pagamentoConta")).toHaveValue("56789-0");
+
+    // O X do Banco do Brasil, no lugar do dígito.
+    await userEvent.fill(campo("pagamentoConta"), "");
+    await userEvent.type(campo("pagamentoConta"), "12345x");
+    await expect.element(campo("pagamentoConta")).toHaveValue("12345-X");
+  });
+
+  test("apagar e corrigir no meio da conta: o cursor não pula para o fim", async () => {
+    await render(<SecaoDadosPagamento pagamento={{ ...PAGAMENTO_VAZIO, conta: "56789-0" }} editavel podeEditar />);
+    const conta = document.querySelector<HTMLInputElement>('[name="pagamentoConta"]')!;
+
+    // Cursor depois do "7" (posição 3): apaga o 7 e digita 1.
+    conta.focus();
+    conta.setSelectionRange(3, 3);
+    await userEvent.keyboard("{Backspace}1");
+
+    await expect.element(campo("pagamentoConta")).toHaveValue("56189-0");
+    expect(conta.selectionStart).toBe(3);
+  });
+
+  test("a chave segue o tipo: CNPJ desde o primeiro número, e trocar o tipo repontua", async () => {
+    await render(<SecaoDadosPagamento pagamento={PAGAMENTO_VAZIO} editavel podeEditar />);
+
+    await userEvent.selectOptions(campo("pagamentoTipoChavePix"), "CNPJ");
+    await userEvent.type(campo("pagamentoChavePix"), "12345678");
+    await expect.element(campo("pagamentoChavePix")).toHaveValue("12.345.678");
+
+    await userEvent.selectOptions(campo("pagamentoTipoChavePix"), "CPF");
+    await expect.element(campo("pagamentoChavePix")).toHaveValue("123.456.78");
+  });
+
+  test("e-mail não perde as letras nem ao trocar para CNPJ por engano", async () => {
+    await render(<SecaoDadosPagamento pagamento={PAGAMENTO_VAZIO} editavel podeEditar />);
+
+    await userEvent.selectOptions(campo("pagamentoTipoChavePix"), "EMAIL");
+    await userEvent.type(campo("pagamentoChavePix"), "financeiro@industria.com.br");
+    await expect.element(campo("pagamentoChavePix")).toHaveValue("financeiro@industria.com.br");
+
+    await userEvent.selectOptions(campo("pagamentoTipoChavePix"), "CNPJ");
+    await expect.element(campo("pagamentoChavePix")).toHaveValue("financeiro@industria.com.br");
+
+    // E continuar digitando nele não apaga as letras, nem joga o cursor longe.
+    await userEvent.type(campo("pagamentoChavePix"), "x");
+    await expect.element(campo("pagamentoChavePix")).toHaveValue("financeiro@industria.com.brx");
   });
 });

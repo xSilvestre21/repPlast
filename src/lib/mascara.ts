@@ -1,6 +1,6 @@
 /**
- * Máscaras dos campos que se digitam sem pontuação: documento, telefone, CEP e
- * dinheiro.
+ * Máscaras dos campos que se digitam sem pontuação: documento, telefone, CEP,
+ * dinheiro, agência e conta.
  *
  * Este módulo é PURO de propósito — nada de DOM, nada de `server-only`. As duas
  * pontas precisam dele:
@@ -143,6 +143,58 @@ export function mascararMoeda(valor: string): string {
   return `${inteiro},${completo.slice(-2)}`;
 }
 
+/**
+ * Só CPF ou só CNPJ, quando o tipo já é sabido (a chave PIX, por exemplo).
+ * O `mascararDocumento` adivinha pelo tamanho, e mostraria um CNPJ no formato
+ * de CPF até o 12º número.
+ */
+export function mascararCpf(valor: string): string {
+  return agrupar(somenteDigitos(valor).slice(0, DIGITOS_CPF), [3, 3, 3, 2], [".", ".", "-"]);
+}
+
+export function mascararCnpj(valor: string): string {
+  return agrupar(somenteDigitos(valor).slice(0, DIGITOS_CNPJ), [2, 3, 3, 4, 2], [".", ".", "/", "-"]);
+}
+
+/** Dígitos da agência, sem o verificador. */
+export const DIGITOS_AGENCIA = 4;
+/** Conta mais longa que se vê (Caixa, com a operação na frente), dígito incluído. */
+export const DIGITOS_CONTA = 13;
+
+/**
+ * O que conta numa agência ou conta: os dígitos e o X, que alguns bancos (o
+ * Banco do Brasil) usam como dígito verificador — e só nessa posição. Um X em
+ * qualquer outro lugar é engano de digitação e cai.
+ */
+function caracteresBancarios(valor: string, posicaoDoDigito: (total: number) => number): string {
+  const caracteres = [...valor.toUpperCase().replace(/[^0-9X]/g, "")];
+  return caracteres.filter((c, i) => c !== "X" || i === posicaoDoDigito(caracteres.length)).join("");
+}
+
+/**
+ * Agência: "1234", ou "1234-5" quando tem o dígito verificador.
+ *
+ * O traço só aparece quando o 5º caractere chega — agência sem dígito é o
+ * caso mais comum, e um "1234-" pendurado pareceria pedir algo que não existe.
+ */
+export function mascararAgencia(valor: string): string {
+  const caracteres = caracteresBancarios(valor, () => DIGITOS_AGENCIA).slice(0, DIGITOS_AGENCIA + 1);
+  return agrupar(caracteres, [DIGITOS_AGENCIA, 1], ["-"]);
+}
+
+/**
+ * Conta: "56789-0", com o traço sempre antes do último caractere.
+ *
+ * O traço anda enquanto se digita ("5", "5-6", "56-7"…), como nos apps de
+ * banco: a conta não tem tamanho fixo, e o único ponto certo é que o último
+ * caractere é o dígito verificador.
+ */
+export function mascararConta(valor: string): string {
+  const caracteres = caracteresBancarios(valor, (total) => total - 1).slice(0, DIGITOS_CONTA);
+  if (caracteres.length < 2) return caracteres;
+  return `${caracteres.slice(0, -1)}-${caracteres.slice(-1)}`;
+}
+
 /* -------------------------------------------------------------------------- */
 /* Normalização de entrada (servidor)                                          */
 /* -------------------------------------------------------------------------- */
@@ -207,4 +259,50 @@ export function normalizarTelefone(valor: string): string | null {
   const temDdd = !digitos.startsWith("0") && (digitos.length === 10 || digitos.length === 11);
 
   return temDdd ? mascararTelefone(digitos) : texto;
+}
+
+/** Sobrou o que não é número, X, traço, ponto ou espaço: "abc", "12a4". */
+const FORA_DO_BANCARIO = /[^0-9xX.\-\s]/;
+
+/** Os caracteres que a pessoa digitou e que contam (número e X), na ordem. */
+const lidosBancarios = (texto: string) => texto.toUpperCase().replace(/[^0-9X]/g, "");
+
+/**
+ * Agência pronta para gravar, ou `null` quando o campo veio vazio.
+ *
+ * LANÇA no que não é agência — letra, X fora do lugar, falta ou sobra de
+ * número —, em vez de gravar pela metade: é o que vai para quem precisa fazer
+ * o pagamento.
+ */
+export function normalizarAgencia(valor: string, campo = "agencia"): string | null {
+  const texto = valor.trim();
+  if (texto === "") return null;
+
+  const mascarada = mascararAgencia(texto);
+  const lidos = lidosBancarios(texto);
+  if (FORA_DO_BANCARIO.test(texto) || lidos !== mascarada.replace("-", "") || lidos.length < DIGITOS_AGENCIA) {
+    throw new ErroDeCampo(
+      campo,
+      `A agência tem ${DIGITOS_AGENCIA} números, e o dígito depois do traço quando houver, como 1234 ou 1234-5.`,
+    );
+  }
+
+  return mascarada;
+}
+
+/** Conta pronta para gravar, ou `null` quando o campo veio vazio. Lança como a agência. */
+export function normalizarConta(valor: string, campo = "conta"): string | null {
+  const texto = valor.trim();
+  if (texto === "") return null;
+
+  const mascarada = mascararConta(texto);
+  const lidos = lidosBancarios(texto);
+  if (FORA_DO_BANCARIO.test(texto) || lidos !== mascarada.replace("-", "") || lidos.length < 2) {
+    throw new ErroDeCampo(
+      campo,
+      `Escreva a conta com os números e o dígito no fim, como 56789-0 (até ${DIGITOS_CONTA} números).`,
+    );
+  }
+
+  return mascarada;
 }

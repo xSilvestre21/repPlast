@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { TIPOS_CHAVE_PIX, TIPOS_CONTA } from "@/lib/dados-pagamento";
+import { normalizarChavePix, TIPOS_CHAVE_PIX, TIPOS_CONTA } from "@/lib/dados-pagamento";
 import { emailValido } from "@/lib/envio-pedido";
 import {
   ErroDeCampo,
@@ -13,7 +13,13 @@ import {
   type EstadoFormulario,
 } from "@/lib/erro-formulario";
 import { definirUltimoNumeroPedido, lerUltimoNumeroPedido } from "@/lib/numeracao-pedido";
-import { normalizarCep, normalizarDocumento, normalizarTelefone } from "@/lib/mascara";
+import {
+  normalizarAgencia,
+  normalizarCep,
+  normalizarConta,
+  normalizarDocumento,
+  normalizarTelefone,
+} from "@/lib/mascara";
 import { exigirNumero, exigirNumeroDe } from "@/lib/numero-br";
 import { recusaExcluirIndustria } from "@/lib/recusa-exclusao";
 import { escopoAtual, exigirAdmin } from "@/lib/sessao";
@@ -59,7 +65,12 @@ function lerTexto(valor: FormDataEntryValue | null): string | null {
 /**
  * Os dados para pagamento (ver `src/lib/dados-pagamento.ts`). Os tipos só
  * podem ser os da lista — a caixa de seleção já garante, mas o envio pode vir
- * de fora dela —, e o CPF/CNPJ é normalizado como o da própria indústria.
+ * de fora dela. A chave PIX é conferida pelo tipo escolhido; agência, conta e
+ * CPF/CNPJ são gravados com a máscara, como os campos da própria indústria.
+ *
+ * Tipo sem o que ele descreve (tipo da chave sem chave, tipo da conta sem
+ * conta) não é gravado: não sairia em lugar nenhum, e voltaria na edição como
+ * se dissesse algo.
  */
 function dadosDePagamento(formData: FormData) {
   const tipo = <T extends Record<string, string>>(campo: string, tabela: T, frase: string) => {
@@ -68,22 +79,27 @@ function dadosDePagamento(formData: FormData) {
     return valor;
   };
   const documento = lerTexto(formData.get("pagamentoDocumento"));
+  const agencia = lerTexto(formData.get("pagamentoAgencia"));
+  const conta = lerTexto(formData.get("pagamentoConta"));
+  const tipoChave = tipo(
+    "pagamentoTipoChavePix",
+    TIPOS_CHAVE_PIX,
+    "Escolha o tipo da chave PIX na lista, como CNPJ ou E-mail.",
+  );
+  const chave = normalizarChavePix(tipoChave, lerTexto(formData.get("pagamentoChavePix")));
+  const tipoConta = tipo(
+    "pagamentoTipoConta",
+    TIPOS_CONTA,
+    "Escolha o tipo da conta na lista: corrente ou poupança.",
+  );
 
   return {
-    pagamentoTipoChavePix: tipo(
-      "pagamentoTipoChavePix",
-      TIPOS_CHAVE_PIX,
-      "Escolha o tipo da chave PIX na lista, como CNPJ ou E-mail.",
-    ),
-    pagamentoChavePix: lerTexto(formData.get("pagamentoChavePix")),
+    pagamentoTipoChavePix: chave ? tipoChave : null,
+    pagamentoChavePix: chave,
     pagamentoBanco: lerTexto(formData.get("pagamentoBanco")),
-    pagamentoAgencia: lerTexto(formData.get("pagamentoAgencia")),
-    pagamentoConta: lerTexto(formData.get("pagamentoConta")),
-    pagamentoTipoConta: tipo(
-      "pagamentoTipoConta",
-      TIPOS_CONTA,
-      "Escolha o tipo da conta na lista: corrente ou poupança.",
-    ),
+    pagamentoAgencia: agencia === null ? null : normalizarAgencia(agencia, "pagamentoAgencia"),
+    pagamentoConta: conta === null ? null : normalizarConta(conta, "pagamentoConta"),
+    pagamentoTipoConta: conta ? tipoConta : null,
     pagamentoFavorecido: lerTexto(formData.get("pagamentoFavorecido")),
     pagamentoDocumento: documento === null ? null : normalizarDocumento(documento, "pagamentoDocumento"),
     pagamentoObservacoes: lerTexto(formData.get("pagamentoObservacoes")),
