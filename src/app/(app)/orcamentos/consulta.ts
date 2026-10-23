@@ -14,6 +14,7 @@
 import type { StatusOrcamento } from "@/generated/prisma/enums";
 import { prepostosComCor } from "@/lib/cores-prepostos";
 import type { DbOrganizacao } from "@/lib/db";
+import { incluirItemAchado, itemAchado, itemProcurado, type ItemAchado } from "@/lib/item-procurado";
 import { numeroProcurado } from "@/lib/numero-procurado";
 import { formatarMoeda } from "@/components/ui";
 
@@ -59,12 +60,16 @@ export type OrcamentoDaLista = {
    * os de todos. Nulo quando é do escritório.
    */
   preposto: { nome: string; cor: string } | null;
+  /** O item que a busca achou (`lib/item-procurado.ts`); nulo sem busca ou quando achou por outra coisa. */
+  itemAchado: ItemAchado | null;
 };
 
 export type FatiaDeOrcamentos = {
   linhas: OrcamentoDaLista[];
   /** Se vale a pena pedir a próxima fatia. */
   temMais: boolean;
+  /** Quantos batem com a busca, ao todo. Só na primeira fatia; as seguintes não recontam. */
+  quantos?: number;
 };
 
 const DATA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "UTC" });
@@ -77,6 +82,7 @@ export async function buscarOrcamentos(
 ): Promise<FatiaDeOrcamentos> {
   const procurado = busca.trim();
   const numero = numeroProcurado(procurado);
+  const filtroDoItem = itemProcurado(procurado);
 
   const onde = {
     organizacaoId,
@@ -91,6 +97,8 @@ export async function buscarOrcamentos(
             { cliente: { razaoSocial: { contains: procurado, mode: "insensitive" as const } } },
             { fornecedor: { nome: { contains: procurado, mode: "insensitive" as const } } },
             { clienteAvulsoNome: { contains: procurado, mode: "insensitive" as const } },
+            // O produto, inclusive a linha feita na conta (`lib/item-procurado.ts`).
+            ...(filtroDoItem ? [{ itens: { some: filtroDoItem } }] : []),
           ],
         }
       : {}),
@@ -98,10 +106,11 @@ export async function buscarOrcamentos(
 
   /*
    * Pede uma linha a mais do que cabe na fatia. É o que responde "ainda tem?"
-   * sem um `count` — que, com o mesmo `OR` de `ILIKE`, custaria uma segunda
-   * varredura a cada tecla digitada.
+   * sem um `count` por fatia — que, com o mesmo `OR` de `ILIKE`, custaria uma
+   * segunda varredura a cada fatia rolada. O `count` que existe é o do número
+   * do topo, uma vez por busca.
    */
-  const [encontrados, prepostos] = await Promise.all([
+  const [encontrados, prepostos, quantos] = await Promise.all([
     db.orcamento.findMany({
     where: onde,
     orderBy: [{ criadoEm: "desc" }, { numero: "desc" }],
@@ -110,11 +119,14 @@ export async function buscarOrcamentos(
     include: {
       cliente: { select: { apelido: true, razaoSocial: true } },
       fornecedor: { select: { nome: true } },
+      ...incluirItemAchado(filtroDoItem),
       _count: { select: { itens: true, pedidos: true } },
     },
     }),
     // O preposto só vê os dele: marcar quem fez seria repetir o óbvio.
     ehAdmin ? prepostosComCor(db, organizacaoId) : Promise.resolve([]),
+    // Quantos batem ao todo — o número do topo. Só na primeira fatia: rolar não reconta.
+    pagina === 0 ? db.orcamento.count({ where: onde }) : undefined,
   ]);
   const porId = new Map(prepostos.map((p) => [p.id, p]));
 
@@ -138,8 +150,9 @@ export async function buscarOrcamentos(
         orcamento.status === "RECUSADO" ? (orcamento.motivoRecusa ?? "") : "",
       // Na proposta, quem a FEZ — é o que decide quem a vê.
       preposto: porId.get(orcamento.criadoPorId ?? "") ?? null,
+      itemAchado: itemAchado("itens" in orcamento ? orcamento.itens : undefined),
     };
   });
 
-  return { linhas, temMais };
+  return { linhas, temMais, quantos };
 }

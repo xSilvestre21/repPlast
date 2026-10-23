@@ -19,6 +19,7 @@ import { Ban, Loader2, Search, ScrollText, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { SeloStatus } from "@/components/selo-status";
+import { useDefinirContagem } from "@/components/contagem-lista";
 import {
   Botao,
   CLASSE_CONTROLE,
@@ -30,7 +31,9 @@ import {
   Segmentado,
   ValorLinha,
 } from "@/components/ui";
+import { lembrarBusca } from "@/lib/busca-lembrada";
 import { BolinhaPreposto } from "@/components/bolinha-preposto";
+import { ItemAchado } from "@/components/item-achado";
 
 import type { FatiaDePedidos, FiltroStatusPedido, PedidoDaLista } from "./consulta";
 
@@ -80,6 +83,8 @@ export function ListaPedidos({
   const emVoo = useRef<AbortController | null>(null);
   const fim = useRef<HTMLDivElement | null>(null);
 
+  const definirContagem = useDefinirContagem();
+
   const buscarFatia = useCallback(
     async (alvo: { busca: string; status: FiltroStatusPedido; pagina: number }) => {
       emVoo.current?.abort();
@@ -101,6 +106,8 @@ export function ListaPedidos({
 
         setLinhas((atuais) => (alvo.pagina === 0 ? fatia.linhas : [...atuais, ...fatia.linhas]));
         setTemMais(fatia.temMais);
+        // O número do topo: só a primeira fatia traz quantos batem ao todo.
+        if (fatia.quantos !== undefined) definirContagem(fatia.quantos);
         setPagina(alvo.pagina);
       } catch (erro) {
         // Abortar é o caminho normal aqui: significa que a pessoa digitou de
@@ -110,7 +117,7 @@ export function ListaPedidos({
         if (emVoo.current === controle) setBuscando(false);
       }
     },
-    [],
+    [definirContagem],
   );
 
   /*
@@ -135,6 +142,9 @@ export function ListaPedidos({
     // da busca sair. Ao abrir, não: o endereço é o da navegação, e quem cuida
     // dele ainda é o roteador.
     const url = endereco(busca, status);
+    // E fica lembrado para quem abrir um item e voltar (`busca-lembrada.ts`) —
+    // inclusive o filtro com que a lista abriu, vindo de um link.
+    lembrarBusca(url);
     if (mexeu.current && window.location.pathname + window.location.search !== url) {
       window.history.replaceState(null, "", url);
     }
@@ -197,7 +207,7 @@ export function ListaPedidos({
                 autoComplete="off"
                 value={busca}
                 onChange={(evento) => setBusca(evento.target.value)}
-                placeholder="Número, cliente, indústria ou pedido do cliente"
+                placeholder="Número, cliente, indústria, pedido do cliente ou produto"
                 className={`${CLASSE_CONTROLE} pl-10`}
               />
             </div>
@@ -268,6 +278,8 @@ export function ListaPedidos({
                       {pedido.pedidoDoCliente && (
                         <> · pedido do cliente {pedido.pedidoDoCliente}</>
                       )}
+                      {/* Pela mesma razão, o item que a busca achou. */}
+                      {pedido.itemAchado && <ItemAchado item={pedido.itemAchado} />}
                       {/* O motivo em linha própria: é frase, não mais um campo
                           da fila de dados separados por ponto. */}
                       {pedido.motivoCancelamento && (

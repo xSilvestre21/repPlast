@@ -16,6 +16,7 @@
 import { Loader2, Search, UserRoundPlus, Users, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useDefinirContagem } from "@/components/contagem-lista";
 import {
   Avatar,
   Botao,
@@ -29,6 +30,7 @@ import {
   Selo,
   ValorLinha,
 } from "@/components/ui";
+import { lembrarBusca } from "@/lib/busca-lembrada";
 
 import type { ClienteDaLista, FatiaDeClientes, FiltroSituacaoCliente } from "./consulta";
 
@@ -75,6 +77,8 @@ export function ListaClientes({
   const emVoo = useRef<AbortController | null>(null);
   const fim = useRef<HTMLDivElement | null>(null);
 
+  const definirContagem = useDefinirContagem();
+
   const buscarFatia = useCallback(
     async (alvo: { busca: string; situacao: FiltroSituacaoCliente; pagina: number }) => {
       emVoo.current?.abort();
@@ -94,6 +98,8 @@ export function ListaClientes({
 
         setLinhas((atuais) => (alvo.pagina === 0 ? fatia.linhas : [...atuais, ...fatia.linhas]));
         setTemMais(fatia.temMais);
+        // O número do topo: só a primeira fatia traz quantos batem ao todo.
+        if (fatia.quantos !== undefined) definirContagem(fatia.quantos);
         setPagina(alvo.pagina);
       } catch (erro) {
         // Abortar é o caminho normal: a pessoa digitou de novo antes da resposta.
@@ -102,7 +108,7 @@ export function ListaClientes({
         if (emVoo.current === controle) setBuscando(false);
       }
     },
-    [],
+    [definirContagem],
   );
 
   /*
@@ -127,6 +133,9 @@ export function ListaClientes({
     // da busca sair. Ao abrir, não: o endereço é o da navegação, e quem cuida
     // dele ainda é o roteador.
     const url = endereco(busca, situacao);
+    // E fica lembrado para quem abrir um item e voltar (`busca-lembrada.ts`) —
+    // inclusive o filtro com que a lista abriu, vindo de um link.
+    lembrarBusca(url);
     if (mexeu.current && window.location.pathname + window.location.search !== url) {
       window.history.replaceState(null, "", url);
     }

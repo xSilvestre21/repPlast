@@ -177,7 +177,24 @@ export function Cabecalho({
               abre buracos entre as letras e lê como letreiro.
             */}
             <h1 className="text-titulo font-bold text-balance">{titulo}</h1>
-            {selo}
+            {selo && (
+              /*
+               * Centrado nas LETRAS do título, e não na caixa da linha: o
+               * título é quase todo minúsculas, cujo miolo fica abaixo do
+               * centro da caixa (que reserva espaço para acento e maiúscula),
+               * e o selo centrado na caixa parecia flutuar alto.
+               *
+               * Espaço EM CIMA, e não deslocamento: a linha centra a caixa
+               * inteira, então o selo desce metade do espaço — 0,12 do título,
+               * o miolo das minúsculas. Quando ele quebra para baixo do título
+               * (no celular), o espaço fica entre os dois, e a distância até a
+               * descrição continua a de sempre; deslocado, ele encostava nela.
+               * A medida vem da variável do tamanho do título (que muda com a
+               * largura) — `text-titulo` aqui passaria ao selo o espaçamento
+               * apertado das letras do título.
+               */
+              <span className="inline-flex pt-[calc(var(--text-titulo)*0.24)]">{selo}</span>
+            )}
           </div>
           {descricao && (
             <p className="text-realce text-tinta-2 mt-2.5 max-w-2xl">{descricao}</p>

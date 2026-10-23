@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useDefinirContagem } from "@/components/contagem-lista";
 import {
   Botao,
   CLASSE_CONTROLE,
@@ -44,6 +45,7 @@ import {
   ValorLinha,
   formatarMoeda,
 } from "@/components/ui";
+import { lembrarBusca } from "@/lib/busca-lembrada";
 
 import type {
   CampoMedida,
@@ -144,6 +146,8 @@ export function ListaProdutos({
   const emVoo = useRef<AbortController | null>(null);
   const fim = useRef<HTMLDivElement | null>(null);
 
+  const definirContagem = useDefinirContagem();
+
   const buscarFatia = useCallback(async (alvo: FiltrosProduto & { pagina: number }) => {
     emVoo.current?.abort();
     const controle = new AbortController();
@@ -162,6 +166,8 @@ export function ListaProdutos({
 
       setLinhas((atuais) => (alvo.pagina === 0 ? fatia.linhas : [...atuais, ...fatia.linhas]));
       setTemMais(fatia.temMais);
+      // O número do topo: só a primeira fatia traz quantos batem ao todo.
+      if (fatia.quantos !== undefined) definirContagem(fatia.quantos);
       setPagina(alvo.pagina);
     } catch (erro) {
       // Abortar é o caminho normal: a pessoa digitou de novo antes da resposta.
@@ -169,7 +175,7 @@ export function ListaProdutos({
     } finally {
       if (emVoo.current === controle) setBuscando(false);
     }
-  }, []);
+  }, [definirContagem]);
 
   /*
    * Os filtros da fatia que está na tela. A inicial já veio do servidor, então
@@ -193,6 +199,9 @@ export function ListaProdutos({
     // da busca sair. Ao abrir, não: o endereço é o da navegação, e quem cuida
     // dele ainda é o roteador.
     const url = endereco(filtros);
+    // E fica lembrado para quem abrir um item e voltar (`busca-lembrada.ts`) —
+    // inclusive o filtro com que a lista abriu, vindo de um link.
+    lembrarBusca(url);
     if (mexeu.current && window.location.pathname + window.location.search !== url) {
       window.history.replaceState(null, "", url);
     }

@@ -17,6 +17,7 @@
 import type { StatusPedido } from "@/generated/prisma/enums";
 import { prepostosComCor } from "@/lib/cores-prepostos";
 import type { DbOrganizacao } from "@/lib/db";
+import { incluirItemAchado, itemAchado, itemProcurado, type ItemAchado } from "@/lib/item-procurado";
 import { numeroProcurado } from "@/lib/numero-procurado";
 import { formatarMoeda } from "@/components/ui";
 
@@ -67,12 +68,16 @@ export type PedidoDaLista = {
    * os de todos. Nulo quando é do escritório.
    */
   preposto: { nome: string; cor: string } | null;
+  /** O item que a busca achou (`lib/item-procurado.ts`); nulo sem busca ou quando achou por outra coisa. */
+  itemAchado: ItemAchado | null;
 };
 
 export type FatiaDePedidos = {
   linhas: PedidoDaLista[];
   /** Se vale a pena pedir a próxima fatia. */
   temMais: boolean;
+  /** Quantos batem com a busca, ao todo. Só na primeira fatia; as seguintes não recontam. */
+  quantos?: number;
 };
 
 const DATA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" });
@@ -85,6 +90,7 @@ export async function buscarPedidos(
 ): Promise<FatiaDePedidos> {
   const procurado = busca.trim();
   const numero = numeroProcurado(procurado);
+  const filtroDoItem = itemProcurado(procurado);
 
   const onde = {
     organizacaoId,
@@ -105,6 +111,8 @@ export async function buscarPedidos(
              * telefone — o nosso número eles nem sempre têm à mão.
              */
             { pedidoDoCliente: { contains: procurado, mode: "insensitive" as const } },
+            // O produto: "os últimos pedidos com aquele saco" (`lib/item-procurado.ts`).
+            ...(filtroDoItem ? [{ itens: { some: filtroDoItem } }] : []),
           ],
         }
       : {}),
@@ -112,10 +120,11 @@ export async function buscarPedidos(
 
   /*
    * Pede uma linha a mais do que cabe na fatia. É o que responde "ainda tem?"
-   * sem um `count` — que, com o mesmo `OR` de `ILIKE`, custaria uma segunda
-   * varredura a cada tecla digitada.
+   * sem um `count` por fatia — que, com o mesmo `OR` de `ILIKE`, custaria uma
+   * segunda varredura a cada fatia rolada. O `count` que existe é o do número
+   * do topo, uma vez por busca.
    */
-  const [encontrados, prepostos] = await Promise.all([
+  const [encontrados, prepostos, quantos] = await Promise.all([
     db.pedido.findMany({
     where: onde,
     orderBy: [{ criadoEm: "desc" }, { numero: "desc" }],
@@ -124,11 +133,14 @@ export async function buscarPedidos(
     include: {
       cliente: { select: { apelido: true } },
       fornecedor: { select: { nome: true } },
+      ...incluirItemAchado(filtroDoItem),
       _count: { select: { itens: true } },
     },
     }),
     // O preposto só vê os dele: marcar de quem é seria repetir o óbvio.
     ehAdmin ? prepostosComCor(db, organizacaoId) : Promise.resolve([]),
+    // Quantos batem ao todo — o número do topo. Só na primeira fatia: rolar não reconta.
+    pagina === 0 ? db.pedido.count({ where: onde }) : undefined,
   ]);
   const porId = new Map(prepostos.map((p) => [p.id, p]));
 
@@ -151,7 +163,8 @@ export async function buscarPedidos(
     // No pedido, o preposto da COMISSÃO — o mesmo que Comissões mostra. Quem
     // digitou só aparece quando o pedido não paga preposto nenhum.
     preposto: porId.get(pedido.representanteId ?? pedido.criadoPorId ?? "") ?? null,
+    itemAchado: itemAchado("itens" in pedido ? pedido.itens : undefined),
   }));
 
-  return { linhas, temMais };
+  return { linhas, temMais, quantos };
 }

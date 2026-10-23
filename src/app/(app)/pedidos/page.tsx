@@ -1,7 +1,9 @@
 import { Plus, ScrollText } from "lucide-react";
 
+import { ContagemDaLista, ContagemProvider } from "@/components/contagem-lista";
 import { Pagina } from "@/components/pagina";
 import { BotaoLink, Cabecalho } from "@/components/ui";
+import { parametrosDaLista } from "@/lib/busca-lembrada-servidor";
 import { escopoAtual } from "@/lib/sessao";
 
 import { buscarPedidos, statusDoParametro } from "./consulta";
@@ -9,7 +11,8 @@ import { ListaPedidos } from "./lista";
 
 export default async function PaginaPedidos({ searchParams }: PageProps<"/pedidos">) {
   const { organizacaoId, ehAdmin, db } = await escopoAtual();
-  const parametros = await searchParams;
+  // Sem filtro na URL, a busca que a pessoa deixou nesta seção (`busca-lembrada.ts`).
+  const parametros = await parametrosDaLista("pedidos", await searchParams);
 
   /*
    * A URL decide como a tela ABRE — é o que faz o link copiado e o F5 trazerem
@@ -24,22 +27,29 @@ export default async function PaginaPedidos({ searchParams }: PageProps<"/pedido
    * cascata de entrada: as linhas já chegam no HTML, e a animação é da página
    * abrindo — não de uma lista que trocou de conteúdo.
    */
-  const inicial = await buscarPedidos(db, organizacaoId, ehAdmin, { busca, status, pagina: 0 });
+  const [inicial, total] = await Promise.all([
+    buscarPedidos(db, organizacaoId, ehAdmin, { busca, status, pagina: 0 }),
+    // O "de 128" do topo, cancelados inclusive — para o preposto, só os dele (RLS).
+    db.pedido.count({ where: { organizacaoId } }),
+  ]);
 
   return (
     <Pagina>
-      <Cabecalho
-        icone={ScrollText}
-        titulo="Pedidos"
-        descricao="A numeração é própria de cada indústria — o nº 133 de uma não colide com o 133 de outra."
-        acao={
-          <BotaoLink href="/pedidos/novo" icone={Plus}>
-            Novo pedido
-          </BotaoLink>
-        }
-      />
+      <ContagemProvider total={total} inicial={inicial.quantos ?? 0}>
+        <Cabecalho
+          icone={ScrollText}
+          titulo="Pedidos"
+          selo={<ContagemDaLista singular="pedido" plural="pedidos" />}
+          descricao="A numeração é própria de cada indústria — o nº 133 de uma não colide com o 133 de outra."
+          acao={
+            <BotaoLink href="/pedidos/novo" icone={Plus}>
+              Novo pedido
+            </BotaoLink>
+          }
+        />
 
-      <ListaPedidos inicial={inicial} buscaInicial={busca} statusInicial={status} />
+        <ListaPedidos inicial={inicial} buscaInicial={busca} statusInicial={status} />
+      </ContagemProvider>
     </Pagina>
   );
 }

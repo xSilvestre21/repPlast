@@ -8,6 +8,7 @@ import { Pagina } from "@/components/pagina";
 import { competenciaDe } from "@/lib/comissao";
 import { escreverNumeroBr } from "@/lib/numero-br";
 import { PLANOS } from "@/lib/planos";
+import { quantos } from "@/lib/quantos";
 import { escopoAtual } from "@/lib/sessao";
 
 import { AvatarPreposto } from "./avatar-preposto";
@@ -33,6 +34,7 @@ export default async function PaginaPrepostos() {
   const prepostos = [...todos].sort(
     (a, b) => Number(b.ativo) - Number(a.ativo) || a.nomeCompleto.localeCompare(b.nomeCompleto, "pt-BR"),
   );
+  const ativos = prepostos.filter((p) => p.ativo).length;
   // Só o mês ("outubro"): com o ano, o rótulo não cabia na coluna do card.
   const mes = nomeDoMes(competencia).split(" ")[0].toLowerCase();
 
@@ -41,6 +43,16 @@ export default async function PaginaPrepostos() {
       <Cabecalho
         icone={Users}
         titulo="Prepostos"
+        selo={
+          // Como nas outras listas; sem busca, o "de" é dos que estão sem acesso.
+          prepostos.length > 0 && (
+            <span className="chip numerico">
+              {ativos === prepostos.length
+                ? quantos(prepostos.length, "preposto", "prepostos")
+                : `${ativos} ${ativos === 1 ? "ativo" : "ativos"} de ${quantos(prepostos.length, "preposto", "prepostos")}`}
+            </span>
+          )
+        }
         descricao="Quem vende por você. Cada um entra com o próprio login e enxerga apenas a carteira dele — inclusive a comissão."
         acao={
           <BotaoLink href="/prepostos/novo" icone={Plus}>

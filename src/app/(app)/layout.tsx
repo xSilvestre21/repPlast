@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { EsquecerBuscas } from "@/components/esquecer-buscas";
 import { Navegacao } from "@/components/navegacao";
 import { sessaoAtual } from "@/lib/sessao";
 
@@ -22,6 +23,7 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
 
   return (
     <>
+      <EsquecerBuscas />
       <Navegacao
         nomeUsuario={sessao.nome}
         nomeOrganizacao={sessao.organizacaoNome}

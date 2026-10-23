@@ -60,6 +60,8 @@ export type FatiaDeClientes = {
   linhas: ClienteDaLista[];
   /** Se vale a pena pedir a próxima fatia. */
   temMais: boolean;
+  /** Quantos batem com a busca, ao todo. Só na primeira fatia; as seguintes não recontam. */
+  quantos?: number;
 };
 
 export async function buscarClientes(
@@ -92,25 +94,33 @@ export async function buscarClientes(
       : {}),
   };
 
-  // Uma linha a mais do que cabe: responde "ainda tem?" sem um `count` por tecla.
-  const encontrados = await db.cliente.findMany({
-    where: onde,
-    orderBy: [{ apelido: "asc" }, { id: "asc" }],
-    take: POR_PAGINA + 1,
-    skip: pagina * POR_PAGINA,
-    select: {
-      id: true,
-      apelido: true,
-      razaoSocial: true,
-      cnpj: true,
-      municipio: true,
-      uf: true,
-      ativo: true,
-      _count: { select: { pedidos: true } },
-    },
-  });
+  /*
+   * Uma linha a mais do que cabe: responde "ainda tem?" sem contar. Quantos
+   * batem ao todo — o número do topo da tela — é contado só na primeira fatia:
+   * uma contagem por busca, e nenhuma ao rolar.
+   */
+  const [encontrados, quantos] = await Promise.all([
+    db.cliente.findMany({
+      where: onde,
+      orderBy: [{ apelido: "asc" }, { id: "asc" }],
+      take: POR_PAGINA + 1,
+      skip: pagina * POR_PAGINA,
+      select: {
+        id: true,
+        apelido: true,
+        razaoSocial: true,
+        cnpj: true,
+        municipio: true,
+        uf: true,
+        ativo: true,
+        _count: { select: { pedidos: true } },
+      },
+    }),
+    pagina === 0 ? db.cliente.count({ where: onde }) : undefined,
+  ]);
 
   return {
+    quantos,
     temMais: encontrados.length > POR_PAGINA,
     linhas: encontrados.slice(0, POR_PAGINA).map((cliente) => ({
       id: cliente.id,

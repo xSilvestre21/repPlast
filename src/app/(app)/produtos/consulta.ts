@@ -82,6 +82,8 @@ export type FatiaDeProdutos = {
   linhas: ProdutoDaLista[];
   /** Se vale a pena pedir a próxima fatia. */
   temMais: boolean;
+  /** Quantos batem com a busca, ao todo. Só na primeira fatia; as seguintes não recontam. */
+  quantos?: number;
 };
 
 /*
@@ -153,21 +155,28 @@ export async function buscarProdutos(
       : {}),
   };
 
-  // Uma linha a mais do que cabe: responde "ainda tem?" sem um `count` por tecla.
-  const encontrados = await db.produto.findMany({
-    where: onde,
-    // Por DESCRIÇÃO, como no sistema anterior: é ela que a pessoa tem na
-    // cabeça. Agrupar por indústria escondia que o mesmo saco existe para
-    // três clientes, porque as três linhas caíam longe uma da outra.
-    orderBy: [{ descricao: "asc" }, { id: "asc" }],
-    take: POR_PAGINA + 1,
-    skip: pagina * POR_PAGINA,
-    include: {
-      fornecedor: { select: { nome: true } },
-      cliente: { select: { apelido: true } },
-      aditivos: { include: { aditivo: true } },
-    },
-  });
+  /*
+   * Uma linha a mais do que cabe: responde "ainda tem?" sem contar. Quantos
+   * batem ao todo — o número do topo da tela — é contado só na primeira fatia:
+   * uma contagem por busca, e nenhuma ao rolar.
+   */
+  const [encontrados, quantos] = await Promise.all([
+    db.produto.findMany({
+      where: onde,
+      // Por DESCRIÇÃO, como no sistema anterior: é ela que a pessoa tem na
+      // cabeça. Agrupar por indústria escondia que o mesmo saco existe para
+      // três clientes, porque as três linhas caíam longe uma da outra.
+      orderBy: [{ descricao: "asc" }, { id: "asc" }],
+      take: POR_PAGINA + 1,
+      skip: pagina * POR_PAGINA,
+      include: {
+        fornecedor: { select: { nome: true } },
+        cliente: { select: { apelido: true } },
+        aditivos: { include: { aditivo: true } },
+      },
+    }),
+    pagina === 0 ? db.produto.count({ where: onde }) : undefined,
+  ]);
 
   /** Preço de referência do produto, na unidade em que ele é vendido. */
   function precoDe(produto: (typeof encontrados)[number]) {
@@ -221,6 +230,7 @@ export async function buscarProdutos(
   }
 
   return {
+    quantos,
     temMais: encontrados.length > POR_PAGINA,
     linhas: encontrados.slice(0, POR_PAGINA).map((produto) => ({
       id: produto.id,
