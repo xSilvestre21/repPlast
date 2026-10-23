@@ -187,14 +187,24 @@ export async function assinaturaDoCliente(clienteId: string): Promise<string | n
 }
 
 /**
- * Troca o valor da mensalidade — preposto além dos inclusos no Max.
+ * Troca o valor da mensalidade — preposto além dos inclusos no Max, ou a troca
+ * de plano em Configurações (que manda também o `plano`, para a fatura dizer
+ * "RepPlast Max" e não o nome do plano de antes).
  *
  * `updatePendingPayments` leva o valor novo também à cobrança já gerada e
  * ainda não paga, para o mês corrente não sair com o valor velho.
  */
-export async function atualizarValorAssinatura(assinaturaId: string, valor: Decimal): Promise<void> {
+export async function atualizarValorAssinatura(
+  assinaturaId: string,
+  valor: Decimal,
+  plano?: CodigoPlano,
+): Promise<void> {
   await chamar(`/v3/subscriptions/${encodeURIComponent(assinaturaId)}`, {
     method: "POST",
-    corpo: { value: valor.toNumber(), updatePendingPayments: true },
+    corpo: {
+      value: valor.toNumber(),
+      updatePendingPayments: true,
+      ...(plano && { description: `RepPlast ${PLANOS[plano].nome}` }),
+    },
   });
 }

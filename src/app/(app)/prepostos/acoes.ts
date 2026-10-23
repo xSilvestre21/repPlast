@@ -55,7 +55,11 @@ async function contextoAdmin() {
       "Só quem administra o escritório cuida dos prepostos. Peça a essa pessoa.",
     );
   }
-  if (escopo.plano !== "PLUS") throw new ErroParaUsuario("Prepostos fazem parte do plano Plus.");
+  if (escopo.plano !== "PLUS") {
+    throw new ErroParaUsuario(
+      "Prepostos fazem parte do plano Max. Para trocar, use Configurações › Escritório › Plano e mensalidade.",
+    );
+  }
 
   return escopo;
 }

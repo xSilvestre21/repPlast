@@ -7,6 +7,7 @@ import { BotaoLink, Cabecalho, Cartao, EstadoVazio, Placa, Selo, formatarMoeda }
 import { Pagina } from "@/components/pagina";
 import { competenciaDe } from "@/lib/comissao";
 import { escreverNumeroBr } from "@/lib/numero-br";
+import { PLANOS } from "@/lib/planos";
 import { escopoAtual } from "@/lib/sessao";
 
 import { AvatarPreposto } from "./avatar-preposto";
@@ -121,11 +122,11 @@ function Numero({ valor, rotulo }: { valor: React.ReactNode; rotulo: string }) {
 }
 
 /**
- * O que a pessoa vê quando o escritório está no plano Padrão.
+ * O que a pessoa vê quando o escritório está no Solo.
  *
- * Um 404 seria mentira: a seção existe, ela só não está contratada. E o convite
- * fica sem botão de propósito — não há cobrança no sistema, então prometer
- * "assinar agora" levaria a lugar nenhum.
+ * Um 404 seria mentira: a seção existe, ela só não está contratada. O botão
+ * leva à troca de plano, em Configurações › Escritório — antes não havia onde
+ * trocar, e a tela pedia para falar com o suporte.
  */
 function ConvitePlus() {
   return (
@@ -140,10 +141,10 @@ function ConvitePlus() {
         <div className="flex flex-col gap-4 max-w-xl">
           <Placa icone={Sparkles} tom="sol" />
           <h2 className="text-realce font-semibold tracking-[-0.01em]">
-            Isto faz parte do plano Plus
+            Isto faz parte do plano {PLANOS.PLUS.nome}
           </h2>
           <p className="text-corpo text-tinta-2 leading-relaxed">
-            No Plus, você inscreve prepostos e dá acesso a eles. Cada um entra com o próprio
+            No {PLANOS.PLUS.nome}, você inscreve prepostos e dá acesso a eles. Cada um entra com o próprio
             e-mail e enxerga apenas os clientes, pedidos e comissões que são dele — o que você
             vê continua sendo tudo.
           </p>
@@ -152,8 +153,15 @@ function ConvitePlus() {
             recebe a fatia combinada com ele.
           </p>
           <p className="text-corpo text-tinta-3 leading-relaxed">
-            Seu escritório está no plano Padrão. Fale comigo para trocar.
+            Seu escritório está no plano {PLANOS.PADRAO.nome}. O {PLANOS.PLUS.nome} custa{" "}
+            {formatarMoeda(PLANOS.PLUS.precoMensal.toString())} por mês, com{" "}
+            {PLANOS.PLUS.prepostosInclusos} prepostos inclusos.
           </p>
+          <div>
+            <BotaoLink href="/configuracoes#escritorio" icone={Sparkles}>
+              Ver planos e trocar
+            </BotaoLink>
+          </div>
         </div>
       </Cartao>
     </Pagina>

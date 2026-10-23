@@ -93,6 +93,21 @@ export function FormularioEsqueciSenha({ acao }: { acao: Acao }) {
   );
 }
 
+/** A troca do e-mail de login, pelo link mandado ao endereço novo: só o botão. */
+export function FormularioConfirmarEmail({ acao }: { acao: Acao }) {
+  const [estado, enviar, enviando] = useActionState(acao, {});
+
+  return (
+    <Formulario estado={estado} action={enviar} className="space-y-4">
+      <ErroGeral />
+
+      <Botao type="submit" carregando={enviando} className="w-full">
+        {enviando ? "Confirmando…" : "Confirmar e-mail novo"}
+      </Botao>
+    </Formulario>
+  );
+}
+
 /** A senha nova, pelo link do e-mail. */
 export function FormularioSenhaNova({ acao }: { acao: Acao }) {
   const [estado, enviar, enviando] = useActionState(acao, {});

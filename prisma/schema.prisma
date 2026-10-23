@@ -296,6 +296,7 @@ model Usuario {
   avisosAdiados AvisoAdiado[]
   trocasDeNome TrocaNomeEscritorio[]
   redefinicoesSenha RedefinicaoSenha[]
+  trocasEmail       TrocaEmail[]
 
   @@index([organizacaoId])
   @@map("usuario")
@@ -323,6 +324,29 @@ model RedefinicaoSenha {
   @@index([email, criadaEm])
   @@index([ip, criadaEm])
   @@map("redefinicao_senha")
+}
+
+/// Cada pedido de troca do e-mail de login, feito em Configurações.
+///
+/// O e-mail só muda quando o link mandado ao endereço NOVO é usado: o login e o
+/// "Esqueceu sua senha?" dependem dele, e um erro de digitação trocado na hora
+/// trancaria a pessoa fora da conta. Guarda o HASH do token, como
+/// `RedefinicaoSenha`, e pelo mesmo motivo.
+model TrocaEmail {
+  id        String    @id @default(uuid()) @db.Uuid
+  usuarioId String    @db.Uuid
+  /// Já em minúsculas, como o login guarda.
+  emailNovo String
+  ip        String
+  tokenHash String    @unique
+  expiraEm  DateTime
+  usadaEm   DateTime?
+  criadaEm  DateTime  @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, criadaEm])
+  @@map("troca_email")
 }
 
 /// Cada senha errada no login. Só as falhas: o limite conta quantas houve na

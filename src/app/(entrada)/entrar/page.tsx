@@ -79,7 +79,7 @@ export default async function PaginaEntrar({ searchParams }: PageProps<"/entrar"
   // Quem já está logado não tem o que fazer aqui.
   const logado = await sessaoAtual();
   if (logado) redirect(inicioDa(logado));
-  const { senha } = await searchParams;
+  const { senha, email } = await searchParams;
 
   return (
     <Movimento>
@@ -154,6 +154,11 @@ export default async function PaginaEntrar({ searchParams }: PageProps<"/entrar"
               {senha === "redefinida" && (
                 <div className="mb-6">
                   <Mensagem tom="verde">Senha nova salva. Entre com ela.</Mensagem>
+                </div>
+              )}
+              {email === "trocado" && (
+                <div className="mb-6">
+                  <Mensagem tom="verde">E-mail trocado. Entre com o e-mail novo e a senha de sempre.</Mensagem>
                 </div>
               )}
               <FormularioEntrada acao={entrar} rotulo="Entrar" />

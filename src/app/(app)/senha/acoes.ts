@@ -71,6 +71,8 @@ export async function trocarMinhaSenha(
         senhaHash: await gerarHashSenha(nova),
         senhaProvisoria: false,
         sessaoVersao: { increment: 1 },
+        // Uma troca de e-mail pedida com a senha antiga não sobrevive à nova.
+        trocasEmail: { updateMany: { where: { usadaEm: null }, data: { usadaEm: new Date() } } },
       },
     });
     // A versão subiu: sem um cookie novo, esta sessão também cairia.

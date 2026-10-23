@@ -33,6 +33,7 @@ import {
   VALIDADE_MIN,
 } from "@/lib/redefinicao-senha";
 import { criarSessao, encerrarSessao, inicioDa, sessaoAtual } from "@/lib/sessao";
+import { LINK_TROCA_VENCIDO, trocarPeloLink } from "@/lib/troca-email";
 import {
   bloqueioDoLogin,
   ipDaRequisicao,
@@ -272,6 +273,72 @@ export async function redefinirSenha(
   }
 
   redirect("/entrar?senha=redefinida");
+}
+
+/**
+ * Confirma a troca do e-mail de login, pelo link mandado ao endereço novo.
+ *
+ * É um botão, e não a simples abertura do link: antivírus de e-mail abrem os
+ * links para inspecionar, e uma página que trocasse ao abrir gastaria o token
+ * antes da pessoa. O `token` chega preso pelo `.bind` da página; quem confere
+ * é `trocarPeloLink`.
+ *
+ * Quem confirma no mesmo navegador em que está logado continua dentro (a
+ * versão da sessão subiu, então o cookie é refeito); em outro aparelho, entra
+ * de novo já com o e-mail novo. O endereço antigo recebe o aviso — se não foi
+ * a pessoa, é por ele que ela fica sabendo.
+ */
+export async function confirmarTrocaEmail(
+  token: string,
+  _estado: EstadoFormulario,
+  _formData: FormData,
+): Promise<EstadoFormulario> {
+  let destino: string;
+
+  try {
+    const logado = await sessaoAtual();
+    const troca = await trocarPeloLink(String(token));
+    if (!troca.ok) {
+      throw new ErroParaUsuario(
+        troca.motivo === "em-uso"
+          ? "Outra conta passou a usar este e-mail, e por isso a troca não foi feita. Entre com o " +
+              "e-mail de antes e peça a troca para outro endereço."
+          : LINK_TROCA_VENCIDO,
+      );
+    }
+
+    // Senhas erradas digitadas com o e-mail novo não contam contra a conta que acaba de recebê-lo.
+    await limparFalhas(troca.emailNovo);
+
+    after(() =>
+      enviarDoSistema({
+        para: troca.emailAntigo,
+        assunto: "O e-mail de login do RepPlast foi trocado",
+        ...montarEmailSistema({
+          nome: troca.nome,
+          paragrafos: [
+            `A sua conta no RepPlast agora entra com ${troca.emailNovo}, e não mais com este ` +
+              "endereço. Os aparelhos que estavam conectados precisam entrar de novo.",
+          ],
+          notas: [
+            "Se foi você, está tudo certo. Se não foi, fale com o suporte agora — e avise o " +
+              "administrador do escritório.",
+          ],
+        }),
+      }),
+    );
+
+    if (logado?.usuarioId === troca.usuarioId) {
+      await criarSessao(troca.usuarioId);
+      destino = "/configuracoes?email=trocado#perfil";
+    } else {
+      destino = "/entrar?email=trocado";
+    }
+  } catch (erro) {
+    return falhou(erro);
+  }
+
+  redirect(destino);
 }
 
 export async function sair(): Promise<void> {

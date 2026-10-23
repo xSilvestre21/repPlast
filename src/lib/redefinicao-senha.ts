@@ -127,7 +127,8 @@ export async function donoDoLink(
  * Primeiro TOMA o link (marca como usado só se ainda não estava, num UPDATE
  * só): dois cliques ao mesmo tempo não trocam a senha duas vezes. Depois, numa
  * escrita só, a senha nova, `sessaoVersao + 1` — que derruba toda sessão aberta
- * com a senha antiga — e o encerramento dos outros links. Se esta segunda parte
+ * com a senha antiga —, o encerramento dos outros links e o das trocas de
+ * e-mail em aberto (`lib/troca-email.ts`). Se esta segunda parte
  * falhar, o link já foi gasto e a senha continua a antiga: pede-se outro.
  */
 export async function redefinirPeloLink(
@@ -154,6 +155,9 @@ export async function redefinirPeloLink(
       senhaProvisoria: false,
       sessaoVersao: { increment: 1 },
       redefinicoesSenha: { updateMany: { where: { usadaEm: null }, data: { usadaEm: agora } } },
+      // Quem redefine a senha pode estar retomando a conta: uma troca de e-mail
+      // pedida com a senha antiga (por quem a descobriu) não pode sobreviver.
+      trocasEmail: { updateMany: { where: { usadaEm: null }, data: { usadaEm: agora } } },
     },
   });
 

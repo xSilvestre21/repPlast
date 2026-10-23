@@ -3,6 +3,8 @@
 import { Moon, Sun } from "lucide-react";
 import { useSyncExternalStore } from "react";
 
+import { Segmentado } from "./ui";
+
 type Tema = "claro" | "escuro";
 
 /**
@@ -81,5 +83,29 @@ export function AlternadorTema() {
         <Sun size={15} strokeWidth={1.5} aria-hidden="true" />
       )}
     </button>
+  );
+}
+
+/**
+ * A mesma escolha, por extenso — para Configurações › Preferências, onde quem
+ * procura "tema" não acha o ícone do sol lá no alto. As duas leem o mesmo
+ * store: trocar aqui troca o ícone do topo, e o contrário.
+ */
+export function EscolhaTema() {
+  const tema = useSyncExternalStore(inscrever, instantaneoCliente, instantaneoServidor);
+
+  // No servidor não há tema: um espaço do tamanho do controle, até hidratar.
+  if (tema === null) return <span className="block h-8" />;
+
+  return (
+    <Segmentado
+      nome="Tema"
+      atual={tema}
+      aoEscolher={definirTema}
+      opcoes={[
+        { valor: "claro", rotulo: "Claro" },
+        { valor: "escuro", rotulo: "Escuro" },
+      ]}
+    />
   );
 }

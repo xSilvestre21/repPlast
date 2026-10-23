@@ -543,7 +543,9 @@ export async function definirPrepostosDaIndustria(
       );
     }
     if (plano !== "PLUS") {
-      throw new ErroParaUsuario("Prepostos fazem parte do plano Plus.");
+      throw new ErroParaUsuario(
+        "Prepostos fazem parte do plano Max. Para trocar, use Configurações › Escritório › Plano e mensalidade.",
+      );
     }
 
     const pertence = await db.fornecedor.count({ where: { id: fornecedorId, organizacaoId } });

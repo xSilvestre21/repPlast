@@ -1,17 +1,30 @@
 "use server";
 
 /**
- * Preferências de conta do usuário logado — e, para o administrador, o nome do
- * escritório.
+ * Preferências de conta do usuário logado — e, para o administrador, o nome e o
+ * plano do escritório.
  */
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 
+import { atualizarValorAssinatura, ErroAsaas } from "@/lib/asaas";
 import { limparAssinatura } from "@/lib/assinatura-email";
 import { contaParaEnvio } from "@/lib/conta-email";
 import { cifrar, decifrar } from "@/lib/cripto";
+import { dbAdministrativo } from "@/lib/db";
+import { dominioRecebeEmail } from "@/lib/dominio-email";
 import { testarConta } from "@/lib/email";
+import { enviarDoSistema, urlDoSistema } from "@/lib/email-sistema";
+import { montarEmailSistema } from "@/lib/email-sistema-html";
+import { problemaNoEmail } from "@/lib/email-valido";
 import { emailValido } from "@/lib/envio-pedido";
+import { minutosAte, minutosPorExtenso } from "@/lib/limite-tentativas";
+import { normalizarTelefone } from "@/lib/mascara";
+import { PLANOS, valorMensal, type CodigoPlano } from "@/lib/planos";
+import { conferirSenha } from "@/lib/senha";
+import { bloqueioDoLogin, ipDaRequisicao, registrarFalha } from "@/lib/tentativas-login";
+import { bloqueioDasTrocas, criarTrocaEmail, VALIDADE_TROCA_MIN } from "@/lib/troca-email";
 import { problemaNoModelo } from "@/lib/modelo-email";
 import { MODELOS_DE_EMAIL, type TipoDeEmail, ehTipoDeEmail } from "@/lib/tipos-de-email";
 import { ehProvedor } from "@/lib/provedores-email";
@@ -31,6 +44,9 @@ import { escopoAtual, exigirAdmin } from "@/lib/sessao";
 
 export type { EstadoFormulario };
 
+/** O estado de sempre mais o recado verde de "deu certo". */
+export type EstadoConta = EstadoFormulario & { ok?: string };
+
 const ASSINATURA_SUMIU =
   "Esta assinatura não foi encontrada — ela pode ter sido excluída em outra tela. " +
   "Recarregue a página.";
@@ -38,6 +54,238 @@ const ASSINATURA_SUMIU =
 const CONTA_SUMIU =
   "Esta conta de e-mail não foi encontrada — ela pode ter sido excluída em outra tela. " +
   "Recarregue a página.";
+
+const USUARIO_SUMIU = "Não encontramos o seu usuário. Saia e entre de novo no sistema.";
+
+/* -------------------------------------------------------------------------- */
+/* Perfil                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Nome, sobrenome e telefone de quem está logado — para corrigir o que saiu
+ * errado no cadastro.
+ *
+ * O administrador precisa do sobrenome: é ele quem paga, e o checkout do Asaas
+ * recusa nome sem sobrenome ("O campo name é inválido") — mesma regra do
+ * cadastro. O preposto pode ficar só com o nome, como na ficha dele.
+ */
+export async function salvarPerfil(
+  _estado: EstadoConta,
+  formData: FormData,
+): Promise<EstadoConta> {
+  try {
+    const { usuarioId, organizacaoId, ehAdmin, db } = await escopoAtual();
+
+    const nome = lerCampo(formData, "nome").replace(/\s+/g, " ");
+    const sobrenome = lerCampo(formData, "sobrenome").replace(/\s+/g, " ");
+    if (!nome) throw new ErroDeCampo("nome", "Informe o seu nome, como João.");
+    if (ehAdmin && !sobrenome) {
+      throw new ErroDeCampo(
+        "sobrenome",
+        "Informe também o sobrenome, como da Silva — o pagamento da assinatura pede o nome completo.",
+      );
+    }
+
+    await db.usuario.updateMany({
+      where: { id: usuarioId, organizacaoId },
+      data: {
+        nome,
+        sobrenome: sobrenome || null,
+        telefone: normalizarTelefone(lerCampo(formData, "telefone")),
+      },
+    });
+  } catch (erro) {
+    return falhou(erro, formData);
+  }
+
+  // O menu de TODAS as telas mostra o nome.
+  revalidatePath("/", "layout");
+  return { ok: "Perfil salvo." };
+}
+
+/**
+ * Pede a troca do e-mail de login: confere a senha e manda o link ao endereço
+ * novo. Nada muda até o link ser aberto (`lib/troca-email.ts`).
+ *
+ * A senha é pedida pelo mesmo motivo da tela de senha: uma sessão esquecida
+ * aberta no computador do cliente não pode virar a conta tomada — trocar o
+ * e-mail é trocar para onde vai o "Esqueceu sua senha?".
+ */
+export async function pedirTrocaEmail(
+  _estado: EstadoConta,
+  formData: FormData,
+): Promise<EstadoConta> {
+  try {
+    const { usuarioId } = await escopoAtual();
+    const db = dbAdministrativo();
+
+    const usuario = await db.usuario.findUnique({
+      where: { id: usuarioId },
+      select: { email: true, nome: true, senhaHash: true },
+    });
+    if (!usuario) throw new ErroParaUsuario(USUARIO_SUMIU);
+
+    const email = lerCampo(formData, "emailNovo").toLowerCase();
+    if (!email) throw new ErroDeCampo("emailNovo", "Digite o e-mail novo, como voce@escritorio.com.br.");
+    const problema = problemaNoEmail(email);
+    if (problema) throw new ErroDeCampo("emailNovo", problema);
+    if (email === usuario.email) {
+      throw new ErroDeCampo("emailNovo", "Este já é o seu e-mail de login. Digite o e-mail novo.");
+    }
+
+    // Sem `trim`: espaço pode ser parte da senha.
+    const bruta = formData.get("senhaAtual");
+    const senha = typeof bruta === "string" ? bruta : "";
+    if (!senha) throw new ErroDeCampo("senhaAtual", "Digite a senha que você usa hoje para entrar.");
+
+    // A mesma porta do login: senão, quem achasse uma sessão aberta testaria
+    // senhas à vontade aqui. Bloqueado, nem confere — como no login.
+    const quem = { email: usuario.email, ip: await ipDaRequisicao() };
+    const fechado = await bloqueioDoLogin(quem);
+    if (fechado) {
+      throw new ErroDeCampo(
+        "senhaAtual",
+        `Muitas tentativas com senha errada. Espere ${minutosPorExtenso(minutosAte(fechado, new Date()))} ` +
+          "e tente de novo.",
+      );
+    }
+    if (!(await conferirSenha(senha, usuario.senhaHash))) {
+      await registrarFalha(quem);
+      throw new ErroDeCampo(
+        "senhaAtual",
+        "Esta não é a sua senha atual. Digite de novo — se não lembrar, troque a senha antes, em “Trocar minha senha”.",
+      );
+    }
+
+    const libera = await bloqueioDasTrocas(usuarioId);
+    if (libera) {
+      throw new ErroParaUsuario(
+        "Você já pediu vários links há pouco. Confira a caixa de entrada e o spam do e-mail novo — " +
+          `ou espere ${minutosPorExtenso(minutosAte(libera, new Date()))} para pedir de novo.`,
+      );
+    }
+
+    if (await db.usuario.findUnique({ where: { email }, select: { id: true } })) {
+      throw new ErroDeCampo("emailNovo", "Este e-mail já é o login de outra conta no sistema. Use outro e-mail.");
+    }
+    const dominio = email.split("@")[1];
+    if (!(await dominioRecebeEmail(dominio))) {
+      throw new ErroDeCampo(
+        "emailNovo",
+        `O endereço “${dominio}” não recebe e-mails. Confira o que vem depois do @, como voce@escritorio.com.br.`,
+      );
+    }
+
+    const token = await criarTrocaEmail({ usuarioId, emailNovo: email, ip: quem.ip });
+    const link = `${urlDoSistema()}/confirmar-email/${token}`;
+    after(() =>
+      enviarDoSistema({
+        para: email,
+        assunto: "Confirme o seu e-mail novo no RepPlast",
+        ...montarEmailSistema({
+          nome: usuario.nome,
+          paragrafos: [
+            `Você pediu para entrar no RepPlast com este e-mail no lugar de ${usuario.email}. ` +
+              "Clique no botão abaixo para confirmar:",
+          ],
+          botao: { rotulo: "Confirmar e-mail novo", url: link },
+          notas: [
+            `Este link vale por ${VALIDADE_TROCA_MIN} minutos e funciona uma vez só.`,
+            "Se não foi você, ignore este e-mail: nada muda na conta.",
+          ],
+        }),
+      }),
+    );
+  } catch (erro) {
+    // A senha nunca volta para o navegador (`valoresDigitados` a tira).
+    return falhou(erro, formData);
+  }
+
+  revalidatePath("/configuracoes");
+  return {
+    ok:
+      "Mandamos um link para o e-mail novo. A troca só vale depois que você clicar nele — até lá, " +
+      "continue entrando com o e-mail de hoje.",
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Escritório                                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Passa o escritório para o outro plano — Solo ↔ Max.
+ *
+ * Só o administrador. O valor novo vale da próxima mensalidade (e da que está
+ * em aberto), sem conta proporcional — o mesmo que já acontece quando um
+ * preposto passa dos inclusos. O Asaas é acertado ANTES de gravar, como em
+ * `acertarMensalidade` (`prepostos/acoes.ts`): se ele recusar, nada muda.
+ *
+ * Max → Solo com preposto ativo é recusado: o Solo não tem preposto, e
+ * inativar a equipe por baixo dos panos seria uma ação em massa escondida num
+ * botão de plano. Inativos podem ficar — o trigger `usuario_exige_plus` só
+ * olha quem é criado ou muda de papel, e voltar ao Max os traz de volta.
+ *
+ * Grava pelo cliente administrativo: o trigger `cobranca_so_administrativa`
+ * impede o papel da aplicação de mexer no plano, para ninguém se dar o Max
+ * montando a requisição à mão sem passar por aqui.
+ */
+export async function trocarPlano(
+  planoNovo: CodigoPlano,
+  _estado: EstadoFormulario,
+  _formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    // Chega pelo `bind`, mas viaja do navegador como qualquer argumento.
+    if (planoNovo !== "PADRAO" && planoNovo !== "PLUS") {
+      throw new ErroParaUsuario("Não deu para saber qual plano escolher. Recarregue a página e tente de novo.");
+    }
+    await exigirAdmin();
+    const { organizacaoId, db } = await escopoAtual();
+
+    const [organizacao, ativos] = await Promise.all([
+      db.organizacao.findUniqueOrThrow({
+        where: { id: organizacaoId },
+        select: { plano: true, asaasAssinaturaId: true },
+      }),
+      db.usuario.count({ where: { organizacaoId, papel: "REPRESENTANTE", ativo: true } }),
+    ]);
+
+    const destino = PLANOS[planoNovo];
+    if (organizacao.plano === planoNovo) {
+      throw new ErroParaUsuario(`O escritório já está no plano ${destino.nome}.`);
+    }
+    if (planoNovo === "PADRAO" && ativos > 0) {
+      throw new ErroParaUsuario(
+        `O Solo não tem prepostos. Inative ${ativos === 1 ? "o preposto ativo" : `os ${ativos} prepostos ativos`} ` +
+          "em “Prepostos” antes de passar para o Solo — os dados e os pedidos deles continuam guardados.",
+      );
+    }
+
+    if (organizacao.asaasAssinaturaId) {
+      try {
+        await atualizarValorAssinatura(organizacao.asaasAssinaturaId, valorMensal(planoNovo, ativos), planoNovo);
+      } catch (erro) {
+        if (!(erro instanceof ErroAsaas)) throw erro;
+        throw new ErroParaUsuario(
+          "Não conseguimos acertar a mensalidade agora, e por isso o plano não foi trocado. " +
+            "Tente de novo em alguns minutos.",
+        );
+      }
+    }
+
+    await dbAdministrativo().organizacao.update({
+      where: { id: organizacaoId },
+      data: { plano: planoNovo },
+    });
+  } catch (erro) {
+    return falhou(erro);
+  }
+
+  // O menu (Prepostos) e as telas com coluna de preposto dependem do plano.
+  revalidatePath("/", "layout");
+  return {};
+}
 
 /**
  * Troca o nome do escritório — o que aparece no topo de todas as telas.
@@ -248,8 +496,6 @@ export async function salvarMensagemEnvioPadrao(
 /* -------------------------------------------------------------------------- */
 /* Contas de e-mail                                                           */
 /* -------------------------------------------------------------------------- */
-
-export type EstadoConta = EstadoFormulario & { ok?: string };
 
 /**
  * A senha já salva, para testar a conta sem pedi-la de novo. Se ela não puder
