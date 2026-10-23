@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { TIPOS_CHAVE_PIX, TIPOS_CONTA } from "@/lib/dados-pagamento";
 import { emailValido } from "@/lib/envio-pedido";
 import {
   ErroDeCampo,
@@ -55,6 +56,40 @@ function lerTexto(valor: FormDataEntryValue | null): string | null {
   return texto === "" ? null : texto;
 }
 
+/**
+ * Os dados para pagamento (ver `src/lib/dados-pagamento.ts`). Os tipos só
+ * podem ser os da lista — a caixa de seleção já garante, mas o envio pode vir
+ * de fora dela —, e o CPF/CNPJ é normalizado como o da própria indústria.
+ */
+function dadosDePagamento(formData: FormData) {
+  const tipo = <T extends Record<string, string>>(campo: string, tabela: T, frase: string) => {
+    const valor = lerTexto(formData.get(campo));
+    if (valor && !(valor in tabela)) throw new ErroDeCampo(campo, frase);
+    return valor;
+  };
+  const documento = lerTexto(formData.get("pagamentoDocumento"));
+
+  return {
+    pagamentoTipoChavePix: tipo(
+      "pagamentoTipoChavePix",
+      TIPOS_CHAVE_PIX,
+      "Escolha o tipo da chave PIX na lista, como CNPJ ou E-mail.",
+    ),
+    pagamentoChavePix: lerTexto(formData.get("pagamentoChavePix")),
+    pagamentoBanco: lerTexto(formData.get("pagamentoBanco")),
+    pagamentoAgencia: lerTexto(formData.get("pagamentoAgencia")),
+    pagamentoConta: lerTexto(formData.get("pagamentoConta")),
+    pagamentoTipoConta: tipo(
+      "pagamentoTipoConta",
+      TIPOS_CONTA,
+      "Escolha o tipo da conta na lista: corrente ou poupança.",
+    ),
+    pagamentoFavorecido: lerTexto(formData.get("pagamentoFavorecido")),
+    pagamentoDocumento: documento === null ? null : normalizarDocumento(documento, "pagamentoDocumento"),
+    pagamentoObservacoes: lerTexto(formData.get("pagamentoObservacoes")),
+  };
+}
+
 function dadosDoFormulario(formData: FormData) {
   const nome = lerTexto(formData.get("nome"));
   if (!nome) {
@@ -87,12 +122,15 @@ function dadosDoFormulario(formData: FormData) {
     razaoSocial: lerTexto(formData.get("razaoSocial")),
     cnpj: cnpj === null ? null : normalizarDocumento(cnpj),
     endereco: lerTexto(formData.get("endereco")),
+    numero: lerTexto(formData.get("numero")),
+    complemento: lerTexto(formData.get("complemento")),
     bairro: lerTexto(formData.get("bairro")),
     cep: cep === null ? null : normalizarCep(cep),
     municipio: lerTexto(formData.get("municipio")),
     uf: uf ? uf.toUpperCase() : null,
     telefone: telefone === null ? null : normalizarTelefone(telefone),
     email,
+    ...dadosDePagamento(formData),
     ipiPercentual: lerPercentual(formData, "ipiPercentual", "o IPI"),
     comissaoPercentual: lerPercentual(formData, "comissaoPercentual", "a comissão"),
     fatorKgPadrao: fatorKgPadrao === null ? null : String(fatorKgPadrao),

@@ -186,6 +186,10 @@ export function Selecao({
       <Rotulo>{rotulo}</Rotulo>
       <select
         {...props}
+        // O React reinicia o formulário depois de cada envio, e um <select>
+        // volta à opção com que foi MONTADO, não ao `defaultValue` novo: a
+        // escolha sumia depois de uma recusa. Remontar quando ele muda resolve.
+        key={String(defaultValue ?? "")}
         defaultValue={defaultValue as ComponentProps<"select">["defaultValue"]}
         aria-invalid={erro ? true : undefined}
         aria-describedby={idRodape}

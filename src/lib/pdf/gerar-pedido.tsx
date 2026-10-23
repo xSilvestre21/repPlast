@@ -9,6 +9,7 @@
 import { renderToBuffer } from "@react-pdf/renderer";
 
 import { type Ator, dbParaOrganizacao } from "../db";
+import { enderecoCompleto } from "../endereco";
 import { rotuloPrecoDosItens, type Familia, type UnidadeVenda } from "../produto-preco";
 import { DocumentoPedido, type DadosPedidoPdf } from "./documento-pedido";
 import { nomeArquivoPedido } from "./nome-arquivo";
@@ -75,7 +76,7 @@ export async function carregarPedidoParaPdf(
         cnpj: pedido.cliente.cnpj,
         ie: pedido.cliente.ie,
         uf: pedido.cliente.uf,
-        endereco: pedido.cliente.endereco,
+        endereco: enderecoCompleto(pedido.cliente),
         bairro: pedido.cliente.bairro,
         cep: pedido.cliente.cep,
         municipio: pedido.cliente.municipio,

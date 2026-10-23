@@ -31,6 +31,7 @@ import { SecaoCabecalho } from "./cabecalho";
 import { BotaoEnviarEmail } from "./envio";
 import { SecaoItens } from "@/components/itens-documento";
 import { Pagina } from "@/components/pagina";
+import { enderecoCompleto } from "@/lib/endereco";
 import { nomeCompleto } from "@/lib/nome-usuario";
 
 const DATA_HORA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
@@ -368,7 +369,7 @@ export default async function PaginaPedido({
                   : null
               }
             />
-            <Info rotulo="Endereço" valor={pedido.cliente.endereco} />
+            <Info rotulo="Endereço" valor={enderecoCompleto(pedido.cliente)} />
             <Info rotulo="Telefone" valor={pedido.cliente.telefone} />
             <Info rotulo="E-mail da NF-e" valor={pedido.cliente.emailNfe} />
           </dl>

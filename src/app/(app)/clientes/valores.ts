@@ -15,6 +15,8 @@ export type ValoresCliente = {
   cnpj: string;
   ie: string;
   endereco: string;
+  numero: string;
+  complemento: string;
   bairro: string;
   cep: string;
   municipio: string;
@@ -34,6 +36,8 @@ export const VALORES_VAZIOS: ValoresCliente = {
   cnpj: "",
   ie: "",
   endereco: "",
+  numero: "",
+  complemento: "",
   bairro: "",
   cep: "",
   municipio: "",

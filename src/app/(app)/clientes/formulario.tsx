@@ -3,7 +3,8 @@
 import { BadgeCheck, HandCoins, MapPin, MessageSquareText, Phone, Users } from "lucide-react";
 import { useActionState } from "react";
 
-import { CampoCep, CampoDocumento, CampoTelefone } from "@/components/campo-mascarado";
+import { CampoDocumento, CampoTelefone } from "@/components/campo-mascarado";
+import { EnderecoPeloCep } from "@/components/endereco-pelo-cep";
 import { ErroGeral, Formulario } from "@/components/formulario";
 import { AreaTexto, Botao, Campo, SecaoCartao } from "@/components/ui";
 import { valoresDaLista } from "@/lib/erro-formulario";
@@ -110,29 +111,7 @@ export function FormularioCliente({
         )}
 
         <SecaoCartao icone={MapPin} titulo="Endereço">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Campo
-              name="endereco"
-              rotulo="Logradouro e número"
-              className="sm:col-span-2 lg:col-span-3"
-              defaultValue={valores.endereco}
-            />
-            <CampoCep name="cep" rotulo="CEP" defaultValue={valores.cep} />
-            <Campo
-              name="bairro"
-              rotulo="Bairro"
-              className="sm:col-span-2"
-              defaultValue={valores.bairro}
-            />
-            <Campo name="municipio" rotulo="Município" defaultValue={valores.municipio} />
-            <Campo
-              name="uf"
-              rotulo="UF"
-              maxLength={2}
-              defaultValue={valores.uf}
-              placeholder="SP"
-            />
-          </div>
+          <EnderecoPeloCep valores={valores} />
         </SecaoCartao>
 
         <SecaoCartao icone={Phone} titulo="Contato">

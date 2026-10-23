@@ -345,6 +345,9 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
       comoAna.fornecedor.update({ where: { id: industria.id }, data: { comissaoPercentual: "99" } }),
     ).rejects.toThrow();
     await expect(
+      comoAna.fornecedor.update({ where: { id: industria.id }, data: { pagamentoChavePix: "dela@exemplo.com" } }),
+    ).rejects.toThrow();
+    await expect(
       comoAna.contatoFornecedor.create({
         data: { fornecedorId: industria.id, email: "x@industria.test", ordem: 0 },
       }),
@@ -365,13 +368,21 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
 
     // E o administrador faz tudo isso.
     const comoDono = dbParaOrganizacao(escritorio, dono);
-    await comoDono.fornecedor.update({ where: { id: industria.id }, data: { telefone: "1" } });
+    await comoDono.fornecedor.update({
+      where: { id: industria.id },
+      data: { telefone: "1", pagamentoChavePix: "12.345.678/0001-95" },
+    });
+    // Os dados de pagamento ela lê: é para copiar e mandar ao cliente.
+    expect(
+      (await comoAna.fornecedor.findUniqueOrThrow({ where: { id: industria.id }, select: { pagamentoChavePix: true } }))
+        .pagamentoChavePix,
+    ).toBe("12.345.678/0001-95");
     await comoDono.produto.update({ where: { id: produto.id }, data: { precoKg: "11" } });
 
     await admin.produto.delete({ where: { id: produto.id } });
     await admin.fornecedor.update({
       where: { id: industria.id },
-      data: { proximoNumeroPedido: industria.proximoNumeroPedido, telefone: null },
+      data: { proximoNumeroPedido: industria.proximoNumeroPedido, telefone: null, pagamentoChavePix: null },
     });
   });
 

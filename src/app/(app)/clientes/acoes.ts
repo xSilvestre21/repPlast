@@ -134,6 +134,8 @@ function dadosDoFormulario(formData: FormData) {
     cnpj: cnpj === null ? null : normalizarDocumento(cnpj),
     ie: lerTexto(formData.get("ie")),
     endereco: lerTexto(formData.get("endereco")),
+    numero: lerTexto(formData.get("numero")),
+    complemento: lerTexto(formData.get("complemento")),
     bairro: lerTexto(formData.get("bairro")),
     cep: cep === null ? null : normalizarCep(cep),
     municipio: lerTexto(formData.get("municipio")),

@@ -1163,6 +1163,23 @@ async function importar(
     }
   }
 
+  /* --- 9. Número e complemento fora da rua -------------------------------- */
+
+  // O SICOV guarda "Rua X, 123 Galpão F" num campo só. A separação é a mesma
+  // da migration que repartiu os cadastros antigos (`separar_numero_do_endereco`):
+  // o que não tem número claro fica inteiro na rua.
+  for (const tabela of ["cliente", "fornecedor"]) {
+    const separados = await tx.$executeRawUnsafe(
+      `UPDATE "${tabela}" t
+       SET "endereco" = s.rua, "numero" = s.numero, "complemento" = s.complemento
+       FROM "${tabela}" o, separar_numero_do_endereco(o."endereco") s
+       WHERE t."id" = o."id" AND o."organizacaoId" = $1::uuid
+         AND o."numero" IS NULL AND s.numero IS NOT NULL`,
+      orgId,
+    );
+    contar(`endereços separados (${tabela})`, separados);
+  }
+
   return orgId;
 }
 

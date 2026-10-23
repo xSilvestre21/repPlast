@@ -9,17 +9,23 @@
  * errada até alguém mexer no seletor.
  */
 
+import { PAGAMENTO_VAZIO, type DadosPagamento } from "@/lib/dados-pagamento";
+
 export type ValoresFornecedor = {
   nome: string;
   razaoSocial: string;
   cnpj: string;
   endereco: string;
+  numero: string;
+  complemento: string;
   bairro: string;
   cep: string;
   municipio: string;
   uf: string;
   telefone: string;
   email: string;
+  /** PIX, banco, conta e favorecido, para copiar e enviar. */
+  pagamento: DadosPagamento;
   ipiPercentual: string;
   comissaoPercentual: string;
   fatorKgPadrao: string;
@@ -34,12 +40,15 @@ export const VALORES_VAZIOS: ValoresFornecedor = {
   razaoSocial: "",
   cnpj: "",
   endereco: "",
+  numero: "",
+  complemento: "",
   bairro: "",
   cep: "",
   municipio: "",
   uf: "",
   telefone: "",
   email: "",
+  pagamento: PAGAMENTO_VAZIO,
   ipiPercentual: "",
   comissaoPercentual: "",
   fatorKgPadrao: "",

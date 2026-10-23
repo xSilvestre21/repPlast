@@ -5,8 +5,8 @@
 // que permite vender o sistema a outros representantes sem reescrever o banco.
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
   // Relação aninhada vira UM SQL (LATERAL JOIN + JSON), e não uma consulta
   // por tabela. Com a estratégia antiga, o Prisma 7 disparava as consultas
   // das relações em paralelo na mesma conexão da transação do RLS — o `pg`
@@ -124,7 +124,6 @@ enum Papel {
   REPRESENTANTE
 }
 
-
 // ---------------------------------------------------------------------------
 // Tenant e acesso
 // ---------------------------------------------------------------------------
@@ -144,18 +143,18 @@ model Organizacao {
 
   /// Nasce ATIVA para os escritórios de antes da cobrança e para o seed; o
   /// cadastro grava AGUARDANDO_PAGAMENTO explicitamente.
-  assinatura        Assinatura @default(ATIVA)
+  assinatura          Assinatura @default(ATIVA)
   /// Último checkout aberto — é por ele que o webhook `CHECKOUT_PAID` acha o escritório.
-  asaasCheckoutId   String?    @unique
-  asaasClienteId    String?
+  asaasCheckoutId     String?    @unique
+  asaasClienteId      String?
   /// A assinatura recorrente criada pelo checkout pago. Os eventos de cobrança
   /// seguintes chegam com ela.
-  asaasAssinaturaId String?    @unique
+  asaasAssinaturaId   String?    @unique
   /// CPF/CNPJ e CEP de quem paga, sem pontuação (o CNPJ pode ter letras). O
   /// checkout do Asaas exige os dois, e guardá-los é o que deixa reabrir o
   /// pagamento sem perguntar de novo.
-  cobrancaDocumento String?
-  cobrancaCep       String?
+  cobrancaDocumento   String?
+  cobrancaCep         String?
   /// "Rua Alfa", "505" e "Centro" — rua e bairro preenchidos pelo CEP no
   /// cadastro, e os três mandados ao checkout (que recusa sem o bairro). Nulos
   /// nos escritórios de antes de o cadastro pedir.
@@ -170,18 +169,18 @@ model Organizacao {
   /// e a indústria nem fica sabendo dele.
   proximoNumeroOrcamento Int @default(1)
 
-  usuarios     Usuario[]
-  clientes     Cliente[]
-  fornecedores Fornecedor[]
-  produtos     Produto[]
-  pedidos      Pedido[]
-  orcamentos   Orcamento[]
-  contasEmail  ContaEmail[]
+  usuarios         Usuario[]
+  clientes         Cliente[]
+  fornecedores     Fornecedor[]
+  produtos         Produto[]
+  pedidos          Pedido[]
+  orcamentos       Orcamento[]
+  contasEmail      ContaEmail[]
   assinaturasEmail AssinaturaEmail[]
-  metas        MetaComissao[]
-  repasses     RepassePreposto[]
-  compromissos Compromisso[]
-  trocasDeNome TrocaNomeEscritorio[]
+  metas            MetaComissao[]
+  repasses         RepassePreposto[]
+  compromissos     Compromisso[]
+  trocasDeNome     TrocaNomeEscritorio[]
 
   @@map("organizacao")
 }
@@ -276,25 +275,25 @@ model Usuario {
   assuntoOrcamentoPadrao  String?
   mensagemOrcamentoPadrao String?
 
-  organizacao Organizacao          @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
-  clientes     ClientePreposto[]
-  clientesCriados Cliente[] @relation("ClienteCriadoPor")
-  pedidos      Pedido[]    @relation("PedidoDoRepresentante")
-  orcamentos   Orcamento[] @relation("OrcamentoDoRepresentante")
-  pedidosCriados    Pedido[]    @relation("PedidoCriadoPor")
-  orcamentosCriados Orcamento[] @relation("OrcamentoCriadoPor")
-  edicoes      OrcamentoEdicao[]
-  edicoesPedido PedidoEdicao[]
-  enviosOrcamento EnvioOrcamento[]
-  fornecedores FornecedorPreposto[]
-  contasEmail  ContaEmail[]
-  assinaturasEmail AssinaturaEmail[]
-  envios       EnvioPedido[]
-  metas        MetaComissao[]
-  repasses     RepassePreposto[]
-  compromissos Compromisso[]
-  avisosAdiados AvisoAdiado[]
-  trocasDeNome TrocaNomeEscritorio[]
+  organizacao       Organizacao           @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  clientes          ClientePreposto[]
+  clientesCriados   Cliente[]             @relation("ClienteCriadoPor")
+  pedidos           Pedido[]              @relation("PedidoDoRepresentante")
+  orcamentos        Orcamento[]           @relation("OrcamentoDoRepresentante")
+  pedidosCriados    Pedido[]              @relation("PedidoCriadoPor")
+  orcamentosCriados Orcamento[]           @relation("OrcamentoCriadoPor")
+  edicoes           OrcamentoEdicao[]
+  edicoesPedido     PedidoEdicao[]
+  enviosOrcamento   EnvioOrcamento[]
+  fornecedores      FornecedorPreposto[]
+  contasEmail       ContaEmail[]
+  assinaturasEmail  AssinaturaEmail[]
+  envios            EnvioPedido[]
+  metas             MetaComissao[]
+  repasses          RepassePreposto[]
+  compromissos      Compromisso[]
+  avisosAdiados     AvisoAdiado[]
+  trocasDeNome      TrocaNomeEscritorio[]
   redefinicoesSenha RedefinicaoSenha[]
   trocasEmail       TrocaEmail[]
 
@@ -392,11 +391,11 @@ model TrocaNomeEscritorio {
 /// De cada USUÁRIO, e só dele (ver a policy): o dono mede contra o que fica com
 /// o escritório depois da fatia dos prepostos, o preposto contra a própria fatia. Não entra em cálculo nenhum.
 model MetaComissao {
-  id            String @id @default(uuid()) @db.Uuid
-  organizacaoId String @db.Uuid
-  usuarioId     String @db.Uuid
+  id            String   @id @default(uuid()) @db.Uuid
+  organizacaoId String   @db.Uuid
+  usuarioId     String   @db.Uuid
   /// "AAAA-MM". Texto e não data: ordena certo como texto e não tem fuso.
-  competencia   String @db.VarChar(7)
+  competencia   String   @db.VarChar(7)
   /// Vazio de propósito: "deste mês em diante, sem meta" é uma escolha que
   /// também precisa interromper a meta herdada dos meses anteriores.
   valor         Decimal? @db.Decimal(14, 2)
@@ -529,11 +528,14 @@ model Cliente {
   cnpj        String?
   ie          String?
 
-  endereco  String?
-  bairro    String?
-  cep       String?
-  municipio String?
-  uf        String? @db.VarChar(2)
+  /// Só a rua; número e complemento ficam ao lado. O PDF junta os três.
+  endereco    String?
+  numero      String?
+  complemento String?
+  bairro      String?
+  cep         String?
+  municipio   String?
+  uf          String? @db.VarChar(2)
 
   telefone String?
   email    String?
@@ -556,14 +558,14 @@ model Cliente {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  organizacao    Organizacao            @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
-  criadoPor      Usuario?               @relation("ClienteCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  organizacao  Organizacao       @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  criadoPor    Usuario?          @relation("ClienteCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
   /// Os prepostos que atendem este cliente — nenhum é do escritório.
-  prepostos      ClientePreposto[]
-  pedidos        Pedido[]
-  orcamentos     Orcamento[]
-  produtos       Produto[]
-  compromissos   Compromisso[]
+  prepostos    ClientePreposto[]
+  pedidos      Pedido[]
+  orcamentos   Orcamento[]
+  produtos     Produto[]
+  compromissos Compromisso[]
 
   @@index([organizacaoId])
   @@index([organizacaoId, apelido])
@@ -596,11 +598,14 @@ model Fornecedor {
   razaoSocial String?
   cnpj        String?
 
-  endereco  String?
-  bairro    String?
-  cep       String?
-  municipio String?
-  uf        String? @db.VarChar(2)
+  /// Só a rua; número e complemento ficam ao lado. O PDF junta os três.
+  endereco    String?
+  numero      String?
+  complemento String?
+  bairro      String?
+  cep         String?
+  municipio   String?
+  uf          String? @db.VarChar(2)
 
   telefone String?
   /// Contato geral da indústria — o vendedor interno, o telefone do escritório.
@@ -608,18 +613,32 @@ model Fornecedor {
   /// com quem se fala.
   email    String?
 
+  /// Dados para pagamento, guardados para copiar e enviar a quem precisar
+  /// pagar a indústria (ver src/lib/dados-pagamento.ts). Os tipos são as
+  /// chaves de `TIPOS_CHAVE_PIX` e `TIPOS_CONTA`, conferidas na ação.
+  pagamentoTipoChavePix String?
+  pagamentoChavePix     String?
+  pagamentoBanco        String?
+  pagamentoAgencia      String?
+  pagamentoConta        String?
+  pagamentoTipoConta    String?
+  pagamentoFavorecido   String?
+  pagamentoDocumento    String?
+  /// O que não cabe nos campos — boleto, um segundo PIX.
+  pagamentoObservacoes  String?
+
   /// Logo da INDÚSTRIA — é ele que vai no cabeçalho do PDF, não o do escritório.
   /// Guardado no próprio banco: são arquivos pequenos, e assim o sistema não
   /// depende de storage externo para funcionar.
-  logo        Bytes?
+  logo     Bytes?
   /// Content-Type do logo, para servir o arquivo com o cabeçalho certo.
-  logoTipo    String?
+  logoTipo String?
 
   /// Percentual de IPI da indústria, ex.: 9.750.
-  ipiPercentual Decimal @default(0) @db.Decimal(6, 3)
+  ipiPercentual         Decimal @default(0) @db.Decimal(6, 3)
   /// Percentual de comissão desta indústria. Cada pedido nasce com ele e pode
   /// ser ajustado enquanto estiver aberto.
-  comissaoPercentual Decimal @default(0) @db.Decimal(6, 3)
+  comissaoPercentual    Decimal @default(0) @db.Decimal(6, 3)
   /// O dia em que a indústria fecha o faturamento, para quem só paga a
   /// comissão no mês seguinte: o vencimento até esse dia conta no mês seguinte,
   /// depois dele no outro. É o PADRÃO, que cada pedido copia ao ser criado —
@@ -753,7 +772,6 @@ model MaterialFaixa {
   @@map("material_faixa")
 }
 
-
 /// Aditivos da indústria, preenchidos pelo próprio representante.
 /// Somam VALOR ABSOLUTO — nunca percentual.
 model Aditivo {
@@ -854,9 +872,9 @@ model Produto {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  organizacao    Organizacao            @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
-  fornecedor     Fornecedor             @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
-  cliente        Cliente?               @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  organizacao    Organizacao      @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  fornecedor     Fornecedor       @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
+  cliente        Cliente?         @relation(fields: [clienteId], references: [id], onDelete: SetNull)
   aditivos       ProdutoAditivo[]
   itensPedido    PedidoItem[]
   itensOrcamento OrcamentoItem[]
@@ -881,7 +899,6 @@ model ProdutoAditivo {
   @@id([produtoId, aditivoId])
   @@map("produto_aditivo")
 }
-
 
 // ---------------------------------------------------------------------------
 // Pedido
@@ -1012,12 +1029,12 @@ model Pedido {
   enviadoEm    DateTime?
   canceladoEm  DateTime?
 
-  organizacao   Organizacao  @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
-  fornecedor    Fornecedor   @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
-  cliente       Cliente      @relation(fields: [clienteId], references: [id], onDelete: Restrict)
-  representante Usuario?     @relation("PedidoDoRepresentante", fields: [representanteId], references: [id], onDelete: SetNull)
-  criadoPor     Usuario?     @relation("PedidoCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
-  orcamento     Orcamento?   @relation(fields: [orcamentoId], references: [id], onDelete: SetNull)
+  organizacao   Organizacao          @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  fornecedor    Fornecedor           @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
+  cliente       Cliente              @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  representante Usuario?             @relation("PedidoDoRepresentante", fields: [representanteId], references: [id], onDelete: SetNull)
+  criadoPor     Usuario?             @relation("PedidoCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  orcamento     Orcamento?           @relation(fields: [orcamentoId], references: [id], onDelete: SetNull)
   itens         PedidoItem[]
   envios        EnvioPedido[]
   edicoes       PedidoEdicao[]
@@ -1208,11 +1225,11 @@ model Orcamento {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  organizacao   Organizacao     @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
-  fornecedor    Fornecedor      @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
-  cliente       Cliente?        @relation(fields: [clienteId], references: [id], onDelete: Restrict)
-  representante Usuario?        @relation("OrcamentoDoRepresentante", fields: [representanteId], references: [id], onDelete: SetNull)
-  criadoPor     Usuario?        @relation("OrcamentoCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  organizacao   Organizacao       @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  fornecedor    Fornecedor        @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
+  cliente       Cliente?          @relation(fields: [clienteId], references: [id], onDelete: Restrict)
+  representante Usuario?          @relation("OrcamentoDoRepresentante", fields: [representanteId], references: [id], onDelete: SetNull)
+  criadoPor     Usuario?          @relation("OrcamentoCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
   itens         OrcamentoItem[]
   edicoes       OrcamentoEdicao[]
   envios        EnvioOrcamento[]
@@ -1368,14 +1385,14 @@ model ContaEmail {
 /// assinatura". `usuarioId` repete o da conta para a policy ser a mesma dela:
 /// só o dono enxerga.
 model AssinaturaEmail {
-  id            String   @id @default(uuid()) @db.Uuid
-  organizacaoId String   @db.Uuid
-  usuarioId     String   @db.Uuid
-  contaId       String   @db.Uuid
+  id            String  @id @default(uuid()) @db.Uuid
+  organizacaoId String  @db.Uuid
+  usuarioId     String  @db.Uuid
+  contaId       String  @db.Uuid
   /// Só para a pessoa reconhecer na hora de enviar: "Completa", "Curta".
   nome          String
   html          String
-  padrao        Boolean  @default(false)
+  padrao        Boolean @default(false)
 
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt

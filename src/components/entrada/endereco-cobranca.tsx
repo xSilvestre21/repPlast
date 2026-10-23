@@ -1,11 +1,10 @@
 "use client";
 
-import { useRef, useState, type ChangeEvent, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 
+import { dicaDoCep, erroDoCep, lugarDoCep, useBuscaCep } from "@/components/busca-cep";
 import { CampoCep } from "@/components/campo-mascarado";
 import { Campo } from "@/components/ui";
-import { consultarCep } from "@/lib/cep";
-import { somenteDigitos } from "@/lib/mascara";
 
 /**
  * CEP, endereço, número, bairro e complemento de quem paga a assinatura.
@@ -23,46 +22,18 @@ import { somenteDigitos } from "@/lib/mascara";
  * O documento entra como filho porque divide a linha com o CEP.
  */
 
-type Busca =
-  | { tipo: "ocioso" }
-  | { tipo: "buscando" }
-  | { tipo: "achou"; cidade: string; uf: string; geral: boolean }
-  | { tipo: "inexistente" }
-  | { tipo: "indisponivel" };
-
 export function EnderecoCobranca({ documento }: { documento: ReactNode }) {
-  const [busca, setBusca] = useState<Busca>({ tipo: "ocioso" });
-  const ultimoCep = useRef("");
   const endereco = useRef<HTMLInputElement>(null);
   const numero = useRef<HTMLInputElement>(null);
   const bairro = useRef<HTMLInputElement>(null);
 
-  async function aoDigitarCep(evento: ChangeEvent<HTMLInputElement>) {
-    const cep = somenteDigitos(evento.currentTarget.value);
-    if (cep.length !== 8) {
-      ultimoCep.current = "";
-      setBusca({ tipo: "ocioso" });
-      return;
-    }
-    if (cep === ultimoCep.current) return;
-    ultimoCep.current = cep;
+  const { busca, aoDigitarCep } = useBuscaCep((achado) => {
+    if (endereco.current) endereco.current.value = achado.logradouro;
+    if (bairro.current) bairro.current.value = achado.bairro;
+    (achado.logradouro ? numero : endereco).current?.focus();
+  });
 
-    setBusca({ tipo: "buscando" });
-    const resultado = await consultarCep(cep);
-    // A pessoa já mudou o CEP enquanto a resposta vinha: esta não vale mais.
-    if (ultimoCep.current !== cep) return;
-
-    if (resultado === "inexistente") return setBusca({ tipo: "inexistente" });
-    if (resultado === null) return setBusca({ tipo: "indisponivel" });
-
-    if (endereco.current) endereco.current.value = resultado.logradouro;
-    if (bairro.current) bairro.current.value = resultado.bairro;
-    const geral = !resultado.logradouro;
-    setBusca({ tipo: "achou", cidade: resultado.cidade, uf: resultado.uf, geral });
-    (geral ? endereco : numero).current?.focus();
-  }
-
-  const lugar = busca.tipo === "achou" ? `${busca.cidade}/${busca.uf}` : "";
+  const lugar = lugarDoCep(busca);
 
   return (
     <>
@@ -73,18 +44,8 @@ export function EnderecoCobranca({ documento }: { documento: ReactNode }) {
           rotulo="CEP"
           required
           onChange={aoDigitarCep}
-          erro={
-            busca.tipo === "inexistente"
-              ? "Não achamos este CEP. Confira os números, como 12345-678."
-              : undefined
-          }
-          dica={
-            busca.tipo === "buscando"
-              ? "Buscando o endereço…"
-              : busca.tipo === "achou"
-                ? lugar
-                : undefined
-          }
+          erro={erroDoCep(busca)}
+          dica={dicaDoCep(busca)}
         />
       </div>
 

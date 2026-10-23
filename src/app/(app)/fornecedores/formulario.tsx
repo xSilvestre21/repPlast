@@ -3,11 +3,13 @@
 import { BadgeCheck, Hash, MapPin, Percent, Phone } from "lucide-react";
 import { useActionState } from "react";
 
-import { CampoCep, CampoDocumento, CampoTelefone } from "@/components/campo-mascarado";
+import { CampoDocumento, CampoTelefone } from "@/components/campo-mascarado";
+import { EnderecoPeloCep } from "@/components/endereco-pelo-cep";
 import { ErroGeral, Formulario } from "@/components/formulario";
 import { Botao, Campo, SecaoCartao } from "@/components/ui";
 
 import type { EstadoFormulario } from "./acoes";
+import { SecaoDadosPagamento } from "./dados-pagamento";
 import type { ValoresFornecedor } from "./valores";
 
 export function FormularioFornecedor({
@@ -15,12 +17,15 @@ export function FormularioFornecedor({
   valores,
   rotuloEnvio,
   editavel = true,
+  podeEditar = true,
 }: {
   acao: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   valores: ValoresFornecedor;
   rotuloEnvio: string;
   /** Ficha já gravada, aberta para leitura: tudo travado até clicar em Editar. */
   editavel?: boolean;
+  /** Se quem lê tem o Editar — o preposto não tem, e a frase não o manda clicar nele. */
+  podeEditar?: boolean;
 }) {
   const [estado, enviar, enviando] = useActionState(acao, {});
 
@@ -52,23 +57,7 @@ export function FormularioFornecedor({
         </SecaoCartao>
 
         <SecaoCartao icone={MapPin} titulo="Endereço">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Campo
-              name="endereco"
-              rotulo="Logradouro e número"
-              className="sm:col-span-2 lg:col-span-3"
-              defaultValue={valores.endereco}
-            />
-            <CampoCep name="cep" rotulo="CEP" defaultValue={valores.cep} />
-            <Campo
-              name="bairro"
-              rotulo="Bairro"
-              className="sm:col-span-2"
-              defaultValue={valores.bairro}
-            />
-            <Campo name="municipio" rotulo="Município" defaultValue={valores.municipio} />
-            <Campo name="uf" rotulo="UF" maxLength={2} defaultValue={valores.uf} placeholder="SP" />
-          </div>
+          <EnderecoPeloCep valores={valores} />
         </SecaoCartao>
 
         <SecaoCartao icone={Phone} titulo="Contato">
@@ -83,7 +72,12 @@ export function FormularioFornecedor({
             />
           </div>
         </SecaoCartao>
+      </fieldset>
 
+      {/* Fora do fieldset: ver `dados-pagamento.tsx`. */}
+      <SecaoDadosPagamento pagamento={valores.pagamento} editavel={editavel} podeEditar={podeEditar} />
+
+      <fieldset disabled={!editavel} className="space-y-5 min-w-0">
         <SecaoCartao
           icone={Percent}
           titulo="Condições comerciais"

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { AcaoComRecusa } from "@/components/acao-com-recusa";
 import { Botao, BotaoLink, Cabecalho, Selo } from "@/components/ui";
+import { dadosPagamentoDe } from "@/lib/dados-pagamento";
 import { escreverNumeroBr } from "@/lib/numero-br";
 import { escopoAtual } from "@/lib/sessao";
 
@@ -179,17 +180,21 @@ export default async function PaginaFornecedor({
           acao={atualizarFornecedor.bind(null, fornecedor.id)}
           rotuloEnvio="Salvar alterações"
           editavel={editavel}
+          podeEditar={ehAdmin}
           valores={{
             nome: fornecedor.nome,
             razaoSocial: fornecedor.razaoSocial ?? "",
             cnpj: fornecedor.cnpj ?? "",
             endereco: fornecedor.endereco ?? "",
+            numero: fornecedor.numero ?? "",
+            complemento: fornecedor.complemento ?? "",
             bairro: fornecedor.bairro ?? "",
             cep: fornecedor.cep ?? "",
             municipio: fornecedor.municipio ?? "",
             uf: fornecedor.uf ?? "",
             telefone: fornecedor.telefone ?? "",
             email: fornecedor.email ?? "",
+            pagamento: dadosPagamentoDe(fornecedor),
             ipiPercentual: escreverNumeroBr(fornecedor.ipiPercentual.toString()),
             comissaoPercentual: escreverNumeroBr(fornecedor.comissaoPercentual.toString()),
             fatorKgPadrao: fornecedor.fatorKgPadrao

@@ -154,6 +154,8 @@ export default async function PaginaCliente({
             cnpj: cliente.cnpj ?? "",
             ie: cliente.ie ?? "",
             endereco: cliente.endereco ?? "",
+            numero: cliente.numero ?? "",
+            complemento: cliente.complemento ?? "",
             bairro: cliente.bairro ?? "",
             cep: cliente.cep ?? "",
             municipio: cliente.municipio ?? "",
