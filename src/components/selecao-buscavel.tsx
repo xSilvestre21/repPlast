@@ -289,6 +289,11 @@ export function SelecaoBuscavel({
           type="text"
           role="combobox"
           autoComplete="off"
+          // É uma busca na lista: sem correção nem maiúscula automática, que
+          // trocavam o apelido digitado por outra palavra no iPhone.
+          autoCorrect="off"
+          autoCapitalize="none"
+          spellCheck={false}
           aria-expanded={aberto}
           aria-controls={idLista}
           aria-autocomplete="list"

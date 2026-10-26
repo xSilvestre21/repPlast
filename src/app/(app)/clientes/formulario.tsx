@@ -72,6 +72,7 @@ export function FormularioCliente({
             <Campo
               name="ie"
               rotulo="Inscrição estadual"
+              autoCapitalize="characters"
               defaultValue={valores.ie}
               placeholder="123.456.789.012"
             />

@@ -262,6 +262,10 @@ export function ListaProdutos({
               />
               <input
                 type="search"
+                enterKeyHint="search"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 name="busca"
                 autoComplete="off"
                 value={filtros.busca}

@@ -602,6 +602,7 @@ export function FormularioProduto({
             <Campo
               name="codigoFornecedor"
               rotulo="Código na indústria"
+              autoCapitalize="characters"
               dica="Sai na coluna COD.FORN do pedido."
               value={campos.codigoFornecedor}
               onChange={(e) => alterar("codigoFornecedor")(e.target.value)}
@@ -610,6 +611,7 @@ export function FormularioProduto({
             <Campo
               name="codigoCliente"
               rotulo="Código no cliente"
+              autoCapitalize="characters"
               dica="Sai na coluna COD.CLI. Opcional — nem todo cliente numera o que compra."
               value={campos.codigoCliente}
               onChange={(e) => alterar("codigoCliente")(e.target.value)}
@@ -984,6 +986,10 @@ export function FormularioProduto({
                   />
                   <input
                     type="search"
+                    enterKeyHint="search"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     autoComplete="off"
                     value={buscaAditivo}
                     onChange={(e) => setBuscaAditivo(e.target.value)}

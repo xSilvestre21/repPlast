@@ -72,6 +72,10 @@ export function ListaClientesDoPreposto({
           />
           <input
             type="search"
+            enterKeyHint="search"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             placeholder="Nome, razão social ou cidade"

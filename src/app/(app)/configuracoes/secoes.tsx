@@ -177,6 +177,10 @@ export function SecoesConfiguracao({
               />
               <input
                 type="search"
+                enterKeyHint="search"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 autoComplete="off"
                 value={busca}
                 onChange={(evento) => setBusca(evento.target.value)}

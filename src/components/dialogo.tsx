@@ -15,6 +15,8 @@
 import { X } from "lucide-react";
 import { type ReactNode, useEffect, useRef } from "react";
 
+import { abrirModal } from "./modal";
+
 export function Dialogo({
   aberto,
   aoFechar,
@@ -38,7 +40,8 @@ export function Dialogo({
     if (!dialogo) return;
 
     if (aberto && !dialogo.open) {
-      dialogo.showModal();
+      // Sem campo marcado, o foco fica na caixa, e não no X (`modal.ts`).
+      abrirModal(dialogo);
       /*
        * O `showModal()` põe o foco no primeiro elemento focável — que é o X de
        * fechar, no cabeçalho. Quem abre um formulário e já sai digitando

@@ -107,7 +107,8 @@ describe("apuração no celular em pé", () => {
     await page.getByRole("button", { name: /acertar/ }).click();
     const folha = page.getByRole("dialog");
     await folha.getByRole("button", { name: "Parcelar o recebimento" }).click();
-    await folha.getByLabelText("Dias a partir da entrega").fill("28/35/42");
+    // Com vírgula, como se digita no teclado do iPhone.
+    await folha.getByLabelText(/^Dias a partir da entrega/).fill("28,35,42");
     await folha.getByRole("button", { name: "Dividir em partes iguais" }).click();
 
     await expect.element(folha.getByText("restante")).toBeVisible();

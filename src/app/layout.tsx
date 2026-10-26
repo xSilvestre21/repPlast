@@ -58,6 +58,10 @@ export const metadata: Metadata = {
  * qualquer script rodar.
  */
 export const viewport: Viewport = {
+  // No Android, o teclado encolhe a página em vez de cobri-la: a folha que
+  // sobe de baixo e o campo focado ficam acima dele. O iPhone ignora isto —
+  // lá quem faz a conta é a própria folha (`folha-de-baixo.tsx`).
+  interactiveWidget: "resizes-content",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#fbfbfc" },
     { media: "(prefers-color-scheme: dark)", color: "#0b0b0f" },

@@ -63,6 +63,8 @@ export function CampoMascarado({
   defaultValue,
   onChange,
   onKeyDown,
+  onSelect,
+  onFocus,
   cursorNoFim = false,
   conteudo = EH_DIGITO,
   ...props
@@ -147,9 +149,36 @@ export function CampoMascarado({
     if (posicao !== selectionStart) alvo.setSelectionRange(posicao, posicao);
   }
 
+  /**
+   * No dinheiro, o cursor mora no fim — também depois de um toque no meio.
+   *
+   * O `aoTeclar` acima segura isso no computador, pela tecla. No celular não
+   * dá: o teclado virtual do Android manda toda tecla como "Unidentified", e o
+   * dígito tocado no meio de "1.234,56" entrava ali — e a máscara montava outro
+   * número. Aqui é pela posição do cursor, que vale para qualquer teclado: ao
+   * focar e a cada mudança de seleção, sem trecho selecionado, ele volta ao
+   * fim. Um quadro depois, porque o iOS reposiciona o cursor depois do toque.
+   */
+  function manterNoFim(alvo: HTMLInputElement) {
+    requestAnimationFrame(() => {
+      const fim = alvo.value.length;
+      if (document.activeElement !== alvo) return;
+      if (alvo.selectionStart !== alvo.selectionEnd) return;
+      if (alvo.selectionStart !== fim) alvo.setSelectionRange(fim, fim);
+    });
+  }
+
   return (
     <Campo
       {...props}
+      onSelect={(evento) => {
+        onSelect?.(evento);
+        if (cursorNoFim) manterNoFim(evento.currentTarget);
+      }}
+      onFocus={(evento) => {
+        onFocus?.(evento);
+        if (cursorNoFim) manterNoFim(evento.currentTarget);
+      }}
       /*
        * O valor que vem do banco também passa pela máscara: cadastro antigo,
        * gravado antes dela existir, aparece pontuado do mesmo jeito.

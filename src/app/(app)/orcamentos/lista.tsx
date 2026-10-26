@@ -216,6 +216,10 @@ export function ListaOrcamentos({
               />
               <input
                 type="search"
+                enterKeyHint="search"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 name="busca"
                 // O Chrome reclama de campo sem identificação ("A form field
                 // element should have an id or name attribute") e tenta

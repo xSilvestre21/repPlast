@@ -24,6 +24,7 @@ import { AlternadorTema } from "./alternador-tema";
 import { NomeQueCabe } from "./nome-que-cabe";
 import { chegarPilula, partir } from "./viagem";
 import { Avatar } from "./ui";
+import { abrirModal } from "./modal";
 
 /**
  * Avatar, seta e o menu que ele abre.
@@ -318,7 +319,8 @@ function MenuCelular({
   useEffect(() => {
     const elemento = gaveta.current;
     if (!elemento) return;
-    if (aberto && !elemento.open) elemento.showModal();
+    // O foco fica na caixa, e não no X de fechar (`modal.ts`).
+    if (aberto && !elemento.open) abrirModal(elemento);
     if (!aberto && elemento.open) elemento.close();
   }, [aberto]);
 

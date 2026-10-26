@@ -117,7 +117,15 @@ export function Campo({
     <label className={`block ${className}`}>
       <Rotulo>{rotulo}</Rotulo>
       <div className="relative">
+        {/*
+          Sem correção automática nem sublinhado de ortografia: num cadastro
+          ela só estraga — o iPhone trocava "PEAD" por "Pead" e reescrevia
+          código e sigla. Texto corrido (observações) é a `AreaTexto`, que
+          continua com ela.
+        */}
         <input
+          autoCorrect="off"
+          spellCheck={false}
           {...props}
           defaultValue={defaultValue as ComponentProps<"input">["defaultValue"]}
           aria-invalid={erro ? true : undefined}

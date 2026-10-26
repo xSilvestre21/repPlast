@@ -465,6 +465,28 @@ body {
 }
 
 /**
+ * Janela aberta: a página por trás não rola.
+ *
+ * O `<dialog>` modal deixa o resto da página inerte para o clique, mas não
+ * para a rolagem — no iPhone, o dedo que escorregava fora da folha arrastava a
+ * lista por trás. `scrollbar-gutter` guarda o lugar da barra de rolagem que some,
+ * para a página não pular de lado no computador.
+ */
+html:has(dialog:modal) {
+  overflow: hidden;
+  scrollbar-gutter: stable;
+}
+
+/*
+ * A caixa da janela recebe o foco ao abrir (`components/modal.ts`), para ele
+ * não cair no X. Ela não ganha anel: quem usa teclado vê o anel a partir do
+ * primeiro Tab, nos botões de dentro.
+ */
+dialog:focus-visible {
+  outline: none;
+}
+
+/**
  * Foco visível no azul interativo.
  *
  * Fica por FORA do elemento, então nunca é engolido pelo canto arredondado —
@@ -839,11 +861,13 @@ body {
 .gaveta {
   inset: 0 auto 0 0;
   border-radius: 0 1.25rem 1.25rem 0;
+  overscroll-behavior: contain;
   transition:
     translate 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
     overlay 260ms allow-discrete,
     display 260ms allow-discrete;
-  translate: 0 0;
+  /* `none`, e não `0 0`: parado, nenhum deslocamento. Ver `.folha-de-baixo`. */
+  translate: none;
 }
 
 @starting-style {
@@ -868,11 +892,21 @@ body {
   max-height: 88dvh;
   border-radius: 1.25rem 1.25rem 0 0;
   padding-bottom: env(safe-area-inset-bottom);
+  overscroll-behavior: contain;
+  /*
+   * A curva e o tempo da folha do iOS, como o Vaul os mede: arranca rápido e
+   * pousa devagar, em meio segundo. A de 260ms de antes chegava seca.
+   */
   transition:
-    translate 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    overlay 260ms allow-discrete,
-    display 260ms allow-discrete;
-  translate: 0 0;
+    translate 500ms cubic-bezier(0.32, 0.72, 0, 1),
+    overlay 500ms allow-discrete,
+    display 500ms allow-discrete;
+  /*
+   * `none`, e não `0 0`. Parada, a folha não pode ter deslocamento nenhum: no
+   * iOS, campo dentro de elemento com `translate` desenha o cursor fora do
+   * lugar — o traço piscando aparecia fora da caixa do valor da parcela.
+   */
+  translate: none;
 }
 
 @starting-style {

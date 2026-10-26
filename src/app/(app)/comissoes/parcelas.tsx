@@ -166,7 +166,7 @@ export function EditorParcelas({
   function dividir() {
     const lidos = lerPrazoEmDias(dias);
     if (!lidos || lidos.length < 2) {
-      setErroDias('Escreva os dias de cada parcela a partir da entrega, como "0/20" ou "28/35/42".');
+      setErroDias('Escreva os dias de cada parcela a partir da entrega, como "28/35/42" ou "28,35,42".');
       return;
     }
     setErroDias(null);
@@ -238,7 +238,11 @@ export function EditorParcelas({
             }
           }}
           placeholder="28/35/42"
-          inputMode="numeric"
+          // "decimal", e não "numeric": o teclado numérico do iPhone não tem a
+          // barra. Com este vem a vírgula, e "28,35,42" lê igual
+          // (`lerPrazoEmDias` aceita qualquer separador).
+          inputMode="decimal"
+          dica="No celular, a vírgula separa também: 28,35,42."
           autoComplete="off"
           className="basis-48 grow"
         />

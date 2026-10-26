@@ -192,6 +192,10 @@ export function ListaClientes({
             />
             <input
               type="search"
+              enterKeyHint="search"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               name="busca"
               autoComplete="off"
               value={busca}
