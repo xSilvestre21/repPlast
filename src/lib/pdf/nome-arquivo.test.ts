@@ -10,7 +10,7 @@ import { nomeArquivoPedido, nomeArquivoRelatorio } from "./nome-arquivo";
 const emUtc = (iso: string) => new Date(`${iso}T12:00:00Z`);
 
 describe("nome do arquivo do pedido", () => {
-  it("a amostra abre com AMOSTRA, para não se confundir com o pedido de venda", () => {
+  it("a amostra traz AMOSTRA logo depois do número, que continua na frente", () => {
     expect(
       nomeArquivoPedido({
         numero: 2260,
@@ -19,7 +19,7 @@ describe("nome do arquivo do pedido", () => {
         prazoEntrega: emUtc("2026-10-09"),
         amostra: true,
       }),
-    ).toBe("AMOSTRA-2260-ORION-09-10-2026.pdf");
+    ).toBe("2260-AMOSTRA-ORION-09-10-2026.pdf");
   });
 
   it("reproduz os quatro nomes reais", () => {
