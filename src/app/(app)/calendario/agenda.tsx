@@ -132,7 +132,7 @@ export function Agenda({
                   type="button"
                   aria-pressed={ligado}
                   onClick={() => definir(ligado ? "nao" : "sim")}
-                  className={`chip cursor-pointer transition-[opacity,box-shadow] duration-200 ${
+                  className={`chip pointer-coarse:py-2.5 cursor-pointer transition-[opacity,box-shadow] duration-200 ${
                     ligado ? "" : "opacity-55 shadow-none"
                   }`}
                 >

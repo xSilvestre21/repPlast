@@ -465,9 +465,11 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
                 </div>
               </div>
 
+              {/* No celular em pé, cada pedido vira cartão (`.tabela-cartoes`). */}
               <Tabela
                 colunas={colunas}
                 larguraMinima="min-w-200"
+                className="tabela-cartoes"
                 rodape={<TotalDaIndustria resumo={resumo} ehAdmin={ehAdmin} />}
               >
                 {doFornecedor.map((pedido) => (
@@ -515,13 +517,19 @@ function TotalDaIndustria({
   return (
     <tr className="font-semibold">
       {/* Pedido, Cliente, Prazo, Entregue — e o %, quando a coluna existe. */}
-      <Celula colSpan={ehAdmin ? 5 : 4}>Total</Celula>
-      <Celula alinhamento="numero">{formatarMoeda(previsto.toString())}</Celula>
-      <Celula alinhamento="numero">
+      <Celula colSpan={ehAdmin ? 5 : 4} data-area="total">
+        Total
+      </Celula>
+      <Celula alinhamento="numero" data-area="previsto" data-rotulo="Previsto">
+        {formatarMoeda(previsto.toString())}
+      </Celula>
+      <Celula alinhamento="numero" data-area="recebido" data-rotulo="Recebido">
         {algumAcerto ? formatarMoeda(recebido.toString()) : <span className="text-tinta-3">—</span>}
       </Celula>
       <Celula
         alinhamento="numero"
+        data-area="diferenca"
+        data-rotulo="Diferença"
         className={
           !algumAcerto || diferenca.isZero()
             ? ""

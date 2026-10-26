@@ -145,7 +145,7 @@ export function SecaoContatos({
                     <button
                       type="button"
                       onClick={() => setLinhas((atuais) => atuais.filter((l) => l.chave !== linha.chave))}
-                      className="justify-self-end size-8 grid place-items-center rounded-full text-tinta-3 hover:text-perigo hover:bg-perigo-fraco cursor-pointer"
+                      className="relative alvo-toque justify-self-end size-8 grid place-items-center rounded-full text-tinta-3 hover:text-perigo hover:bg-perigo-fraco cursor-pointer"
                       aria-label={`Tirar ${linha.email || "este contato"}`}
                     >
                       <Trash2 size={15} aria-hidden="true" />

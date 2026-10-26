@@ -31,6 +31,7 @@ import {
   type Familia,
   type UnidadeVenda,
   precoUnitario,
+  rotuloColunaPreco,
   rotuloPrecoDosItens,
   unidadesDoItem,
 } from "@/lib/produto-preco";
@@ -175,8 +176,11 @@ export function SecaoItens({
           </EstadoVazio>
         </div>
       ) : (
+        // No celular em pé, cada item vira cartão (`.tabela-itens`, em
+        // `globals.css`): na tabela cabiam o código e a descrição quebrada em
+        // quatro linhas, e a quantidade, o preço e o total ficavam à direita.
         <Tabela
-          className="mb-4"
+          className="mb-4 tabela-cartoes tabela-itens"
           colunas={[
             { rotulo: "COD.FORN" },
             { rotulo: "COD.CLI" },
@@ -300,6 +304,8 @@ function LinhaItem({
   semPreco: boolean;
 }) {
   const [estado, enviar, salvando] = useActionState(atualizar, {});
+  // No cartão do celular, cada linha diz o preço na unidade dela.
+  const rotuloPreco = rotuloColunaPreco(item.familia, item.unidade);
 
   /*
    * A caixa recusada fica vermelha e volta com o que foi digitado. Sem o valor
@@ -353,9 +359,13 @@ function LinhaItem({
   return (
     <Fragment>
     <tr>
-      <Celula className="numerico text-tinta-2">{item.codigoFornecedor ?? "—"}</Celula>
-      <Celula className="numerico text-tinta-2">{item.codigoCliente ?? ""}</Celula>
-      <Celula className="font-mono text-mini">
+      <Celula data-area="codforn" data-rotulo="Cód. indústria" className="numerico text-tinta-2">
+        {item.codigoFornecedor ?? "—"}
+      </Celula>
+      <Celula data-area="codcli" data-rotulo="Cód. cliente" className="numerico text-tinta-2">
+        {item.codigoCliente ?? ""}
+      </Celula>
+      <Celula data-area="descricao" className="font-mono text-mini">
         {item.descricao}
         {item.cadastrarEm && (
           <Link
@@ -369,7 +379,7 @@ function LinhaItem({
 
       {editavel ? (
         <>
-          <Celula alinhamento="numero">
+          <Celula alinhamento="numero" data-area="qnt" data-rotulo="Quantidade">
             <form action={enviar} id={`item-${item.id}`}>
               <input type="hidden" name="itemId" value={item.id} />
               {/*
@@ -387,15 +397,17 @@ function LinhaItem({
                 aria-label="Quantidade"
                 aria-invalid={comErro("quantidade") ? true : undefined}
                 aria-describedby={estado.erro ? idErro : undefined}
-                className={`${CLASSE_CONTROLE_CELULA} w-20 text-right numerico ${
+                className={`${CLASSE_CONTROLE_CELULA} w-20 max-sm:w-full text-right numerico ${
                   comErro("quantidade") ? CLASSE_ERRO : ""
                 }`}
               />
             </form>
           </Celula>
-          <Celula className="text-tinta-2">{ROTULO_UNIDADE[item.unidade]}</Celula>
+          <Celula data-area="un" data-rotulo="Unidade" className="text-tinta-2">
+            {ROTULO_UNIDADE[item.unidade]}
+          </Celula>
           {!semPreco && (
-          <Celula alinhamento="numero">
+          <Celula alinhamento="numero" data-area="preco" data-rotulo={rotuloPreco}>
             <input
               form={`item-${item.id}`}
               name="precoUnitario"
@@ -407,7 +419,7 @@ function LinhaItem({
               aria-label="Preço unitário"
               aria-invalid={comErro("precoUnitario") ? true : undefined}
               aria-describedby={estado.erro ? idErro : undefined}
-              className={`${CLASSE_CONTROLE_CELULA} w-28 text-right numerico ${
+              className={`${CLASSE_CONTROLE_CELULA} w-28 max-sm:w-full text-right numerico ${
                 comErro("precoUnitario") ? CLASSE_ERRO : ""
               }`}
             />
@@ -416,15 +428,25 @@ function LinhaItem({
         </>
       ) : (
         <>
-          <Celula alinhamento="numero">{escreverNumeroBr(item.quantidade, 0)}</Celula>
-          <Celula className="text-tinta-2">{ROTULO_UNIDADE[item.unidade]}</Celula>
-          {!semPreco && <Celula alinhamento="numero">{formatarMoeda(item.precoUnitario)}</Celula>}
+          <Celula alinhamento="numero" data-area="qnt" data-rotulo="Quantidade">
+            {escreverNumeroBr(item.quantidade, 0)}
+          </Celula>
+          <Celula data-area="un" data-rotulo="Unidade" className="text-tinta-2">
+            {ROTULO_UNIDADE[item.unidade]}
+          </Celula>
+          {!semPreco && (
+            <Celula alinhamento="numero" data-area="preco" data-rotulo={rotuloPreco}>
+              {formatarMoeda(item.precoUnitario)}
+            </Celula>
+          )}
         </>
       )}
 
       {!semPreco && (
       <>
-      <Celula alinhamento="numero">{formatarMoeda(item.totalSemIpi)}</Celula>
+      <Celula alinhamento="numero" data-area="totsemipi" data-rotulo="Total s/ IPI">
+        {formatarMoeda(item.totalSemIpi)}
+      </Celula>
       {/*
         A caixa fica NA COLUNA DO IPI, e não numa coluna nova.
 
@@ -433,10 +455,10 @@ function LinhaItem({
         extra só para a caixa empurraria a tabela para a rolagem horizontal no
         celular sem dizer nada a mais.
       */}
-      <Celula alinhamento="numero" className="text-tinta-2">
+      <Celula alinhamento="numero" data-area="ipi" data-rotulo="IPI" className="text-tinta-2">
         {editavel ? (
           <label
-            className="flex items-center justify-end gap-2 cursor-pointer"
+            className="flex items-center justify-end max-sm:justify-start gap-2 cursor-pointer"
             title={item.comIpi ? "Tributado. Desmarque para isentar." : "Isento de IPI."}
           >
             <input
@@ -470,12 +492,14 @@ function LinhaItem({
           formatarMoeda(item.valorIpi)
         )}
       </Celula>
-      <Celula alinhamento="numero">{formatarMoeda(item.total)}</Celula>
+      <Celula alinhamento="numero" data-area="total" data-rotulo="Total">
+        {formatarMoeda(item.total)}
+      </Celula>
       </>
       )}
 
       {editavel && (
-        <Celula alinhamento="acao">
+        <Celula alinhamento="acao" data-area="acao">
           <AcaoComRecusa
             acao={remover}
             confirmar={{
@@ -508,7 +532,7 @@ function LinhaItem({
     */}
     {estado.erro && (
       <tr>
-        <td colSpan={colunas} className="px-3 pb-2.5">
+        <td colSpan={colunas} data-area="linha" className="px-3 pb-2.5">
           <p id={idErro} role="alert" className="text-mini text-perigo max-w-2xl">
             {estado.erro}
           </p>

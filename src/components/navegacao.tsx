@@ -329,7 +329,7 @@ function MenuCelular({
   ];
 
   const ITEM =
-    "flex items-center gap-3 rounded-suave px-3 py-2.5 text-corpo transition-colors";
+    "flex items-center gap-3 rounded-suave px-3 py-2.5 baixa:py-1.5 text-corpo transition-colors";
 
   return (
     <div className="md:hidden">
@@ -375,7 +375,7 @@ function MenuCelular({
 
             <nav aria-label="Principal" className="flex-1 overflow-y-auto px-3 py-3">
               {grupos.map(({ titulo, itens: doGrupo }) => (
-                <div key={titulo ?? "inicio"} className={titulo ? "mt-4" : ""}>
+                <div key={titulo ?? "inicio"} className={titulo ? "mt-4 baixa:mt-2" : ""}>
                   {titulo && <p className="rotulo px-3 mb-1 text-tinta-3">{titulo}</p>}
                   <ul className="space-y-0.5">
                     {doGrupo.map((item) => {
@@ -405,7 +405,7 @@ function MenuCelular({
                 </div>
               ))}
 
-              <div className="mt-4 border-t border-filete pt-4">
+              <div className="mt-4 baixa:mt-2 border-t border-filete pt-4 baixa:pt-2">
                 <p className="rotulo px-3 mb-1 text-tinta-3">Mais</p>
                 <ul className="space-y-0.5">
                   {itensMenu.map((item) => {

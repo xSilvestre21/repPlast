@@ -240,7 +240,7 @@ function BotaoAcao({
       disabled={desabilitado}
       aria-label={rotulo}
       title={rotulo}
-      className={`grid place-items-center size-8 rounded-full transition-colors cursor-pointer disabled:opacity-40 ${
+      className={`relative alvo-toque grid place-items-center size-8 rounded-full transition-colors cursor-pointer disabled:opacity-40 ${
         destaque
           ? "text-verde hover:bg-verde-fraco"
           : perigoso

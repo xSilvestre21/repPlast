@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Mono, Plus_Jakarta_Sans } from "next/font/google";
 
 import { SCRIPT_TEMA } from "@/components/alternador-tema";
@@ -36,6 +36,32 @@ const mono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "RepPlast",
   description: "Pedidos e comissões para representantes de embalagens plásticas",
+  /*
+   * Instalado na tela inicial do iPhone, abre em tela cheia com o nome
+   * "RepPlast" embaixo do ícone (`apple-icon.png`). O Android lê o mesmo do
+   * manifesto (`manifest.ts`).
+   */
+  appleWebApp: {
+    capable: true,
+    title: "RepPlast",
+    statusBarStyle: "default",
+  },
+};
+
+/**
+ * A cor da barra do navegador e da barra de status do app instalado: o
+ * `--papel` de cada tema (`globals.css`), para a barra emendar no fundo da
+ * página em vez de aparecer como uma faixa de outra cor.
+ *
+ * Segue o tema do aparelho. Quem escolheu o tema no sistema diferente do
+ * aparelho vê a barra na cor do aparelho — o navegador lê esta tag antes de
+ * qualquer script rodar.
+ */
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fbfbfc" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0b0f" },
+  ],
 };
 
 /**

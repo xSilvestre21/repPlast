@@ -486,7 +486,7 @@ function FormEnvio({
                 type="button"
                 onClick={() => setAnexos((atual) => atual.filter((_, j) => j !== i))}
                 aria-label={`Tirar ${arquivo.name}`}
-                className="size-7 grid place-items-center rounded-full text-tinta-3 hover:text-perigo hover:bg-perigo-fraco cursor-pointer"
+                className="relative alvo-toque size-7 grid place-items-center rounded-full text-tinta-3 hover:text-perigo hover:bg-perigo-fraco cursor-pointer"
               >
                 <X size={14} aria-hidden="true" />
               </button>

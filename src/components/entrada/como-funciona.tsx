@@ -448,7 +448,7 @@ export function ComoFunciona() {
             >
               <span className="flex items-center gap-3">
                 <span
-                  className={`grid place-items-center size-8 rounded-full transition-colors ${
+                  className={`relative alvo-toque grid place-items-center size-8 rounded-full transition-colors ${
                     selecionada ? "bg-tinta text-papel" : "bg-folha-2 text-tinta-2"
                   }`}
                   aria-hidden="true"

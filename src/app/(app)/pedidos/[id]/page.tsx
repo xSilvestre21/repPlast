@@ -40,6 +40,7 @@ import { AcaoPedido, CancelarPedido, MotivoDoCancelamento } from "./acoes-status
 import { SecaoCabecalho } from "./cabecalho";
 import { BotaoEnviarEmail } from "./envio";
 import { SecaoItens } from "@/components/itens-documento";
+import { MaisAcoes } from "@/components/mais-acoes";
 import { Pagina } from "@/components/pagina";
 import { enderecoCompleto } from "@/lib/endereco";
 import { nomeCompleto } from "@/lib/nome-usuario";
@@ -218,60 +219,46 @@ export default async function PaginaPedido({
         }
         acao={
           <div className="flex flex-wrap gap-2 items-start">
-          {temItens && (
-            <>
-              {/*
-                Baixa direto, com o nome que a rota já monta (`2276-LYRA-…pdf`),
-                como no orçamento. O `download` faz o Link deixar o clique com o
-                navegador em vez de tentar navegar para a rota do arquivo.
-              */}
-              <BotaoLink
-                href={`/pedidos/${pedido.id}/pdf`}
-                download
-                prefetch={false}
-                variante="secundaria"
-                icone={FileDown}
-              >
-                Baixar PDF
-              </BotaoLink>
-
-              {pedido.status !== "CANCELADO" && (
-                <BotaoEnviarEmail
-                  jaEnviado={pedido.status === "ENVIADO"}
-                  aConferir={aConferir}
-                  acao={enviarPedidoPorEmail.bind(null, pedido.id)}
-                  contas={contas}
-                  contatos={pedido.fornecedor.contatos}
-                  fornecedor={{ id: pedido.fornecedor.id, nome: pedido.fornecedor.nome }}
-                  editaIndustria={ehAdmin}
-                  cliente={{
-                    apelido: pedido.cliente.apelido,
-                    email: pedido.cliente.email ?? pedido.cliente.emailNfe,
-                  }}
-                  textoPadrao={textoPadraoDoEnvio(
-                    {
-                      numero: pedido.numero,
-                      razaoSocialCliente: pedido.cliente.razaoSocial,
-                      cnpjCliente: pedido.cliente.cnpj,
-                      pedidoDoCliente: pedido.pedidoDoCliente,
-                      vendedor: pedido.vendedor,
-                      amostra: pedido.amostra,
-                    },
-                    {
-                      assunto: modeloEnvio?.assuntoEnvioPadrao,
-                      corpo: modeloEnvio?.mensagemEnvioPadrao,
-                    },
-                  )}
-                  nomeArquivoPdf={nomeArquivoPedido({
+          {/*
+            À vista, as ações do dia a dia: mandar, marcar como enviado e
+            editar. As outras ficam no "Mais ações" do celular (`MaisAcoes`);
+            no computador continuam todas na linha.
+          */}
+          {temItens && pedido.status !== "CANCELADO" && (
+              <BotaoEnviarEmail
+                jaEnviado={pedido.status === "ENVIADO"}
+                aConferir={aConferir}
+                acao={enviarPedidoPorEmail.bind(null, pedido.id)}
+                contas={contas}
+                contatos={pedido.fornecedor.contatos}
+                fornecedor={{ id: pedido.fornecedor.id, nome: pedido.fornecedor.nome }}
+                editaIndustria={ehAdmin}
+                cliente={{
+                  apelido: pedido.cliente.apelido,
+                  email: pedido.cliente.email ?? pedido.cliente.emailNfe,
+                }}
+                textoPadrao={textoPadraoDoEnvio(
+                  {
                     numero: pedido.numero,
-                    apelidoCliente: pedido.cliente.apelido,
+                    razaoSocialCliente: pedido.cliente.razaoSocial,
+                    cnpjCliente: pedido.cliente.cnpj,
                     pedidoDoCliente: pedido.pedidoDoCliente,
-                    prazoEntrega: pedido.prazoEntrega,
+                    vendedor: pedido.vendedor,
                     amostra: pedido.amostra,
-                  })}
-                />
-              )}
-            </>
+                  },
+                  {
+                    assunto: modeloEnvio?.assuntoEnvioPadrao,
+                    corpo: modeloEnvio?.mensagemEnvioPadrao,
+                  },
+                )}
+                nomeArquivoPdf={nomeArquivoPedido({
+                  numero: pedido.numero,
+                  apelidoCliente: pedido.cliente.apelido,
+                  pedidoDoCliente: pedido.pedidoDoCliente,
+                  prazoEntrega: pedido.prazoEntrega,
+                  amostra: pedido.amostra,
+                })}
+              />
           )}
 
           {aberto && !editavel && (
@@ -282,31 +269,6 @@ export default async function PaginaPedido({
             >
               Editar
             </BotaoLink>
-          )}
-
-          {editavel && (
-            <AcaoPedido
-              rotulo={pedido.amostra ? "Deixar de ser amostra" : "Tornar amostra"}
-              rotuloOcupado="Alterando…"
-              variante="secundaria"
-              icone="amostra"
-              confirmacao={
-                pedido.amostra
-                  ? {
-                      titulo: `O pedido ${pedido.numero} deixa de ser amostra?`,
-                      texto:
-                        "Os itens voltam a ter o preço do cadastro do produto, e o pedido passa a contar " +
-                        "na comissão quando for marcado como enviado. Confira os preços antes de enviar.",
-                    }
-                  : {
-                      titulo: `Tornar o pedido ${pedido.numero} uma amostra?`,
-                      texto:
-                        "Os preços dos itens serão zerados, e o PDF sai como pedido de amostra, sem custo. " +
-                        "Amostra não conta na comissão, nas metas nem nos gráficos.",
-                    }
-              }
-              acao={alternarAmostra.bind(null, pedido.id)}
-            />
           )}
 
           {pedido.status === "ABERTO" && temItens && (
@@ -347,14 +309,7 @@ export default async function PaginaPedido({
             />
           )}
 
-          <AcaoPedido
-            rotulo="Duplicar"
-            rotuloOcupado="Duplicando…"
-            icone="duplicar"
-            acao={duplicarPedido.bind(null, pedido.id)}
-          />
-
-          {pedido.status === "CANCELADO" ? (
+          {pedido.status === "CANCELADO" && (
             <AcaoPedido
               rotulo="Reabrir"
               rotuloOcupado="Reabrindo…"
@@ -367,23 +322,76 @@ export default async function PaginaPedido({
               }}
               acao={reabrirPedido.bind(null, pedido.id)}
             />
-          ) : (
-            <CancelarPedido acao={cancelarPedido.bind(null, pedido.id)} />
           )}
 
-          {!pedido.enviadoEm && (
+          <MaisAcoes titulo={`Pedido ${pedido.numero}`}>
+            {/*
+              Baixa direto, com o nome que a rota já monta (`2276-LYRA-…pdf`),
+              como no orçamento. O `download` faz o Link deixar o clique com o
+              navegador em vez de tentar navegar para a rota do arquivo.
+            */}
+            {temItens && (
+              <BotaoLink
+                href={`/pedidos/${pedido.id}/pdf`}
+                download
+                prefetch={false}
+                variante="secundaria"
+                icone={FileDown}
+              >
+                Baixar PDF
+              </BotaoLink>
+            )}
+
+            {editavel && (
+              <AcaoPedido
+                rotulo={pedido.amostra ? "Deixar de ser amostra" : "Tornar amostra"}
+                rotuloOcupado="Alterando…"
+                variante="secundaria"
+                icone="amostra"
+                confirmacao={
+                  pedido.amostra
+                    ? {
+                        titulo: `O pedido ${pedido.numero} deixa de ser amostra?`,
+                        texto:
+                          "Os itens voltam a ter o preço do cadastro do produto, e o pedido passa a contar " +
+                          "na comissão quando for marcado como enviado. Confira os preços antes de enviar.",
+                      }
+                    : {
+                        titulo: `Tornar o pedido ${pedido.numero} uma amostra?`,
+                        texto:
+                          "Os preços dos itens serão zerados, e o PDF sai como pedido de amostra, sem custo. " +
+                          "Amostra não conta na comissão, nas metas nem nos gráficos.",
+                      }
+                }
+                acao={alternarAmostra.bind(null, pedido.id)}
+              />
+            )}
+
             <AcaoPedido
-              rotulo="Apagar"
-              rotuloOcupado="Apagando…"
-              variante="perigo"
-              icone="apagar"
-              confirmacao={{
-                titulo: `Apagar o pedido ${pedido.numero}?`,
-                texto: avisoApagar,
-              }}
-              acao={excluirPedido.bind(null, pedido.id)}
+              rotulo="Duplicar"
+              rotuloOcupado="Duplicando…"
+              icone="duplicar"
+              acao={duplicarPedido.bind(null, pedido.id)}
             />
-          )}
+
+            {pedido.status !== "CANCELADO" && (
+              <CancelarPedido acao={cancelarPedido.bind(null, pedido.id)} />
+            )}
+
+            {!pedido.enviadoEm && (
+              <AcaoPedido
+                rotulo="Apagar"
+                rotuloOcupado="Apagando…"
+                variante="perigo"
+                icone="apagar"
+                confirmacao={{
+                  titulo: `Apagar o pedido ${pedido.numero}?`,
+                  texto: avisoApagar,
+                }}
+                acao={excluirPedido.bind(null, pedido.id)}
+              />
+            )}
+          </MaisAcoes>
           </div>
         }
       />

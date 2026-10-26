@@ -27,7 +27,7 @@ export const MAXIMO_DE_PILULAS = 6;
 export type IndustriaDoFiltro = { id: string; nome: string; pedidos: number };
 
 const PILULA =
-  "inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-mini font-semibold " +
+  "inline-flex items-center gap-1.5 px-3 py-1 pointer-coarse:py-2.5 rounded-full border text-mini font-semibold " +
   "whitespace-nowrap transition-colors duration-200";
 const ATIVA = "border-filete bg-folha text-tinta shadow-suave";
 const INATIVA = "border-transparent bg-folha-2 text-tinta-2 hover:text-tinta";

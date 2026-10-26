@@ -89,7 +89,7 @@ export function CartaoGrafico({
   }
 
   const BOTAO =
-    "grid place-items-center size-8 rounded-full text-tinta-3 hover:text-tinta hover:bg-folha-2 " +
+    "relative alvo-toque grid place-items-center size-8 rounded-full text-tinta-3 hover:text-tinta hover:bg-folha-2 " +
     "transition-colors cursor-pointer";
 
   const cartao = (

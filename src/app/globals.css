@@ -1,6 +1,13 @@
 @import "tailwindcss";
 
 /*
+ * Tela baixa: o celular deitado, com uns 340px de altura. Ali o título grande
+ * de cada tela e o espaçamento folgado do menu comiam metade da altura — no
+ * menu lateral cabiam 4 itens. `baixa:` aperta só o que é vertical.
+ */
+@custom-variant baixa (@media (max-height: 30rem));
+
+/*
  * Luz & Superfície — identidade visual do RepPlast.
  *
  * O sistema é um SaaS e é isso que a tela diz. Fundo claro quase branco, um
@@ -404,6 +411,60 @@ body {
 }
 
 /**
+ * Ficha em leitura, no celular: o campo travado vira texto.
+ *
+ * Cliente, indústria, preposto e produto abrem para leitura dentro de um
+ * `<fieldset disabled>` (ver os `formulario.tsx`). No computador a cara de
+ * campo travado ajuda a ver que basta clicar em Editar; no celular, uma
+ * pilha de caixas cinza esmaecidas, cada uma com o rótulo em cima, é uma
+ * rolagem longa de algo que parece formulário. Aqui o rótulo continua em cima
+ * e o valor fica como texto pleno — a leitura de uma ficha, não de um cadastro.
+ */
+@media (max-width: 639.98px) {
+  fieldset:disabled :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    padding-inline: 0;
+    padding-block: 0.125rem;
+    opacity: 1;
+    color: var(--tinta);
+    -webkit-text-fill-color: var(--tinta);
+    resize: none;
+  }
+  /* O exemplo do campo vazio ("Rua, avenida…") lido como valor confundia. */
+  fieldset:disabled ::placeholder {
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+  }
+}
+
+/**
+ * Área de toque de 44px em volta de um alvo pequeno, sem mudar o desenho.
+ *
+ * O botão de ícone (32px), o "remover" de texto (17px de altura) e o número do
+ * pedido na tabela eram do tamanho certo para o mouse e pequenos demais para o
+ * dedo: a Apple pede 44pt, o Material 48dp. Crescer de verdade empurraria tudo
+ * em volta; aqui cresce só a área que aceita o toque, por um pseudo-elemento
+ * centrado no alvo.
+ *
+ * O elemento precisa estar posicionado (`relative` ou `absolute`) — é ele a
+ * referência do quadrado invisível. Só em tela de toque: no computador, a área
+ * a mais roubaria o clique do vizinho.
+ */
+@media (pointer: coarse) {
+  .alvo-toque::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+}
+
+/**
  * Foco visível no azul interativo.
  *
  * Fica por FORA do elemento, então nunca é engolido pelo canto arredondado —
@@ -791,6 +852,142 @@ body {
   }
 }
 
+/**
+ * A folha que sobe de baixo (`components/folha-de-baixo.tsx`): o "bottom
+ * sheet" do iOS e do Android, com o mesmo deslize da gaveta do menu.
+ *
+ * Presa no pé da tela, na largura toda, com o canto de cima arredondado. O
+ * `env(safe-area-inset-bottom)` afasta o conteúdo da barra de gestos do
+ * iPhone, que de outro modo ficaria por cima do botão Salvar.
+ */
+.folha-de-baixo {
+  inset: auto 0 0 0;
+  margin: 0;
+  width: 100%;
+  max-width: none;
+  max-height: 88dvh;
+  border-radius: 1.25rem 1.25rem 0 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  transition:
+    translate 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    overlay 260ms allow-discrete,
+    display 260ms allow-discrete;
+  translate: 0 0;
+}
+
+@starting-style {
+  .folha-de-baixo[open] {
+    translate: 0 100%;
+  }
+}
+
+/**
+ * Tabela que vira cartões no celular em pé.
+ *
+ * A apuração de Comissões tem nove colunas e 800px de largura; num iPhone
+ * cabiam três — pedido, cliente e prazo —, e o resto (o previsto, o recebido,
+ * o "acertar") ficava escondido à direita, sem aviso de que dava para arrastar.
+ * Abaixo de 640px cada linha vira um cartão de três faixas:
+ *
+ *     #2301  LEMEPACK                     [acerto]
+ *     Prazo        Entregue        %
+ *     Previsto     Recebido        Diferença
+ *
+ * As células dizem onde ficam (`data-area`) e o rótulo que perderam junto com
+ * o cabeçalho (`data-rotulo`). É a MESMA marcação da tabela — o mesmo
+ * componente, o mesmo formulário de acerto —, só desenhada de outro jeito.
+ */
+@media (max-width: 639.98px) {
+  .tabela-cartoes {
+    overflow-x: visible;
+    margin-inline: 0;
+    padding-inline: 0;
+  }
+  .tabela-cartoes table {
+    min-width: 0;
+  }
+  .tabela-cartoes thead {
+    display: none;
+  }
+  .tabela-cartoes tbody,
+  .tabela-cartoes tfoot {
+    display: block;
+  }
+  .tabela-cartoes tr {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-areas:
+      "pedido cliente cliente cliente acao acao"
+      "prazo prazo entregue entregue percentual percentual"
+      "previsto previsto recebido recebido diferenca diferenca";
+    gap: 0.75rem 0.75rem;
+    padding: 1rem 0;
+  }
+  .tabela-cartoes tfoot tr {
+    grid-template-areas:
+      "total total total total total total"
+      "previsto previsto recebido recebido diferenca diferenca";
+  }
+  .tabela-cartoes tr[hidden] {
+    display: none;
+  }
+  .tabela-cartoes td {
+    padding: 0;
+    width: auto;
+    max-width: none;
+    text-align: left;
+  }
+  .tabela-cartoes td:not([data-area]) {
+    display: none;
+  }
+  .tabela-cartoes td[data-rotulo]::before {
+    content: attr(data-rotulo);
+    display: block;
+    margin-bottom: 0.125rem;
+    font-size: var(--text-mini);
+    font-weight: 500;
+    color: var(--tinta-3);
+  }
+  .tabela-cartoes [data-area="pedido"] { grid-area: pedido; }
+  .tabela-cartoes [data-area="cliente"] { grid-area: cliente; }
+  .tabela-cartoes [data-area="acao"] { grid-area: acao; justify-self: end; align-self: start; }
+  .tabela-cartoes [data-area="prazo"] { grid-area: prazo; }
+  .tabela-cartoes [data-area="entregue"] { grid-area: entregue; }
+  .tabela-cartoes [data-area="percentual"] { grid-area: percentual; }
+  .tabela-cartoes [data-area="previsto"] { grid-area: previsto; }
+  .tabela-cartoes [data-area="recebido"] { grid-area: recebido; }
+  .tabela-cartoes [data-area="diferenca"] { grid-area: diferenca; }
+  .tabela-cartoes [data-area="total"] { grid-area: total; }
+  /* A linha que atravessa tudo — a frase de erro do item, embaixo dele. */
+  .tabela-cartoes [data-area="linha"] { grid-column: 1 / -1; }
+
+  /*
+   * O item do pedido e da proposta (`components/itens-documento.tsx`):
+   *
+   *     Cód. indústria   Cód. cliente          [remover]
+   *     77x150x0,05 SF 09 PEAD C/ DESLIZANTE
+   *     Quantidade       Unidade       Milheiro
+   *     Total s/ IPI     IPI           Total
+   *
+   * Na amostra, sem preço, as faixas de valor ficam vazias e somem.
+   */
+  .tabela-cartoes.tabela-itens tr {
+    grid-template-areas:
+      "codforn codforn codcli codcli acao acao"
+      "descricao descricao descricao descricao descricao descricao"
+      "qnt qnt un un preco preco"
+      "totsemipi totsemipi ipi ipi total total";
+  }
+  .tabela-itens [data-area="codforn"] { grid-area: codforn; }
+  .tabela-itens [data-area="codcli"] { grid-area: codcli; }
+  .tabela-itens [data-area="descricao"] { grid-area: descricao; }
+  .tabela-itens [data-area="qnt"] { grid-area: qnt; }
+  .tabela-itens [data-area="un"] { grid-area: un; }
+  .tabela-itens [data-area="preco"] { grid-area: preco; }
+  .tabela-itens [data-area="totsemipi"] { grid-area: totsemipi; }
+  .tabela-itens [data-area="ipi"] { grid-area: ipi; }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Movimento                                                                  */
 /* -------------------------------------------------------------------------- */
@@ -1173,6 +1370,7 @@ body:has(> .entrega.entrega-saindo) > :not(.entrega) {
 
 /* A gaveta do menu do celular aparece no lugar, sem entrar deslizando. */
 :root[data-animacoes="desativadas"] .gaveta { transition: none; }
+:root[data-animacoes="desativadas"] .folha-de-baixo { transition: none; }
 
 /* Sem voo: o avião e o rastro somem, o cartão e o fundo já nascem no lugar. */
 :root[data-animacoes="desativadas"] .entrega-aviao,

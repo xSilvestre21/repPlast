@@ -102,7 +102,7 @@ function Seta({
     <Link
       href={href}
       aria-label={rotulo}
-      className="grid place-items-center size-8 text-tinta-3
+      className="relative alvo-toque grid place-items-center size-8 text-tinta-3
         transition-colors duration-150 hover:text-carimbo"
     >
       {children}

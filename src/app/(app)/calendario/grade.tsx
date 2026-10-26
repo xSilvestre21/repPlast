@@ -101,7 +101,9 @@ export function GradeDoMes({
                 (2,2:1). A data por extenso, no fim do botão, ainda diz qual é.
               */}
               {feriado && doMes && (
-                <span className={`hidden sm:block text-[10px] leading-tight truncate ${COR_FERIADO}`}>
+                // `text-micro` (11px): a 10px, no celular deitado — onde esta
+                // linha já aparece —, o nome ficava abaixo do mínimo legível.
+                <span className={`hidden sm:block text-micro leading-tight truncate ${COR_FERIADO}`}>
                   {feriado}
                 </span>
               )}

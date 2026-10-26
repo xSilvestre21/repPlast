@@ -274,7 +274,9 @@ export function ListaProdutos({
 
           <fieldset className="min-w-0">
             <legend className="rotulo block mb-1.5 text-tinta-2">Medidas do saco</legend>
-            <div className="grid grid-cols-3 gap-2 lg:w-96">
+            {/* Três por linha só com folga: no iPhone SE, com o campo de 16px do
+                celular, "160" virava "16C" e "0,055" virava "0,0!". */}
+            <div className="grid grid-cols-2 min-[400px]:grid-cols-3 gap-2 lg:w-96">
               {MEDIDAS.map((medida) => (
                 <div key={medida.campo} className="relative">
                   <input

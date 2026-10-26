@@ -158,7 +158,7 @@ export function Cabecalho({
       {voltar && (
         <Link
           href={voltar.href}
-          className="inline-flex items-center gap-1.5 mb-3 text-corpo text-tinta-2
+          className="relative alvo-toque inline-flex items-center gap-1.5 mb-3 text-corpo text-tinta-2
             transition-colors hover:text-carimbo"
         >
           <ArrowLeft size={15} strokeWidth={2} aria-hidden="true" />
@@ -176,7 +176,8 @@ export function Cabecalho({
               geométrica os dois andam juntos — sem apertar, o título de 40px
               abre buracos entre as letras e lê como letreiro.
             */}
-            <h1 className="text-titulo font-bold text-balance">{titulo}</h1>
+            {/* Deitado, o título encolhe: a tela tem 340px de altura. */}
+            <h1 className="text-titulo baixa:text-[1.625rem] font-bold text-balance">{titulo}</h1>
             {selo && (
               /*
                * Centrado nas LETRAS do título, e não na caixa da linha: o
@@ -197,7 +198,7 @@ export function Cabecalho({
             )}
           </div>
           {descricao && (
-            <p className="text-realce text-tinta-2 mt-2.5 max-w-2xl">{descricao}</p>
+            <p className="text-realce baixa:text-corpo text-tinta-2 mt-2.5 baixa:mt-1 max-w-2xl">{descricao}</p>
           )}
         </div>
         {acao}
@@ -559,8 +560,8 @@ export function BotaoTexto({
   return (
     <button
       {...props}
-      className={`text-mini font-medium text-tinta-3 underline underline-offset-2 decoration-filete-forte
-        transition-colors px-0.5 cursor-pointer disabled:opacity-50 ${
+      className={`relative alvo-toque text-mini font-medium text-tinta-3 underline underline-offset-2
+        decoration-filete-forte transition-colors px-0.5 cursor-pointer disabled:opacity-50 ${
           perigoso ? "hover:text-perigo" : "hover:text-carimbo"
         } ${className}`}
     />
@@ -1002,9 +1003,12 @@ export function Segmentado<T extends string>({
   aoEscolher?: (valor: T) => void;
   className?: string;
 }) {
+  // No dedo a pastilha cresce de verdade (44px com a borda do grupo): ela é o
+  // controle principal da tela, e a área invisível de `alvo-toque` não ajuda a
+  // ver onde tocar.
   const PASTILHA =
-    "px-3 py-1 rounded-full text-mini font-semibold cursor-pointer transition-colors duration-200 " +
-    "whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed";
+    "px-3 py-1 pointer-coarse:py-3 rounded-full text-mini font-semibold cursor-pointer " +
+    "transition-colors duration-200 whitespace-nowrap shrink-0 disabled:opacity-40 disabled:cursor-not-allowed";
   const ATIVA = "bg-folha text-tinta shadow-suave";
   const INATIVA = "text-tinta-2 hover:text-tinta";
 
@@ -1012,7 +1016,10 @@ export function Segmentado<T extends string>({
     <div
       role="group"
       aria-label={nome}
-      className={`inline-flex gap-0.5 p-0.5 rounded-full bg-folha-2 border border-filete ${className}`}
+      // Numa tela estreita a fileira rola de lado em vez de cortar a última
+      // opção — no iPhone SE, "Amostras" saía como "Ar".
+      className={`inline-flex max-w-full overflow-x-auto [scrollbar-width:none] gap-0.5 p-0.5 rounded-full
+        bg-folha-2 border border-filete ${className}`}
     >
       {opcoes.map((opcao) => {
         const ativa = opcao.valor === atual;

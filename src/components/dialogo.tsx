@@ -79,7 +79,7 @@ export function Dialogo({
               type="button"
               onClick={aoFechar}
               aria-label="Fechar"
-              className="size-8 shrink-0 grid place-items-center rounded-full text-tinta-3 hover:bg-folha-2 hover:text-tinta cursor-pointer"
+              className="relative alvo-toque size-8 shrink-0 grid place-items-center rounded-full text-tinta-3 hover:bg-folha-2 hover:text-tinta cursor-pointer"
             >
               <X size={16} aria-hidden="true" />
             </button>

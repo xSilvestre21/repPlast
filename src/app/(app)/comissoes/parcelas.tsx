@@ -341,7 +341,7 @@ export function EditorParcelas({
                       type="button"
                       onClick={() => remover(i)}
                       aria-label={`Remover a parcela ${i + 1}`}
-                      className="grid place-items-center size-8 rounded-full text-tinta-3 transition-colors
+                      className="relative alvo-toque grid place-items-center size-8 rounded-full text-tinta-3 transition-colors
                         hover:bg-folha-2 hover:text-perigo cursor-pointer"
                     >
                       <X size={14} strokeWidth={2} aria-hidden="true" />

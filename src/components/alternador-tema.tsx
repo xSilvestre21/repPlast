@@ -72,7 +72,7 @@ export function AlternadorTema() {
       type="button"
       onClick={() => definirTema(tema === "claro" ? "escuro" : "claro")}
       aria-label={tema === "claro" ? "Mudar para o tema escuro" : "Mudar para o tema claro"}
-      className="grid place-items-center size-8 text-tinta-3 cursor-pointer shrink-0
+      className="relative alvo-toque grid place-items-center size-8 text-tinta-3 cursor-pointer shrink-0
         transition-colors duration-150 hover:text-carimbo"
     >
       {tema === null ? (

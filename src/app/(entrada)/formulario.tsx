@@ -51,7 +51,7 @@ export function FormularioEntrada({
         <div className="mt-2 flex justify-end">
           <Link
             href="/esqueci-senha"
-            className="text-mini text-tinta-2 underline underline-offset-4 decoration-tinta-3/40
+            className="relative alvo-toque text-mini text-tinta-2 underline underline-offset-4 decoration-tinta-3/40
               transition-colors hover:text-carimbo hover:decoration-carimbo"
           >
             Esqueceu sua senha?

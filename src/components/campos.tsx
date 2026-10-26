@@ -161,7 +161,7 @@ export function CampoSenha(props: Omit<ComponentProps<typeof Campo>, "type" | "s
           aria-label={visivel ? "Esconder a senha" : "Mostrar a senha"}
           aria-pressed={visivel}
           title={visivel ? "Esconder a senha" : "Mostrar a senha"}
-          className="absolute right-1.5 top-1/2 -translate-y-1/2 size-8 grid place-items-center rounded-full
+          className="alvo-toque absolute right-1.5 top-1/2 -translate-y-1/2 size-8 grid place-items-center rounded-full
             text-tinta-3 hover:text-carimbo cursor-pointer"
         >
           <Icone size={16} aria-hidden="true" />

@@ -292,7 +292,7 @@ export function TextoComVariaveis({
           // Segura o foco no campo: é de lá que sai a posição do cursor.
           onMouseDown={(evento) => evento.preventDefault()}
           onClick={abrirChave}
-          className={`absolute right-2 ${linhas ? "top-2" : "top-1/2 -translate-y-1/2"}
+          className={`alvo-toque absolute right-2 ${linhas ? "top-2" : "top-1/2 -translate-y-1/2"}
             rounded-miudo p-1.5 text-tinta-3 transition-colors hover:bg-folha-2 hover:text-tinta`}
         >
           <Braces size={15} strokeWidth={2} aria-hidden="true" />

@@ -8,6 +8,10 @@
  * obrigaria a abrir e fechar quinze vezes, perdendo de vista a lista que se
  * está conferindo.
  *
+ * No celular em pé a linha vira cartão (`.tabela-cartoes`, em `globals.css`) e
+ * o acerto abre numa folha que sobe de baixo: dentro do cartão, o formulário
+ * herdava a largura da tabela e saía cortado.
+ *
  * Enquanto não há acerto, a linha mostra só o previsto — que é a verdade
  * daquele momento: o pedido foi enviado e ainda não foi pago.
  */
@@ -27,6 +31,8 @@ import Link from "next/link";
 import { useActionState, useId, useState } from "react";
 
 import { CampoData } from "@/components/campo-data";
+import { FolhaDeBaixo } from "@/components/folha-de-baixo";
+import { useTelaEstreita } from "@/components/tela-estreita";
 import { CampoMoeda } from "@/components/campo-mascarado";
 import { SeloStatus } from "@/components/selo-status";
 import {
@@ -155,7 +161,7 @@ function Pontualidade({ prazo, entregue }: { prazo: string | null; entregue: str
   const { classe, icone: Glifo, texto } = TONS[p.situacao];
 
   return (
-    <span className={`flex items-center justify-end gap-1 text-mini mt-0.5 ${classe}`}>
+    <span className={`flex items-center justify-end max-sm:justify-start gap-1 text-mini mt-0.5 ${classe}`}>
       <Glifo size={11} strokeWidth={2.25} aria-hidden="true" />
       {texto}
     </span>
@@ -198,6 +204,7 @@ export function LinhaComissao({
   // Dentro do painel aberto: o acerto, ou o editor de parcelas no lugar dele.
   const [parcelando, setParcelando] = useState(false);
   const painel = useId();
+  const estreita = useTelaEstreita();
 
   /*
    * Salvou sem erro, fecha o acerto — na mesma renderização em que a linha
@@ -246,13 +253,162 @@ export function LinhaComissao({
   const diferenca = acertado ? pedido.recebido! - pedido.previsto : 0;
   const colunas = colunasDaComissao(comPercentual).length;
 
+  /*
+   * O acerto, ou o editor de parcelas no lugar dele. Um elemento só, posto na
+   * linha da tabela (tela larga) ou na folha que sobe de baixo (celular).
+   */
+  const conteudoDoPainel =
+    parcelando ? (
+      <EditorParcelas
+        venda={pedido.venda}
+        percentual={pedido.percentual}
+        percentualPreposto={pedido.percentualPreposto}
+        dataBase={pedido.dataBaseParcelas}
+        prazoSugerido={pedido.prazoPagamento}
+        fechamento={pedido.fechamento}
+        atuais={pedido.parcelasAtuais}
+        salvar={salvarParcelas}
+        desfazer={pedido.parcela ? desfazerParcelas : null}
+        aoFechar={() => setParcelando(false)}
+      />
+    ) : (
+      <Formulario estado={estado} action={enviar} className="space-y-4">
+        {/* Pelo topo: o erro de um campo aparece embaixo dele, e pela
+            base os vizinhos desceriam junto. */}
+        <div className="flex flex-wrap items-start gap-3">
+          <CampoMoeda
+            name="valorRecebido"
+            rotulo="Valor recebido"
+            defaultValue={pedido.valorRecebido}
+            placeholder={formatarMoeda(pedido.base).replace("R$", "").trim()}
+            className="basis-36 grow"
+          />
+
+          <Campo
+            name="comissaoPercentualRecebido"
+            rotulo="%"
+            inputMode="decimal"
+            /*
+              Nasce com o percentual do pedido, como o usuário pediu: no caso
+              comum a indústria paga o combinado, e quem precisa mudar muda.
+            */
+            defaultValue={pedido.percentualRecebido || pedido.percentual}
+            className="basis-24 grow-0"
+          />
+
+          <CampoData
+            name="entregueEm"
+            rotulo="Entregue em"
+            defaultValue={pedido.entregueEm ?? ""}
+            atalhos={[]}
+            atalhosUteis={[]}
+            className="basis-40 grow"
+          />
+
+          {/* No celular, o Salvar desce para a largura toda, no alcance do
+              polegar — ao lado dos campos, numa folha estreita, ele espremia o
+              campo da data. */}
+          <div className="max-sm:basis-full">
+            <EspacoDoRotulo />
+            <Botao
+              type="submit"
+              variante="secundaria"
+              carregando={salvando}
+              className="px-4 py-2 max-sm:w-full max-sm:py-3"
+            >
+              {salvando ? "Salvando…" : "Salvar"}
+            </Botao>
+          </div>
+        </div>
+
+        {!pedido.parcela && (
+          <div className="space-y-1.5">
+            {pagamento.campos}
+            <p className="text-mini text-tinta-3">
+              A comissão deste pedido conta em{" "}
+              <span className="font-semibold text-tinta-2">
+                {MES.format(new Date(`${mesDaComissao}-01T00:00:00Z`))}
+              </span>
+              .
+            </p>
+          </div>
+        )}
+
+        <p className="text-mini text-tinta-3 leading-relaxed">
+          {pedido.parcela
+            ? `Parcela ${pedido.parcela.numero} de ${pedido.parcela.total}: `
+            : "Previsto: "}
+          {formatarMoeda(pedido.base)} × {formatarPercentual(pedido.percentual)} ={" "}
+          <span className="numerico">{formatarMoeda(pedido.previsto)}</span>.
+          {pedido.prazoEntrega && ` Entrega prometida para ${DATA.format(paraData(pedido.prazoEntrega)!)}.`}
+        </p>
+
+        <ErroGeral />
+
+        {acertado && (
+          <div>
+            <BotaoTexto
+              type="submit"
+              name="desfazer"
+              value="sim"
+              onClick={perguntaDesfazer.aoClicar}
+              disabled={salvando}
+              perigoso
+              className="inline-flex items-center gap-1"
+            >
+              <Undo2 size={12} aria-hidden="true" />
+              desfazer acerto
+            </BotaoTexto>
+            {perguntaDesfazer.janela}
+          </div>
+        )}
+
+        {/*
+          Parcelar mora aqui, no acerto: é conferindo com a indústria que
+          se descobre que o pagamento vem em partes.
+        */}
+        {(pedido.podeParcelar || pedido.parcela || pedido.parcelarExigeDesfazerAcerto) && (
+          /*
+            Botão de verdade, num rodapé separado por filete. Era um link
+            miúdo e cinza no fim do painel, que se perdia entre as notas.
+          */
+          <div className="flex flex-wrap items-center gap-3 border-t border-filete pt-3">
+            {pedido.parcelarExigeDesfazerAcerto ? (
+              <p className="text-mini text-tinta-3">
+                Para parcelar o recebimento, use “desfazer acerto” antes.
+              </p>
+            ) : (
+              <>
+                <Botao
+                  type="button"
+                  variante="secundaria"
+                  tamanho="compacto"
+                  icone={Scissors}
+                  onClick={() => setParcelando(true)}
+                >
+                  {pedido.parcela
+                    ? `Editar as ${pedido.parcela.total} parcelas`
+                    : "Parcelar o recebimento"}
+                </Botao>
+                <span className="text-mini text-tinta-3">
+                  {pedido.parcela
+                    ? "Mude datas e valores; cada parcela conta no mês em que a indústria a paga."
+                    : "A indústria paga em partes? Cada parcela conta no mês em que ela a paga."}
+                </span>
+              </>
+            )}
+          </div>
+        )}
+      </Formulario>
+    );
+
   return (
     <>
       <tr>
-        <Celula>
+        <Celula data-area="pedido">
           <Link
             href={`/pedidos/${pedido.id}`}
-            className="numerico text-tinta-2 hover:text-carimbo transition-colors"
+            className="relative alvo-toque numerico text-tinta-2 hover:text-carimbo transition-colors"
           >
             #{pedido.numero}
           </Link>
@@ -267,8 +423,8 @@ export function LinhaComissao({
           em tela larga. A rolagem continua existindo nas telas menores, pelo
           `min-w-200` da tabela.
         */}
-        <Celula className="w-full max-w-0">
-          <span className={`block truncate ${cancelado ? "text-tinta-3" : ""}`}>
+        <Celula data-area="cliente" className="w-full max-w-0">
+          <span className={`block truncate max-sm:whitespace-normal max-sm:font-medium ${cancelado ? "text-tinta-3" : ""}`}>
             {pedido.apelidoCliente}
           </span>
           {/*
@@ -297,7 +453,7 @@ export function LinhaComissao({
           {pedido.parcela && (
             <span className="flex items-center gap-1 text-mini text-carimbo mt-0.5 min-w-0">
               <CalendarClock size={11} strokeWidth={2} aria-hidden="true" className="shrink-0" />
-              <span className="truncate">
+              <span className="truncate max-sm:whitespace-normal">
                 Parcela {pedido.parcela.numero} de {pedido.parcela.total} · vence{" "}
                 {pedido.parcela.recebimento === pedido.parcela.vencimento.slice(0, 7)
                   ? DIA_MES.format(paraData(pedido.parcela.vencimento)!)
@@ -326,7 +482,7 @@ export function LinhaComissao({
           indústria não entra — para a comissão, o que conta é a mercadoria
           chegar.
         */}
-        <Celula alinhamento="numero">
+        <Celula alinhamento="numero" data-area="prazo" data-rotulo="Prazo">
           {/*
             O prazo de entrega do pedido, também na parcela: a coluna diz a
             mesma coisa em todas as linhas. O vencimento da parcela, que é o que
@@ -343,13 +499,13 @@ export function LinhaComissao({
           )}
         </Celula>
 
-        <Celula alinhamento="numero">
+        <Celula alinhamento="numero" data-area="entregue" data-rotulo="Entregue">
           {pedido.entregueEm ? DATA.format(paraData(pedido.entregueEm)!) : TRACO}
           {!cancelado && <Pontualidade prazo={pedido.prazoEntrega} entregue={pedido.entregueEm} />}
         </Celula>
 
         {comPercentual && (
-          <Celula alinhamento="numero" className="text-tinta-2">
+          <Celula alinhamento="numero" data-area="percentual" data-rotulo="%" className="text-tinta-2">
             {pedido.percentual ? formatarPercentual(pedido.percentual) : TRACO}
           </Celula>
         )}
@@ -360,7 +516,7 @@ export function LinhaComissao({
           do traço, numa linha só: empilhada embaixo dele, empurrava o traço
           para cima e a célula saía do alinhamento das vizinhas.
         */}
-        <Celula alinhamento="numero">
+        <Celula alinhamento="numero" data-area="previsto" data-rotulo="Previsto">
           {cancelado ? (
             <span className="text-mini text-tinta-3">fora da soma</span>
           ) : (
@@ -371,7 +527,7 @@ export function LinhaComissao({
           )}
         </Celula>
 
-        <Celula alinhamento="numero">
+        <Celula alinhamento="numero" data-area="recebido" data-rotulo="Recebido">
           {acertado ? (
             <>
               <span className="font-medium">{formatarMoeda(pedido.recebido!)}</span>
@@ -384,16 +540,19 @@ export function LinhaComissao({
 
         <Celula
           alinhamento="numero"
+          data-area="diferenca"
+          data-rotulo="Diferença"
           className={!acertado || diferenca === 0 ? "" : diferenca < 0 ? "text-perigo" : "text-verde"}
         >
           {acertado ? `${diferenca > 0 ? "+" : ""}${formatarMoeda(diferenca)}` : TRACO}
         </Celula>
 
-        <Celula alinhamento="acao">
+        <Celula alinhamento="acao" data-area="acao">
           {cancelado ? (
             <SeloStatus status={pedido.status} />
           ) : (
             pedido.podeAcertar && (
+              <>
               <BotaoTexto
                 type="button"
                 onClick={() => {
@@ -404,16 +563,41 @@ export function LinhaComissao({
                 }}
                 aria-expanded={aberto}
                 aria-controls={painel}
-                className="inline-flex items-center gap-1"
+                // No cartão, botão de verdade: o "acertar" sublinhado de 17px
+                // era o que mais se tocava na tela e o menor alvo dela.
+                className="inline-flex items-center gap-1 max-sm:no-underline max-sm:rounded-full
+                  max-sm:border max-sm:border-filete-forte max-sm:px-3.5 max-sm:py-2 max-sm:text-corpo
+                  max-sm:text-tinta"
               >
                 {acertado ? "acerto" : "acertar"}
                 <ChevronDown
                   size={13}
                   strokeWidth={2}
                   aria-hidden="true"
-                  className={`transition-transform duration-200 ${aberto ? "rotate-180" : ""}`}
+                  className={`transition-transform duration-200 max-sm:hidden ${aberto ? "rotate-180" : ""}`}
                 />
               </BotaoTexto>
+              {estreita && (
+                <FolhaDeBaixo
+                  id={painel}
+                  aberto={aberto}
+                  aoFechar={() => {
+                    setAberto(false);
+                    setParcelando(false);
+                  }}
+                  titulo={
+                    parcelando
+                      ? `Parcelas do pedido #${pedido.numero}`
+                      : pedido.parcela
+                        ? `Acerto da parcela ${pedido.parcela.numero} de ${pedido.parcela.total}`
+                        : `Acerto do pedido #${pedido.numero}`
+                  }
+                  descricao={`${pedido.apelidoCliente} · previsto ${formatarMoeda(pedido.previsto)}`}
+                >
+                  {conteudoDoPainel}
+                </FolhaDeBaixo>
+              )}
+              </>
             )
           )}
         </Celula>
@@ -421,149 +605,17 @@ export function LinhaComissao({
 
       {/*
         `hidden`, e não desmontar: o formulário guarda o que foi digitado e o
-        erro da última tentativa enquanto a pessoa fecha e reabre a linha.
+        erro da última tentativa enquanto a pessoa fecha e reabre a linha. No
+        celular em pé esta linha não existe: o painel vai para a folha que sobe
+        de baixo, montada na célula da ação.
       */}
-      <tr id={painel} hidden={!aberto || !pedido.podeAcertar}>
-        <td colSpan={colunas} className="px-3 pb-4 pt-1">
-          <div className="rounded-suave border border-filete bg-folha-2 p-4">
-            {parcelando ? (
-              <EditorParcelas
-                venda={pedido.venda}
-                percentual={pedido.percentual}
-                percentualPreposto={pedido.percentualPreposto}
-                dataBase={pedido.dataBaseParcelas}
-                prazoSugerido={pedido.prazoPagamento}
-                fechamento={pedido.fechamento}
-                atuais={pedido.parcelasAtuais}
-                salvar={salvarParcelas}
-                desfazer={pedido.parcela ? desfazerParcelas : null}
-                aoFechar={() => setParcelando(false)}
-              />
-            ) : (
-            <Formulario estado={estado} action={enviar} className="space-y-4">
-              {/* Pelo topo: o erro de um campo aparece embaixo dele, e pela
-                  base os vizinhos desceriam junto. */}
-              <div className="flex flex-wrap items-start gap-3">
-                <CampoMoeda
-                  name="valorRecebido"
-                  rotulo="Valor recebido"
-                  defaultValue={pedido.valorRecebido}
-                  placeholder={formatarMoeda(pedido.base).replace("R$", "").trim()}
-                  className="basis-36 grow"
-                />
-
-                <Campo
-                  name="comissaoPercentualRecebido"
-                  rotulo="%"
-                  inputMode="decimal"
-                  /*
-                    Nasce com o percentual do pedido, como o usuário pediu: no caso
-                    comum a indústria paga o combinado, e quem precisa mudar muda.
-                  */
-                  defaultValue={pedido.percentualRecebido || pedido.percentual}
-                  className="basis-24 grow-0"
-                />
-
-                <CampoData
-                  name="entregueEm"
-                  rotulo="Entregue em"
-                  defaultValue={pedido.entregueEm ?? ""}
-                  atalhos={[]}
-                  atalhosUteis={[]}
-                  className="basis-40 grow"
-                />
-
-                <div>
-                  <EspacoDoRotulo />
-                  <Botao type="submit" variante="secundaria" carregando={salvando} className="px-4 py-2">
-                    {salvando ? "Salvando…" : "Salvar"}
-                  </Botao>
-                </div>
-              </div>
-
-              {!pedido.parcela && (
-                <div className="space-y-1.5">
-                  {pagamento.campos}
-                  <p className="text-mini text-tinta-3">
-                    A comissão deste pedido conta em{" "}
-                    <span className="font-semibold text-tinta-2">
-                      {MES.format(new Date(`${mesDaComissao}-01T00:00:00Z`))}
-                    </span>
-                    .
-                  </p>
-                </div>
-              )}
-
-              <p className="text-mini text-tinta-3 leading-relaxed">
-                {pedido.parcela
-                  ? `Parcela ${pedido.parcela.numero} de ${pedido.parcela.total}: `
-                  : "Previsto: "}
-                {formatarMoeda(pedido.base)} × {formatarPercentual(pedido.percentual)} ={" "}
-                <span className="numerico">{formatarMoeda(pedido.previsto)}</span>.
-                {pedido.prazoEntrega && ` Entrega prometida para ${DATA.format(paraData(pedido.prazoEntrega)!)}.`}
-              </p>
-
-              <ErroGeral />
-
-              {acertado && (
-                <div>
-                  <BotaoTexto
-                    type="submit"
-                    name="desfazer"
-                    value="sim"
-                    onClick={perguntaDesfazer.aoClicar}
-                    disabled={salvando}
-                    perigoso
-                    className="inline-flex items-center gap-1"
-                  >
-                    <Undo2 size={12} aria-hidden="true" />
-                    desfazer acerto
-                  </BotaoTexto>
-                  {perguntaDesfazer.janela}
-                </div>
-              )}
-
-              {/*
-                Parcelar mora aqui, no acerto: é conferindo com a indústria que
-                se descobre que o pagamento vem em partes.
-              */}
-              {(pedido.podeParcelar || pedido.parcela || pedido.parcelarExigeDesfazerAcerto) && (
-                /*
-                  Botão de verdade, num rodapé separado por filete. Era um link
-                  miúdo e cinza no fim do painel, que se perdia entre as notas.
-                */
-                <div className="flex flex-wrap items-center gap-3 border-t border-filete pt-3">
-                  {pedido.parcelarExigeDesfazerAcerto ? (
-                    <p className="text-mini text-tinta-3">
-                      Para parcelar o recebimento, use “desfazer acerto” antes.
-                    </p>
-                  ) : (
-                    <>
-                      <Botao
-                        type="button"
-                        variante="secundaria"
-                        tamanho="compacto"
-                        icone={Scissors}
-                        onClick={() => setParcelando(true)}
-                      >
-                        {pedido.parcela
-                          ? `Editar as ${pedido.parcela.total} parcelas`
-                          : "Parcelar o recebimento"}
-                      </Botao>
-                      <span className="text-mini text-tinta-3">
-                        {pedido.parcela
-                          ? "Mude datas e valores; cada parcela conta no mês em que a indústria a paga."
-                          : "A indústria paga em partes? Cada parcela conta no mês em que ela a paga."}
-                      </span>
-                    </>
-                  )}
-                </div>
-              )}
-            </Formulario>
-            )}
-          </div>
-        </td>
-      </tr>
+      {!estreita && (
+        <tr id={painel} hidden={!aberto || !pedido.podeAcertar}>
+          <td colSpan={colunas} className="px-3 pb-4 pt-1">
+            <div className="rounded-suave border border-filete bg-folha-2 p-4">{conteudoDoPainel}</div>
+          </td>
+        </tr>
+      )}
     </>
   );
 }
