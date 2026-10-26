@@ -25,6 +25,15 @@ import { NomeQueCabe } from "./nome-que-cabe";
 import { chegarPilula, partir } from "./viagem";
 import { Avatar } from "./ui";
 import { abrirModal } from "./modal";
+import {
+  FRACAO_PARA_FECHAR,
+  VELOCIDADE_PARA_FECHAR,
+  deslizar,
+  limpar,
+  posicionar,
+  resistencia,
+  velocidade,
+} from "./movimento-folha";
 
 /**
  * Avatar, seta e o menu que ele abre.
@@ -300,6 +309,12 @@ function Divisoria() {
  * É um `<dialog>` com `showModal()`, como o `Dialogo`: o navegador prende o
  * foco dentro, fecha no Esc e deixa o resto da página inerte. Fecha também ao
  * escolher um destino — a gaveta vive no layout e não desmonta ao navegar.
+ *
+ * O movimento é o da folha do acerto (`movimento-folha.ts`): entra e sai na
+ * curva do iOS, em meio segundo — também ao tocar fora, no X, no Esc e ao
+ * escolher um destino, que antes a faziam sumir de uma vez — e fecha
+ * arrastando para a esquerda, depois de um quarto da largura ou num peteleco.
+ * O conteúdo continua montado enquanto ela sai (`fechando`).
  */
 function MenuCelular({
   itens,
@@ -312,16 +327,88 @@ function MenuCelular({
   indiceAtual: number;
   nomeOrganizacao: string;
 }) {
-  const [aberto, setAberto] = useState(false);
+  // "fechando": a gaveta ainda está na tela, saindo, e o conteúdo fica montado até ela sumir.
+  const [estado, setEstado] = useState<"fechado" | "aberto" | "fechando">("fechado");
+  const aberto = estado === "aberto";
   const gaveta = useRef<HTMLDialogElement>(null);
   const caminho = usePathname();
+
+  /** Fecha deslizando; repetir o pedido no meio da saída não recomeça nada. */
+  const fechar = () => setEstado((atual) => (atual === "aberto" ? "fechando" : atual));
 
   useEffect(() => {
     const elemento = gaveta.current;
     if (!elemento) return;
-    // O foco fica na caixa, e não no X de fechar (`modal.ts`).
-    if (aberto && !elemento.open) abrirModal(elemento);
-    if (!aberto && elemento.open) elemento.close();
+    if (estado === "aberto" && !elemento.open) {
+      limpar(elemento);
+      // O foco fica na caixa, e não no X de fechar (`modal.ts`).
+      abrirModal(elemento);
+    }
+    if (estado === "fechando") {
+      // De onde ela estiver — no lugar, ou onde o dedo a deixou.
+      deslizar(elemento, "-100% 0", 1, () => {
+        if (elemento.open) elemento.close();
+        limpar(elemento);
+        setEstado("fechado");
+      });
+    }
+  }, [estado]);
+
+  /*
+   * Arrastar para a esquerda fecha. Toque com `touchmove` não passivo: o gesto
+   * só vira arraste quando anda mais na horizontal que na vertical — na
+   * vertical é a rolagem da lista, e fica com ela.
+   */
+  useEffect(() => {
+    const elemento = gaveta.current;
+    if (!elemento || !aberto) return;
+    let arraste: { x: number; y: number; t: number; deslocamento: number; decidido: boolean } | null = null;
+
+    const aoTocar = (evento: TouchEvent) => {
+      if (evento.touches.length !== 1) return;
+      const { clientX, clientY } = evento.touches[0];
+      arraste = { x: clientX, y: clientY, t: evento.timeStamp, deslocamento: 0, decidido: false };
+    };
+    const aoMover = (evento: TouchEvent) => {
+      if (!arraste) return;
+      const dx = evento.touches[0].clientX - arraste.x;
+      const dy = evento.touches[0].clientY - arraste.y;
+      if (!arraste.decidido) {
+        if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+        if (Math.abs(dy) > Math.abs(dx)) {
+          arraste = null;
+          return;
+        }
+        arraste.decidido = true;
+        elemento.style.transition = "none";
+      }
+      evento.preventDefault();
+      // Para a esquerda acompanha o dedo; para a direita resiste.
+      arraste.deslocamento = dx <= 0 ? dx : resistencia(dx);
+      posicionar(elemento, `${arraste.deslocamento}px 0`, -arraste.deslocamento / elemento.offsetWidth);
+    };
+    const aoSoltar = (evento: TouchEvent) => {
+      const atual = arraste;
+      arraste = null;
+      if (!atual?.decidido) return;
+      const andou = atual.x - evento.changedTouches[0].clientX;
+      const fecha =
+        -atual.deslocamento > elemento.offsetWidth * FRACAO_PARA_FECHAR ||
+        (atual.deslocamento < 0 && velocidade(andou, evento.timeStamp - atual.t) > VELOCIDADE_PARA_FECHAR);
+      if (fecha) setEstado("fechando");
+      else deslizar(elemento, "0px", 0, () => limpar(elemento));
+    };
+
+    elemento.addEventListener("touchstart", aoTocar, { passive: true });
+    elemento.addEventListener("touchmove", aoMover, { passive: false });
+    elemento.addEventListener("touchend", aoSoltar);
+    elemento.addEventListener("touchcancel", aoSoltar);
+    return () => {
+      elemento.removeEventListener("touchstart", aoTocar);
+      elemento.removeEventListener("touchmove", aoMover);
+      elemento.removeEventListener("touchend", aoSoltar);
+      elemento.removeEventListener("touchcancel", aoSoltar);
+    };
   }, [aberto]);
 
   const grupos: { titulo: string | null; itens: typeof ITENS_PRINCIPAIS }[] = [
@@ -337,7 +424,7 @@ function MenuCelular({
     <div className="md:hidden">
       <button
         type="button"
-        onClick={() => setAberto(true)}
+        onClick={() => setEstado("aberto")}
         aria-label="Abrir o menu"
         aria-haspopup="dialog"
         aria-expanded={aberto}
@@ -349,16 +436,21 @@ function MenuCelular({
 
       <dialog
         ref={gaveta}
-        onClose={() => setAberto(false)}
+        // O Esc (e o voltar do Android) fecha deslizando, como o resto.
+        onCancel={(evento) => {
+          evento.preventDefault();
+          fechar();
+        }}
+        onClose={() => setEstado("fechado")}
         // Clique no fundo escurecido fecha; a gaveta ocupa o resto do <dialog>.
         onClick={(evento) => {
-          if (evento.target === gaveta.current) setAberto(false);
+          if (evento.target === gaveta.current) fechar();
         }}
         aria-label="Menu"
         className="gaveta m-0 h-dvh max-h-none w-[min(20rem,85vw)] bg-folha text-tinta p-0
           shadow-[var(--sombra-alta)] backdrop:bg-black/45 backdrop:backdrop-blur-[2px]"
       >
-        {aberto && (
+        {estado !== "fechado" && (
           <div className="flex h-full flex-col">
             <div className="flex h-14 items-center justify-between gap-3 border-b border-filete px-4">
               <span className="min-w-0 font-extrabold tracking-[-0.03em]" title={nomeOrganizacao}>
@@ -366,7 +458,7 @@ function MenuCelular({
               </span>
               <button
                 type="button"
-                onClick={() => setAberto(false)}
+                onClick={fechar}
                 aria-label="Fechar o menu"
                 className="grid size-9 shrink-0 place-items-center rounded-full text-tinta-3
                   hover:bg-folha-2 hover:text-tinta cursor-pointer"
@@ -388,7 +480,7 @@ function MenuCelular({
                           <Link
                             href={item.href}
                             aria-current={ativo ? "page" : undefined}
-                            onClick={() => setAberto(false)}
+                            onClick={fechar}
                             className={`${ITEM} ${
                               ativo
                                 ? "bg-tinta text-papel font-semibold"
@@ -417,7 +509,7 @@ function MenuCelular({
                         <Link
                           href={item.href}
                           aria-current={ativo ? "page" : undefined}
-                          onClick={() => setAberto(false)}
+                          onClick={fechar}
                           className={`${ITEM} ${
                             ativo
                               ? "bg-tinta text-papel font-semibold"

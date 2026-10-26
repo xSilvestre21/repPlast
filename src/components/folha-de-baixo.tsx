@@ -15,7 +15,8 @@
  * O `<dialog>` nativo prende o foco, deixa a página inerte (e parada: ver
  * `html:has(dialog:modal)` em `globals.css`) e escurece o fundo.
  *
- * O movimento é o da folha do iOS, com os números que o Vaul mediu nela:
+ * O movimento é o da folha do iOS, com os números que o Vaul mediu nela
+ * (`movimento-folha.ts`, o mesmo da gaveta do menu):
  *   - abre, volta e fecha na curva `cubic-bezier(0.32, 0.72, 0, 1)`, 500ms;
  *   - arrasta pela alça, pelo título ou pelo conteúdo já rolado até o topo;
  *   - solta depois de 25% da altura, ou num peteleco acima de 0,4 px/ms, e ela
@@ -30,76 +31,24 @@ import { X } from "lucide-react";
 import { type PointerEvent, type ReactNode, useEffect, useId, useRef } from "react";
 
 import { abrirModal } from "./modal";
+import {
+  FRACAO_PARA_FECHAR,
+  VELOCIDADE_PARA_FECHAR,
+  deslizar,
+  limpar,
+  posicionar,
+  resistencia,
+  velocidade,
+} from "./movimento-folha";
 
-/** A fração da altura que, arrastada, fecha ao soltar (o `CLOSE_THRESHOLD` do Vaul). */
-const FRACAO_PARA_FECHAR = 0.25;
-/** Px por ms: o peteleco que fecha mesmo sem ter descido muito (o `VELOCITY_THRESHOLD`). */
-const VELOCIDADE_PARA_FECHAR = 0.4;
-const CURVA = "cubic-bezier(0.32, 0.72, 0, 1)";
-const DURACAO_MS = 500;
 /** Depois de rolar o conteúdo, o tempo em que o dedo não arrasta a folha. */
 const TRAVA_APOS_ROLAGEM_MS = 100;
 
 type Arraste = { inicioY: number; inicioT: number; deslocamento: number };
 
-function semMovimento() {
-  return document.documentElement.dataset.animacoes === "desativadas";
-}
-
-/** A resistência de puxar para cima: nada no começo, e cada vez menos depois. */
-function resistencia(distancia: number) {
-  return Math.max(0, 8 * (Math.log(distancia + 1) - 2));
-}
-
 /** Onde o toque não pode virar arraste: quem digita ou escolhe precisa do dedo. */
 function ehControle(alvo: EventTarget | null) {
   return alvo instanceof Element && alvo.closest("input, textarea, select, [contenteditable='true']") !== null;
-}
-
-/** A folha onde o dedo está, e o fundo clareando na mesma proporção. */
-function posicionar(folha: HTMLDialogElement, deslocamento: number) {
-  folha.style.translate = `0 ${deslocamento}px`;
-  folha.style.setProperty("--arraste", String(Math.max(0, Math.min(1, deslocamento / folha.offsetHeight))));
-}
-
-/**
- * Tira o que um arraste deixou: parada, a folha não fica com `translate` nenhum.
- *
- * Sem transição na hora de tirar: com a da classe valendo, o navegador
- * animaria de "0px" até "none" por mais meio segundo — e era justamente
- * `translate` na folha que fazia o iOS desenhar o cursor fora do campo.
- */
-function limpar(folha: HTMLDialogElement) {
-  folha.style.transition = "none";
-  folha.style.translate = "";
-  folha.style.removeProperty("--arraste");
-  // Aplica sem animar, e só então devolve a transição da classe.
-  void folha.offsetHeight;
-  folha.style.transition = "";
-}
-
-/** Anima o `translate` até `destino` e chama `depois` no fim (ou logo, sem animação). */
-function deslizar(folha: HTMLDialogElement, destino: string, depois: () => void) {
-  if (semMovimento()) {
-    depois();
-    return;
-  }
-  folha.style.transition = `translate ${DURACAO_MS}ms ${CURVA}`;
-  // Um quadro antes de mudar o destino: sem isto, a transição não arranca
-  // quando o valor de partida acabou de ser posto.
-  requestAnimationFrame(() => {
-    folha.style.translate = destino;
-  });
-  let feito = false;
-  const fim = () => {
-    if (feito) return;
-    feito = true;
-    folha.removeEventListener("transitionend", fim);
-    depois();
-  };
-  folha.addEventListener("transitionend", fim);
-  // Se a transição não disparar (aba em segundo plano), não fica preso.
-  window.setTimeout(fim, DURACAO_MS + 80);
 }
 
 export function FolhaDeBaixo({
@@ -136,7 +85,7 @@ export function FolhaDeBaixo({
       abrirModal(folha);
     }
     if (!aberto && folha.open) {
-      deslizar(folha, "0 100%", () => {
+      deslizar(folha, "0 100%", 1, () => {
         folha.close();
         limpar(folha);
       });
@@ -157,7 +106,7 @@ export function FolhaDeBaixo({
     if (!atual || !folha) return;
     const bruto = y - atual.inicioY;
     atual.deslocamento = bruto >= 0 ? bruto : -resistencia(-bruto);
-    posicionar(folha, atual.deslocamento);
+    posicionar(folha, `0 ${atual.deslocamento}px`, atual.deslocamento / folha.offsetHeight);
   }
 
   function terminar(y: number, t: number) {
@@ -166,20 +115,16 @@ export function FolhaDeBaixo({
     arraste.current = null;
     if (!atual || !folha) return;
 
-    // A velocidade do gesto inteiro, como o Vaul mede: distância sobre tempo.
-    const tempo = t - atual.inicioT;
-    const velocidade = tempo > 0 ? (y - atual.inicioY) / tempo : 0;
     const fecha =
       atual.deslocamento > folha.offsetHeight * FRACAO_PARA_FECHAR ||
-      (atual.deslocamento > 0 && velocidade > VELOCIDADE_PARA_FECHAR);
+      (atual.deslocamento > 0 && velocidade(y - atual.inicioY, t - atual.inicioT) > VELOCIDADE_PARA_FECHAR);
 
     if (fecha) {
       // Quem a abriu decide: o efeito de `aberto` desce a folha de onde o dedo a deixou.
       aoFecharRef.current();
       return;
     }
-    folha.style.removeProperty("--arraste");
-    deslizar(folha, "0px", () => limpar(folha));
+    deslizar(folha, "0px", 0, () => limpar(folha));
   }
 
   /* A alça e o título: ponteiro (dedo ou mouse). */
