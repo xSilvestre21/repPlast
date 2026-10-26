@@ -369,6 +369,41 @@ body {
 }
 
 /**
+ * Nada passa da largura da tela.
+ *
+ * A página nova entra deslizando de lado (`chegarPagina`, em `viagem.ts`), e
+ * qualquer sobra — o deslize, um texto que não quebra — deixava o iPhone
+ * arrastar a tela para o lado. `clip`, e não `hidden`: não cria contêiner de
+ * rolagem, e o cabeçalho `sticky` continua preso no topo. As tabelas não somem:
+ * rolam dentro do próprio contêiner (`Tabela`, em `ui.tsx`).
+ */
+html,
+body {
+  overflow-x: clip;
+}
+
+/**
+ * Campo com 16px em tela de toque.
+ *
+ * O Safari do iPhone (e do iPad) dá zoom sozinho ao tocar num campo com fonte
+ * menor que 16px — e não volta: a tela fica ampliada e fora do centro, inclusive
+ * na página seguinte. Os campos do sistema são `text-corpo` (14px). Travar o
+ * zoom na meta viewport tiraria de quem precisa o gesto de ampliar; aumentar a
+ * fonte resolve a causa.
+ *
+ * Fora de `@layer` de propósito: assim vence o utilitário `text-corpo` do
+ * Tailwind. No computador (`pointer: fine`) nada muda.
+ */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea,
+  [contenteditable="true"] {
+    font-size: 16px;
+  }
+}
+
+/**
  * Foco visível no azul interativo.
  *
  * Fica por FORA do elemento, então nunca é engolido pelo canto arredondado —
