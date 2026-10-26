@@ -6,7 +6,9 @@
  *     sai, e o conteúdo continua na tela até lá (antes sumia de uma vez);
  *   - arrastar para a esquerda fecha; arrastar pouco devolve a gaveta, sem
  *     deixar `translate` nenhum;
- *   - abre com o foco na caixa, e não no X.
+ *   - abre com o foco na caixa, e não no X;
+ *   - só o fim do PRÓPRIO deslize encerra a saída: `transitionend` borbulha, e o
+ *     de um link ou do fundo escuro fechava a gaveta de uma vez.
  *
  * Rode com:  npm run test:navegador
  */
@@ -76,6 +78,22 @@ describe("gaveta do menu", () => {
     expect(gaveta.open).toBe(true);
     expect(gaveta.querySelector("nav")).not.toBeNull();
 
+    await vi.waitFor(() => expect(gaveta.open).toBe(false), { timeout: 1500 });
+  });
+
+  test("uma transição de outra coisa terminando não encerra a saída", async () => {
+    const gaveta = await abrirGaveta();
+
+    gaveta.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+    // O que chegava aqui e fechava a gaveta de uma vez: o fim da cor de um
+    // link (borbulha até o <dialog>) e o do fundo escurecido.
+    const link = gaveta.querySelector("a")!;
+    link.dispatchEvent(new TransitionEvent("transitionend", { propertyName: "color", bubbles: true }));
+    gaveta.dispatchEvent(new TransitionEvent("transitionend", { propertyName: "opacity", pseudoElement: "::backdrop" }));
+    await esperar(50);
+
+    expect(gaveta.open).toBe(true);
     await vi.waitFor(() => expect(gaveta.open).toBe(false), { timeout: 1500 });
   });
 

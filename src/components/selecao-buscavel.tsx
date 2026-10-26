@@ -225,7 +225,14 @@ export function SelecaoBuscavel({
     setFiltro(null);
     setDestaque(Math.max(0, opcoes.findIndex((o) => o.id === idSelecionado)));
     // Selecionado por inteiro: a primeira tecla troca o rótulo pelo filtro.
-    requestAnimationFrame(() => campoRef.current?.select());
+    // Já agora, para quem digita antes do próximo quadro; e de novo nele,
+    // porque soltar o clique desfaz a seleção — mas só se nada foi digitado
+    // até lá, ou a busca já começada iria por baixo da próxima tecla.
+    campoRef.current?.select();
+    const rotulo = campoRef.current?.value;
+    requestAnimationFrame(() => {
+      if (campoRef.current && campoRef.current.value === rotulo) campoRef.current.select();
+    });
   }
 
   /** Fechar joga o filtro fora, e a caixa volta a mostrar o escolhido sozinha. */

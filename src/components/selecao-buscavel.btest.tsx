@@ -232,3 +232,26 @@ describe("o que o formulário recebe", () => {
     expect(escondido?.value).toBe("");
   });
 });
+
+describe("digitar logo ao entrar", () => {
+  /*
+   * Com um escolhido, a caixa mostra o rótulo dele, e a primeira tecla tem de
+   * trocá-lo pelo filtro. A seleção que permite isso chegava um quadro depois:
+   * quem digitava antes (ou um celular lento) via "Todas as indústriasqual".
+   */
+  test("a primeira tecla troca o rótulo, mesmo antes do próximo quadro", async () => {
+    const tela = await render(
+      <SelecaoBuscavel name="produtoId" rotulo="Produto" opcoes={PRODUTOS} defaultValue="2" />,
+    );
+    const campo = tela.getByRole("combobox").element() as HTMLInputElement;
+
+    campo.focus();
+    document.execCommand("insertText", false, "canela");
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+
+    expect(campo.value).toBe("canela");
+    // E o quadro seguinte não seleciona o que já foi digitado.
+    expect(campo.selectionStart).toBe(campo.value.length);
+    await expect.element(tela.getByRole("option", { name: /Caixa/ })).toBeVisible();
+  });
+});

@@ -61,20 +61,26 @@ export function deslizar(janela: HTMLElement, destino: string, fundo: 0 | 1, dep
     return;
   }
   janela.style.transition = `translate ${DURACAO_MS}ms ${CURVA}`;
+  let feito = false;
+  const fim = () => {
+    if (feito) return;
+    feito = true;
+    janela.removeEventListener("transitionend", aoTerminar);
+    depois();
+  };
+  // Só o fim DESTE deslize. `transitionend` borbulha: a cor de um link, o
+  // fundo escuro (`::backdrop`) ou a entrada que ainda terminava chegam aqui
+  // também — e davam a saída por terminada antes de ela começar.
+  const aoTerminar = (evento: TransitionEvent) => {
+    if (evento.target === janela && !evento.pseudoElement && evento.propertyName === "translate") fim();
+  };
   // Um quadro antes de mudar o destino: sem isto, a transição não arranca
   // quando o valor de partida acabou de ser posto.
   requestAnimationFrame(() => {
     janela.style.translate = destino;
     janela.style.setProperty("--arraste", String(fundo));
+    if (!feito) janela.addEventListener("transitionend", aoTerminar);
   });
-  let feito = false;
-  const fim = () => {
-    if (feito) return;
-    feito = true;
-    janela.removeEventListener("transitionend", fim);
-    depois();
-  };
-  janela.addEventListener("transitionend", fim);
   // Se a transição não disparar (aba em segundo plano), não fica preso.
   window.setTimeout(fim, DURACAO_MS + 80);
 }
