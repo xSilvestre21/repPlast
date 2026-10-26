@@ -19,9 +19,6 @@ type Escolha = "automatico" | Tema;
  */
 const CHAVE = "tema-escolhido";
 
-/** O `--papel` de cada tema (`globals.css`): a cor da barra do navegador. */
-const COR_DA_BARRA: Record<Tema, string> = { claro: "#fbfbfc", escuro: "#0b0b0f" };
-
 /**
  * Script que roda ANTES da primeira pintura.
  *
@@ -82,27 +79,6 @@ function avisar() {
   for (const aoMudar of ouvintes) aoMudar();
 }
 
-/**
- * A barra do navegador (e a de status do app instalado) na cor da página.
- *
- * O `layout.tsx` gera duas `theme-color`, uma por modo do aparelho. Com o tema
- * fixado, as duas recebem a cor dele — senão, com o app escuro num celular
- * claro, a barra de cima saía clara sobre a página escura. No Automático cada
- * uma volta à sua.
- */
-function pintarBarra() {
-  const escolha = lerEscolha();
-  for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
-    if (escolha !== "automatico") {
-      meta.content = COR_DA_BARRA[escolha];
-      continue;
-    }
-    meta.content = (meta.getAttribute("media") ?? "").includes("dark")
-      ? COR_DA_BARRA.escuro
-      : COR_DA_BARRA.claro;
-  }
-}
-
 function definirEscolha(nova: Escolha) {
   if (nova === "automatico") delete document.documentElement.dataset.tema;
   else document.documentElement.dataset.tema = nova;
@@ -114,22 +90,16 @@ function definirEscolha(nova: Escolha) {
     // Navegador com armazenamento bloqueado: a escolha vale só para esta aba.
   }
 
-  pintarBarra();
   avisar();
 }
 
 /*
- * No cliente, uma vez: a barra na cor certa desde o começo, e o Automático
- * acompanhando o aparelho quando ele troca de modo (a Central de Controle do
- * iPhone, o modo noturno programado) — o CSS já troca sozinho; aqui trocam o
- * ícone do sol/lua e a barra.
+ * No cliente, uma vez: o Automático acompanhando o aparelho quando ele troca
+ * de modo (a Central de Controle do iPhone, o modo noturno programado). O CSS
+ * já troca sozinho; aqui troca o ícone do sol/lua.
  */
 if (typeof window !== "undefined") {
-  pintarBarra();
-  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-    pintarBarra();
-    avisar();
-  });
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", avisar);
 }
 
 function useTemaAtual(): { escolha: Escolha; visivel: Tema } | null {

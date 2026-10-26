@@ -37,8 +37,9 @@ function irAoTopo() {
  * da nova está fora da tela — vindo de uma página rolada um pouco, a nova
  * abria rolada também, com o título colado no cabeçalho. Duas vezes: agora, e
  * um quadro depois, porque o ajuste de rolagem do Next roda depois deste e o
- * desfaria. Voltando pelo histórico, ou indo a uma âncora (`#`), não: ali a
- * posição é a que a pessoa espera reencontrar.
+ * desfaria; e mais uma, se o menu que trouxe até aqui ainda estiver fechando.
+ * Voltando pelo histórico, ou indo a uma âncora (`#`), não: ali a posição é a
+ * que a pessoa espera reencontrar.
  */
 export function Pagina({ children }: { children: ReactNode }) {
   const pagina = useRef<HTMLDivElement>(null);
@@ -55,7 +56,23 @@ export function Pagina({ children }: { children: ReactNode }) {
     if (window.location.hash) return;
     irAoTopo();
     const quadro = requestAnimationFrame(irAoTopo);
-    return () => cancelAnimationFrame(quadro);
+
+    /*
+     * Chegando pelo menu do celular, a gaveta ainda está saindo (meio
+     * segundo), e com ela aberta a rolagem da página fica travada
+     * (`html:has(dialog:modal)`). Nesse estado o Safari do iPhone ignora o
+     * pedido de ir ao topo — ou o guarda e devolve a posição antiga ao
+     * destravar —, e a página nova abria rolada. Então, de novo, quando a
+     * janela fecha.
+     */
+    const janela = document.querySelector("dialog[open]");
+    const aoFechar = () => requestAnimationFrame(irAoTopo);
+    janela?.addEventListener("close", aoFechar, { once: true });
+
+    return () => {
+      cancelAnimationFrame(quadro);
+      janela?.removeEventListener("close", aoFechar);
+    };
   }, []);
 
   return <div ref={pagina}>{children}</div>;
