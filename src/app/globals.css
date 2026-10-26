@@ -375,6 +375,15 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+/*
+ * O `<html>` também no papel. É dele que o Safari mais novo tira a cor da
+ * barra do topo e a do repuxo quando a rolagem passa do fim — sem fundo
+ * próprio, ele saía branco por cima da página escura.
+ */
+html {
+  background: var(--papel);
+}
+
 /**
  * Nada passa da largura da tela.
  *

@@ -6,25 +6,44 @@ import { useSyncExternalStore } from "react";
 import { Segmentado } from "./ui";
 
 type Tema = "claro" | "escuro";
+/** Automático segue o modo claro/escuro do aparelho; os outros fixam. */
+type Escolha = "automatico" | Tema;
+
+/**
+ * Onde a escolha fica guardada.
+ *
+ * A chave mudou de `tema` para `tema-escolhido` quando o Automático virou o
+ * padrão: quem tinha tocado no sol/lua uma vez ficava preso ao tema para
+ * sempre, e no celular com o modo trocado a barra do topo saía de outra cor.
+ * Trocar a chave devolveu todo mundo ao Automático de uma vez.
+ */
+const CHAVE = "tema-escolhido";
+
+/** O `--papel` de cada tema (`globals.css`): a cor da barra do navegador. */
+const COR_DA_BARRA: Record<Tema, string> = { claro: "#fbfbfc", escuro: "#0b0b0f" };
 
 /**
  * Script que roda ANTES da primeira pintura.
  *
  * Sem ele a página nasceria no tema padrão e trocaria depois da hidratação —
  * um flash branco a cada carregamento, que é justamente o que mais incomoda
- * em quem usa tema escuro.
+ * em quem usa tema escuro. Apaga também a chave antiga (ver `CHAVE`).
  */
-export const SCRIPT_TEMA = `(function(){try{var t=localStorage.getItem('tema');if(t==='claro'||t==='escuro'){document.documentElement.dataset.tema=t}}catch(e){}})()`;
+export const SCRIPT_TEMA = `(function(){try{localStorage.removeItem('tema');var t=localStorage.getItem('${CHAVE}');if(t==='claro'||t==='escuro'){document.documentElement.dataset.tema=t}}catch(e){}})()`;
 
 /*
  * O tema mora fora do React: quem manda é o atributo `data-tema` no <html>,
- * porque é ele que o CSS lê. Este pequeno store existe só para os componentes
- * acompanharem essa fonte externa, via `useSyncExternalStore` — que é feito
- * exatamente para isto e resolve a hidratação sem `setState` dentro de efeito.
+ * porque é ele que o CSS lê — sem ele, valem as regras de
+ * `prefers-color-scheme`, e o tema acompanha o aparelho sozinho. Este pequeno
+ * store existe só para os componentes acompanharem essa fonte externa, via
+ * `useSyncExternalStore`.
+ *
+ * O instantâneo é um texto ("automatico:escuro"), e não um objeto: o React
+ * compara por referência, e um texto igual é igual.
  */
 
 let ouvintes: (() => void)[] = [];
-let cache: Tema | null = null;
+let cache: string | null = null;
 
 function inscrever(aoMudar: () => void) {
   ouvintes.push(aoMudar);
@@ -33,51 +52,109 @@ function inscrever(aoMudar: () => void) {
   };
 }
 
-function lerDoDocumento(): Tema {
-  const escolhido = document.documentElement.dataset.tema;
-  if (escolhido === "claro" || escolhido === "escuro") return escolhido;
-
-  return window.matchMedia("(prefers-color-scheme: light)").matches ? "claro" : "escuro";
+function lerEscolha(): Escolha {
+  const fixado = document.documentElement.dataset.tema;
+  return fixado === "claro" || fixado === "escuro" ? fixado : "automatico";
 }
 
-/** O valor precisa ser estável entre notificações, daí o cache. */
-function instantaneoCliente(): Tema {
-  if (cache === null) cache = lerDoDocumento();
+function temaDoAparelho(): Tema {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "escuro" : "claro";
+}
+
+/** O tema que está na tela: o fixado, ou o do aparelho. */
+function lerVisivel(): Tema {
+  const escolha = lerEscolha();
+  return escolha === "automatico" ? temaDoAparelho() : escolha;
+}
+
+function instantaneoCliente(): string {
+  cache ??= `${lerEscolha()}:${lerVisivel()}`;
   return cache;
 }
 
-/** No servidor não há tema: o botão renderiza vazio até hidratar. */
+/** No servidor não há tema: os controles renderizam vazios até hidratar. */
 function instantaneoServidor(): null {
   return null;
 }
 
-function definirTema(novo: Tema) {
-  cache = novo;
-  document.documentElement.dataset.tema = novo;
-
-  try {
-    localStorage.setItem("tema", novo);
-  } catch {
-    // Navegador com armazenamento bloqueado: o tema vale só para esta aba.
-  }
-
+function avisar() {
+  cache = null;
   for (const aoMudar of ouvintes) aoMudar();
 }
 
+/**
+ * A barra do navegador (e a de status do app instalado) na cor da página.
+ *
+ * O `layout.tsx` gera duas `theme-color`, uma por modo do aparelho. Com o tema
+ * fixado, as duas recebem a cor dele — senão, com o app escuro num celular
+ * claro, a barra de cima saía clara sobre a página escura. No Automático cada
+ * uma volta à sua.
+ */
+function pintarBarra() {
+  const escolha = lerEscolha();
+  for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
+    if (escolha !== "automatico") {
+      meta.content = COR_DA_BARRA[escolha];
+      continue;
+    }
+    meta.content = (meta.getAttribute("media") ?? "").includes("dark")
+      ? COR_DA_BARRA.escuro
+      : COR_DA_BARRA.claro;
+  }
+}
+
+function definirEscolha(nova: Escolha) {
+  if (nova === "automatico") delete document.documentElement.dataset.tema;
+  else document.documentElement.dataset.tema = nova;
+
+  try {
+    if (nova === "automatico") localStorage.removeItem(CHAVE);
+    else localStorage.setItem(CHAVE, nova);
+  } catch {
+    // Navegador com armazenamento bloqueado: a escolha vale só para esta aba.
+  }
+
+  pintarBarra();
+  avisar();
+}
+
+/*
+ * No cliente, uma vez: a barra na cor certa desde o começo, e o Automático
+ * acompanhando o aparelho quando ele troca de modo (a Central de Controle do
+ * iPhone, o modo noturno programado) — o CSS já troca sozinho; aqui trocam o
+ * ícone do sol/lua e a barra.
+ */
+if (typeof window !== "undefined") {
+  pintarBarra();
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    pintarBarra();
+    avisar();
+  });
+}
+
+function useTemaAtual(): { escolha: Escolha; visivel: Tema } | null {
+  const instantaneo = useSyncExternalStore(inscrever, instantaneoCliente, instantaneoServidor);
+  if (instantaneo === null) return null;
+  const [escolha, visivel] = instantaneo.split(":") as [Escolha, Tema];
+  return { escolha, visivel };
+}
+
+/** O sol/lua do topo: fixa o tema oposto ao que está na tela. */
 export function AlternadorTema() {
-  const tema = useSyncExternalStore(inscrever, instantaneoCliente, instantaneoServidor);
+  const tema = useTemaAtual();
+  const visivel = tema?.visivel ?? null;
 
   return (
     <button
       type="button"
-      onClick={() => definirTema(tema === "claro" ? "escuro" : "claro")}
-      aria-label={tema === "claro" ? "Mudar para o tema escuro" : "Mudar para o tema claro"}
+      onClick={() => definirEscolha(visivel === "claro" ? "escuro" : "claro")}
+      aria-label={visivel === "claro" ? "Mudar para o tema escuro" : "Mudar para o tema claro"}
       className="relative alvo-toque grid place-items-center size-8 text-tinta-3 cursor-pointer shrink-0
         transition-colors duration-150 hover:text-carimbo"
     >
-      {tema === null ? (
+      {visivel === null ? (
         <span className="block size-4" />
-      ) : tema === "claro" ? (
+      ) : visivel === "claro" ? (
         <Moon size={15} strokeWidth={1.5} aria-hidden="true" />
       ) : (
         <Sun size={15} strokeWidth={1.5} aria-hidden="true" />
@@ -88,11 +165,11 @@ export function AlternadorTema() {
 
 /**
  * A mesma escolha, por extenso — para Configurações › Preferências, onde quem
- * procura "tema" não acha o ícone do sol lá no alto. As duas leem o mesmo
- * store: trocar aqui troca o ícone do topo, e o contrário.
+ * procura "tema" não acha o ícone do sol lá no alto. Aqui mora o Automático,
+ * que o sol/lua não oferece: é por aqui que se volta a seguir o aparelho.
  */
 export function EscolhaTema() {
-  const tema = useSyncExternalStore(inscrever, instantaneoCliente, instantaneoServidor);
+  const tema = useTemaAtual();
 
   // No servidor não há tema: um espaço do tamanho do controle, até hidratar.
   if (tema === null) return <span className="block h-8" />;
@@ -100,9 +177,10 @@ export function EscolhaTema() {
   return (
     <Segmentado
       nome="Tema"
-      atual={tema}
-      aoEscolher={definirTema}
+      atual={tema.escolha}
+      aoEscolher={definirEscolha}
       opcoes={[
+        { valor: "automatico", rotulo: "Automático" },
         { valor: "claro", rotulo: "Claro" },
         { valor: "escuro", rotulo: "Escuro" },
       ]}

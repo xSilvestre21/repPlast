@@ -217,11 +217,11 @@ export default async function PaginaConfiguracoes({ searchParams }: PageProps<"/
         </SecaoConfiguracao>
 
         <SecaoConfiguracao id="preferencias" titulo="Preferências">
-          <ItemConfiguracao busca="tema claro escuro modo noturno cor cores aparência preferência">
+          <ItemConfiguracao busca="tema claro escuro automático sistema modo noturno cor cores aparência preferência">
             <SecaoCartao
               icone={Palette}
               titulo="Tema"
-              descricao="Claro ou escuro. Vale para este navegador — no celular, escolha lá também. É o mesmo botão do sol e da lua, no alto da tela."
+              descricao="Automático segue o modo claro ou escuro do celular (ou do computador). Claro e Escuro fixam, e valem só para este navegador. O sol e a lua, no alto da tela, também fixam."
             >
               <EscolhaTema />
             </SecaoCartao>
