@@ -120,13 +120,17 @@ export function unidadeDoRotulo(rotulo: string | null | undefined): UnidadeVenda
  * A fita aparece com as duas porque o usuário vende tanto rolo avulso quanto
  * caixa fechada; quais delas de fato valem depende de quais preços o produto
  * tem cadastrados (ver `unidadesComPreco`).
+ *
+ * A unidade ("un") vale para toda família: a amostra de 25 sacos ou de duas
+ * bobinas de stretch não é 0,025 milheiro nem um número de quilos. A primeira
+ * da lista continua sendo a de costume.
  */
 export function unidadesDaFamilia(familia: Familia): UnidadeVenda[] {
   switch (familia) {
     case "SACO":
       // Milheiro é o comum; por quilo existe — 27 sacos do acervo do SICOV
       // eram vendidos assim.
-      return ["MIL", "KG"];
+      return ["MIL", "KG", "UN"];
     case "FITA":
       return ["CX", "UN"];
     case "AVULSO":
@@ -137,7 +141,9 @@ export function unidadesDaFamilia(familia: Familia): UnidadeVenda[] {
        */
       return ["UN", "KG", "CX", "MIL"];
     default:
-      return ["KG"];
+      // Stretch e bobina: o cadastro não tem o peso do rolo, então por
+      // unidade não há preço calculado — ele é digitado no item.
+      return ["KG", "UN"];
   }
 }
 
@@ -146,6 +152,18 @@ export function unidadesComPreco(produto: ProdutoPrecificavel): UnidadeVenda[] {
   return unidadesDaFamilia(produto.familia).filter(
     (unidade) => precoUnitario(produto, unidade) !== null,
   );
+}
+
+/**
+ * As unidades que o lançamento do item oferece: as que têm preço, e a unidade
+ * sempre — com o preço digitado quando o cadastro não dá um.
+ *
+ * Não são todas as da família de propósito: milheiro ou caixa sem preço não
+ * ajudam ninguém; a unidade sim, porque é nela que a amostra vai.
+ */
+export function unidadesDoItem(produto: ProdutoPrecificavel): UnidadeVenda[] {
+  const comPreco = unidadesComPreco(produto);
+  return comPreco.includes("UN") ? comPreco : [...comPreco, "UN"];
 }
 
 /**
@@ -169,14 +187,14 @@ export function precoUnitario(
     if (unidade === "KG") {
       return produto.fatorKg == null ? null : fatorEfetivo(produto.fatorKg, produto.aditivos);
     }
-    if (unidade !== "MIL") return null;
+    if (unidade !== "MIL" && unidade !== "UN") return null;
 
     const { larguraCm, comprimentoCm, espessuraMm, fatorKg } = produto;
     if (larguraCm == null || comprimentoCm == null || espessuraMm == null || fatorKg == null) {
       return null;
     }
 
-    return precoMilheiroSaco({
+    const milheiro = precoMilheiroSaco({
       larguraCm,
       comprimentoCm,
       espessuraMm,
@@ -184,6 +202,10 @@ export function precoUnitario(
       densidade: produto.densidade,
       aditivos: produto.aditivos,
     });
+
+    // A unidade é o milheiro dividido por mil — a mesma conta, sem fórmula
+    // nova, e sem arredondar antes de multiplicar pela quantidade.
+    return unidade === "UN" ? milheiro.dividedBy(1000) : milheiro;
   }
 
   if (produto.familia === "FITA") {
@@ -238,14 +260,15 @@ export function pesoDoItem(
 ): Decimal {
   if (unidade === "KG") return new Decimal(quantidade);
 
-  if (produto.familia === "SACO" && unidade === "MIL") {
+  if (produto.familia === "SACO" && (unidade === "MIL" || unidade === "UN")) {
     const { larguraCm, comprimentoCm, espessuraMm } = produto;
     if (larguraCm == null || comprimentoCm == null || espessuraMm == null) return new Decimal(0);
 
+    const milheiros = unidade === "UN" ? new Decimal(quantidade).dividedBy(1000) : quantidade;
     return pesoMilheiroKg(
       { larguraCm, comprimentoCm, espessuraMm },
       produto.densidade,
-    ).times(quantidade);
+    ).times(milheiros);
   }
 
   return new Decimal(0);

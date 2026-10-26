@@ -17,6 +17,7 @@ import {
   precoUnitario,
   unidadesComPreco,
   unidadesDaFamilia,
+  unidadesDoItem,
   type ProdutoPrecificavel,
 } from "./produto-preco";
 
@@ -112,11 +113,24 @@ describe("preço unitário por família", () => {
 });
 
 describe("unidades válidas", () => {
-  it("cada família aceita só as suas unidades", () => {
-    expect(unidadesDaFamilia("SACO")).toEqual(["MIL", "KG"]);
+  it("cada família aceita as suas unidades, e a unidade vale para todas", () => {
+    expect(unidadesDaFamilia("SACO")).toEqual(["MIL", "KG", "UN"]);
     expect(unidadesDaFamilia("FITA")).toEqual(["CX", "UN"]);
-    expect(unidadesDaFamilia("STRETCH")).toEqual(["KG"]);
-    expect(unidadesDaFamilia("BOBINA")).toEqual(["KG"]);
+    expect(unidadesDaFamilia("STRETCH")).toEqual(["KG", "UN"]);
+    expect(unidadesDaFamilia("BOBINA")).toEqual(["KG", "UN"]);
+  });
+
+  it("o lançamento oferece as unidades com preço e a unidade, sem repeti-la", () => {
+    expect(unidadesDoItem(SACO_2253)).toEqual(["MIL", "KG", "UN"]);
+    expect(unidadesDoItem(STRETCH_146)).toEqual(["KG", "UN"]);
+    expect(unidadesDoItem(FITA_133)).toEqual(["CX", "UN"]);
+    // Avulso vendido por quilo: a unidade entra com o preço digitado.
+    expect(unidadesDoItem({ familia: "AVULSO", unidadeAvulsa: "KG", precoAvulso: 8 })).toEqual([
+      "KG",
+      "UN",
+    ]);
+    // Sem preço nenhum, sobra a unidade — a amostra ainda entra.
+    expect(unidadesDoItem({ familia: "SACO", larguraCm: 99 })).toEqual(["UN"]);
   });
 
   it("recusa unidade que não pertence à família", () => {
@@ -134,6 +148,17 @@ describe("unidades válidas", () => {
 
   it("devolve null quando faltam medidas do saco", () => {
     expect(precoUnitario({ familia: "SACO", larguraCm: 99 }, "MIL")).toBeNull();
+    expect(precoUnitario({ familia: "SACO", larguraCm: 99 }, "UN")).toBeNull();
+  });
+
+  it("saco por unidade é o milheiro dividido por mil, sem arredondar", () => {
+    const milheiro = precoUnitario(SACO_2253, "MIL")!;
+    expect(precoUnitario(SACO_2253, "UN")?.equals(milheiro.dividedBy(1000))).toBe(true);
+    expect(precoUnitario(SACO_2253, "UN")?.toDecimalPlaces(6).toFixed(6)).toBe("1.774872");
+  });
+
+  it("stretch por unidade não tem preço calculado — ele é digitado", () => {
+    expect(precoUnitario(STRETCH_146, "UN")).toBeNull();
   });
 });
 
@@ -154,6 +179,11 @@ describe("peso do item", () => {
   it("saco usa o peso do milheiro vezes a quantidade", () => {
     // 99 × 166 × 0,08 ÷ 10 = 131,472 kg por milheiro.
     expect(pesoDoItem(SACO_2253, "MIL", 6).toFixed(3)).toBe("788.832");
+  });
+
+  it("saco por unidade pesa o milheiro dividido por mil", () => {
+    expect(pesoDoItem(SACO_2253, "UN", 6000).toFixed(3)).toBe("788.832");
+    expect(pesoDoItem(SACO_2253, "UN", 25).toFixed(3)).toBe("3.287");
   });
 });
 

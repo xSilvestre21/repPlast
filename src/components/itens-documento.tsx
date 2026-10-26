@@ -32,7 +32,7 @@ import {
   type UnidadeVenda,
   precoUnitario,
   rotuloPrecoDosItens,
-  unidadesComPreco,
+  unidadesDoItem,
 } from "@/lib/produto-preco";
 
 /**
@@ -572,15 +572,9 @@ function FormularioAdicao({
     [produtos],
   );
 
-  // Na amostra o preço não importa: o produto sem preço cadastrado também
-  // entra, em qualquer unidade.
-  const unidades = useMemo(() => {
-    if (!produto) return [];
-    const comPreco = unidadesComPreco(produto);
-    return semPreco && comPreco.length === 0
-      ? (Object.keys(ROTULO_UNIDADE) as UnidadeVenda[])
-      : comPreco;
-  }, [produto, semPreco]);
+  // As que têm preço, e a unidade sempre: é nela que vai a amostra de 25 sacos
+  // ou de duas bobinas. Sem preço calculado, ele é digitado (`unidadesDoItem`).
+  const unidades = useMemo(() => (produto ? unidadesDoItem(produto) : []), [produto]);
 
   const unidadeEfetiva = (unidade ||
     (produto?.unidadePadrao && unidades.includes(produto.unidadePadrao)
@@ -684,7 +678,13 @@ function FormularioAdicao({
           inputMode="decimal"
           value={preco}
           onChange={(e) => setPrecoManual(e.target.value)}
-          dica={precoCalculado ? "Calculado — dá para ajustar." : undefined}
+          dica={
+            precoCalculado
+              ? "Calculado — dá para ajustar."
+              : unidadeEfetiva === "UN"
+                ? "Digite o preço por unidade."
+                : undefined
+          }
           className="lg:w-36"
         />
 
