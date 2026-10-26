@@ -881,6 +881,13 @@ body {
   }
 }
 
+/* Arrastando para fechar, o fundo clareia junto (`--arraste`, de 0 a 1, posto
+   pelo componente). Navegador que não herda variável no `::backdrop` só deixa
+   o fundo escuro até o fim — nada quebra. */
+.folha-de-baixo::backdrop {
+  opacity: calc(1 - var(--arraste, 0) * 0.6);
+}
+
 /**
  * Tabela que vira cartões no celular em pé.
  *

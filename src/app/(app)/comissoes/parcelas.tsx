@@ -242,10 +242,16 @@ export function EditorParcelas({
           autoComplete="off"
           className="basis-48 grow"
         />
-        <div>
+        <div className="max-sm:basis-full">
           <EspacoDoRotulo />
           <div className="flex items-center h-11">
-            <Botao type="button" variante="secundaria" icone={Scissors} onClick={dividir}>
+            <Botao
+              type="button"
+              variante="secundaria"
+              icone={Scissors}
+              onClick={dividir}
+              className="max-sm:w-full max-sm:justify-center"
+            >
               Dividir em partes iguais
             </Botao>
           </div>
@@ -274,9 +280,17 @@ export function EditorParcelas({
                 erroDoCampo(estado, campoDaLinha("base", i));
 
               return (
+                /*
+                  No celular, cada parcela vira um bloco de três faixas — data,
+                  valor, e o mês e a comissão —, com o número à esquerda e o ×
+                  à direita. A linha de cinco colunas pedia uns 616px, e na folha
+                  do iPhone o valor e a comissão ficavam para o lado.
+                */
                 <li
                   key={`${geracao}-${i}`}
-                  className="grid grid-cols-[2.5rem_minmax(15rem,17rem)_minmax(9rem,1fr)_minmax(7rem,auto)_2rem] items-center gap-3"
+                  className="grid grid-cols-[2.5rem_minmax(15rem,17rem)_minmax(9rem,1fr)_minmax(7rem,auto)_2rem]
+                    max-sm:grid-cols-[2rem_minmax(0,1fr)_2rem] max-sm:gap-x-2 max-sm:gap-y-2 items-center gap-3
+                    max-sm:border-b max-sm:border-filete max-sm:pb-3 max-sm:last:border-b-0"
                 >
                   <span className="text-mini text-tinta-3 numerico">
                     {i + 1}/{linhas.length}
@@ -295,7 +309,7 @@ export function EditorParcelas({
                       A última não se digita: é o que sobra da venda. É ela que
                       recebe o "restante para frente" quando as outras mudam.
                     */
-                    <div>
+                    <div className="max-sm:col-start-2">
                       <input type="hidden" name="base" value={restante.toFixed(2)} />
                       <div
                         className={`${CLASSE_CONTROLE} numerico flex justify-between ${
@@ -313,11 +327,11 @@ export function EditorParcelas({
                       rotulo={`Valor da parcela ${i + 1}`}
                       defaultValue={linha.valor}
                       onChange={(e) => mudar(i, "valor", e.currentTarget.value)}
-                      className="[&>span:first-child]:sr-only"
+                      className="[&>span:first-child]:sr-only max-sm:col-start-2"
                     />
                   )}
 
-                  <span className="text-mini text-tinta-3 leading-snug">
+                  <span className="text-mini text-tinta-3 leading-snug max-sm:col-start-2">
                     {recebe ? (
                       <>
                         vence {mesDe(linha.vencimento)}
@@ -342,16 +356,20 @@ export function EditorParcelas({
                       onClick={() => remover(i)}
                       aria-label={`Remover a parcela ${i + 1}`}
                       className="relative alvo-toque grid place-items-center size-8 rounded-full text-tinta-3 transition-colors
-                        hover:bg-folha-2 hover:text-perigo cursor-pointer"
+                        hover:bg-folha-2 hover:text-perigo cursor-pointer max-sm:col-start-3 max-sm:row-start-1"
                     >
                       <X size={14} strokeWidth={2} aria-hidden="true" />
                     </button>
                   ) : (
-                    <span />
+                    <span className="max-sm:col-start-3 max-sm:row-start-1" />
                   )}
 
                   {erroDaLinha && (
-                    <p data-invalido="" role="alert" className="col-start-2 col-span-3 -mt-1 text-mini text-perigo">
+                    <p
+                      data-invalido=""
+                      role="alert"
+                      className="col-start-2 col-span-3 max-sm:col-span-1 -mt-1 text-mini text-perigo"
+                    >
                       {erroDaLinha}
                     </p>
                   )}
@@ -371,7 +389,13 @@ export function EditorParcelas({
           <MensagemErro>{estadoDesfazer.erro}</MensagemErro>
 
           <div className="flex flex-wrap items-center gap-3">
-            <Botao type="submit" variante="secundaria" carregando={salvando} disabled={restanteInvalido}>
+            <Botao
+              type="submit"
+              variante="secundaria"
+              carregando={salvando}
+              disabled={restanteInvalido}
+              className="max-sm:w-full max-sm:justify-center max-sm:py-3"
+            >
               {salvando ? "Salvando…" : "Salvar parcelas"}
             </Botao>
             <BotaoTexto type="button" onClick={adicionar} className="inline-flex items-center gap-1">

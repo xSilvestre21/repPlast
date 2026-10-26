@@ -44,8 +44,26 @@ export function usePagamentoComissao(inicial: string) {
             atual={pagamento}
             aoEscolher={setPagamento}
             opcoes={[
-              { valor: "vencimento", rotulo: "no mês do vencimento" },
-              { valor: "seguinte", rotulo: "no mês seguinte ao faturamento" },
+              // Curto no celular: na folha, o rótulo inteiro cortava. A frase
+              // "A comissão deste pedido conta em…", logo abaixo, diz o mês.
+              {
+                valor: "vencimento",
+                rotulo: (
+                  <>
+                    <span className="sm:hidden">no vencimento</span>
+                    <span className="max-sm:hidden">no mês do vencimento</span>
+                  </>
+                ),
+              },
+              {
+                valor: "seguinte",
+                rotulo: (
+                  <>
+                    <span className="sm:hidden">após faturar</span>
+                    <span className="max-sm:hidden">no mês seguinte ao faturamento</span>
+                  </>
+                ),
+              },
             ]}
           />
         </div>

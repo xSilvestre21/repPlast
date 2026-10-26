@@ -100,4 +100,23 @@ describe("apuração no celular em pé", () => {
     await folha.getByRole("button", { name: "Fechar" }).click();
     await expect.element(folha).not.toBeInTheDocument();
   });
+
+  test("o parcelamento cabe na folha: nenhuma parcela fica para o lado", async () => {
+    await montar();
+
+    await page.getByRole("button", { name: /acertar/ }).click();
+    const folha = page.getByRole("dialog");
+    await folha.getByRole("button", { name: "Parcelar o recebimento" }).click();
+    await folha.getByLabelText("Dias a partir da entrega").fill("28/35/42");
+    await folha.getByRole("button", { name: "Dividir em partes iguais" }).click();
+
+    await expect.element(folha.getByText("restante")).toBeVisible();
+    const caixa = document.querySelector("dialog")!.getBoundingClientRect();
+    const parcelas = [...document.querySelectorAll("dialog ol > li")];
+    expect(parcelas).toHaveLength(3);
+    for (const parcela of parcelas) {
+      expect(parcela.scrollWidth).toBeLessThanOrEqual(parcela.clientWidth);
+      expect(parcela.getBoundingClientRect().right).toBeLessThanOrEqual(caixa.right);
+    }
+  });
 });
