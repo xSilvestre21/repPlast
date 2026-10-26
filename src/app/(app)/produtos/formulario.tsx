@@ -385,6 +385,22 @@ export function FormularioProduto({
     });
   }, [campos, sufixos]);
 
+  /*
+   * Mexeu numa especificação que entra na descrição (medidas, material,
+   * sanfona, complemento, aditivos), a descrição volta a ser a gerada.
+   *
+   * Ao editar, a descrição gravada abre como "digitada" — é o que preserva o
+   * texto do sistema anterior de quem só abre e salva. Mas ela ficava presa
+   * aí: o saco passava de 30x40 para 35x45 e continuava impresso 30x40. A
+   * comparação é com a gerada da renderização anterior, e não com o campo:
+   * abrir a tela não muda nada; mudar a especificação muda.
+   */
+  const [geradaVista, setGeradaVista] = useState(descricaoGerada);
+  if (descricaoGerada !== geradaVista) {
+    setGeradaVista(descricaoGerada);
+    setDescricaoManual(null);
+  }
+
   const descricao = descricaoManual ?? descricaoGerada;
   const descricaoDivergente =
     descricaoManual !== null && descricaoGerada !== "" && descricaoManual !== descricaoGerada;
@@ -1033,7 +1049,7 @@ export function FormularioProduto({
         <SecaoCartao
           icone={FileText}
           titulo="Como sai no pedido"
-          descricao="A descrição é montada a partir das medidas, mas você pode ajustar."
+          descricao="A descrição é montada a partir das especificações, e acompanha qualquer mudança nelas. Dá para ajustar o texto depois."
         >
           <Campo
             name="descricao"

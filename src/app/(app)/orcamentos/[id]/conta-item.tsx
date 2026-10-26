@@ -312,6 +312,14 @@ export function ContaItem({
     });
   })();
 
+  // Mexeu na conta, a descrição volta a ser a gerada — como no cadastro de
+  // produto: o saco que virou 35x45 não pode seguir escrito 30x40.
+  const [geradaVista, setGeradaVista] = useState(descricaoGerada);
+  if (descricaoGerada !== geradaVista) {
+    setGeradaVista(descricaoGerada);
+    setDescricaoManual(null);
+  }
+
   const descricao = descricaoManual ?? descricaoGerada;
 
   /** O rastro da conta do saco, para conferir de olho antes de lançar. */
