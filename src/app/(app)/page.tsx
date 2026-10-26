@@ -130,13 +130,13 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
     // Só quem já comprou pode ter sumido: cliente cadastrado e nunca atendido
     // é assunto de prospecção, não de positivação.
     db.cliente.findMany({
-      where: { organizacaoId, ativo: true, pedidos: { some: { status: "ENVIADO" } } },
+      where: { organizacaoId, ativo: true, pedidos: { some: { status: "ENVIADO", amostra: false } } },
       select: {
         id: true,
         apelido: true,
         razaoSocial: true,
         pedidos: {
-          where: { status: "ENVIADO" },
+          where: { status: "ENVIADO", amostra: false },
           orderBy: { enviadoEm: "desc" },
           take: 1,
           select: { enviadoEm: true, totalGeral: true },

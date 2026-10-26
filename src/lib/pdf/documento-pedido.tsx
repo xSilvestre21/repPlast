@@ -34,6 +34,11 @@ export interface ItemPdf {
 
 export interface DadosPedidoPdf {
   numero: number;
+  /**
+   * Pedido de amostra: o título diz, uma faixa avisa que é sem custo, e as
+   * colunas de preço, IPI e total saem — a descrição fica com a largura delas.
+   */
+  amostra?: boolean;
   data: Date;
   /**
    * Cabeçalho da coluna de preço, já decidido olhando TODAS as linhas — ver
@@ -198,6 +203,17 @@ const estilos = StyleSheet.create({
   },
 
   rodape: { position: "absolute", bottom: 44.8, left: MARGEM, right: MARGEM, fontSize: 9 },
+
+  faixaAmostra: {
+    borderWidth: 0.75,
+    borderColor: "#000000",
+    paddingVertical: 4,
+    marginBottom: 8,
+    textAlign: "center",
+    fontSize: 10,
+    fontFamily: "Helvetica-Bold",
+  },
+  semValor: { marginTop: 6.7, textAlign: "right", fontSize: 11, fontFamily: "Helvetica-Bold" },
 });
 
 /**
@@ -260,11 +276,14 @@ function Campo({
 export function DocumentoPedido({ pedido }: { pedido: DadosPedidoPdf }) {
   const { cliente } = pedido;
 
-  const { rotuloPreco } = pedido;
+  const { rotuloPreco, amostra = false } = pedido;
+  const larguraDescricao = amostra
+    ? COLUNAS.descricao + COLUNAS.preco + COLUNAS.totalSemIpi + COLUNAS.ipi + COLUNAS.total
+    : COLUNAS.descricao;
 
   return (
     <Document
-      title={`Pedido ${pedido.numero} — ${cliente.razaoSocial}`}
+      title={`${amostra ? "Pedido de amostra" : "Pedido"} ${pedido.numero} — ${cliente.razaoSocial}`}
       author={pedido.vendedor ?? undefined}
     >
       <Page size="A4" orientation="landscape" style={estilos.pagina}>
@@ -278,12 +297,20 @@ export function DocumentoPedido({ pedido }: { pedido: DadosPedidoPdf }) {
           )}
 
           <View style={estilos.blocoNumero}>
-            <Text style={estilos.numeroPedido}>PEDIDO Nº {pedido.numero}</Text>
+            <Text style={estilos.numeroPedido}>
+              {amostra ? "PEDIDO DE AMOSTRA" : "PEDIDO"} Nº {pedido.numero}
+            </Text>
             <Text style={estilos.dataPedido}>Data: {DATA.format(pedido.data)}</Text>
           </View>
         </View>
 
         <View style={estilos.regua} />
+
+        {amostra && (
+          <Text style={estilos.faixaAmostra}>
+            AMOSTRA SEM CUSTO — PARA TESTE DO CLIENTE · SEM VALOR COMERCIAL
+          </Text>
+        )}
 
         <Text style={estilos.tituloSecao}>DADOS DO CLIENTE</Text>
 
@@ -358,7 +385,7 @@ export function DocumentoPedido({ pedido }: { pedido: DadosPedidoPdf }) {
             COD.FORN
           </Text>
           <Text style={[estilos.colunaCabecalho, { width: COLUNAS.codigoCliente }]}>COD.CLI</Text>
-          <Text style={[estilos.colunaCabecalho, { width: COLUNAS.descricao }]}>DESCRIÇÃO</Text>
+          <Text style={[estilos.colunaCabecalho, { width: larguraDescricao }]}>DESCRIÇÃO</Text>
           <Text
             style={[
               estilos.colunaCabecalho,
@@ -370,6 +397,8 @@ export function DocumentoPedido({ pedido }: { pedido: DadosPedidoPdf }) {
           <Text style={[estilos.colunaCabecalho, { width: COLUNAS.unidade, paddingLeft: 6 }]}>
             UN
           </Text>
+          {!amostra && (
+          <>
           <Text
             style={[
               estilos.colunaCabecalho,
@@ -397,6 +426,8 @@ export function DocumentoPedido({ pedido }: { pedido: DadosPedidoPdf }) {
           <Text style={[estilos.colunaCabecalho, { width: COLUNAS.total, textAlign: "right" }]}>
             TOTAL
           </Text>
+          </>
+          )}
         </View>
 
         <View style={estilos.corpoTabela}>
@@ -408,13 +439,15 @@ export function DocumentoPedido({ pedido }: { pedido: DadosPedidoPdf }) {
               <Text style={[estilos.celula, { width: COLUNAS.codigoCliente }]}>
                 {item.codigoCliente ?? ""}
               </Text>
-              <Text style={[estilos.celula, { width: COLUNAS.descricao }]}>{item.descricao}</Text>
+              <Text style={[estilos.celula, { width: larguraDescricao }]}>{item.descricao}</Text>
               <Text style={[estilos.celulaNumero, { width: COLUNAS.quantidade }]}>
                 {quantidade(item.quantidade)}
               </Text>
               <Text style={[estilos.celula, { width: COLUNAS.unidade, paddingLeft: 6 }]}>
                 {ROTULO_UNIDADE[item.unidade]}
               </Text>
+              {!amostra && (
+              <>
               <Text style={[estilos.celulaNumero, { width: COLUNAS.preco }]}>
                 {dinheiro(item.precoUnitario)}
               </Text>
@@ -429,10 +462,15 @@ export function DocumentoPedido({ pedido }: { pedido: DadosPedidoPdf }) {
               >
                 {dinheiro(item.total)}
               </Text>
+              </>
+              )}
             </View>
           ))}
         </View>
 
+        {amostra ? (
+          <Text style={estilos.semValor}>SEM VALOR COMERCIAL</Text>
+        ) : (
         <View style={estilos.totais}>
           <View style={estilos.linhaTotal}>
             <Text style={estilos.rotuloTotal}>Subtotal s/ IPI:</Text>
@@ -453,6 +491,7 @@ export function DocumentoPedido({ pedido }: { pedido: DadosPedidoPdf }) {
             <Text style={estilos.valorTotalGeral}>{dinheiro(pedido.totalGeral)}</Text>
           </View>
         </View>
+        )}
 
         {pedido.vendedor && (
           <Text style={estilos.rodape} fixed>

@@ -23,11 +23,14 @@ export function FormularioNovoPedido({
   fornecedores,
   acao,
   rotuloEnvio = "Criar pedido",
+  comAmostra = false,
 }: {
   clientes: Opcao[];
   fornecedores: Opcao[];
   acao: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   rotuloEnvio?: string;
+  /** Só o pedido pergunta se é amostra; a proposta é sempre de venda. */
+  comAmostra?: boolean;
 }) {
   const [estado, enviar, enviando] = useActionState(acao, {});
 
@@ -58,6 +61,24 @@ export function FormularioNovoPedido({
             dica="O IPI e a comissão dela ficam congelados neste pedido."
           />
         </div>
+
+        {comAmostra && (
+          <label className="mt-4 flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              name="amostra"
+              defaultChecked={estado.valores?.amostra === "on"}
+              className="mt-1 size-4 shrink-0 accent-carimbo cursor-pointer"
+            />
+            <span className="text-corpo">
+              <span className="font-medium text-tinta">Pedido de amostra</span>
+              <span className="block text-mini text-tinta-2">
+                Produto para o cliente testar, sem custo: o PDF sai sem preço, e o pedido fica fora da
+                comissão, das metas e dos gráficos.
+              </span>
+            </span>
+          </label>
+        )}
       </SecaoCartao>
 
       <ErroGeral />

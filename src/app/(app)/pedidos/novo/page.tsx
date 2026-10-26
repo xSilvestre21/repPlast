@@ -60,6 +60,7 @@ export default async function PaginaNovoPedido() {
       />
       <FormularioNovoPedido
         acao={criarPedido}
+        comAmostra
         clientes={clientes.map((c) => ({
           id: c.id,
           rotulo: c.apelido,

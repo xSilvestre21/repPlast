@@ -8,7 +8,8 @@
  *     133-COSTA-MELO-12-06-2026.pdf
  *
  * Número, apelido do cliente, o pedido de compra dele quando houver, e a data
- * de ENTREGA — não a de emissão. Isso não é detalhe estético: quem recebe
+ * de ENTREGA — não a de emissão. A amostra abre com "AMOSTRA-", para não se
+ * confundir na pasta da indústria com o pedido de venda. Isso não é detalhe estético: quem recebe
  * arquiva por esse nome, e mudá-lo atrapalharia quem já tem a pasta organizada.
  *
  * Módulo separado do gerador para poder ser testado sem carregar o renderizador
@@ -20,12 +21,14 @@ export function nomeArquivoPedido(pedido: {
   apelidoCliente: string;
   pedidoDoCliente: string | null;
   prazoEntrega: Date | null;
+  amostra?: boolean;
 }): string {
   const data = pedido.prazoEntrega ?? new Date();
   const dia = String(data.getUTCDate()).padStart(2, "0");
   const mes = String(data.getUTCMonth() + 1).padStart(2, "0");
 
   const partes = [
+    pedido.amostra ? "AMOSTRA" : null,
     String(pedido.numero),
     normalizar(pedido.apelidoCliente),
     pedido.pedidoDoCliente ? `PC-${normalizar(pedido.pedidoDoCliente)}` : null,

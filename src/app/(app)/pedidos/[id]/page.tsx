@@ -1,9 +1,18 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Building2, FileDown, History, Mail, Pencil, ScrollText } from "lucide-react";
+import { Building2, FileDown, Gift, History, Mail, Pencil, ScrollText } from "lucide-react";
 
 import { SeloStatus } from "@/components/selo-status";
-import { BotaoLink, Cabecalho, Cartao, Emblema, Painel, SecaoCartao } from "@/components/ui";
+import {
+  BotaoLink,
+  Cabecalho,
+  Cartao,
+  Emblema,
+  Mensagem,
+  Painel,
+  SecaoCartao,
+  Selo,
+} from "@/components/ui";
 import { ASSINATURAS_DA_CONTA } from "@/lib/conta-email";
 import { textoPadraoDoEnvio } from "@/lib/envio-pedido";
 import { escreverNumeroBr } from "@/lib/numero-br";
@@ -13,6 +22,7 @@ import { escopoAtual } from "@/lib/sessao";
 
 import {
   adicionarItem,
+  alternarAmostra,
   atualizarCabecalho,
   definirIpiDeTodosOsItens,
   atualizarItem,
@@ -165,6 +175,12 @@ export default async function PaginaPedido({
     : [];
   const listaAConferir = aConferir.map((e) => `${e.quem} em ${e.quando}`).join("; ");
 
+  // Desligar a amostra recalcula o preço pelo cadastro; a linha sem produto ou
+  // sem preço cadastrado fica zerada, e é isto que avisa (ver `alternarAmostra`).
+  const semPrecoNaVenda = pedido.amostra
+    ? 0
+    : pedido.itens.filter((item) => Number(item.precoUnitario) === 0).length;
+
   // Só o último pedido da indústria devolve o número (ver `apagarPedido`).
   const avisoApagar = [
     pedido.itens.length > 0
@@ -185,8 +201,17 @@ export default async function PaginaPedido({
       <Cabecalho
         voltar={{ href: "/pedidos", rotulo: "Pedidos" }}
         icone={ScrollText}
-        titulo={`Pedido ${pedido.numero}`}
-        selo={<SeloStatus status={pedido.status} />}
+        titulo={`${pedido.amostra ? "Amostra" : "Pedido"} ${pedido.numero}`}
+        selo={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            <SeloStatus status={pedido.status} />
+            {pedido.amostra && (
+              <Selo tom="carimbo" icone={Gift}>
+                Amostra
+              </Selo>
+            )}
+          </span>
+        }
         descricao={
           `${pedido.fornecedor.nome} · criado em ${DATA_HORA.format(pedido.criadoEm)}` +
           (pedido.enviadoEm ? ` · enviado em ${DATA_HORA.format(pedido.enviadoEm)}` : "")
@@ -230,6 +255,7 @@ export default async function PaginaPedido({
                       cnpjCliente: pedido.cliente.cnpj,
                       pedidoDoCliente: pedido.pedidoDoCliente,
                       vendedor: pedido.vendedor,
+                      amostra: pedido.amostra,
                     },
                     {
                       assunto: modeloEnvio?.assuntoEnvioPadrao,
@@ -241,6 +267,7 @@ export default async function PaginaPedido({
                     apelidoCliente: pedido.cliente.apelido,
                     pedidoDoCliente: pedido.pedidoDoCliente,
                     prazoEntrega: pedido.prazoEntrega,
+                    amostra: pedido.amostra,
                   })}
                 />
               )}
@@ -257,6 +284,31 @@ export default async function PaginaPedido({
             </BotaoLink>
           )}
 
+          {editavel && (
+            <AcaoPedido
+              rotulo={pedido.amostra ? "Deixar de ser amostra" : "Tornar amostra"}
+              rotuloOcupado="Alterando…"
+              variante="secundaria"
+              icone="amostra"
+              confirmacao={
+                pedido.amostra
+                  ? {
+                      titulo: `O pedido ${pedido.numero} deixa de ser amostra?`,
+                      texto:
+                        "Os itens voltam a ter o preço do cadastro do produto, e o pedido passa a contar " +
+                        "na comissão quando for marcado como enviado. Confira os preços antes de enviar.",
+                    }
+                  : {
+                      titulo: `Tornar o pedido ${pedido.numero} uma amostra?`,
+                      texto:
+                        "Os preços dos itens serão zerados, e o PDF sai como pedido de amostra, sem custo. " +
+                        "Amostra não conta na comissão, nas metas nem nos gráficos.",
+                    }
+              }
+              acao={alternarAmostra.bind(null, pedido.id)}
+            />
+          )}
+
           {pedido.status === "ABERTO" && temItens && (
             <AcaoPedido
               rotulo="Marcar como enviado"
@@ -270,8 +322,11 @@ export default async function PaginaPedido({
                     ? `Atenção: um preposto editou este pedido (${listaAConferir}). ` +
                       "Confira as alterações antes de continuar.\n\n"
                     : "") +
-                  "O pedido fica travado para edição e passa a contar na comissão do mês da " +
-                  "entrega. Para mexer nele depois, use “Desmarcar envio”.",
+                  (pedido.amostra
+                    ? "O pedido fica travado para edição. Por ser amostra, não conta na comissão. "
+                    : "O pedido fica travado para edição e passa a contar na comissão do mês da " +
+                      "entrega. ") +
+                  "Para mexer nele depois, use “Desmarcar envio”.",
               }}
               acao={marcarEnviado.bind(null, pedido.id)}
             />
@@ -375,8 +430,19 @@ export default async function PaginaPedido({
           </dl>
         </Cartao>
 
+        {semPrecoNaVenda > 0 && (
+          <Mensagem>
+            {semPrecoNaVenda === 1
+              ? "Um item está com preço zero."
+              : `${semPrecoNaVenda} itens estão com preço zero.`}{" "}
+            Confira o preço na tabela abaixo antes de enviar — clique em Editar, no alto da página, se
+            ela estiver em leitura.
+          </Mensagem>
+        )}
+
         <SecaoItens
           editavel={editavel}
+          semPreco={pedido.amostra}
           motivoTravado={
             aberto
               ? "Em leitura. Para lançar ou mexer em item, use Editar no alto da página."
@@ -444,6 +510,7 @@ export default async function PaginaPedido({
 
         <SecaoCabecalho
           editavel={editavel}
+          amostra={pedido.amostra}
           emLeitura={aberto && !editavel}
           acao={atualizarCabecalho.bind(null, pedido.id)}
           prepostos={prepostosDoCliente}

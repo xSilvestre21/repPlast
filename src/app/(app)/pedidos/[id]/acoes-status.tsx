@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, Copy, RotateCcw, Send, Trash2, Undo2, type LucideIcon } from "lucide-react";
+import { Ban, Copy, Gift, RotateCcw, Send, Trash2, Undo2, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { useFormStatus } from "react-dom";
 
@@ -32,6 +32,7 @@ const ICONES = {
   reabrir: RotateCcw,
   cancelar: Ban,
   apagar: Trash2,
+  amostra: Gift,
 } satisfies Record<string, LucideIcon>;
 
 export type NomeDeIcone = keyof typeof ICONES;

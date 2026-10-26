@@ -109,6 +109,7 @@ async function exigirAberto(db: DbOrganizacao, pedidoId: string, organizacaoId: 
       clienteId: true,
       emElaboracao: true,
       representanteId: true,
+      amostra: true,
     },
   });
 
@@ -395,6 +396,8 @@ export async function criarPedido(
         ...preposto,
         // Quem digitou: junto com a carteira, é o que decide quem vê o pedido.
         criadoPorId: usuarioId,
+        // Amostra sai na mesma numeração: a indústria a identifica pelo número.
+        amostra: formData.get("amostra") === "on",
       },
       select: { id: true },
     });
@@ -447,7 +450,13 @@ export async function atualizarCabecalho(
         observacoes: lerTexto(formData.get("observacoes")),
         vendedor: lerTexto(formData.get("vendedor")),
         ipiPercentual: ipi === null ? undefined : String(ipi),
-        comissaoPercentual: comissao === null ? null : String(comissao),
+        // O campo some na amostra, que não tem comissão: sem ele, o percentual
+        // fica como está, para voltar inteiro se ela deixar de ser amostra.
+        comissaoPercentual: !formData.has("comissaoPercentual")
+          ? undefined
+          : comissao === null
+            ? null
+            : String(comissao),
         ...preposto,
         emElaboracao: false,
       },
@@ -543,11 +552,12 @@ export async function adicionarItem(
     const comIpiItem = ipiDoFormulario(formData) ?? heranca;
 
     // Texto que não é número no preço era trocado pelo preço calculado, sem
-    // aviso — o item entrava com um valor que a pessoa não digitou.
-    const precoInformado = lerPreco(formData);
-    const precoCalculado = precoUnitario(precificavel, unidade);
+    // aviso — o item entrava com um valor que a pessoa não digitou. Amostra
+    // não tem preço: a linha entra zerada, com ou sem preço no cadastro.
+    const precoInformado = pedido.amostra ? null : lerPreco(formData);
+    const precoCalculado = pedido.amostra ? null : precoUnitario(precificavel, unidade);
 
-    if (precoInformado === null && precoCalculado === null) {
+    if (!pedido.amostra && precoInformado === null && precoCalculado === null) {
       throw new ErroDeCampo(
         "precoUnitario",
         "Este produto não tem preço cadastrado para a unidade escolhida. Digite o preço aqui, " +
@@ -555,7 +565,11 @@ export async function adicionarItem(
       );
     }
 
-    const preco = precoInformado !== null ? String(precoInformado) : precoCalculado!.toString();
+    const preco = pedido.amostra
+      ? "0"
+      : precoInformado !== null
+        ? String(precoInformado)
+        : precoCalculado!.toString();
 
     const ultimo = await db.pedidoItem.findFirst({
       where: { pedidoId },
@@ -611,7 +625,7 @@ export async function atualizarItem(
     }
 
     const quantidade = lerQuantidade(formData, { naLinha: true });
-    const preco = lerPreco(formData);
+    const preco = pedido.amostra ? 0 : lerPreco(formData);
     if (preco === null) throw new ErroDeCampo("precoUnitario", "Informe o preço.");
 
     const item = await db.pedidoItem.findFirst({
@@ -686,6 +700,57 @@ async function gravarRemoverItem(pedidoId: string, formData: FormData): Promise<
   await registrarEdicao(db, pedido, usuarioId);
 
   revalidatePath(`/pedidos/${pedidoId}`);
+}
+
+/**
+ * Liga ou desliga a amostra do pedido aberto.
+ *
+ * Ligar zera o preço de todas as linhas: amostra não tem valor, e um preço
+ * esquecido numa linha sairia no PDF da indústria. Desligar recalcula cada
+ * linha pelo cadastro do produto, a mesma conta de `adicionarItem`; a linha
+ * sem produto ou sem preço cadastrado fica zerada, e a ficha do pedido avisa
+ * que há linha com preço zero para conferir.
+ */
+export async function alternarAmostra(
+  pedidoId: string,
+  _estado: EstadoFormulario,
+  _formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    const { organizacaoId, usuarioId, db } = await contexto();
+    const pedido = await exigirAberto(db, pedidoId, organizacaoId);
+    const amostra = !pedido.amostra;
+
+    if (amostra) {
+      await db.pedidoItem.updateMany({ where: { pedidoId }, data: { precoUnitario: "0" } });
+    } else {
+      const itens = await db.pedidoItem.findMany({
+        where: { pedidoId },
+        select: {
+          id: true,
+          unidade: true,
+          produto: { include: { aditivos: { include: { aditivo: true } } } },
+        },
+      });
+      for (const item of itens) {
+        const preco = item.produto
+          ? precoUnitario(paraPrecificavel(item.produto), item.unidade as UnidadeVenda)
+          : null;
+        if (preco === null) continue;
+        await db.pedidoItem.update({ where: { id: item.id }, data: { precoUnitario: preco.toString() } });
+      }
+    }
+
+    await db.pedido.update({ where: { id: pedidoId }, data: { amostra } });
+    await recalcularTotais(db, pedidoId);
+    await registrarEdicao(db, pedido, usuarioId);
+  } catch (erro) {
+    return falhou(erro);
+  }
+
+  revalidatePath("/pedidos");
+  revalidatePath(`/pedidos/${pedidoId}`);
+  return {};
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1119,6 +1184,8 @@ async function copiarPedido(pedidoId: string): Promise<string> {
       ipiPercentual: origem.ipiPercentual,
       comissaoPercentual: origem.comissaoPercentual,
       diaFechamentoComissao: origem.diaFechamentoComissao,
+      // A amostra duplicada continua amostra, com os itens zerados como eram.
+      amostra: origem.amostra,
       // Não copiamos: número da ordem de compra do cliente e prazo de entrega,
       // que são desta compra e não da próxima.
       itens: {

@@ -23,6 +23,13 @@ const PEDIDO_SUMIU =
   "Este pedido não foi encontrado — ele pode ter sido excluído em outra tela. Recarregue a página.";
 
 /**
+ * Amostra não aparece em Comissões, mas o acerto e o parcelamento chegam por
+ * id: recusar aqui é a defesa para quem montar a chamada à mão.
+ */
+const AMOSTRA_SEM_COMISSAO =
+  "Pedido de amostra não tem comissão. Para lançar o acerto, desligue “Pedido de amostra” na ficha do pedido.";
+
+/**
  * Data de coluna `date`, montada em UTC para o dia não escorregar pelo fuso.
  * Recusa a data que não existe ("2026-02-31"), que antes ia ao banco e voltava
  * como erro em inglês.
@@ -188,6 +195,12 @@ export async function salvarAcerto(
       );
     }
 
+    const alvo = await db.pedido.findFirst({
+      where: { id: pedidoId, organizacaoId },
+      select: { amostra: true },
+    });
+    if (alvo?.amostra) throw new ErroParaUsuario(AMOSTRA_SEM_COMISSAO);
+
     const { count } = await db.pedido.updateMany({
       where: { id: pedidoId, organizacaoId },
       data: {
@@ -321,12 +334,14 @@ export async function salvarParcelas(
       where: { id: pedidoId, organizacaoId },
       select: {
         status: true,
+        amostra: true,
         subtotalSemIpi: true,
         valorRecebido: true,
         comissaoPercentualRecebido: true,
       },
     });
     if (!pedido) throw new ErroParaUsuario(PEDIDO_SUMIU);
+    if (pedido.amostra) throw new ErroParaUsuario(AMOSTRA_SEM_COMISSAO);
     if (pedido.status === "CANCELADO") {
       throw new ErroParaUsuario("Pedido cancelado não tem comissão a receber, e por isso não se parcela.");
     }

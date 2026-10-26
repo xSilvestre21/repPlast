@@ -124,6 +124,15 @@ describe("texto padrão", () => {
     vendedor: null,
   };
 
+  it("a amostra avisa no assunto, com o modelo da pessoa ou sem", () => {
+    expect(textoPadraoDoEnvio({ ...PEDIDO, amostra: true }).assunto).toBe(
+      "AMOSTRA — Pedido nº 2276 — LYRA EMBALAGENS LTDA",
+    );
+    expect(
+      textoPadraoDoEnvio({ ...PEDIDO, amostra: true }, { assunto: "Nosso {numero}" }).assunto,
+    ).toBe("AMOSTRA — Nosso 2276");
+  });
+
   it("usa o modelo da pessoa, sumindo com a linha de campo vazio", () => {
     const { assunto, corpo } = textoPadraoDoEnvio(PEDIDO, {
       assunto: "PC {pedido_cliente} / nosso {numero}",

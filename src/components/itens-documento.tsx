@@ -44,6 +44,8 @@ export type { EstadoFormulario };
 
 /** Colunas da tabela de itens — a linha de erro atravessa todas. */
 const COLUNAS_DA_TABELA = 9;
+/** Sem as colunas de preço, total s/ IPI, IPI e total — a amostra. */
+const COLUNAS_SEM_PRECO = 5;
 
 /**
  * A tabela de itens, compartilhada pelo pedido e pelo orçamento.
@@ -120,6 +122,7 @@ export function SecaoItens({
   atualizar,
   remover,
   definirIpiDeTodos,
+  semPreco = false,
 }: {
   itens: ItemPedido[];
   produtos: ProdutoOpcao[];
@@ -138,6 +141,12 @@ export function SecaoItens({
   atualizar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   remover: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   definirIpiDeTodos: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
+  /**
+   * Pedido de amostra: sem preço, sem IPI e sem total, nem na tabela nem no
+   * lançamento — as colunas são as do PDF da amostra. O servidor zera o preço
+   * de todo jeito; esconder é para a tela não mostrar um R$ 0,00 em cada linha.
+   */
+  semPreco?: boolean;
 }) {
   const [estadoAdicao, enviarAdicao, adicionando] = useActionState(adicionar, {});
 
@@ -174,10 +183,11 @@ export function SecaoItens({
             { rotulo: "DESCRIÇÃO" },
             { rotulo: "QNT", alinhamento: "numero" },
             { rotulo: "UN" },
-            { rotulo: rotuloPreco, alinhamento: "numero" },
-            { rotulo: "TOT S/IPI", alinhamento: "numero" },
+            ...(semPreco ? [] : [
+            { rotulo: rotuloPreco, alinhamento: "numero" as const },
+            { rotulo: "TOT S/IPI", alinhamento: "numero" as const },
             {
-              alinhamento: "numero",
+              alinhamento: "numero" as const,
               rotulo: (
                 <span className="whitespace-nowrap">
                   IPI
@@ -202,7 +212,8 @@ export function SecaoItens({
                 </span>
               ),
             },
-            { rotulo: "TOTAL", alinhamento: "numero" },
+            { rotulo: "TOTAL", alinhamento: "numero" as const },
+            ]),
             ...(editavel ? [{ rotulo: "", alinhamento: "acao" as const }] : []),
           ]}
         >
@@ -211,14 +222,20 @@ export function SecaoItens({
               key={item.id}
               item={item}
               editavel={editavel}
-              colunas={COLUNAS_DA_TABELA + (editavel ? 1 : 0)}
+              colunas={(semPreco ? COLUNAS_SEM_PRECO : COLUNAS_DA_TABELA) + (editavel ? 1 : 0)}
               atualizar={atualizar}
               remover={remover}
+              semPreco={semPreco}
             />
           ))}
         </Tabela>
       )}
 
+      {semPreco ? (
+        <p className="text-corpo text-tinta-2 text-right border-t border-filete pt-4">
+          Pedido de amostra — sem valor comercial, sem custo para o cliente.
+        </p>
+      ) : (
       <div className="flex flex-col items-end gap-1 text-corpo numerico border-t border-filete pt-4">
         <div className="flex gap-8">
           <span className="text-tinta-2">Subtotal s/ IPI:</span>
@@ -241,6 +258,7 @@ export function SecaoItens({
           <span className="w-32 text-right cifra">{formatarMoeda(totais.totalGeral)}</span>
         </div>
       </div>
+      )}
 
       {editavel && (
         <div className="mt-5 pt-5 border-t border-filete">
@@ -257,6 +275,7 @@ export function SecaoItens({
               estado={estadoAdicao}
               enviar={enviarAdicao}
               enviando={adicionando}
+              semPreco={semPreco}
             />
           ))}
         </div>
@@ -271,12 +290,14 @@ function LinhaItem({
   colunas,
   atualizar,
   remover,
+  semPreco,
 }: {
   item: ItemPedido;
   editavel: boolean;
   colunas: number;
   atualizar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   remover: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
+  semPreco: boolean;
 }) {
   const [estado, enviar, salvando] = useActionState(atualizar, {});
 
@@ -357,7 +378,7 @@ function LinhaItem({
                 indistinguível de formulário sem caixa, e desmarcar nunca
                 salvaria. Só existe quando a caixa existe.
               */}
-              <input type="hidden" name={CAMPO_IPI_DEFINIDO} value="1" />
+              {!semPreco && <input type="hidden" name={CAMPO_IPI_DEFINIDO} value="1" />}
               <input
                 name="quantidade"
                 inputMode="decimal"
@@ -373,6 +394,7 @@ function LinhaItem({
             </form>
           </Celula>
           <Celula className="text-tinta-2">{ROTULO_UNIDADE[item.unidade]}</Celula>
+          {!semPreco && (
           <Celula alinhamento="numero">
             <input
               form={`item-${item.id}`}
@@ -390,15 +412,18 @@ function LinhaItem({
               }`}
             />
           </Celula>
+          )}
         </>
       ) : (
         <>
           <Celula alinhamento="numero">{escreverNumeroBr(item.quantidade, 0)}</Celula>
           <Celula className="text-tinta-2">{ROTULO_UNIDADE[item.unidade]}</Celula>
-          <Celula alinhamento="numero">{formatarMoeda(item.precoUnitario)}</Celula>
+          {!semPreco && <Celula alinhamento="numero">{formatarMoeda(item.precoUnitario)}</Celula>}
         </>
       )}
 
+      {!semPreco && (
+      <>
       <Celula alinhamento="numero">{formatarMoeda(item.totalSemIpi)}</Celula>
       {/*
         A caixa fica NA COLUNA DO IPI, e não numa coluna nova.
@@ -446,6 +471,8 @@ function LinhaItem({
         )}
       </Celula>
       <Celula alinhamento="numero">{formatarMoeda(item.total)}</Celula>
+      </>
+      )}
 
       {editavel && (
         <Celula alinhamento="acao">
@@ -453,9 +480,10 @@ function LinhaItem({
             acao={remover}
             confirmar={{
               titulo: `Remover “${item.descricao}”?`,
-              texto:
-                `A linha sai, com a quantidade e o preço dela, e o total é recalculado sem ` +
-                `${formatarMoeda(item.total)}. Para trazê-la de volta, lance o item de novo.`,
+              texto: semPreco
+                ? "A linha sai do pedido. Para trazê-la de volta, lance o item de novo."
+                : `A linha sai, com a quantidade e o preço dela, e o total é recalculado sem ` +
+                  `${formatarMoeda(item.total)}. Para trazê-la de volta, lance o item de novo.`,
               rotulo: "Remover",
             }}
           >
@@ -496,11 +524,13 @@ function FormularioAdicao({
   estado,
   enviar,
   enviando,
+  semPreco,
 }: {
   produtos: ProdutoOpcao[];
   estado: EstadoFormulario;
   enviar: (formData: FormData) => void;
   enviando: boolean;
+  semPreco: boolean;
 }) {
   const [produtoId, setProdutoId] = useState("");
   const [unidade, setUnidade] = useState<UnidadeVenda | "">("");
@@ -542,10 +572,15 @@ function FormularioAdicao({
     [produtos],
   );
 
-  const unidades = useMemo(
-    () => (produto ? unidadesComPreco(produto) : []),
-    [produto],
-  );
+  // Na amostra o preço não importa: o produto sem preço cadastrado também
+  // entra, em qualquer unidade.
+  const unidades = useMemo(() => {
+    if (!produto) return [];
+    const comPreco = unidadesComPreco(produto);
+    return semPreco && comPreco.length === 0
+      ? (Object.keys(ROTULO_UNIDADE) as UnidadeVenda[])
+      : comPreco;
+  }, [produto, semPreco]);
 
   const unidadeEfetiva = (unidade ||
     (produto?.unidadePadrao && unidades.includes(produto.unidadePadrao)
@@ -581,7 +616,13 @@ function FormularioAdicao({
         TOPO é o que mantém as caixas na mesma linha; alinhar pelo centro ou
         pela base faria cada uma subir conforme o que tem embaixo dela.
       */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(12rem,2fr)_7rem_8rem_9.5rem_auto_auto] lg:items-start">
+      <div
+        className={`grid gap-3 sm:grid-cols-2 lg:items-start ${
+          semPreco
+            ? "lg:grid-cols-[minmax(12rem,2fr)_7rem_8rem_auto]"
+            : "lg:grid-cols-[minmax(12rem,2fr)_7rem_8rem_9.5rem_auto_auto]"
+        }`}
+      >
         <SelecaoBuscavel
           name="produtoId"
           rotulo="Produto"
@@ -635,6 +676,8 @@ function FormularioAdicao({
           className="lg:w-32"
         />
 
+        {!semPreco && (
+        <>
         <Campo
           name="precoUnitario"
           rotulo="Preço"
@@ -668,6 +711,8 @@ function FormularioAdicao({
               <span className="text-corpo text-tinta-2 whitespace-nowrap">Cobrar</span>
             </span>
         </label>
+        </>
+        )}
 
         {/*
           O botão não tem rótulo, mas precisa da altura de um para descer até a
@@ -687,7 +732,7 @@ function FormularioAdicao({
         </div>
       </div>
 
-      {totalPrevisto !== null && (
+      {!semPreco && totalPrevisto !== null && (
         <p className="text-mini text-tinta-3 numerico">
           Este item entra por {formatarMoeda(totalPrevisto)} antes do IPI.
         </p>

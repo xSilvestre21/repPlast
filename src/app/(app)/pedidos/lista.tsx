@@ -15,7 +15,7 @@
  * diferentes custava mais do que o link para a página 3 valia.
  */
 
-import { Ban, Loader2, Search, ScrollText, X } from "lucide-react";
+import { Ban, Gift, Loader2, Search, ScrollText, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { SeloStatus } from "@/components/selo-status";
@@ -29,6 +29,7 @@ import {
   FimDaLinha,
   LinhaLista,
   Segmentado,
+  Selo,
   ValorLinha,
 } from "@/components/ui";
 import { lembrarBusca } from "@/lib/busca-lembrada";
@@ -219,12 +220,13 @@ export function ListaPedidos({
             nome="Status"
             // "todos" (sem filtro) não bate com nenhuma opção abaixo de
             // propósito — nenhuma pastilha fica marcada como ativa nesse caso.
-            atual={status as "aberto" | "enviado" | "cancelado"}
+            atual={status as "aberto" | "enviado" | "cancelado" | "amostra"}
             aoEscolher={(valor) => setStatus(valor === status ? "todos" : valor)}
             opcoes={[
               { valor: "aberto", rotulo: "Em aberto" },
               { valor: "enviado", rotulo: "Enviados" },
               { valor: "cancelado", rotulo: "Cancelados" },
+              { valor: "amostra", rotulo: "Amostras" },
             ]}
           />
 
@@ -309,7 +311,15 @@ export function ListaPedidos({
                 <ValorLinha
                   className="w-32"
                   riscado={pedido.status === "CANCELADO"}
-                  valor={pedido.valor}
+                  valor={
+                    pedido.amostra ? (
+                      <Selo tom="carimbo" icone={Gift}>
+                        Amostra
+                      </Selo>
+                    ) : (
+                      pedido.valor
+                    )
+                  }
                 />
                 <div className="w-24 flex justify-end">
                   <SeloStatus status={pedido.status} />

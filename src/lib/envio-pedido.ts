@@ -224,6 +224,10 @@ export function problemaNoModelo(modelo: string): string | null {
  * Parte do modelo da pessoa (ou do texto de sempre) e é só o começo — no
  * diálogo dá para escrever o que o pedido pedir ("urgente, cliente precisa até
  * sexta"). As regras de preenchimento são as de `lib/modelo-email.ts`.
+ *
+ * A amostra ganha "AMOSTRA — " no começo do assunto, com o modelo da pessoa
+ * ou sem: quem recebe na indústria precisa saber antes de abrir que não é
+ * venda.
  */
 export function textoPadraoDoEnvio(
   pedido: {
@@ -232,6 +236,7 @@ export function textoPadraoDoEnvio(
     cnpjCliente: string | null;
     pedidoDoCliente: string | null;
     vendedor: string | null;
+    amostra?: boolean;
   },
   modelo?: { assunto?: string | null; corpo?: string | null },
 ): { assunto: string; corpo: string } {
@@ -243,11 +248,12 @@ export function textoPadraoDoEnvio(
     vendedor: pedido.vendedor ?? "",
   };
 
-  return nucleo.preencherModelo(
+  const texto = nucleo.preencherModelo(
     {
       assunto: modelo?.assunto || ASSUNTO_ENVIO_PADRAO,
       corpo: modelo?.corpo || MENSAGEM_ENVIO_PADRAO,
     },
     valores,
   );
+  return pedido.amostra ? { ...texto, assunto: `AMOSTRA — ${texto.assunto}` } : texto;
 }

@@ -1024,6 +1024,14 @@ model Pedido {
   /// conferiu e enviou não é cobrado de novo pelas mesmas edições.
   edicoesConferidasEm DateTime?
 
+  /// Pedido de amostra: o representante pede à indústria um produto para o
+  /// cliente testar, sem custo. Os itens ficam com preço zero (as ações
+  /// garantem), o PDF sai sem preço, e o pedido fica fora de tudo que mede
+  /// venda — comissão, metas, gráficos e a última compra do cliente. Continua
+  /// na lista, na agenda de entregas e na numeração da indústria, que
+  /// identifica a amostra pelo número como qualquer pedido.
+  amostra Boolean @default(false)
+
   criadoEm     DateTime  @default(now())
   atualizadoEm DateTime  @updatedAt
   enviadoEm    DateTime?

@@ -55,9 +55,11 @@ export async function carregarPedidoParaPdf(
       apelidoCliente: pedido.cliente.apelido,
       pedidoDoCliente: pedido.pedidoDoCliente,
       prazoEntrega: pedido.prazoEntrega,
+      amostra: pedido.amostra,
     }),
     dados: {
       numero: pedido.numero,
+      amostra: pedido.amostra,
       data: pedido.criadoEm,
       // Todos os itens de um pedido são da mesma indústria, mas podem ser de
       // famílias e unidades diferentes: o rótulo olha todas as linhas.

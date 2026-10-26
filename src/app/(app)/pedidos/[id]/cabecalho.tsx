@@ -30,8 +30,15 @@ export function SecaoCabecalho({
   emLeitura = false,
   acao,
   prepostos,
+  amostra = false,
 }: {
   valores: ValoresCabecalho;
+  /**
+   * Pedido de amostra: sem preço, não tem IPI nem comissão a ajustar, e o
+   * cartão some. Sem os campos no envio, a ação deixa os percentuais como
+   * estão, para voltarem inteiros se ele deixar de ser amostra.
+   */
+  amostra?: boolean;
   /**
    * Os prepostos que atendem o cliente. Sem eles o campo não aparece: para o
    * preposto, o pedido que ele lança é dele, e fora do plano Plus não há com
@@ -117,6 +124,7 @@ export function SecaoCabecalho({
 
         A ALÍQUOTA fica: ela é do pedido porque a indústria cobra uma só.
       */}
+      {!amostra && (
       <SecaoCartao icone={Percent} titulo="Impostos e comissão">
         <fieldset disabled={!editavel} className="grid gap-4 sm:grid-cols-2 items-start">
           <Campo
@@ -154,6 +162,7 @@ export function SecaoCabecalho({
           )}
         </fieldset>
       </SecaoCartao>
+      )}
 
       <SecaoCartao
         icone={MessageSquareText}

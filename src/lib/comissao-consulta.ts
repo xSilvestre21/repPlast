@@ -347,6 +347,9 @@ async function itensEnviadosEntre(
     where: {
       organizacaoId,
       status: "ENVIADO",
+      // Amostra não é venda: fora da apuração, das metas e dos gráficos, que
+      // saem todos daqui.
+      amostra: false,
       OR: [
         { prazoEntrega: { gte: desde, lt: ate } },
         { prazoEntrega: null, criadoEm: { gte: desde, lt: ate } },
@@ -428,6 +431,7 @@ export async function canceladosDaCompetencia(
     where: {
       organizacaoId,
       status: "CANCELADO",
+      amostra: false,
       OR: [
         { prazoEntrega: { gte: de, lt: ate } },
         { prazoEntrega: null, criadoEm: { gte: de, lt: ate } },

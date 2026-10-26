@@ -46,6 +46,7 @@ export async function pedidosCanceladosDaCompetencia(
     where: {
       organizacaoId,
       status: "CANCELADO",
+      amostra: false,
       canceladoEm: { gte: de, lt: ate },
       ...(apenasDoPreposto ? { representanteId: apenasDoPreposto } : {}),
     },
@@ -109,7 +110,8 @@ export async function orcamentosDoIntervalo(
  * ENVIO (`enviadoEm`), não pela competência da comissão. As duas datas
  * respondem perguntas diferentes — "quando esse cliente comprou pela última
  * vez" não é "em que mês essa comissão cai" — e uniformizá-las estragaria as
- * duas telas de uma vez.
+ * duas telas de uma vez. *
+ * Amostra não é compra: o cliente que só recebeu amostra não está positivado.
  */
 export async function clientesComUltimaCompra(
   db: DbOrganizacao,
@@ -120,7 +122,7 @@ export async function clientesComUltimaCompra(
     where: {
       organizacaoId,
       ativo: true,
-      pedidos: { some: { status: "ENVIADO" } },
+      pedidos: { some: { status: "ENVIADO", amostra: false } },
       // Os clientes que ele atende — um cliente pode ser de vários prepostos.
       ...(apenasDoPreposto ? { prepostos: { some: { usuarioId: apenasDoPreposto } } } : {}),
     },
@@ -128,7 +130,7 @@ export async function clientesComUltimaCompra(
       id: true,
       apelido: true,
       pedidos: {
-        where: { status: "ENVIADO" },
+        where: { status: "ENVIADO", amostra: false },
         orderBy: { enviadoEm: "desc" },
         take: 1,
         select: { enviadoEm: true, totalGeral: true },
@@ -166,6 +168,7 @@ export async function pedidosCanceladosEntre(
     where: {
       organizacaoId,
       status: "CANCELADO",
+      amostra: false,
       canceladoEm: { gte: de, lt: ate },
       ...(apenasDoPreposto ? { representanteId: apenasDoPreposto } : {}),
     },

@@ -24,9 +24,14 @@ import { formatarMoeda } from "@/components/ui";
 /** Quantas linhas por fatia, na primeira e em todas as seguintes. */
 export const POR_PAGINA = 20;
 
-export type FiltroStatusPedido = "todos" | "aberto" | "enviado" | "cancelado";
+/**
+ * "amostra" não é status — a amostra também abre, é enviada e cancela —, mas
+ * mora na mesma fileira de pastilhas: é a pergunta "me mostra as amostras",
+ * e uma segunda fileira de filtro para uma pastilha só pesaria mais que ajuda.
+ */
+export type FiltroStatusPedido = "todos" | "aberto" | "enviado" | "cancelado" | "amostra";
 
-const STATUS_VALIDOS: FiltroStatusPedido[] = ["aberto", "enviado", "cancelado"];
+const STATUS_VALIDOS: FiltroStatusPedido[] = ["aberto", "enviado", "cancelado", "amostra"];
 
 /**
  * Um para um com o enum do banco.
@@ -54,6 +59,8 @@ export type PedidoDaLista = {
   id: string;
   numero: number;
   status: string;
+  /** Pedido de amostra: no lugar do valor (sempre zero), a lista diz "Amostra". */
+  amostra: boolean;
   cliente: string;
   fornecedor: string;
   itens: number;
@@ -94,7 +101,11 @@ export async function buscarPedidos(
 
   const onde = {
     organizacaoId,
-    ...(status !== "todos" ? { status: STATUS_DO_FILTRO[status] } : {}),
+    ...(status === "amostra"
+      ? { amostra: true }
+      : status !== "todos"
+        ? { status: STATUS_DO_FILTRO[status] }
+        : {}),
     ...(procurado
       ? {
           OR: [
@@ -150,6 +161,7 @@ export async function buscarPedidos(
     id: pedido.id,
     numero: pedido.numero,
     status: pedido.status,
+    amostra: pedido.amostra,
     cliente: pedido.cliente.apelido,
     fornecedor: pedido.fornecedor.nome,
     itens: pedido._count.itens,
