@@ -427,21 +427,23 @@ export async function cadastrar(
     }
 
     const escritorio = normalizarNomeEscritorio(lerTexto(formData.get("escritorio")));
-    const nome = lerTexto(formData.get("nome"));
+    const primeiroNome = lerTexto(formData.get("nome")).replace(/\s+/g, " ");
+    const sobrenome = lerTexto(formData.get("sobrenome")).replace(/\s+/g, " ");
     const email = lerEmail(formData.get("email"));
     const senha = lerTexto(formData.get("senha"));
 
     const problemaNoNome = problemaNoNomeEscritorio(escritorio);
     if (problemaNoNome) throw new ErroDeCampo("escritorio", problemaNoNome);
-    if (!nome) throw new ErroDeCampo("nome", "Informe o seu nome e sobrenome.");
+    if (!primeiroNome) throw new ErroDeCampo("nome", "Informe o seu nome, como João.");
     // O checkout do Asaas recusa nome sem sobrenome ("O campo name é inválido").
-    const [primeiroNome, ...restoDoNome] = nome.split(/\s+/);
-    if (restoDoNome.length === 0) {
+    // Caixa própria: numa só, um nome composto ("Maria Clara") passava por completo.
+    if (!sobrenome) {
       throw new ErroDeCampo(
-        "nome",
-        "Informe também o sobrenome, como João da Silva — o pagamento pede o nome completo.",
+        "sobrenome",
+        "Informe também o sobrenome, como da Silva — o pagamento pede o nome completo.",
       );
     }
+    const nome = `${primeiroNome} ${sobrenome}`;
     if (!email) throw new ErroDeCampo("email", "Informe o seu e-mail — é com ele que você vai entrar.");
     const problemaNoFormato = problemaNoEmail(email);
     if (problemaNoFormato) throw new ErroDeCampo("email", problemaNoFormato);
@@ -571,7 +573,7 @@ export async function cadastrar(
         usuarios: {
           create: {
             nome: primeiroNome,
-            sobrenome: restoDoNome.join(" "),
+            sobrenome,
             email,
             telefone: mascararTelefone(telefone),
             senhaHash: await gerarHashSenha(senha),

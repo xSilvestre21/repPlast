@@ -159,14 +159,15 @@ export function FormularioCadastro({
         }
         autoFocus
       />
-      <Campo
-        name="nome"
-        rotulo="Seu nome"
-        dica="Nome e sobrenome — é assim que você assina o rodapé das propostas."
-        placeholder="João da Silva"
-        autoComplete="name"
-        required
-      />
+      {/*
+        Nome e sobrenome em caixas separadas, como em Configurações: numa caixa
+        só, um nome composto ("Maria Clara") passava por nome completo, e o
+        sobrenome nunca era pedido de verdade.
+      */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Campo name="nome" rotulo="Nome" placeholder="João" autoComplete="given-name" required />
+        <Campo name="sobrenome" rotulo="Sobrenome" placeholder="da Silva" autoComplete="family-name" required />
+      </div>
       <Campo
         name="email"
         rotulo="E-mail"
