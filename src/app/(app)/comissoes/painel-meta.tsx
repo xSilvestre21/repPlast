@@ -1,7 +1,8 @@
 "use client";
 
 import { PartyPopper, Pencil, Target, Wallet } from "lucide-react";
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 
 import { CampoMoeda } from "@/components/campo-mascarado";
 import {
@@ -89,7 +90,7 @@ export function PainelMeta({
 
   return (
     <>
-      {batida && <Comemoracao competencia={competencia} meta={meta} />}
+      <Comemoracao competencia={competencia} meta={meta} batida={batida} />
 
       <Cartao marcada className="p-6 sm:p-8 mb-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -220,49 +221,130 @@ export function PainelMeta({
 /**
  * A festa.
  *
- * Dispara UMA vez por competência e meta. Bater a meta é notícia; ver o mesmo
- * confete a cada carregamento de página vira incômodo. Trocar a meta por uma
- * que já está batida é notícia nova — e comemora na hora, sem recarregar.
+ * Dispara sempre que a meta PASSA a estar batida — no acerto que a fez bater,
+ * ou ao trocar a meta por uma já alcançada. Não dispara de novo ao recarregar a
+ * página com ela batida: ver o mesmo confete a cada visita vira incômodo. Mas
+ * se o mês cai abaixo da meta (um acerto desfeito, um pedido cancelado) e volta
+ * a bater, é notícia de novo, e comemora.
+ *
+ * Por isso o componente fica sempre montado, batida ou não: é ele que anota
+ * "não batida" no navegador, para a próxima batida ser reconhecida como nova.
+ * Antes ele só existia com a meta batida e anotava "já comemorou" para sempre —
+ * bater, desfazer e bater de novo não comemorava, e parecia quebrado.
  *
  * O estado permanente de "meta batida" é dito pela própria apuração — o rótulo
- * e a barra ficam verdes o mês inteiro. O confete é só o instante; quem conta
- * o fato depois é a cor da barra.
+ * e a barra ficam verdes o mês inteiro. O confete é só o instante.
  */
-function Comemoracao({ competencia, meta }: { competencia: string; meta: string | null }) {
+const memoria = new Map<string, string>();
+
+/** O navegador, ou a memória da aba quando ele recusa guardar (aba anônima, cota cheia). */
+function lerMarca(chave: string): string | null {
+  try {
+    return localStorage.getItem(chave);
+  } catch {
+    return memoria.get(chave) ?? null;
+  }
+}
+
+function gravarMarca(chave: string, valor: string) {
+  memoria.set(chave, valor);
+  try {
+    localStorage.setItem(chave, valor);
+  } catch {}
+}
+
+/**
+ * Chama `fazer` quando não houver janela aberta por cima da página.
+ *
+ * O confete fica abaixo de qualquer `<dialog>` aberto — a janela entra na
+ * camada de topo do navegador, acima de todo `z-index`. No celular, o acerto
+ * que bate a meta é salvo na folha que sobe de baixo, e o confete caía por trás
+ * dela e do fundo escuro. Então espera a folha fechar.
+ */
+function semJanelaPorCima(fazer: () => void): () => void {
+  const janela = document.querySelector("dialog[open]");
+  if (!janela) {
+    fazer();
+    return () => {};
+  }
+  let cancelar = () => {};
+  const aoFechar = () => {
+    cancelar = semJanelaPorCima(fazer);
+  };
+  janela.addEventListener("close", aoFechar, { once: true });
+  return () => {
+    janela.removeEventListener("close", aoFechar);
+    cancelar();
+  };
+}
+
+/** Para o `useSyncExternalStore` que só pergunta "já estou no navegador?". */
+const nadaAOuvir = () => () => {};
+
+function Comemoracao({
+  competencia,
+  meta,
+  batida,
+}: {
+  competencia: string;
+  meta: string | null;
+  batida: boolean;
+}) {
   const confete = useRef<HTMLDivElement>(null);
+  // O portal só existe no cliente: no servidor não há `document.body`.
+  const noCliente = useSyncExternalStore(
+    nadaAOuvir,
+    () => true,
+    () => false,
+  );
 
   /*
    * O efeito só mexe no DOM — que é justamente para o que ele serve. Decidir
-   * "comemorar ou não" depende de `localStorage`, que não existe no servidor;
+   * "comemorar ou não" depende do `localStorage`, que não existe no servidor;
    * resolver isso com `setState` dentro do efeito causaria render em cascata.
    * Mostrar e esconder um elemento já renderizado evita as duas coisas.
    */
   useEffect(() => {
-    const chave = `comemorou:${competencia}:${meta}`;
-    let jaComemorou = true;
+    // Só com o confete já montado: senão a meta ficaria anotada como
+    // comemorada sem ninguém ter visto a festa.
+    if (!meta || !noCliente || !confete.current) return;
+    const chave = `meta-batida:${competencia}:${meta}`;
 
-    try {
-      jaComemorou = localStorage.getItem(chave) === "sim";
-      if (!jaComemorou) localStorage.setItem(chave, "sim");
-    } catch {
-      // Armazenamento bloqueado: melhor não comemorar do que comemorar sempre.
+    if (!batida) {
+      gravarMarca(chave, "nao");
+      return;
     }
+    // A marca de antes desta versão: quem já comemorou esta meta não comemora
+    // de novo só porque a chave mudou.
+    const anterior = lerMarca(chave) ?? (lerMarca(`comemorou:${competencia}:${meta}`) === "sim" ? "sim" : null);
+    if (anterior === "sim") return;
+    gravarMarca(chave, "sim");
 
     const pecas = confete.current;
     let esconder: ReturnType<typeof setTimeout> | undefined;
-
-    if (!jaComemorou && pecas) {
-      // As animações só começam quando o elemento deixa de estar oculto.
+    const cancelarEspera = semJanelaPorCima(() => {
+      // As animações (re)começam quando o elemento deixa de estar oculto.
       pecas.hidden = false;
       esconder = setTimeout(() => {
         pecas.hidden = true;
       }, 5000);
-    }
+    });
 
-    return () => clearTimeout(esconder);
-  }, [competencia, meta]);
+    return () => {
+      cancelarEspera();
+      clearTimeout(esconder);
+    };
+  }, [competencia, meta, batida, noCliente]);
 
-  return (
+  if (!noCliente) return null;
+
+  /*
+   * Direto no `<body>`, e não dentro da página: a página entra deslizando
+   * (`viagem.ts`), e enquanto ela tem `translate` o `position: fixed` do
+   * confete passa a valer em relação a ela, e não à tela — a festa ficava
+   * presa na área da página.
+   */
+  return createPortal(
     <div ref={confete} hidden className="confete" aria-hidden="true">
       {Array.from({ length: PECAS }, (_, indice) => (
         <span
@@ -278,6 +360,7 @@ function Comemoracao({ competencia, meta }: { competencia: string; meta: string 
           }
         />
       ))}
-    </div>
+    </div>,
+    document.body,
   );
 }
