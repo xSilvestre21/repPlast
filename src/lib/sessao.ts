@@ -12,13 +12,13 @@
 
 import "server-only";
 
-import { createHmac, timingSafeEqual } from "node:crypto";
 import { cache } from "react";
 import { cookies } from "next/headers";
 
 import { type Ator, dbAdministrativo, dbParaOrganizacao } from "./db";
 import { ErroParaUsuario } from "./erro-formulario";
 import { nomeCompleto } from "./nome-usuario";
+import { INATIVIDADE_MANTER_MS, criarToken, lerToken, precisaRenovar, type TokenLido } from "./token-sessao";
 
 /**
  * Sem sessão no meio de uma ação: o cookie venceu com a tela aberta. Entrar
@@ -37,7 +37,6 @@ const ASSINATURA_PENDENTE =
   "sistema em outra aba para ver o que falta e regularizar.";
 
 const COOKIE = "repplast_sessao";
-const DURACAO_DIAS = 30;
 
 export interface Sessao {
   usuarioId: string;
@@ -68,44 +67,27 @@ function segredo(): string {
   return valor;
 }
 
-function assinar(dados: string): string {
-  return createHmac("sha256", segredo()).update(dados).digest("base64url");
+/** O token do cookie desta requisição, já conferido — ou `null`. */
+async function tokenAtual(): Promise<TokenLido | null> {
+  const token = (await cookies()).get(COOKIE)?.value;
+  return token ? lerToken(token, segredo(), Date.now()) : null;
 }
 
 /**
- * Token no formato `payload.assinatura`, com o vencimento dentro do payload.
+ * Grava o cookie com um token novo.
  *
- * `versao` é a `sessaoVersao` do usuário no momento do login: redefinir a
- * senha a soma, e o token velho deixa de bater (`sessaoAtual`).
+ * "Manter conectado" desmarcado: cookie de sessão, sem `maxAge` — some ao
+ * fechar o navegador. Marcado: dura o mesmo que o token sem uso; usar renova
+ * os dois juntos (`renovarSessao`).
  */
-function criarToken(usuarioId: string, versao: number): string {
-  const expiraEm = Date.now() + DURACAO_DIAS * 24 * 60 * 60 * 1000;
-  const dados = Buffer.from(JSON.stringify({ usuarioId, expiraEm, versao })).toString("base64url");
-
-  return `${dados}.${assinar(dados)}`;
-}
-
-function lerToken(token: string): { usuarioId: string; versao: number } | null {
-  const [dados, assinatura] = token.split(".");
-  if (!dados || !assinatura) return null;
-
-  const esperada = Buffer.from(assinar(dados));
-  const recebida = Buffer.from(assinatura);
-
-  // Tempo constante: comparar com `===` vazaria, pelo tempo de resposta,
-  // quantos bytes da assinatura o atacante já acertou.
-  if (esperada.length !== recebida.length || !timingSafeEqual(esperada, recebida)) return null;
-
-  try {
-    const { usuarioId, expiraEm, versao } = JSON.parse(Buffer.from(dados, "base64url").toString());
-    if (typeof usuarioId !== "string" || typeof expiraEm !== "number") return null;
-    if (Date.now() > expiraEm) return null;
-
-    // Token de antes da versão existir conta como 0: o deploy não desloga ninguém.
-    return { usuarioId, versao: typeof versao === "number" ? versao : 0 };
-  } catch {
-    return null;
-  }
+async function gravarCookie(sessao: { usuarioId: string; versao: number; manter: boolean; inicio: number }) {
+  (await cookies()).set(COOKIE, criarToken(sessao, segredo(), Date.now()), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    ...(sessao.manter ? { maxAge: INATIVIDADE_MANTER_MS / 1000 } : {}),
+  });
 }
 
 /**
@@ -115,10 +97,7 @@ function lerToken(token: string): { usuarioId: string; versao: number } | null {
  * várias partes da página perguntem quem está logado.
  */
 export const sessaoAtual = cache(async (): Promise<Sessao | null> => {
-  const token = (await cookies()).get(COOKIE)?.value;
-  if (!token) return null;
-
-  const lido = lerToken(token);
+  const lido = await tokenAtual();
   if (!lido) return null;
   const { usuarioId } = lido;
 
@@ -255,19 +234,41 @@ export async function exigirAdmin(): Promise<void> {
   }
 }
 
-export async function criarSessao(usuarioId: string): Promise<void> {
+/**
+ * Abre a sessão — ou a refaz, quando a `sessaoVersao` subiu (troca de senha ou
+ * de e-mail com a pessoa logada).
+ *
+ * Sem `manter`, é a sessão desta mesma pessoa sendo refeita: fica a escolha do
+ * login, e o teto de 30 dias continua contando dele — trocar a senha não pode
+ * estender a sessão. Sem cookie nenhum (o cadastro), fica conectado.
+ */
+export async function criarSessao(usuarioId: string, opcoes: { manter?: boolean } = {}): Promise<void> {
   const usuario = await dbAdministrativo().usuario.findUnique({
     where: { id: usuarioId },
     select: { sessaoVersao: true },
   });
+  const atual = await tokenAtual();
+  const continua = opcoes.manter === undefined && atual?.usuarioId === usuarioId ? atual : null;
 
-  (await cookies()).set(COOKIE, criarToken(usuarioId, usuario?.sessaoVersao ?? 0), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: DURACAO_DIAS * 24 * 60 * 60,
+  await gravarCookie({
+    usuarioId,
+    versao: usuario?.sessaoVersao ?? 0,
+    manter: opcoes.manter ?? continua?.manter ?? true,
+    inicio: continua?.inicio ?? Date.now(),
   });
+}
+
+/**
+ * Usar o sistema estica a sessão (`/api/sessao`, chamada ao abrir o app).
+ *
+ * Só depois de uma hora do último token, para não gravar cookie a cada
+ * clique. Devolve se havia sessão — sem ela, nada a renovar.
+ */
+export async function renovarSessao(): Promise<boolean> {
+  const lido = await tokenAtual();
+  if (!lido) return false;
+  if (precisaRenovar(lido, Date.now())) await gravarCookie(lido);
+  return true;
 }
 
 export async function encerrarSessao(): Promise<void> {

@@ -126,7 +126,7 @@ export default async function PaginaConfiguracoes({ searchParams }: PageProps<"/
             <SecaoCartao
               icone={KeyRound}
               titulo="Senha"
-              descricao="Só você troca a sua senha — nem o administrador do escritório."
+              descricao="Só você troca a sua senha — nem o administrador do escritório. Por segurança, o sistema pede a senha de novo depois de 7 dias sem uso, e 30 dias depois de entrar."
             >
               <BotaoLink href="/senha" variante="secundaria" icone={KeyRound}>
                 Trocar minha senha
