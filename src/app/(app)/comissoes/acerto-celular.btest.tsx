@@ -17,6 +17,7 @@ import { Tabela } from "@/components/ui";
 
 import { type LinhaPedido, LinhaComissao } from "./acerto";
 import { colunasDaComissao } from "./colunas";
+import { EditorParcelas } from "./parcelas";
 
 const PEDIDO: LinhaPedido = {
   id: "p1",
@@ -99,6 +100,36 @@ describe("apuração no celular em pé", () => {
 
     await folha.getByRole("button", { name: "Fechar" }).click();
     await expect.element(folha).not.toBeInTheDocument();
+  });
+
+  test("no rodapé das parcelas, as ações têm altura de botão e não se encostam", async () => {
+    await render(
+      <EditorParcelas
+        venda="9000"
+        percentual="3"
+        percentualPreposto={null}
+        dataBase="2026-10-02"
+        prazoSugerido={null}
+        fechamento=""
+        atuais={[
+          { vencimento: "2026-10-08", valor: "3.000,00" },
+          { vencimento: "2026-10-22", valor: "3.000,00" },
+          { vencimento: "2026-11-05", valor: "3.000,00" },
+        ]}
+        salvar={async () => ({})}
+        desfazer={async () => ({})}
+        aoFechar={() => {}}
+      />,
+    );
+
+    const caixas = ["mais uma parcela", "cancelar", "desfazer parcelamento"].map((nome) =>
+      page.getByRole("button", { name: nome }).element().getBoundingClientRect(),
+    );
+    for (const caixa of caixas) expect(caixa.height).toBeGreaterThanOrEqual(44);
+    // Um embaixo do outro, com folga — e o desfazer por último, afastado.
+    const [mais, cancelar, desfazer] = caixas;
+    expect(cancelar.top - mais.bottom).toBeGreaterThanOrEqual(8);
+    expect(desfazer.top - cancelar.bottom).toBeGreaterThanOrEqual(8);
   });
 
   test("o parcelamento cabe na folha: nenhuma parcela fica para o lado", async () => {

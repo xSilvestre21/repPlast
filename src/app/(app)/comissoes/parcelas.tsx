@@ -78,6 +78,10 @@ function mesDe(iso: string): string {
 }
 
 
+/** As ações de texto do rodapé, no celular: altura de botão, centradas, sem sublinhado. */
+const ACAO_NO_CELULAR =
+  "max-sm:flex max-sm:justify-center max-sm:py-3 max-sm:text-corpo max-sm:no-underline";
+
 export function EditorParcelas({
   venda,
   percentual,
@@ -392,7 +396,14 @@ export function EditorParcelas({
           <ErroGeral />
           <MensagemErro>{estadoDesfazer.erro}</MensagemErro>
 
-          <div className="flex flex-wrap items-center gap-3">
+          {/*
+            No celular, as ações viram botões de altura cheia, um embaixo do
+            outro — lado a lado, como links de 17px, "mais uma parcela",
+            "desfazer" e "cancelar" ficavam colados e o dedo errava. O desfazer,
+            que apaga, vai por último e separado por um filete, como o iOS
+            afasta a ação destrutiva das outras.
+          */}
+          <div className="flex flex-wrap items-center gap-3 max-sm:flex-col max-sm:items-stretch max-sm:gap-2">
             <Botao
               type="submit"
               variante="secundaria"
@@ -402,7 +413,12 @@ export function EditorParcelas({
             >
               {salvando ? "Salvando…" : "Salvar parcelas"}
             </Botao>
-            <BotaoTexto type="button" onClick={adicionar} className="inline-flex items-center gap-1">
+            <BotaoTexto
+              type="button"
+              onClick={adicionar}
+              className={`inline-flex items-center gap-1 ${ACAO_NO_CELULAR} max-sm:rounded-full max-sm:border
+                max-sm:border-filete-forte max-sm:text-tinta`}
+            >
               <Plus size={12} aria-hidden="true" />
               mais uma parcela
             </BotaoTexto>
@@ -413,13 +429,14 @@ export function EditorParcelas({
                 onClick={perguntaDesfazer.aoClicar}
                 disabled={desfazendo}
                 perigoso
-                className="ml-auto"
+                className={`sm:ml-auto ${ACAO_NO_CELULAR} max-sm:order-last max-sm:mt-2 max-sm:border-t
+                  max-sm:border-filete max-sm:pt-4 max-sm:text-perigo`}
               >
                 {desfazendo ? "desfazendo…" : "desfazer parcelamento"}
               </BotaoTexto>
             )}
             {perguntaDesfazer.janela}
-            <BotaoTexto type="button" onClick={aoFechar}>
+            <BotaoTexto type="button" onClick={aoFechar} className={ACAO_NO_CELULAR}>
               cancelar
             </BotaoTexto>
           </div>
