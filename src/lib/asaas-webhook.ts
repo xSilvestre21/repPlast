@@ -22,6 +22,7 @@ import { timingSafeEqual } from "node:crypto";
 
 import { assinaturaDoCliente } from "./asaas";
 import { dbAdministrativo } from "./db";
+import { acertarDepoisDoPagamento } from "./mensalidade";
 
 type Situacao = "AGUARDANDO_PAGAMENTO" | "ATIVA" | "ATRASADA" | "CANCELADA";
 
@@ -150,6 +151,22 @@ export async function processarEventoAsaas(corpo: unknown): Promise<void> {
     if (alvo.asaasAssinaturaId && "asaasClienteId" in onde) delete dados.asaasAssinaturaId;
 
     await db.organizacao.update({ where: { id: alvo.id }, data: dados });
+
+    /*
+     * Fatura paga: a redução do ciclo (preposto inativado, volta ao Solo) passa
+     * a valer nas seguintes — ver `mensalidade.ts`. Só no CONFIRMED: no cartão,
+     * que é o único meio do checkout, ele chega no dia da cobrança, e o
+     * RECEIVED só uns 30 dias depois, quando o dinheiro cai — perto do
+     * vencimento seguinte, e baixaria a fatura que ainda vai ser cobrada.
+     *
+     * Melhor-esforço: se o Asaas falhar, o webhook não falha junto (o Asaas
+     * suspende a fila depois de várias recusas), e a próxima fatura paga acerta.
+     */
+    if (evento.event === "PAYMENT_CONFIRMED") {
+      await acertarDepoisDoPagamento(alvo.id).catch((erro) => {
+        console.error(`[asaas] não deu para acertar a mensalidade de ${alvo.id}:`, erro);
+      });
+    }
   } catch (erro) {
     // Falhou depois da trava: solta, para a nova tentativa do Asaas valer.
     await db.eventoAsaas.delete({ where: { id: evento.id } }).catch(() => {});

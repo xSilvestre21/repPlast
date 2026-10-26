@@ -2,9 +2,11 @@
  * Testes de integração da troca de plano e do perfil, em Configurações.
  *
  * O que se protege: Max → Solo com preposto ativo é recusado e nada muda; com
- * os prepostos inativos, passa; o Asaas é acertado ANTES de gravar — se ele
- * recusar, o plano fica o de antes; e o plano só se grava pelo caminho da
- * ação (o papel restrito, sozinho, é barrado pelo trigger da cobrança).
+ * os prepostos inativos, passa, sem baixar a fatura em aberto (a redução só
+ * vale depois que ela for paga — `lib/mensalidade.ts`); Solo → Max sobe no
+ * Asaas ANTES de gravar — se ele recusar, o plano fica o de antes; e o plano
+ * só se grava pelo caminho da ação (o papel restrito, sozinho, é barrado pelo
+ * trigger da cobrança).
  *
  * As ações rodam com o papel restrito (`dbParaOrganizacao`), não como dono do
  * banco, que passaria por cima do RLS.
@@ -39,11 +41,17 @@ vi.mock("@/lib/sessao", () => ({
   },
 }));
 
-const asaas = vi.hoisted(() => ({ falhar: false, chamadas: [] as unknown[][] }));
+/** `cobrado`: o valor que a assinatura tem no Asaas. */
+const asaas = vi.hoisted(() => ({ falhar: false, cobrado: "189", chamadas: [] as unknown[][] }));
 vi.mock("@/lib/asaas", async (original) => {
   const real = await original<typeof import("@/lib/asaas")>();
   return {
     ...real,
+    valorDaAssinatura: async () => {
+      if (asaas.falhar) throw new real.ErroAsaas("fora do ar", 503);
+      const { default: Decimal } = await import("decimal.js");
+      return new Decimal(asaas.cobrado);
+    },
     atualizarValorAssinatura: async (...argumentos: unknown[]) => {
       if (asaas.falhar) throw new real.ErroAsaas("fora do ar", 503);
       asaas.chamadas.push(argumentos);
@@ -85,6 +93,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   asaas.falhar = false;
+  asaas.cobrado = "189";
   asaas.chamadas = [];
   ator = { usuarioId: donoId, papel: "ADMIN" };
 });
@@ -102,17 +111,24 @@ describe("trocarPlano", () => {
     expect(asaas.chamadas).toHaveLength(0);
   });
 
-  it("com os prepostos inativos, passa para o Solo e acerta a mensalidade", async () => {
+  it("com os prepostos inativos, passa para o Solo sem baixar a fatura em aberto", async () => {
     await admin.usuario.update({ where: { id: prepostoId }, data: { ativo: false } });
 
     const estado = await trocarPlano("PADRAO", {}, new FormData());
 
     expect(estado.erro).toBeUndefined();
     expect(await planoAgora()).toBe("PADRAO");
-    expect(asaas.chamadas).toHaveLength(1);
-    const [, valor, plano] = asaas.chamadas[0] as [string, { toString(): string }, string];
-    expect(valor.toString()).toBe("79");
-    expect(plano).toBe("PADRAO");
+    // O mês foi usado no Max: o valor do Solo só vale depois do pagamento.
+    expect(asaas.chamadas).toHaveLength(0);
+  });
+
+  it("volta ao Max no mesmo ciclo, com a fatura ainda no valor do Max, sem chamar o Asaas", async () => {
+    const estado = await trocarPlano("PLUS", {}, new FormData());
+    expect(estado.erro).toBeUndefined();
+    expect(await planoAgora()).toBe("PLUS");
+    expect(asaas.chamadas).toHaveLength(0);
+
+    await trocarPlano("PADRAO", {}, new FormData());
   });
 
   it("recusa trocar para o plano em que já está", async () => {
@@ -129,7 +145,9 @@ describe("trocarPlano", () => {
     expect(await planoAgora()).toBe("PADRAO");
   });
 
-  it("volta ao Max", async () => {
+  it("volta ao Max depois que a fatura baixou para o Solo", async () => {
+    asaas.cobrado = "79";
+
     const estado = await trocarPlano("PLUS", {}, new FormData());
 
     expect(estado.erro).toBeUndefined();

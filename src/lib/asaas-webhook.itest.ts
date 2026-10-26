@@ -5,8 +5,8 @@
  * liberar o escritório certo, uma entrega repetida não pode aplicar nada de
  * novo, e o próprio escritório não pode se marcar como pago.
  *
- * O Asaas não é chamado: a consulta de assinatura por cliente é trocada por
- * uma resposta fixa.
+ * O Asaas não é chamado: a consulta de assinatura por cliente e o valor da
+ * assinatura são respostas fixas, e a troca de valor só é anotada.
  *
  * Exige banco configurado. Rode com:  npm run test:db
  */
@@ -15,8 +15,17 @@ import { randomUUID } from "node:crypto";
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+/** `cobrado`: o valor que a assinatura tem no Asaas. */
+const asaas = vi.hoisted(() => ({ cobrado: "189", chamadas: [] as unknown[][] }));
 vi.mock("./asaas", () => ({
   assinaturaDoCliente: vi.fn(async () => "sub_teste_checkout"),
+  valorDaAssinatura: async () => {
+    const { default: Decimal } = await import("decimal.js");
+    return new Decimal(asaas.cobrado);
+  },
+  atualizarValorAssinatura: async (...argumentos: unknown[]) => {
+    asaas.chamadas.push(argumentos);
+  },
 }));
 
 import { processarEventoAsaas, tokenDoWebhookConfere } from "./asaas-webhook";
@@ -245,5 +254,51 @@ describe("CHECKOUT_PAID sem cliente", () => {
       asaasClienteId: `cus2_${sufixo}`,
       asaasAssinaturaId: `sub2_${sufixo}`,
     });
+  });
+});
+
+describe("mensalidade depois do pagamento", () => {
+  it("PAYMENT_CONFIRMED leva às próximas faturas a redução do ciclo pago", async () => {
+    // Max sem preposto ativo deve 189; a fatura paga ainda era a de 4 prepostos.
+    asaas.cobrado = "238";
+    asaas.chamadas = [];
+
+    await processarEventoAsaas(
+      evento("PAYMENT_CONFIRMED", {
+        payment: { subscription: "sub_teste_checkout", customer: clienteId },
+      }),
+    );
+
+    expect(asaas.chamadas).toHaveLength(1);
+    const [assinatura, valor, plano] = asaas.chamadas[0] as [string, { toString(): string }, string];
+    expect(assinatura).toBe("sub_teste_checkout");
+    expect(valor.toString()).toBe("189");
+    expect(plano).toBe("PLUS");
+  });
+
+  it("PAYMENT_RECEIVED não mexe no valor — no cartão, chega perto do vencimento seguinte", async () => {
+    asaas.cobrado = "238";
+    asaas.chamadas = [];
+
+    await processarEventoAsaas(
+      evento("PAYMENT_RECEIVED", {
+        payment: { subscription: "sub_teste_checkout", customer: clienteId },
+      }),
+    );
+
+    expect(asaas.chamadas).toHaveLength(0);
+  });
+
+  it("PAYMENT_CONFIRMED com a fatura já no valor certo não chama o Asaas", async () => {
+    asaas.cobrado = "189";
+    asaas.chamadas = [];
+
+    await processarEventoAsaas(
+      evento("PAYMENT_CONFIRMED", {
+        payment: { subscription: "sub_teste_checkout", customer: clienteId },
+      }),
+    );
+
+    expect(asaas.chamadas).toHaveLength(0);
   });
 });

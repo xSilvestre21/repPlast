@@ -43,9 +43,21 @@ export function CartaoPlano({
         "se o escritório voltar ao Max."
       : null;
 
-  const quando = temCobranca
-    ? "O plano muda na hora; o valor novo vale a partir da próxima mensalidade, sem cobrança proporcional."
-    : "O plano muda na hora.";
+  // Sobe já na fatura em aberto; desce só depois que ela for paga — o mês em
+  // curso foi usado no Max (`lib/mensalidade.ts`).
+  const agora = formatarMoeda(mensalidadeAgora.toString());
+  const depois = formatarMoeda(mensalidadeDepois.toString());
+  const quando = !temCobranca
+    ? "O plano muda na hora."
+    : sobe
+      ? "O plano muda na hora, e o valor novo já vale para a fatura em aberto, sem cobrança proporcional."
+      : "O plano muda na hora. A fatura em aberto continua com o valor do Max; o do Solo vale a partir da seguinte.";
+  const valores = !temCobranca
+    ? ""
+    : sobe
+      ? `A mensalidade sobe de ${agora} para ${depois}, já na fatura em aberto, sem cobrança proporcional.`
+      : `A mensalidade cai de ${agora} para ${depois} a partir da fatura seguinte à que está em aberto — ` +
+        `essa continua com ${agora}, porque o mês já foi usado no Max.`;
 
   return (
     <SecaoCartao
@@ -96,8 +108,7 @@ export function CartaoPlano({
           confirmar={{
             titulo: `Passar para o ${outro.nome}?`,
             texto:
-              `A mensalidade passa de ${formatarMoeda(mensalidadeAgora.toString())} para ` +
-              `${formatarMoeda(mensalidadeDepois.toString())}. ${quando}` +
+              `${valores || quando}` +
               (sobe ? " O menu do seu nome, no alto, ganha “Prepostos”." : " O menu do seu nome, no alto, perde “Prepostos”."),
             rotulo: `Passar para o ${outro.nome}`,
             perigo: false,

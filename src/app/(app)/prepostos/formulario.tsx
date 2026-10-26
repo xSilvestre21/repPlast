@@ -52,6 +52,7 @@ export function FormularioPreposto({
   rotuloEnvio,
   novo = false,
   editavel = true,
+  aviso,
 }: {
   acao: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   valores: ValoresPreposto;
@@ -62,6 +63,8 @@ export function FormularioPreposto({
   novo?: boolean;
   /** Ficha aberta para leitura: tudo travado até clicar em Editar. */
   editavel?: boolean;
+  /** Dito logo acima do botão — na inscrição, quanto a mensalidade sobe. */
+  aviso?: string | null;
 }) {
   const [estado, enviar, enviando] = useActionState(acao, {});
 
@@ -182,6 +185,11 @@ export function FormularioPreposto({
 
       {editavel && (
         <div className="space-y-3">
+          {aviso && (
+            <p className="rounded-suave border border-filete bg-folha-2 px-4 py-3 text-corpo text-tinta-2">
+              {aviso}
+            </p>
+          )}
           <ErroGeral />
           <div className="flex justify-end">
             <Botao type="submit" carregando={enviando}>

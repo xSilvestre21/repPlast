@@ -12,7 +12,7 @@
 
 import "server-only";
 
-import type Decimal from "decimal.js";
+import Decimal from "decimal.js";
 
 import { PLANOS, type CodigoPlano } from "./planos";
 
@@ -186,13 +186,23 @@ export async function assinaturaDoCliente(clienteId: string): Promise<string | n
   return lista.data.find((a) => !a.deleted)?.id ?? null;
 }
 
+/** O valor que a assinatura cobra hoje — o que vai nas próximas faturas. */
+export async function valorDaAssinatura(assinaturaId: string): Promise<Decimal> {
+  const assinatura = await chamar<{ value: number }>(`/v3/subscriptions/${encodeURIComponent(assinaturaId)}`, {
+    method: "GET",
+  });
+
+  return new Decimal(assinatura.value);
+}
+
 /**
- * Troca o valor da mensalidade — preposto além dos inclusos no Max, ou a troca
- * de plano em Configurações (que manda também o `plano`, para a fatura dizer
- * "RepPlast Max" e não o nome do plano de antes).
+ * Troca o valor da mensalidade. Quem decide quando subir e quando descer é
+ * `mensalidade.ts`; aqui é só a chamada. O `plano` vai junto quando o plano
+ * mudou, para a fatura dizer "RepPlast Max" e não o nome do plano de antes.
  *
- * `updatePendingPayments` leva o valor novo também à cobrança já gerada e
- * ainda não paga, para o mês corrente não sair com o valor velho.
+ * `updatePendingPayments` leva o valor novo também às cobranças já geradas e
+ * ainda não pagas — e o Asaas gera cada cobrança 40 dias antes do vencimento,
+ * então a do próximo vencimento sempre já existe.
  */
 export async function atualizarValorAssinatura(
   assinaturaId: string,

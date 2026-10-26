@@ -91,8 +91,9 @@ export default async function PaginaPreposto({
 
   /*
    * O que tirar ou devolver o acesso muda, dito antes do clique — inclusive na
-   * mensalidade, que `acertarMensalidade` (../acoes.ts) ajusta acima dos
-   * prepostos inclusos no plano.
+   * mensalidade acima dos prepostos inclusos no plano: devolver o acesso sobe
+   * já na fatura em aberto; tirar só baixa a partir da seguinte, porque o mês
+   * em curso foi usado com ele (`lib/mensalidade.ts`).
    */
   const [ativos, assinatura] = await Promise.all([
     db.usuario.count({ where: { organizacaoId, papel: "REPRESENTANTE", ativo: true } }),
@@ -100,11 +101,16 @@ export default async function PaginaPreposto({
   ]);
   const mensalidadeAgora = valorMensal(plano, ativos);
   const mensalidadeDepois = valorMensal(plano, ativos + (preposto.ativo ? -1 : 1));
+  const agora = formatarMoeda(mensalidadeAgora.toString());
+  const depois = formatarMoeda(mensalidadeDepois.toString());
   const mudaMensalidade =
-    assinatura?.asaasAssinaturaId && !mensalidadeAgora.equals(mensalidadeDepois)
-      ? ` A mensalidade do escritório passa de ${formatarMoeda(mensalidadeAgora.toString())} para ` +
-        `${formatarMoeda(mensalidadeDepois.toString())}.`
-      : "";
+    !assinatura?.asaasAssinaturaId || mensalidadeAgora.equals(mensalidadeDepois)
+      ? ""
+      : preposto.ativo
+        ? ` A mensalidade do escritório cai de ${agora} para ${depois} a partir da fatura seguinte à ` +
+          `que está em aberto — essa continua com ${agora}, porque o mês já foi usado com ele.`
+        : ` Com ele, o escritório passa dos prepostos inclusos no plano: a mensalidade sobe de ${agora} ` +
+          `para ${depois}, já na fatura em aberto, sem cobrança proporcional.`;
   const perguntaAcesso = preposto.ativo
     ? {
         titulo: `Tirar o acesso de ${preposto.nomeCompleto}?`,

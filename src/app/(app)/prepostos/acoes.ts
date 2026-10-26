@@ -12,7 +12,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { atualizarValorAssinatura, ErroAsaas } from "@/lib/asaas";
+import { ErroAsaas } from "@/lib/asaas";
 import { dbAdministrativo, type DbOrganizacao } from "@/lib/db";
 import {
   ErroDeCampo,
@@ -22,6 +22,7 @@ import {
 } from "@/lib/erro-formulario";
 import { normalizarTelefone } from "@/lib/mascara";
 import { exigirNumero } from "@/lib/numero-br";
+import { subirMensalidade } from "@/lib/mensalidade";
 import { PLANOS, valorMensal } from "@/lib/planos";
 import { gerarHashSenha } from "@/lib/senha";
 import { TAMANHO_MINIMO_SENHA } from "@/lib/senha-regras";
@@ -65,19 +66,19 @@ async function contextoAdmin() {
 }
 
 /**
- * Acerta a mensalidade no Asaas quando o número de prepostos ativos vai mudar.
+ * Sobe a mensalidade no Asaas quando um preposto vai ficar ativo — inscrito
+ * ou com o acesso devolvido.
  *
  * O Max cobre 3 prepostos; do quarto em diante cada um soma
- * `precoPrepostoExtra`. Roda ANTES de gravar: se o Asaas recusar, o preposto
- * não é criado nem reativado — melhor que um preposto trabalhando sem estar na
- * cobrança. Escritório sem assinatura no Asaas (os de antes da cobrança) não
- * tem o que acertar.
+ * `precoPrepostoExtra`, já na fatura em aberto. Roda ANTES de gravar: se o
+ * Asaas recusar, o preposto não é criado nem reativado — melhor que um
+ * preposto trabalhando sem estar na cobrança.
+ *
+ * Tirar o acesso não passa por aqui: a redução só vale depois que a fatura em
+ * aberto for paga (`mensalidade.ts`). Escritório sem assinatura no Asaas (os
+ * de antes da cobrança) não tem o que acertar.
  */
-async function acertarMensalidade(
-  db: DbOrganizacao,
-  organizacaoId: string,
-  variacao: 1 | -1,
-): Promise<void> {
+async function cobrarPrepostoAMais(db: DbOrganizacao, organizacaoId: string): Promise<void> {
   const [organizacao, ativos] = await Promise.all([
     db.organizacao.findUniqueOrThrow({
       where: { id: organizacaoId },
@@ -88,12 +89,11 @@ async function acertarMensalidade(
 
   if (!organizacao.asaasAssinaturaId) return;
 
-  const antes = valorMensal(organizacao.plano, ativos);
-  const depois = valorMensal(organizacao.plano, ativos + variacao);
-  if (antes.equals(depois)) return;
+  const depois = valorMensal(organizacao.plano, ativos + 1);
+  if (depois.equals(valorMensal(organizacao.plano, ativos))) return;
 
   try {
-    await atualizarValorAssinatura(organizacao.asaasAssinaturaId, depois);
+    await subirMensalidade(organizacao.asaasAssinaturaId, depois);
   } catch (erro) {
     if (!(erro instanceof ErroAsaas)) throw erro;
     throw new ErroParaUsuario(
@@ -213,7 +213,7 @@ export async function inscreverPreposto(
       );
     }
 
-    await acertarMensalidade(db, organizacaoId, 1);
+    await cobrarPrepostoAMais(db, organizacaoId);
 
     const preposto = await db.usuario.create({
       data: {
@@ -294,7 +294,7 @@ async function gravarAlternarAtivoPreposto(id: string, _formData: FormData): Pro
 
   if (!preposto) throw new ErroParaUsuario(PREPOSTO_SUMIU);
 
-  await acertarMensalidade(db, organizacaoId, preposto.ativo ? -1 : 1);
+  if (!preposto.ativo) await cobrarPrepostoAMais(db, organizacaoId);
 
   await db.usuario.updateMany({
     where: { id, organizacaoId, papel: "REPRESENTANTE" },

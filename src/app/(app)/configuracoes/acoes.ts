@@ -8,7 +8,7 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 
-import { atualizarValorAssinatura, ErroAsaas } from "@/lib/asaas";
+import { ErroAsaas } from "@/lib/asaas";
 import { limparAssinatura } from "@/lib/assinatura-email";
 import { contaParaEnvio } from "@/lib/conta-email";
 import { cifrar, decifrar } from "@/lib/cripto";
@@ -21,6 +21,7 @@ import { problemaNoEmail } from "@/lib/email-valido";
 import { emailValido } from "@/lib/envio-pedido";
 import { minutosAte, minutosPorExtenso } from "@/lib/limite-tentativas";
 import { normalizarTelefone } from "@/lib/mascara";
+import { subirMensalidade } from "@/lib/mensalidade";
 import { PLANOS, valorMensal, type CodigoPlano } from "@/lib/planos";
 import { conferirSenha } from "@/lib/senha";
 import { bloqueioDoLogin, ipDaRequisicao, registrarFalha } from "@/lib/tentativas-login";
@@ -216,10 +217,12 @@ export async function pedirTrocaEmail(
 /**
  * Passa o escritório para o outro plano — Solo ↔ Max.
  *
- * Só o administrador. O valor novo vale da próxima mensalidade (e da que está
- * em aberto), sem conta proporcional — o mesmo que já acontece quando um
- * preposto passa dos inclusos. O Asaas é acertado ANTES de gravar, como em
- * `acertarMensalidade` (`prepostos/acoes.ts`): se ele recusar, nada muda.
+ * Só o administrador. Solo → Max sobe a mensalidade já na fatura em aberto,
+ * sem conta proporcional, e o Asaas é acertado ANTES de gravar: se ele
+ * recusar, nada muda. Max → Solo não vai ao Asaas agora — a fatura em aberto
+ * segue com o valor do Max, e o do Solo vale depois que ela for paga
+ * (`mensalidade.ts`); senão voltar ao Solo na véspera de cada vencimento daria
+ * o Max pelo preço do Solo.
  *
  * Max → Solo com preposto ativo é recusado: o Solo não tem preposto, e
  * inativar a equipe por baixo dos panos seria uma ação em massa escondida num
@@ -262,9 +265,9 @@ export async function trocarPlano(
       );
     }
 
-    if (organizacao.asaasAssinaturaId) {
+    if (planoNovo === "PLUS" && organizacao.asaasAssinaturaId) {
       try {
-        await atualizarValorAssinatura(organizacao.asaasAssinaturaId, valorMensal(planoNovo, ativos), planoNovo);
+        await subirMensalidade(organizacao.asaasAssinaturaId, valorMensal(planoNovo, ativos), planoNovo);
       } catch (erro) {
         if (!(erro instanceof ErroAsaas)) throw erro;
         throw new ErroParaUsuario(

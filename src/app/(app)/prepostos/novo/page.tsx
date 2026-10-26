@@ -2,7 +2,8 @@ import { notFound, redirect } from "next/navigation";
 import { UserPlus } from "lucide-react";
 
 import { Pagina } from "@/components/pagina";
-import { Cabecalho } from "@/components/ui";
+import { Cabecalho, formatarMoeda } from "@/components/ui";
+import { PLANOS, valorMensal } from "@/lib/planos";
 import { escopoAtual } from "@/lib/sessao";
 
 import { inscreverPreposto } from "../acoes";
@@ -16,11 +17,26 @@ export default async function PaginaNovoPreposto() {
   if (!ehAdmin) notFound();
   if (plano !== "PLUS") redirect("/prepostos");
 
-  const industrias = await db.fornecedor.findMany({
-    where: { organizacaoId, ativo: true },
-    orderBy: { nome: "asc" },
-    select: { id: true, nome: true },
-  });
+  const [industrias, ativos, organizacao] = await Promise.all([
+    db.fornecedor.findMany({
+      where: { organizacaoId, ativo: true },
+      orderBy: { nome: "asc" },
+      select: { id: true, nome: true },
+    }),
+    db.usuario.count({ where: { organizacaoId, papel: "REPRESENTANTE", ativo: true } }),
+    db.organizacao.findUnique({ where: { id: organizacaoId }, select: { asaasAssinaturaId: true } }),
+  ]);
+
+  // Do quarto preposto em diante, cada um soma na mensalidade — dito antes de
+  // inscrever, e não descoberto na fatura. `inscreverPreposto` sobe no Asaas.
+  const agora = valorMensal(plano, ativos);
+  const depois = valorMensal(plano, ativos + 1);
+  const aviso =
+    organizacao?.asaasAssinaturaId && !agora.equals(depois)
+      ? `O escritório já usa os ${PLANOS.PLUS.prepostosInclusos} prepostos inclusos no ${PLANOS.PLUS.nome}. ` +
+        `Com este, a mensalidade sobe de ${formatarMoeda(agora.toString())} para ` +
+        `${formatarMoeda(depois.toString())}, já na fatura em aberto, sem cobrança proporcional.`
+      : null;
 
   return (
     <Pagina>
@@ -36,6 +52,7 @@ export default async function PaginaNovoPreposto() {
         industrias={industrias}
         rotuloEnvio="Inscrever preposto"
         novo
+        aviso={aviso}
       />
     </Pagina>
   );
