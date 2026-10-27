@@ -3,9 +3,10 @@
  * celular ("Adicionar à Tela de Início" no iPhone, "Instalar app" no Android),
  * na aba do navegador e no alternador de apps.
  *
- * A marca é a do logo dos e-mails (`gerar-logo-email.mjs`) e do marca-texto da
- * tela de entrar: o "Rp" em Plus Jakarta Sans 800, cor de tinta, sobre uma
- * etiqueta amarela — aqui inclinada, num quadro escuro da mesma tinta, para o
+ * Uma sacola plástica de alça vazada — o que o representante vende — no
+ * amarelo do marca-texto (`--destaque`), com as linhas longas da solda e o
+ * "Rp" do logo dos e-mails (`gerar-logo-email.mjs`) em Plus Jakarta Sans 800,
+ * cor de tinta, centrado no corpo. O quadro é escuro, da mesma tinta, para o
  * ícone se destacar na tela do celular, que costuma ter fundo claro.
  *
  * Tudo nasce de um SVG só, com as letras convertidas em desenho (`fontkit`):
@@ -19,7 +20,7 @@
  *   - `public/icones/icone-192.png`, `-512` e `-1024`: o manifesto (Android,
  *     computador). O web.dev pede 192 e 512; o 1024 serve às telas grandes.
  *   - `public/icones/icone-mascaravel-512.png`: o Android recorta o ícone no
- *     formato do aparelho (círculo, gota...), então a etiqueta inteira fica
+ *     formato do aparelho (círculo, gota...), então a sacola inteira fica
  *     dentro do círculo de 40% de raio, a zona que nenhum recorte come.
  *
  * Rode de novo só se a marca mudar:
@@ -37,9 +38,6 @@ const FONTE = path.join(
   process.cwd(),
   "node_modules/@fontsource/plus-jakarta-sans/files/plus-jakarta-sans-latin-800-normal.woff",
 );
-
-/** Inclinação da etiqueta, em graus: a marca de quem destacou à mão. */
-const INCLINACAO = -6;
 
 /**
  * O "Rp" como desenho, centrado num quadro de 1024: `altura` é a da caixa
@@ -76,6 +74,9 @@ function letras(altura, cx, cy) {
  * O ícone num quadro de 1024. `raio`: canto arredondado, em fração do lado (0
  * = quadrado, para quem arredonda sozinho). `tamanho`: escala da etiqueta —
  * menor no mascarável, para caber na zona segura.
+ *
+ * A sacola: o corpo de canto arredondado, a alça vazada (o furo, com
+ * `evenodd`) e três soldas — a de cima, a abaixo da alça e a do fundo.
  */
 function svg({ raio, tamanho }) {
   const r = Math.round(1024 * raio);
@@ -84,16 +85,23 @@ function svg({ raio, tamanho }) {
   <linearGradient id="fundo" x1="0" y1="0" x2="1" y2="1">
     <stop offset="0" stop-color="#2a2516"/><stop offset="1" stop-color="#121008"/>
   </linearGradient>
-  <linearGradient id="etiqueta" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0" stop-color="#fff5a6"/><stop offset="1" stop-color="#f8e46a"/>
+  <linearGradient id="sacola" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#fff7b2"/><stop offset="1" stop-color="#f5dc4c"/>
   </linearGradient>
   <clipPath id="quadro"><rect width="1024" height="1024" rx="${r}"/></clipPath>
 </defs>
 <g clip-path="url(#quadro)">
   <rect width="1024" height="1024" fill="url(#fundo)"/>
-  <g transform="translate(512 512) scale(${tamanho}) rotate(${INCLINACAO}) translate(-512 -512)">
-    <rect x="196" y="282" width="632" height="460" rx="92" fill="url(#etiqueta)"/>
-    <g fill="${TINTA}">${letras(290, 512, 486)}</g>
+  <g transform="translate(512 512) scale(${tamanho}) translate(-512 -512)">
+    <path fill="url(#sacola)" fill-rule="evenodd" d="
+      M236 140 H788 Q836 140 836 188 V836 Q836 884 788 884 H236 Q188 884 188 836 V188 Q188 140 236 140 Z
+      M424 236 H600 Q644 236 644 280 Q644 324 600 324 H424 Q380 324 380 280 Q380 236 424 236 Z"/>
+    <g stroke="${TINTA}" stroke-opacity="0.2" stroke-width="12" stroke-linecap="round">
+      <line x1="240" y1="186" x2="784" y2="186"/>
+      <line x1="240" y1="384" x2="784" y2="384"/>
+      <line x1="240" y1="852" x2="784" y2="852"/>
+    </g>
+    <g fill="${TINTA}">${letras(290, 512, 582)}</g>
   </g>
 </g>
 </svg>`;
@@ -105,9 +113,9 @@ const ICONES = [
   { destino: "public/icones/icone-192.png", lado: 192, raio: 0.22, tamanho: 1 },
   { destino: "public/icones/icone-512.png", lado: 512, raio: 0.22, tamanho: 1 },
   { destino: "public/icones/icone-1024.png", lado: 1024, raio: 0.22, tamanho: 1 },
-  // A etiqueta inclinada mede ~0,98 do lado na diagonal; 0,8 do lado é o
-  // diâmetro da zona segura — 0,74 deixa uma folga.
-  { destino: "public/icones/icone-mascaravel-512.png", lado: 512, raio: 0, tamanho: 0.74 },
+  // O canto da sacola fica a ~0,48 do lado do centro; a zona segura tem raio
+  // de 0,4 — 0,78 traz o canto para dentro, com folga.
+  { destino: "public/icones/icone-mascaravel-512.png", lado: 512, raio: 0, tamanho: 0.78 },
 ];
 
 function salvar(destino, conteudo) {
