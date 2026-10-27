@@ -40,18 +40,39 @@ export const REABERTA_MS = 5 * 1000;
 export const CELULAR = "(pointer: coarse)";
 
 /**
- * Roda antes da primeira pintura, no carregamento completo da página: sem a
- * marca, esconde tudo (`html[data-aba]` em `globals.css`) até `GuardaDaAba`
- * decidir — senão as comissões apareceriam por um instante antes de sair.
+ * Quanto esperar a resposta de outra guia logada antes de encerrar. Guia
+ * aberta responde em milissegundos; a congelada pelo celular não responde
+ * nunca, e esperar mais só atrasa a tela de entrar.
+ */
+export const ESPERA_RESPOSTA_MS = 200;
+
+/** Encerra a sessão e responde com a tela de entrar, numa ida só ao servidor. */
+export const ROTA_SAIR = "/api/sessao/sair";
+
+/**
+ * Roda na leitura da página, antes da primeira pintura: sem a marca, esconde
+ * tudo (`html[data-aba]` em `globals.css`) — senão as comissões apareceriam
+ * por um instante antes de sair — e decide ali mesmo, sem esperar o React.
+ * Esperá-lo custava uns 2 segundos no celular, justo ao abrir o app instalado,
+ * que começa no painel.
  *
- * Mesma conta de `abaLiberada`, em JavaScript cru: é texto inserido no HTML.
+ * A mesma conta de `GuardaDaAba`, em JavaScript cru: é texto inserido no
+ * HTML. Quem cuida da navegação do React e da volta ao app é o componente.
  * Sem `sessionStorage` (navegador que o bloqueia), libera — trancar ali seria
  * trancar sempre.
  */
 export const SCRIPT_ABA = `(function(){try{
-var s=sessionStorage,a=Date.now(),n=performance.getEntriesByType('navigation')[0];
+var s=sessionStorage,h=document.documentElement,a=Date.now(),n=performance.getEntriesByType('navigation')[0];
 if(document.cookie.split('; ').indexOf('${COOKIE_ENTROU}=1')>=0){s.setItem('${MARCA}','1');s.removeItem('${OCULTA_EM}');s.removeItem('${SAIU_EM}');document.cookie='${COOKIE_ENTROU}=; Max-Age=0; path=/'}
 var o=Number(s.getItem('${OCULTA_EM}')),d=Number(s.getItem('${SAIU_EM}'));
-var recarga=n&&n.type==='reload';
-if(!s.getItem('${MARCA}')||(d&&!recarga&&a-d>${REABERTA_MS})||(o&&matchMedia('${CELULAR}').matches&&a-o>${AUSENCIA_CELULAR_MS}))document.documentElement.dataset.aba='conferindo'
+if(d&&!(n&&n.type==='reload')&&a-d>${REABERTA_MS})s.removeItem('${MARCA}');
+s.removeItem('${SAIU_EM}');
+var ausente=o&&matchMedia('${CELULAR}').matches&&a-o>${AUSENCIA_CELULAR_MS};
+if(s.getItem('${MARCA}')&&!ausente)return;
+h.dataset.aba='conferindo';
+var sair=function(){h.dataset.aba='saindo';s.removeItem('${MARCA}');var f=document.createElement('form');f.method='post';f.action='${ROTA_SAIR}';document.body.appendChild(f);f.submit()};
+if(ausente||!window.BroadcastChannel)return sair();
+var c=new BroadcastChannel('${CANAL}'),t=setTimeout(function(){c.close();sair()},${ESPERA_RESPOSTA_MS});
+c.onmessage=function(e){if(e.data!=='logada')return;clearTimeout(t);c.close();s.setItem('${MARCA}','1');delete h.dataset.aba};
+c.postMessage('alguma-logada?')
 }catch(e){}})()`;

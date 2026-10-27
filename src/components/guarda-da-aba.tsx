@@ -18,15 +18,15 @@ import {
   CANAL,
   CELULAR,
   COOKIE_ENTROU,
+  ESPERA_RESPOSTA_MS,
   MARCA,
   OCULTA_EM,
   REABERTA_MS,
+  ROTA_SAIR,
   SAIU_EM,
 } from "@/lib/aba";
 
 const INTERVALO_AVISO_MS = 15 * 60 * 1000;
-/** Quanto esperar a resposta de outra guia logada antes de encerrar. */
-const ESPERA_RESPOSTA_MS = 400;
 
 let ultimoAviso = 0;
 let saindo = false;
@@ -90,13 +90,15 @@ function abaLiberada(): boolean {
 function encerrar() {
   if (saindo) return;
   saindo = true;
-  document.documentElement.dataset.aba = "conferindo";
+  document.documentElement.dataset.aba = "saindo";
   armazenamento()?.removeItem(MARCA);
-  // Recarrega mesmo sem rede: `/entrar` com o cookie ainda lá volta ao
-  // sistema, e esta guia, sem a marca, tenta sair de novo.
-  fetch("/api/sessao", { method: "DELETE" })
-    .catch(() => {})
-    .finally(() => window.location.replace("/entrar?sessao=encerrada"));
+  // Formulário, e não `fetch` + `location`: encerra e traz a tela de entrar
+  // numa ida só ao servidor (`ROTA_SAIR`).
+  const formulario = document.createElement("form");
+  formulario.method = "post";
+  formulario.action = ROTA_SAIR;
+  document.body.appendChild(formulario);
+  formulario.submit();
 }
 
 /** Pergunta às outras guias deste navegador se alguma está logada. */
@@ -130,6 +132,8 @@ function reaberta(s: Storage): boolean {
 }
 
 async function conferir(carregou = false) {
+  // O `SCRIPT_ABA` já decidiu sair, antes de o React carregar.
+  if (document.documentElement.dataset.aba === "saindo") return;
   const s = armazenamento();
   if (s) {
     consumirLogin(s);
