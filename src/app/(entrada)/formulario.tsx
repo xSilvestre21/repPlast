@@ -59,26 +59,6 @@ export function FormularioEntrada({
         </div>
       </div>
 
-      {/*
-        Desmarcada, a sessão acaba ao fechar o navegador. Marcada, só depois
-        de 7 dias sem uso (`lib/token-sessao.ts`). Depois de um erro, como a
-        pessoa tinha deixado: marcada vai como "on", desmarcada não vai.
-      */}
-      <label className="flex items-start gap-2.5 cursor-pointer">
-        <input
-          type="checkbox"
-          name="manter"
-          defaultChecked={estado.erro ? estado.valores?.manter === "on" : true}
-          className="mt-1 size-4 accent-[var(--carimbo)]"
-        />
-        <span>
-          <span className="text-corpo font-medium">Manter conectado</span>
-          <span className="block text-mini text-tinta-3">
-            Desmarque em computador de outra pessoa. Sem uso por 7 dias, o sistema pede a senha de novo.
-          </span>
-        </span>
-      </label>
-
       <ErroGeral />
 
       <Botao type="submit" carregando={enviando} className="w-full">

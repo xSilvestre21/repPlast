@@ -163,7 +163,7 @@ export async function entrar(
     }
 
     await limparFalhas(email);
-    await criarSessao(usuario.id, { manter: formData.get("manter") === "on" });
+    await criarSessao(usuario.id);
     destino = inicioDa(usuario.organizacao);
     // Entrou com a senha inicial que o administrador criou: antes do sistema,
     // a sugestão de criar uma só dele (com "Agora não" — é sugestão).

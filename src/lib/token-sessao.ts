@@ -4,11 +4,12 @@
  * Separado de `sessao.ts` para ser testado sem Next nem banco — o relógio e o
  * segredo chegam por parâmetro.
  *
- * Vale até o primeiro destes três:
- *   - 7 dias sem usar o sistema ("Manter conectado" marcado);
- *   - 12 horas sem usar, com a caixa desmarcada — o cookie já some ao fechar o
- *     navegador, mas o do celular às vezes "restaura" a aba, e o cookie junto;
- *   - 30 dias desde o login, mesmo usando todo dia.
+ * Vale até o primeiro destes:
+ *   - 12 horas sem usar — fechar a guia já encerra a sessão (`lib/aba.ts`),
+ *     mas isso depende do navegador; este prazo não;
+ *   - 30 dias desde o login, mesmo usando todo dia;
+ *   - 7 dias sem usar, para quem entrou quando havia "Manter conectado"
+ *     (`manter`): tokens daquela época, que somem sozinhos.
  *
  * Era 30 dias fixos: fechar e abrir o app não pedia nada nesse tempo, e um
  * celular esquecido mostrava as comissões a quem pegasse. Cada uso refaz o

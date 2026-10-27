@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 
 import { EsquecerBuscas } from "@/components/esquecer-buscas";
+import { GuardaDaAba } from "@/components/guarda-da-aba";
 import { Navegacao } from "@/components/navegacao";
-import { RenovarSessao } from "@/components/renovar-sessao";
+import { SCRIPT_ABA } from "@/lib/aba";
 import { sessaoAtual } from "@/lib/sessao";
 
 /**
@@ -24,8 +25,15 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
 
   return (
     <>
+      {/*
+        Antes de tudo que mostra dados: a guia reaberta sem login fica
+        escondida até `GuardaDaAba` decidir. O aviso do React de que o script
+        não roda na navegação do cliente vale aqui também, e não importa — ver
+        o `SCRIPT_TEMA` no layout raiz; essa navegação é coberta pelo guarda.
+      */}
+      <script dangerouslySetInnerHTML={{ __html: SCRIPT_ABA }} />
+      <GuardaDaAba />
       <EsquecerBuscas />
-      <RenovarSessao />
       <Navegacao
         nomeUsuario={sessao.nome}
         nomeOrganizacao={sessao.organizacaoNome}

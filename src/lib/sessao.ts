@@ -18,7 +18,8 @@ import { cookies } from "next/headers";
 import { type Ator, dbAdministrativo, dbParaOrganizacao } from "./db";
 import { ErroParaUsuario } from "./erro-formulario";
 import { nomeCompleto } from "./nome-usuario";
-import { INATIVIDADE_MANTER_MS, criarToken, lerToken, precisaRenovar, type TokenLido } from "./token-sessao";
+import { COOKIE_ENTROU } from "./aba";
+import { criarToken, lerToken, precisaRenovar, type TokenLido } from "./token-sessao";
 
 /**
  * Sem sessão no meio de uma ação: o cookie venceu com a tela aberta. Entrar
@@ -76,9 +77,8 @@ async function tokenAtual(): Promise<TokenLido | null> {
 /**
  * Grava o cookie com um token novo.
  *
- * "Manter conectado" desmarcado: cookie de sessão, sem `maxAge` — some ao
- * fechar o navegador. Marcado: dura o mesmo que o token sem uso; usar renova
- * os dois juntos (`renovarSessao`).
+ * Cookie de sessão, sem `maxAge`: some ao fechar o navegador inteiro. Fechar
+ * só a guia, ou o app no celular, não o apaga — disso cuida `lib/aba.ts`.
  */
 async function gravarCookie(sessao: { usuarioId: string; versao: number; manter: boolean; inicio: number }) {
   (await cookies()).set(COOKIE, criarToken(sessao, segredo(), Date.now()), {
@@ -86,7 +86,6 @@ async function gravarCookie(sessao: { usuarioId: string; versao: number; manter:
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    ...(sessao.manter ? { maxAge: INATIVIDADE_MANTER_MS / 1000 } : {}),
   });
 }
 
@@ -238,24 +237,34 @@ export async function exigirAdmin(): Promise<void> {
  * Abre a sessão — ou a refaz, quando a `sessaoVersao` subiu (troca de senha ou
  * de e-mail com a pessoa logada).
  *
- * Sem `manter`, é a sessão desta mesma pessoa sendo refeita: fica a escolha do
- * login, e o teto de 30 dias continua contando dele — trocar a senha não pode
- * estender a sessão. Sem cookie nenhum (o cadastro), fica conectado.
+ * Refeita, o teto de 30 dias continua contando do login: trocar a senha não
+ * pode estender a sessão. Aberta agora, grava também o `COOKIE_ENTROU`, que
+ * marca esta guia como a que fez login (`lib/aba.ts`) — legível pelo
+ * JavaScript de propósito, e só diz que houve login, nada de quem.
  */
-export async function criarSessao(usuarioId: string, opcoes: { manter?: boolean } = {}): Promise<void> {
+export async function criarSessao(usuarioId: string): Promise<void> {
   const usuario = await dbAdministrativo().usuario.findUnique({
     where: { id: usuarioId },
     select: { sessaoVersao: true },
   });
   const atual = await tokenAtual();
-  const continua = opcoes.manter === undefined && atual?.usuarioId === usuarioId ? atual : null;
+  const continua = atual?.usuarioId === usuarioId ? atual : null;
 
   await gravarCookie({
     usuarioId,
     versao: usuario?.sessaoVersao ?? 0,
-    manter: opcoes.manter ?? continua?.manter ?? true,
+    manter: false,
     inicio: continua?.inicio ?? Date.now(),
   });
+
+  if (!continua) {
+    (await cookies()).set(COOKIE_ENTROU, "1", {
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 10 * 60,
+    });
+  }
 }
 
 /**
@@ -267,7 +276,8 @@ export async function criarSessao(usuarioId: string, opcoes: { manter?: boolean 
 export async function renovarSessao(): Promise<boolean> {
   const lido = await tokenAtual();
   if (!lido) return false;
-  if (precisaRenovar(lido, Date.now())) await gravarCookie(lido);
+  // `manter: false` também para quem entrou quando havia "Manter conectado".
+  if (precisaRenovar(lido, Date.now())) await gravarCookie({ ...lido, manter: false });
   return true;
 }
 

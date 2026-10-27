@@ -79,7 +79,7 @@ export default async function PaginaEntrar({ searchParams }: PageProps<"/entrar"
   // Quem já está logado não tem o que fazer aqui.
   const logado = await sessaoAtual();
   if (logado) redirect(inicioDa(logado));
-  const { senha, email } = await searchParams;
+  const { senha, email, sessao } = await searchParams;
 
   return (
     <Movimento>
@@ -159,6 +159,15 @@ export default async function PaginaEntrar({ searchParams }: PageProps<"/entrar"
               {email === "trocado" && (
                 <div className="mb-6">
                   <Mensagem tom="verde">E-mail trocado. Entre com o e-mail novo e a senha de sempre.</Mensagem>
+                </div>
+              )}
+              {/* `GuardaDaAba`: a guia foi fechada, ou o app ficou tempo demais fora da tela. */}
+              {sessao === "encerrada" && (
+                <div className="mb-6">
+                  <Mensagem tom="verde">
+                    Por segurança, a sessão encerra ao fechar a guia ou o app, e no celular depois de 1
+                    hora fora dele. Entre de novo.
+                  </Mensagem>
                 </div>
               )}
               <FormularioEntrada acao={entrar} rotulo="Entrar" />

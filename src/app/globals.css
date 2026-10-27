@@ -487,6 +487,14 @@ html:has(dialog:modal) {
 }
 
 /*
+ * A guia ainda não provou que fez login (`lib/aba.ts`): nada aparece até
+ * `GuardaDaAba` liberar — ou sair, sem as comissões terem piscado na tela.
+ */
+html[data-aba] body {
+  visibility: hidden;
+}
+
+/*
  * A caixa da janela recebe o foco ao abrir (`components/modal.ts`), para ele
  * não cair no X. Ela não ganha anel: quem usa teclado vê o anel a partir do
  * primeiro Tab, nos botões de dentro.
