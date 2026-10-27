@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<defs>
+  <linearGradient id="fundo" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#2a2516"/><stop offset="1" stop-color="#121008"/>
+  </linearGradient>
+  <linearGradient id="etiqueta" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#fff5a6"/><stop offset="1" stop-color="#f8e46a"/>
+  </linearGradient>
+  <clipPath id="quadro"><rect width="1024" height="1024" rx="225"/></clipPath>
+</defs>
+<g clip-path="url(#quadro)">
+  <rect width="1024" height="1024" fill="url(#fundo)"/>
+  <g transform="translate(512 512) scale(1) rotate(-6) translate(-512 -512)">
+    <rect x="196" y="282" width="632" height="460" rx="92" fill="url(#etiqueta)"/>
+    <g fill="#1a1608"><path transform="translate(254.50 631.00) scale(0.38926 -0.38926)" d="M66 0L66 745L351 745Q428 745 487.5 718Q547 691 581 638Q615 585 615 507Q615 431 580 377.5Q545 324 486 297L656 0L482 0L331 270L221 270L221 0ZM221 405L352 405Q385 405 409 418Q433 431 446.5 454Q460 477 460 507Q460 538 446.5 561Q433 584 409 597Q385 610 352 610L221 610Z"/><path transform="translate(494.68 631.00) scale(0.38926 -0.38926)" d="M55 -200L55 546L195 546L195 489Q219 518 256 536Q302 558 362 558Q440 558 503 520Q566 482 603 417.5Q640 353 640 273Q640 194 603.5 129Q567 64 504 26Q441 -12 361 -12Q305 -12 258 9Q228 21 205 42L205 -200ZM343 123Q385 123 417 142Q449 161 467 195Q485 229 485 273Q485 317 467 350.5Q449 384 417 403.5Q385 423 343 423Q303 423 271.5 404Q240 385 222.5 351Q205 317 205 273Q205 229 222.5 195Q240 161 271.5 142Q303 123 343 123Z"/></g>
+  </g>
+</g>
+</svg>
