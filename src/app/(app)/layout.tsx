@@ -27,11 +27,16 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
     <>
       {/*
         Antes de tudo que mostra dados: a guia reaberta sem login fica
-        escondida até `GuardaDaAba` decidir. O aviso do React de que o script
-        não roda na navegação do cliente vale aqui também, e não importa — ver
-        o `SCRIPT_TEMA` no layout raiz; essa navegação é coberta pelo guarda.
+        escondida até `GuardaDaAba` decidir.
+
+        O script vai como HTML pronto, e não como `<script>` do React: o
+        navegador o executa ao ler a página, que é o único momento em que ele
+        serve. Na navegação do cliente (o login chegando ao sistema), um
+        `<script>` do React não roda e acusa um erro no console a cada login;
+        dentro do `innerHTML` ele também não roda, mas calado — e ali quem
+        confere é o `GuardaDaAba`.
       */}
-      <script dangerouslySetInnerHTML={{ __html: SCRIPT_ABA }} />
+      <div hidden dangerouslySetInnerHTML={{ __html: `<script>${SCRIPT_ABA}</script>` }} />
       <GuardaDaAba />
       <EsquecerBuscas />
       <Navegacao
