@@ -1,5 +1,6 @@
 "use client";
 
+import * as Sentry from "@sentry/nextjs";
 import { RefreshCw, TriangleAlert } from "lucide-react";
 import { useEffect } from "react";
 
@@ -23,6 +24,8 @@ export default function ErroInesperado({
   retry: () => void;
 }) {
   useEffect(() => {
+    // A tela apanhou o erro, e o Sentry não o veria sozinho (`instrumentation-client.ts`).
+    Sentry.captureException(error);
     console.error(error);
   }, [error]);
 

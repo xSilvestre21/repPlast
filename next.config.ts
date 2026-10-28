@@ -1,3 +1,4 @@
+import { withSentryConfig } from "@sentry/nextjs/config";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
@@ -41,4 +42,19 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+/**
+ * O Sentry (`src/instrumentation.ts`). O envio do navegador passa por
+ * `/monitoramento`, no próprio domínio: bloqueador de anúncio não o derruba.
+ * Com `SENTRY_AUTH_TOKEN` (só no Vercel), o build manda os source maps, e o
+ * erro chega apontando a linha do código, e não a do arquivo minificado; sem
+ * ele, o build segue sem mandar.
+ */
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  tunnelRoute: "/monitoramento",
+  widenClientFileUpload: true,
+  silent: !process.env.CI,
+  telemetry: false,
+});

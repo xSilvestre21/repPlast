@@ -24,6 +24,7 @@
     "@prisma/adapter-pg": "^7.10.1",
     "@prisma/client": "^7.10.1",
     "@react-pdf/renderer": "^4.9.0",
+    "@sentry/nextjs": "^11.7.0",
     "decimal.js": "^10.6.0",
     "echarts": "^6.1.0",
     "fflate": "0.8.3",

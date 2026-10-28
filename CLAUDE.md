@@ -73,7 +73,10 @@ O erro aparece **embaixo do campo que o causou**, em português, dizendo o que f
 - Remetente do sistema (só o "Esqueceu sua senha?"): `SISTEMA_SMTP_HOST`, `SISTEMA_SMTP_PORTA`,
   `SISTEMA_SMTP_USUARIO`, `SISTEMA_SMTP_SENHA`, `SISTEMA_EMAIL_REMETENTE`; o link usa `APP_URL`
   (obrigatória em produção — nunca o `Host` da requisição). Ver README, "Esqueceu sua senha?"
-- Nenhuma `NEXT_PUBLIC_*` hoje — confirmar que o valor é seguro no client antes de criar uma
+- Monitoramento (Sentry, só em produção): `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`
+  e `SENTRY_AUTH_TOKEN` (segredo, só no Vercel — source maps). Ver README, "Monitoramento de erros"
+- `NEXT_PUBLIC_SENTRY_DSN` é a única `NEXT_PUBLIC_*` — o DSN é feito para o navegador (só manda
+  erro). Confirmar que o valor é seguro no client antes de criar outra
 - `.env` inteiro é ignorado pelo git, não só `.env.local`
 
 ## Workflow

@@ -1,37 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Mono, Plus_Jakarta_Sans } from "next/font/google";
 
 import { SCRIPT_TEMA } from "@/components/alternador-tema";
 import { sessaoAtual } from "@/lib/sessao";
 
+import { classesDasFontes } from "./fontes";
 import "./globals.css";
-
-/*
- * Duas vozes, e cada uma tem um trabalho.
- *
- * Plus Jakarta Sans conduz tudo: interface, títulos e NÚMEROS. É uma
- * geométrica de terminações retas e caixa alta estreita, que é o que permite
- * levar um valor a 4rem com tracking negativo sem ele virar um borrão — e é
- * justamente aí, no número grande, que a tela ganha a cara de produto.
- *
- * IBM Plex Mono cuida do que é código: medida (99x166x0,08), COD.FORN,
- * descrição gerada. São dados que a indústria confere caractere a caractere, e
- * numa proporcional o 1 e o l se confundem.
- *
- * O peso 800 existe só para o número da comissão. Abaixo dele nada passa de
- * 600, senão a tela inteira grita junto e o valor deixa de ser o mais alto.
- */
-const sans = Plus_Jakarta_Sans({
-  variable: "--fonte-sans",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800"],
-});
-
-const mono = IBM_Plex_Mono({
-  variable: "--fonte-mono",
-  subsets: ["latin"],
-  weight: ["400", "500"],
-});
 
 export const metadata: Metadata = {
   title: "RepPlast",
@@ -94,7 +67,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="pt-BR"
-      className={`${sans.variable} ${mono.variable} h-full antialiased`}
+      className={`${classesDasFontes} h-full antialiased`}
       // O tema escolhido é aplicado pelo script abaixo, antes da pintura.
       // Animação é preferência de conta: já vem pronta do servidor, sem
       // script nem flash — ausente (sem sessão) significa animações ligadas.

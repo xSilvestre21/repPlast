@@ -193,6 +193,25 @@ Módulos que nunca podem ir para o navegador — `db`, `sessao`, `senha`, `email
 Como esse pacote só é inofensivo sob a condição `react-server`, os scripts em Node puro (seed,
 setup) precisam passar `--conditions react-server`.
 
+### Monitoramento de erros
+
+Em produção, os erros vão para o **Sentry** e viram alerta por e-mail: o 500 que nenhuma tela
+tratou, todo `console.error` do servidor (cobrança recusada pelo Asaas, e-mail do sistema que não
+saiu, erro inesperado de formulário) e o erro de tela no navegador. Só erros — sem rastreio de
+desempenho e sem gravação de tela, que mostraria pedidos e comissões. O navegador manda pelo
+próprio domínio (`/monitoramento`), então bloqueador de anúncio não derruba o envio.
+
+```
+NEXT_PUBLIC_SENTRY_DSN="https://...@o123.ingest.sentry.io/456"  # Settings → Client Keys (DSN)
+SENTRY_ORG="slug-da-organizacao"
+SENTRY_PROJECT="slug-do-projeto"
+SENTRY_AUTH_TOKEN="sntrys_..."  # só no Vercel: manda os source maps no build
+```
+
+O DSN é a única variável `NEXT_PUBLIC_*`: ele vai para o navegador de propósito e só permite
+*mandar* erros, não ler. Sem ele, ou fora de produção, o Sentry fica desligado. O token, ao
+contrário, é segredo — nunca no repositório.
+
 ## Identidade visual: Papel & Tinta
 
 **O que este sistema produz é um documento impresso.** O pedido em PDF é o que a indústria recebe,
