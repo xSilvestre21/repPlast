@@ -7,8 +7,9 @@
  * título e "OK" no lugar do nome da ação — e que alguns navegadores deixam
  * desligar com "não mostrar mais", depois do que o clique em Excluir apagava
  * sem perguntar nada. Agora é a mesma janela do resto do sistema, com o botão
- * dizendo o que vai acontecer ("Excluir", "Remover") e o Cancelar com o foco,
- * para o Enter distraído não apagar.
+ * dizendo o que vai acontecer ("Excluir", "Remover") e o Enter distraído sem
+ * apagar nada: no teclado o foco vem no Cancelar; no toque, fica na caixa
+ * (`modal.ts`), sem o anel de Tab aceso num botão que ninguém escolheu.
  *
  * Funciona por cima do formulário que já existe: o envio é segurado, a janela
  * abre e, confirmado, o MESMO envio é refeito com `requestSubmit` — o botão que

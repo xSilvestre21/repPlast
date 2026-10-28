@@ -33,6 +33,7 @@ import { CircleCheck, Send } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { focarSePuder } from "@/components/foco";
 import { Botao } from "@/components/ui";
 
 /** Quanto o cartão fica na tela depois de pousar, antes de sumir sozinho. */
@@ -163,6 +164,12 @@ export function EntregaEnviado({
 
   useEffect(() => () => clearTimeout(saida.current), []);
 
+  // O "Entendi" com o foco, para o Enter dispensar — só no teclado (`foco.ts`).
+  const entendi = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    focarSePuder(entendi.current);
+  }, []);
+
   const caminho = trajetoria(janela.largura, janela.altura);
   const aviao = useRef<HTMLSpanElement>(null);
 
@@ -278,7 +285,7 @@ export function EntregaEnviado({
               {aviso}
             </p>
             <div className="mt-4 flex justify-center">
-              <Botao type="button" autoFocus onClick={sair}>
+              <Botao ref={entendi} type="button" onClick={sair}>
                 Entendi
               </Botao>
             </div>

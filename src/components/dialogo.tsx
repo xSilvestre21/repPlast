@@ -40,16 +40,15 @@ export function Dialogo({
     if (!dialogo) return;
 
     if (aberto && !dialogo.open) {
-      // Sem campo marcado, o foco fica na caixa, e não no X (`modal.ts`).
-      abrirModal(dialogo);
       /*
        * O `showModal()` põe o foco no primeiro elemento focável — que é o X de
        * fechar, no cabeçalho. Quem abre um formulário e já sai digitando
        * apertaria o X no primeiro espaço. O `autoFocus` do React não ajuda: ele
        * roda antes do `showModal()` e perde para ele. Então o conteúdo marca o
-       * campo certo com `data-autofocus`, e o foco vai para ele aqui.
+       * campo certo com `data-autofocus`, e o `abrirModal` leva o foco até ele —
+       * ou, sem campo marcado, para a caixa (`modal.ts`).
        */
-      dialogo.querySelector<HTMLElement>("[data-autofocus]")?.focus();
+      abrirModal(dialogo);
     }
     if (!aberto && dialogo.open) dialogo.close();
   }, [aberto]);

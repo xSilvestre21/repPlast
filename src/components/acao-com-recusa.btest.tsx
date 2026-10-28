@@ -12,7 +12,7 @@
 
 import { describe, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 
 import { AcaoComRecusa } from "./acao-com-recusa";
 import { usePerguntaAntes } from "./pergunta-antes";
@@ -44,10 +44,25 @@ describe("pergunta antes de excluir", () => {
     await expect.element(page.getByRole("dialog")).toBeVisible();
     await expect.element(page.getByText("Remover “Saco 30x40”?")).toBeVisible();
     await expect.element(page.getByText("Esta ação não pode ser desfeita.")).toBeVisible();
-    // O foco começa no Cancelar: o Enter distraído não apaga.
-    await expect.element(page.getByRole("button", { name: "Cancelar" })).toHaveFocus();
+    // Aberta com o dedo ou o mouse, o foco fica na caixa: nenhum botão vem com
+    // o anel de Tab aceso (no iPhone, o Cancelar vinha), e o Enter não apaga.
+    await expect.element(page.getByRole("dialog")).toHaveFocus();
 
     await page.getByRole("button", { name: "Cancelar" }).click();
+    await expect.element(page.getByRole("dialog")).not.toBeInTheDocument();
+    expect(acao).not.toHaveBeenCalled();
+  });
+
+  test("aberta pelo teclado, o foco começa no Cancelar: o Enter distraído não apaga", async () => {
+    const acao = abrir();
+
+    const remover = page.getByRole("button", { name: "remover" });
+    await expect.element(remover).toBeVisible();
+    remover.element().focus();
+    await userEvent.keyboard("{Enter}");
+    await expect.element(page.getByRole("button", { name: "Cancelar" })).toHaveFocus();
+
+    await userEvent.keyboard("{Enter}");
     await expect.element(page.getByRole("dialog")).not.toBeInTheDocument();
     expect(acao).not.toHaveBeenCalled();
   });

@@ -48,6 +48,7 @@ import {
   useCamadaDeTopo,
 } from "./camada-flutuante";
 import { useCampoDoFormulario } from "./contexto-formulario";
+import { focarSePuder } from "./foco";
 import { CLASSE_CONTROLE, CLASSE_ERRO, RodapeCampo, Rotulo } from "./ui";
 
 const DIAS_DA_SEMANA = ["D", "S", "T", "Q", "Q", "S", "S"];
@@ -154,7 +155,7 @@ export function CampoData({
 
   function fechar(devolverFoco = true) {
     setAberto(false);
-    if (devolverFoco) botaoRef.current?.focus();
+    if (devolverFoco) focarSePuder(botaoRef.current);
   }
 
   function escolher(iso: DataIso) {
@@ -197,10 +198,13 @@ export function CampoData({
     if (aberto && !paraCima) calendarioRef.current?.scrollIntoView({ block: "nearest" });
   }, [aberto, paraCima, mesMostrado, contagem]);
 
-  /* O foco do teclado acompanha o dia destacado, inclusive ao trocar de mês. */
+  /*
+   * O foco do teclado acompanha o dia destacado, inclusive ao trocar de mês.
+   * Só o do teclado: aberto com o dedo, o dia não vem aceso (`foco.ts`).
+   */
   useEffect(() => {
     if (!aberto) return;
-    gradeRef.current?.querySelector<HTMLButtonElement>(`[data-dia="${foco}"]`)?.focus();
+    focarSePuder(gradeRef.current?.querySelector<HTMLButtonElement>(`[data-dia="${foco}"]`));
   }, [aberto, foco]);
 
   function aoTeclarNaGrade(evento: React.KeyboardEvent) {

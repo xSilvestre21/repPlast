@@ -38,6 +38,7 @@ import {
 import { horaCompleta, lerHora, mascararHora } from "@/lib/hora";
 
 import { useCampoDoFormulario } from "./contexto-formulario";
+import { focarSePuder } from "./foco";
 import { CLASSE_CONTROLE, CLASSE_ERRO, RodapeCampo, Rotulo, Segmentado } from "./ui";
 
 type Periodo = "manha" | "tarde" | "noite";
@@ -148,7 +149,8 @@ export function CampoHora({
 
   function fechar(devolverFoco = true) {
     setAberto(false);
-    if (devolverFoco) botaoRef.current?.focus();
+    // Só no teclado: escolhida a hora com o dedo, o campo não volta aceso (`foco.ts`).
+    if (devolverFoco) focarSePuder(botaoRef.current);
   }
 
   function escolher(hora: string) {

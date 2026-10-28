@@ -1,3 +1,5 @@
+import { focarSePuder } from "./foco";
+
 /**
  * Abre um `<dialog>` como modal, com o foco no lugar certo.
  *
@@ -11,10 +13,15 @@
  * `<dialog>` diria o mesmo pela especificação, mas o Chromium o ignora. O Tab
  * continua levando ao primeiro botão, e o leitor de tela anuncia o título
  * (`aria-labelledby`). O anel da caixa focada é tirado em `globals.css`.
+ *
+ * O conteúdo pede o foco com `data-autofocus`: no campo que se vai digitar, ou
+ * no Cancelar do "tem certeza?". Botão só o recebe de quem está no teclado
+ * (`foco.ts`) — no iPhone o Cancelar abria aceso, como o X; quem tocou na tela
+ * fica com o foco na caixa, onde o Enter não confirma nada.
  */
 export function abrirModal(dialogo: HTMLDialogElement) {
   dialogo.showModal();
-  if (dialogo.querySelector("[data-autofocus]")) return;
+  if (focarSePuder(dialogo.querySelector<HTMLElement>("[data-autofocus]"))) return;
   dialogo.tabIndex = -1;
   dialogo.focus({ preventScroll: true });
 }

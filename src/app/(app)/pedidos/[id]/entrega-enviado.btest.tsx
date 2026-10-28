@@ -100,6 +100,26 @@ describe("como sai", () => {
     vi.advanceTimersByTime(300);
     expect(fechar).toHaveBeenCalledOnce();
   });
+
+  /*
+   * Quem enviou com o dedo não vê o Entendi aceso com o anel de Tab — no iPhone
+   * ele vinha. Quem enviou pelo teclado o encontra com o foco, e o Enter dispensa.
+   */
+  const RECUSA = "Enviado, mas o servidor recusou: pcp@exemplo.com.br.";
+
+  test("com recusa, enviado com o dedo, o Entendi não vem com o foco", async () => {
+    window.dispatchEvent(new PointerEvent("pointerdown"));
+    await render(<EntregaEnviado {...BASE} aviso={RECUSA} fechar={() => {}} />);
+
+    expect(document.activeElement?.textContent).not.toBe("Entendi");
+  });
+
+  test("com recusa, enviado pelo teclado, o Entendi vem com o foco", async () => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+    await render(<EntregaEnviado {...BASE} aviso={RECUSA} fechar={() => {}} />);
+
+    expect(document.activeElement?.textContent).toBe("Entendi");
+  });
 });
 
 /**

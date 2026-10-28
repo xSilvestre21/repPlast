@@ -5,6 +5,7 @@ import { useContext, useEffect, useRef, useState, type ComponentProps, type Form
 import { erroDoCampo, type EstadoFormulario } from "@/lib/erro-formulario";
 
 import { ContextoFormulario, type Contexto } from "./contexto-formulario";
+import { focarSePuder } from "./foco";
 
 export { useCampoDoFormulario } from "./contexto-formulario";
 import { MensagemErro } from "./ui";
@@ -28,11 +29,15 @@ import { MensagemErro } from "./ui";
  *     tela, e some sozinho em três segundos.
  */
 
-/** Rola até o controle e põe o cursor nele, como o navegador faz no `required`. */
+/**
+ * Rola até o controle e põe o cursor nele, como o navegador faz no `required`.
+ * O que não é de digitar (o botão da data) só recebe o foco no teclado — no
+ * toque, ele viria aceso com o anel de Tab (`foco.ts`).
+ */
 function levarAte(alvo: HTMLElement) {
   const semMovimento = document.documentElement.dataset.animacoes === "desativadas";
   alvo.scrollIntoView({ block: "center", behavior: semMovimento ? "auto" : "smooth" });
-  alvo.focus({ preventScroll: true });
+  focarSePuder(alvo, { preventScroll: true });
 }
 
 type Controle = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
