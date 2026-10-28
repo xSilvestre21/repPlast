@@ -276,7 +276,8 @@ function FormEnvio({
           <Botao type="button" variante="secundaria" onClick={cancelar}>
             Agora não
           </Botao>
-          <BotaoLink href="/configuracoes" icone={Mail}>
+          {/* Configurações abre já no formulário de cadastro (`contas-email.tsx`). */}
+          <BotaoLink href="/configuracoes?conta=nova#nova-conta" icone={Mail}>
             Cadastrar meu e-mail
           </BotaoLink>
         </div>

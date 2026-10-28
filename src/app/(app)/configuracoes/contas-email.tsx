@@ -12,7 +12,7 @@
  */
 
 import { AtSign, Check, Mail, Pencil, PenLine, PlugZap, Plus, Star, X } from "lucide-react";
-import { type ReactNode, startTransition, useActionState, useState } from "react";
+import { type ReactNode, startTransition, useActionState, useEffect, useRef, useState } from "react";
 
 import {
   Botao,
@@ -81,14 +81,32 @@ export function SecaoContasEmail({
   nomeUsuario,
   emailUsuario,
   criptoConfigurada,
+  abrirCadastro = false,
 }: {
   contas: ContaVisivel[];
   adicionar: AcaoConta;
   nomeUsuario: string;
   emailUsuario: string;
   criptoConfigurada: boolean;
+  /** Chegou pelo "Cadastrar meu e-mail" do envio (`?conta=nova#nova-conta`). */
+  abrirCadastro?: boolean;
 }) {
-  const [adicionando, setAdicionando] = useState(false);
+  const [adicionando, setAdicionando] = useState(abrirCadastro && criptoConfigurada);
+  const formNovo = useRef<HTMLDivElement>(null);
+
+  /*
+   * Quem chega pelo envio encontra o formulário já aberto e na tela, e não a
+   * página no topo com o cadastro lá embaixo. A âncora sozinha não daria
+   * conta: o esqueleto do `loading.tsx` monta antes, sem o alvo, e o Next
+   * desiste do alvo que não achou. Ela fica para o `Pagina` não subir ao topo.
+   */
+  useEffect(() => {
+    if (!abrirCadastro || !criptoConfigurada) return;
+    // Na hora, como o `Pagina` ao chegar: deslizar desde o topo seria uma viagem.
+    formNovo.current?.scrollIntoView({ block: "start", behavior: "instant" });
+    // Cumprido o pedido, recarregar a página não reabre o formulário.
+    history.replaceState(null, "", `${window.location.pathname}#email`);
+  }, [abrirCadastro, criptoConfigurada]);
 
   return (
     <SecaoCartao
@@ -116,20 +134,23 @@ export function SecaoContasEmail({
       </Painel>
 
       {adicionando ? (
-        <FormConta
-          acao={async (estado, formData) => {
-            const resultado = await adicionar(estado, formData);
-            if (resultado.ok) setAdicionando(false);
-            return resultado;
-          }}
-          inicial={{
-            provedor: provedorDoEmail(emailUsuario) ?? "OUTRO",
-            email: emailUsuario,
-            nomeExibicao: nomeUsuario,
-          }}
-          primeira={contas.length === 0}
-          cancelar={() => setAdicionando(false)}
-        />
+        // `scroll-mt`: para abaixo da barra do topo, que é fixa.
+        <div ref={formNovo} id="nova-conta" className="scroll-mt-20">
+          <FormConta
+            acao={async (estado, formData) => {
+              const resultado = await adicionar(estado, formData);
+              if (resultado.ok) setAdicionando(false);
+              return resultado;
+            }}
+            inicial={{
+              provedor: provedorDoEmail(emailUsuario) ?? "OUTRO",
+              email: emailUsuario,
+              nomeExibicao: nomeUsuario,
+            }}
+            primeira={contas.length === 0}
+            cancelar={() => setAdicionando(false)}
+          />
+        </div>
       ) : (
         <div className="flex justify-end">
           <Botao

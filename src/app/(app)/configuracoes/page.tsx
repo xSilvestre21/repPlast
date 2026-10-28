@@ -50,7 +50,7 @@ import { type SecaoDoIndice, SecoesConfiguracao } from "./secoes";
 export default async function PaginaConfiguracoes({ searchParams }: PageProps<"/configuracoes">) {
   const sessao = await sessaoAtual();
   const reduzidas = sessao?.reduzirAnimacoes ?? false;
-  const { email: aviso } = await searchParams;
+  const { email: aviso, conta } = await searchParams;
 
   const { usuarioId, organizacaoId, ehAdmin, db } = await escopoAtual();
   const [usuario, contas, nomeEscritorio, organizacao, prepostosAtivos, emailPendente] = await Promise.all([
@@ -164,6 +164,7 @@ export default async function PaginaConfiguracoes({ searchParams }: PageProps<"/
               nomeUsuario={usuario ? nomeCompleto(usuario) : ""}
               emailUsuario={usuario?.email ?? ""}
               criptoConfigurada={criptoConfigurada()}
+              abrirCadastro={conta === "nova"}
               adicionar={salvarContaEmail.bind(null, null)}
               contas={contas.map((conta) => ({
                 ...conta,
