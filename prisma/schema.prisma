@@ -189,9 +189,14 @@ model Organizacao {
 /// vez": o mesmo evento pode chegar de novo, e o id dele é a chave que impede
 /// processar duas vezes. Tabela só administrativa — o RLS fecha para a aplicação.
 model EventoAsaas {
-  id         String   @id
-  tipo       String
-  recebidoEm DateTime @default(now())
+  id            String   @id
+  tipo          String
+  recebidoEm    DateTime @default(now())
+  /// O evento como chegou, sem o token do cartão. Apagado depois de 90 dias
+  /// (`asaas-webhook.ts`); a linha fica, que é ela a trava da repetição.
+  corpo         Json?
+  /// O escritório do evento — vazio quando é de outro produto da mesma conta.
+  organizacaoId String?  @db.Uuid
 
   @@map("evento_asaas")
 }

@@ -20,9 +20,14 @@ import "server-only";
 
 import { timingSafeEqual } from "node:crypto";
 
+import { Prisma } from "@/generated/prisma/client";
+
 import { assinaturaDoCliente } from "./asaas";
 import { dbAdministrativo } from "./db";
 import { acertarDepoisDoPagamento } from "./mensalidade";
+
+/** Quanto o corpo do evento fica guardado — o bastante para investigar uma cobrança. */
+const GUARDA_DO_CORPO_MS = 90 * 24 * 60 * 60 * 1000;
 
 type Situacao = "AGUARDANDO_PAGAMENTO" | "ATIVA" | "ATRASADA" | "CANCELADA";
 
@@ -42,6 +47,23 @@ export function tokenDoWebhookConfere(recebido: string | null): boolean {
   const a = Buffer.from(esperado);
   const b = Buffer.from(recebido);
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/**
+ * O evento sem o que não deve ficar guardado. O cartão chega só com os 4
+ * últimos dígitos e a bandeira, mas junto vem o `creditCardToken`, que cobra o
+ * cartão de novo pela API: chave com "token" no nome sai, em qualquer nível.
+ */
+export function semSegredos(valor: unknown): unknown {
+  if (Array.isArray(valor)) return valor.map(semSegredos);
+  if (valor && typeof valor === "object") {
+    return Object.fromEntries(
+      Object.entries(valor)
+        .filter(([chave]) => !/token/i.test(chave))
+        .map(([chave, dentro]) => [chave, semSegredos(dentro)]),
+    );
+  }
+  return valor;
 }
 
 /** O que a cobrança diz sobre a situação. `null`: o evento não muda nada. */
@@ -126,25 +148,43 @@ export async function processarEventoAsaas(corpo: unknown): Promise<void> {
     }
   }
 
+  // O escritório pode não existir (evento de outro produto na mesma conta
+  // Asaas), e isso não é erro. Achado antes da trava, para o registro do evento
+  // já dizer de quem é — também o que não muda nada, como a cobrança criada.
+  const alvo = onde
+    ? await db.organizacao.findFirst({ where: onde, select: { id: true, asaasAssinaturaId: true } })
+    : null;
+
   // O registro do evento é a trava: a chave primária faz a segunda entrega —
   // mesmo simultânea — falhar aqui, antes de mexer no escritório.
   try {
-    await db.eventoAsaas.create({ data: { id: evento.id, tipo: evento.event } });
+    await db.eventoAsaas.create({
+      data: {
+        id: evento.id,
+        tipo: evento.event,
+        corpo: semSegredos(corpo) as Prisma.InputJsonValue,
+        organizacaoId: alvo?.id ?? null,
+      },
+    });
   } catch (erro) {
     if ((erro as { code?: string }).code === "P2002") return;
     throw erro;
   }
 
-  try {
-    if (!onde || Object.keys(dados).length === 0) return;
+  // Melhor-esforço: o corpo que passou da guarda é apagado a cada evento que
+  // chega. Falhar aqui não pode recusar o evento — o próximo tenta de novo.
+  await db.eventoAsaas
+    .updateMany({
+      where: {
+        recebidoEm: { lt: new Date(Date.now() - GUARDA_DO_CORPO_MS) },
+        corpo: { not: Prisma.DbNull },
+      },
+      data: { corpo: Prisma.DbNull },
+    })
+    .catch((erro) => console.error("[asaas] não deu para apagar o corpo dos eventos antigos:", erro));
 
-    // O escritório pode não existir (evento de outro produto na mesma conta
-    // Asaas), e isso não é erro.
-    const alvo = await db.organizacao.findFirst({
-      where: onde,
-      select: { id: true, asaasAssinaturaId: true },
-    });
-    if (!alvo) return;
+  try {
+    if (!onde || !alvo || Object.keys(dados).length === 0) return;
 
     // Assinatura já gravada não é trocada por um evento de cliente — o
     // cliente pode ter mais de uma, e a do checkout pago é a que vale.

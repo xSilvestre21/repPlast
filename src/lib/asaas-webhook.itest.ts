@@ -155,6 +155,64 @@ describe("processarEventoAsaas", () => {
   });
 });
 
+/*
+ * O registro de cada evento: o que ele dizia e de quem era. Sem isso, os
+ * eventos de 21/10 eram só id e tipo, e não deu para saber de quem eram.
+ */
+describe("registro do evento", () => {
+  const DIA_MS = 24 * 60 * 60 * 1000;
+
+  it("guarda o corpo sem o token do cartão, e o escritório do evento", async () => {
+    const criada = evento("PAYMENT_CREATED", {
+      payment: {
+        subscription: "sub_teste_checkout",
+        customer: clienteId,
+        value: 189,
+        creditCard: { creditCardNumber: "8829", creditCardBrand: "MASTERCARD", creditCardToken: "tok_secreto" },
+      },
+    });
+    await processarEventoAsaas(criada);
+
+    const registro = await admin.eventoAsaas.findUniqueOrThrow({ where: { id: criada.id } });
+    expect(registro.organizacaoId).toBe(organizacaoId);
+    expect(registro.corpo).toMatchObject({
+      event: "PAYMENT_CREATED",
+      payment: { value: 189, creditCard: { creditCardNumber: "8829", creditCardBrand: "MASTERCARD" } },
+    });
+    expect(JSON.stringify(registro.corpo)).not.toContain("tok_secreto");
+    // Cobrança criada não muda a situação: só fica registrada.
+    expect((await situacao()).assinatura).toBe("CANCELADA");
+  });
+
+  it("evento que não é de escritório nenhum fica registrado, sem escritório", async () => {
+    const alheio = evento("PAYMENT_CREATED", { payment: { subscription: "sub_de_ninguem" } });
+    await processarEventoAsaas(alheio);
+
+    const registro = await admin.eventoAsaas.findUniqueOrThrow({ where: { id: alheio.id } });
+    expect(registro.organizacaoId).toBeNull();
+    expect(registro.corpo).toMatchObject({ id: alheio.id });
+  });
+
+  it("o corpo de mais de 90 dias é apagado; a linha fica, e segura a repetição", async () => {
+    const antigo = evento("PAYMENT_CREATED", { payment: { subscription: "sub_teste_checkout" } });
+    await admin.eventoAsaas.create({
+      data: {
+        id: antigo.id,
+        tipo: antigo.event,
+        corpo: antigo,
+        organizacaoId,
+        recebidoEm: new Date(Date.now() - 91 * DIA_MS),
+      },
+    });
+
+    const novo = evento("PAYMENT_CREATED", { payment: { subscription: "sub_teste_checkout" } });
+    await processarEventoAsaas(novo);
+
+    expect((await admin.eventoAsaas.findUniqueOrThrow({ where: { id: antigo.id } })).corpo).toBeNull();
+    expect((await admin.eventoAsaas.findUniqueOrThrow({ where: { id: novo.id } })).corpo).not.toBeNull();
+  });
+});
+
 describe("trava da cobrança", () => {
   it("o próprio escritório não consegue se marcar como pago", async () => {
     const db = dbParaOrganizacao(organizacaoId, {
