@@ -144,6 +144,9 @@ model Organizacao {
   /// Nasce ATIVA para os escritórios de antes da cobrança e para o seed; o
   /// cadastro grava AGUARDANDO_PAGAMENTO explicitamente.
   assinatura          Assinatura @default(ATIVA)
+  /// Até quando o escritório que cancelou pela tela continua entrando: o fim
+  /// do mês já pago (`lib/acesso-assinatura.ts`). Nulo em qualquer outro caso.
+  acessoAte           DateTime?
   /// Último checkout aberto — é por ele que o webhook `CHECKOUT_PAID` acha o escritório.
   asaasCheckoutId     String?    @unique
   asaasClienteId      String?
@@ -364,6 +367,19 @@ model TentativaLogin {
   @@index([email, criadaEm])
   @@index([ip, criadaEm])
   @@map("tentativa_login")
+}
+
+/// Cada cadastro tentado que passou da conferência dos campos — o limite da
+/// porta mais cara e mais aberta do sistema (`lib/tentativas-cadastro.ts`).
+model TentativaCadastro {
+  id       String   @id @default(uuid()) @db.Uuid
+  email    String
+  ip       String
+  criadaEm DateTime @default(now())
+
+  @@index([email, criadaEm])
+  @@index([ip, criadaEm])
+  @@map("tentativa_cadastro")
 }
 
 /// Cada troca do nome do escritório. A troca seguinte espera o intervalo a

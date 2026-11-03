@@ -73,14 +73,23 @@ const nextConfig: NextConfig = {
   // 127.0.0.1 — e sem isto os planos de /comecar nem aparecem (são revelados
   // por JavaScript, que o Next bloqueava).
   allowedDevOrigins: ["192.168.15.129", "127.0.0.1"],
+  // A imagem Docker da produção (`Dockerfile`) leva só o servidor mínimo e o
+  // que ele usa (`.next/standalone`), não o `node_modules` inteiro. Só lá: o
+  // Vercel monta o pacote do seu jeito, e no Windows a cópia pede permissão de
+  // criar link simbólico.
+  output: process.env.NEXT_OUTPUT === "standalone" ? "standalone" : undefined,
   // Arquivos que o servidor lê do disco na hora (`readFile`, `Font.register`),
-  // e não por `import`: sem isto, numa hospedagem serverless eles ficam fora do
-  // pacote da função. As fontes do PDF de gráficos e o logo do e-mail do
-  // sistema (`lib/pdf/documento-graficos.tsx`, `lib/email-sistema.ts`).
+  // e não por `import`: sem isto eles ficam fora do pacote — o da função, no
+  // Vercel, e o `standalone` da imagem. As fontes do PDF de gráficos e o logo
+  // do e-mail do sistema (`lib/pdf/documento-graficos.tsx`, `lib/email-sistema.ts`).
+  // E o gancho que o Sentry carrega na subida pelo caminho do arquivo: sem ele,
+  // o standalone avisa "Failed to register diagnostics-channel injection hooks"
+  // a cada início.
   outputFileTracingIncludes: {
     "/**/*": [
       "./node_modules/@fontsource/plus-jakarta-sans/files/plus-jakarta-sans-latin-*-normal.woff",
       "./public/email/**/*",
+      "./node_modules/@sentry/server-runtime-injection/build/esm/**/*.js",
     ],
   },
   experimental: {
@@ -107,9 +116,10 @@ const nextConfig: NextConfig = {
 /**
  * O Sentry (`src/instrumentation.ts`). O envio do navegador passa por
  * `/monitoramento`, no próprio domínio: bloqueador de anúncio não o derruba.
- * Com `SENTRY_AUTH_TOKEN` (só no Vercel), o build manda os source maps, e o
- * erro chega apontando a linha do código, e não a do arquivo minificado; sem
- * ele, o build segue sem mandar.
+ * Com `SENTRY_AUTH_TOKEN` (no Vercel, ou segredo do build da imagem — nunca no
+ * `.env` nem no servidor), o build manda os source maps, e o erro chega
+ * apontando a linha do código, e não a do arquivo minificado; sem ele, o build
+ * segue sem mandar. A versão vem de `SENTRY_RELEASE`, quando o build a recebe.
  */
 export default withSentryConfig(nextConfig, {
   org: process.env.SENTRY_ORG,

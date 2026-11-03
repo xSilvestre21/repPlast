@@ -5,6 +5,7 @@ import { RefreshCw, TriangleAlert } from "lucide-react";
 import { useEffect } from "react";
 
 import { Botao, BotaoLink, EstadoVazio } from "@/components/ui";
+import { CONTROLADOR } from "@/lib/lgpd";
 
 /**
  * A rede de segurança: o erro que nenhuma tela tratou.
@@ -46,7 +47,10 @@ export default function ErroInesperado({
         }
       >
         Algo deu errado do nosso lado, e o que já estava salvo continua salvo. Tente de novo em
-        instantes; se continuar acontecendo, fale com o suporte
+        instantes; se continuar acontecendo, escreva para{" "}
+        <a href={`mailto:${CONTROLADOR.email}`} className="text-carimbo underline underline-offset-4">
+          {CONTROLADOR.email}
+        </a>
         {error.digest ? (
           <>
             {" "}

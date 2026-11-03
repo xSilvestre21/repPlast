@@ -1,0 +1,30 @@
+# O que NUNCA entra na imagem (ver Dockerfile).
+
+# Segredos: as variáveis de produção chegam no `docker run`, não no build. E o
+# Next copia o `.env` para dentro do `.next/standalone` — sem ele no contexto,
+# não há o que copiar.
+.env*
+
+# Pedidos reais de clientes — nem no git, nem na imagem.
+referencia/
+
+# Documentos e apresentações soltos na raiz.
+/*.docx
+/*.pdf
+/*.pptx
+
+# Gerados ou reinstalados lá dentro (o `node_modules` do Windows não serve no Linux).
+node_modules/
+.next/
+src/generated/prisma/
+coverage/
+.vitest/
+*.tsbuildinfo
+
+# Ferramentas e histórico.
+.git/
+.github/
+.claude/
+.agents/
+.windsurf/
+deploy/

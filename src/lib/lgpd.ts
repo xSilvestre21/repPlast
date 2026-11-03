@@ -5,7 +5,8 @@
  *
  * O controlador é pessoa física enquanto o RepPlast não tiver CNPJ. Quando
  * tiver, troque `nome` pela razão social, acrescente o CNPJ aos textos e suba
- * a `VERSAO_TERMOS`.
+ * a `VERSAO_TERMOS`. Com o domínio próprio, o `email` passa a ser o de
+ * suporte nele (suporte@…) — é o que todas as frases de "escreva para" citam.
  *
  * O CPF do controlador não aparece nas páginas nem mora no código: a lei pede
  * identificação e um canal de contato, e nome mais e-mail bastam — CPF inteiro
@@ -22,7 +23,7 @@ export const CONTROLADOR = {
  * A versão dos textos aceitos, gravada junto com o aceite de cada pessoa.
  * Mudou o que os textos dizem? Suba a data: é ela que prova o que foi aceito.
  */
-export const VERSAO_TERMOS = "2026-10-16";
+export const VERSAO_TERMOS = "2026-11-03";
 
 /** "16 de outubro de 2026" — a data de vigência que as páginas mostram. */
 export const VIGENCIA_TERMOS = new Intl.DateTimeFormat("pt-BR", {

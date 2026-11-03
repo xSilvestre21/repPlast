@@ -1,0 +1,102 @@
+# A produção (AWS Lightsail): depois do CI verde na main, ou à mão.
+#
+# 1. Monta as duas imagens (o sistema e o migrador) e as manda ao ECR, com a
+#    versão do commit. O acesso à AWS é por OIDC: nenhuma chave guardada aqui.
+# 2. Entra na instância por SSH e roda `deploy/publicar.sh`, que aplica as
+#    migrations, troca o container e espera o /api/saude — ou volta à versão
+#    anterior.
+#
+# Configuração (ver o README, "Produção"):
+#   vars do REPOSITÓRIO (Settings → Secrets and variables → Actions → Variables —
+#   o `if` do job lê antes de entrar no ambiente, e só enxerga as do repositório):
+#            AWS_ROLE_ARN, ECR_REPOSITORIO, LIGHTSAIL_HOST, LIGHTSAIL_HOST_KEY,
+#            NEXT_PUBLIC_SENTRY_DSN, SENTRY_ORG, SENTRY_PROJECT
+#   secrets do ambiente `producao` (Settings → Environments):
+#            LIGHTSAIL_SSH_KEY, SENTRY_AUTH_TOKEN
+# Para exigir aprovação antes de cada deploy: "Required reviewers" no ambiente.
+
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# Um deploy por vez, e nenhum interrompido no meio.
+concurrency:
+  group: producao
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publicar:
+    # Sem a AWS montada (as `vars` do ambiente vazias), não tenta: o push na
+    # main não fica vermelho até a produção existir.
+    if: >-
+      vars.AWS_ROLE_ARN != '' &&
+      (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    environment: producao
+    timeout-minutes: 30
+    env:
+      COMMIT: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.COMMIT }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: sa-east-1
+
+      - uses: aws-actions/amazon-ecr-login@v2
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Imagem do sistema
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runner
+          push: true
+          tags: ${{ vars.ECR_REPOSITORIO }}:${{ env.COMMIT }}
+          build-args: |
+            NEXT_PUBLIC_SENTRY_DSN=${{ vars.NEXT_PUBLIC_SENTRY_DSN }}
+            SENTRY_RELEASE=${{ env.COMMIT }}
+            SENTRY_ORG=${{ vars.SENTRY_ORG }}
+            SENTRY_PROJECT=${{ vars.SENTRY_PROJECT }}
+          secrets: |
+            sentry_auth_token=${{ secrets.SENTRY_AUTH_TOKEN }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Imagem do migrador
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: migrador
+          push: true
+          tags: ${{ vars.ECR_REPOSITORIO }}:${{ env.COMMIT }}-migrador
+          cache-from: type=gha
+
+      - name: Publicar na instância
+        env:
+          CHAVE: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          HOST: ${{ vars.LIGHTSAIL_HOST }}
+          HOST_KEY: ${{ vars.LIGHTSAIL_HOST_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$CHAVE" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          # A chave da instância conferida, não aceita às cegas.
+          printf '%s %s\n' "$HOST" "$HOST_KEY" > ~/.ssh/known_hosts
+          scp -i ~/.ssh/deploy deploy/compose.yaml deploy/Caddyfile deploy/publicar.sh deploy/backup.sh \
+            "ubuntu@$HOST:/opt/repplast/"
+          ssh -i ~/.ssh/deploy "ubuntu@$HOST" "sh /opt/repplast/publicar.sh $COMMIT"

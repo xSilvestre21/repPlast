@@ -12,6 +12,7 @@ import { Recursos } from "@/components/entrada/recursos";
 import { Revelar, SemScriptRevela } from "@/components/entrada/revelar";
 import { TopoEntrada } from "@/components/entrada/topo-entrada";
 import { Cartao, Mensagem, Placa } from "@/components/ui";
+import { CONTROLADOR } from "@/lib/lgpd";
 import { inicioDa, sessaoAtual } from "@/lib/sessao";
 
 import { entrar } from "../acoes";
@@ -249,9 +250,20 @@ export default async function PaginaEntrar({ searchParams }: PageProps<"/entrar"
               </Link>
             </div>
           </Revelar>
-          <p className="mt-10 text-center text-mini text-tinta-3">
-            RepPlast · Sistema para representação comercial de embalagens plásticas
-          </p>
+          <footer className="mt-10 text-center text-mini text-tinta-3">
+            <p>RepPlast · Sistema para representação comercial de embalagens plásticas</p>
+            <nav aria-label="Termos e contato" className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1">
+              <Link href="/termos" className="underline underline-offset-2 hover:text-carimbo">
+                Termos de Uso
+              </Link>
+              <Link href="/privacidade" className="underline underline-offset-2 hover:text-carimbo">
+                Política de Privacidade
+              </Link>
+              <a href={`mailto:${CONTROLADOR.email}`} className="underline underline-offset-2 hover:text-carimbo">
+                {CONTROLADOR.email}
+              </a>
+            </nav>
+          </footer>
         </section>
       </div>
     </Movimento>

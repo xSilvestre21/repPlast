@@ -14,7 +14,11 @@
 
 import "server-only";
 
+import { lookup } from "node:dns/promises";
+
 import nodemailer from "nodemailer";
+
+import { enderecoInterno } from "./endereco-interno";
 
 /**
  * Com `cid`, o anexo é uma imagem do próprio corpo HTML (`<img src="cid:…">`):
@@ -41,6 +45,54 @@ export type ResultadoEnvio =
 /** Servidor na própria máquina — o SMTP de teste do desenvolvimento. */
 function ehLocal(host: string): boolean {
   return ["localhost", "127.0.0.1", "::1", "[::1]"].includes(host.toLowerCase());
+}
+
+/** As portas de envio de e-mail. Outra porta não é SMTP — é alguém sondando. */
+const PORTAS_SMTP = [25, 465, 587, 2525];
+
+/**
+ * Por que o sistema não conecta a esta caixa — ou `null`, se pode.
+ *
+ * Em produção, o servidor de e-mail tem de estar na internet: o host e a porta
+ * vêm do formulário das Configurações, e sem esta conferência o "Testar"
+ * viraria um jeito de sondar a rede interna do servidor (o banco, os metadados
+ * da nuvem), porta por porta, pela frase de erro que volta. No
+ * desenvolvimento, o SMTP de teste na própria máquina continua valendo.
+ *
+ * O nome é resolvido aqui e de novo pelo nodemailer: um DNS que mude de
+ * resposta entre as duas passaria. É a fresta que sobra, estreita — e o
+ * firewall da instância também não deixa sair para a rede interna.
+ */
+async function destinoRecusado(
+  conta: Pick<ContaSmtp, "host" | "porta">,
+): Promise<{ motivo: string; campo: "host" | "porta" } | null> {
+  if (process.env.NODE_ENV !== "production") return null;
+
+  if (!PORTAS_SMTP.includes(conta.porta)) {
+    return {
+      campo: "porta",
+      motivo:
+        `A porta ${conta.porta} não é de envio de e-mail. Use a que o seu provedor indica — quase sempre ` +
+        "587 (STARTTLS) ou 465 (SSL).",
+    };
+  }
+
+  let enderecos: { address: string }[];
+  try {
+    enderecos = await lookup(conta.host, { all: true });
+  } catch {
+    // Não resolveu: o nodemailer dá o erro de conexão de sempre (EDNS).
+    return null;
+  }
+  if (enderecos.some(({ address }) => enderecoInterno(address))) {
+    return {
+      campo: "host",
+      motivo:
+        `O servidor “${conta.host}” aponta para um endereço interno, que o sistema não usa para mandar e-mail. ` +
+        "Confira o servidor de envio da sua conta — como smtp.gmail.com.",
+    };
+  }
+  return null;
 }
 
 function transporte(conta: ContaSmtp) {
@@ -132,6 +184,9 @@ function campoDoErro(erro: unknown): "senha" | "host" | "seguranca" | undefined 
 export async function testarConta(
   conta: ContaSmtp,
 ): Promise<{ ok: true } | { ok: false; motivo: string; campo?: string }> {
+  const recusa = await destinoRecusado(conta);
+  if (recusa) return { ok: false, ...recusa };
+
   try {
     await transporte(conta).verify();
     return { ok: true };
@@ -155,6 +210,9 @@ export async function enviarEmail(mensagem: {
   if (mensagem.para.length === 0) {
     return { enviado: false, motivo: "Nenhum destinatário informado." };
   }
+
+  const recusa = await destinoRecusado(conta);
+  if (recusa) return { enviado: false, motivo: recusa.motivo };
 
   try {
     const info = await transporte(conta).sendMail({

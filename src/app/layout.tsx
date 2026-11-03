@@ -6,9 +6,28 @@ import { sessaoAtual } from "@/lib/sessao";
 import { classesDasFontes } from "./fontes";
 import "./globals.css";
 
+/** O endereço do sistema, para o link compartilhado (WhatsApp, e-mail) virar um cartão com nome e descrição. */
+function enderecoDoSistema(): URL | undefined {
+  try {
+    return process.env.APP_URL ? new URL(process.env.APP_URL) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const DESCRICAO = "Pedidos e comissões para representantes de embalagens plásticas";
+
 export const metadata: Metadata = {
   title: "RepPlast",
-  description: "Pedidos e comissões para representantes de embalagens plásticas",
+  description: DESCRICAO,
+  metadataBase: enderecoDoSistema(),
+  openGraph: {
+    title: "RepPlast",
+    description: DESCRICAO,
+    siteName: "RepPlast",
+    locale: "pt_BR",
+    type: "website",
+  },
   /*
    * Instalado na tela inicial do iPhone, abre em tela cheia com o nome
    * "RepPlast" embaixo do ícone (`apple-icon.png`). O Android lê o mesmo do

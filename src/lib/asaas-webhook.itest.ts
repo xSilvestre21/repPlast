@@ -232,6 +232,13 @@ describe("trava da cobrança", () => {
         data: { plano: "PADRAO" },
       }),
     ).rejects.toThrow();
+    // Nem se dar mais prazo depois de cancelar.
+    await expect(
+      db.organizacao.update({
+        where: { id: organizacaoId },
+        data: { acessoAte: new Date("2099-01-01T00:00:00Z") },
+      }),
+    ).rejects.toThrow();
 
     expect((await situacao()).assinatura).toBe("CANCELADA");
   });
@@ -316,6 +323,11 @@ describe("CHECKOUT_PAID sem cliente", () => {
 });
 
 describe("mensalidade depois do pagamento", () => {
+  // Os testes de cima terminam com o escritório cancelado; o acerto é de quem paga.
+  beforeAll(async () => {
+    await admin.organizacao.update({ where: { id: organizacaoId }, data: { assinatura: "ATIVA" } });
+  });
+
   it("PAYMENT_CONFIRMED leva às próximas faturas a redução do ciclo pago", async () => {
     // Max sem preposto ativo deve 189; a fatura paga ainda era a de 4 prepostos.
     asaas.cobrado = "238";
@@ -358,5 +370,95 @@ describe("mensalidade depois do pagamento", () => {
     );
 
     expect(asaas.chamadas).toHaveLength(0);
+  });
+});
+
+describe("cancelamento e assinatura antiga", () => {
+  const DIA_MS = 24 * 60 * 60 * 1000;
+  const checkoutDaVolta = `chk3_${sufixo}`;
+
+  async function prazo() {
+    return (
+      await admin.organizacao.findUniqueOrThrow({ where: { id: organizacaoId }, select: { acessoAte: true } })
+    ).acessoAte;
+  }
+
+  it("o pagamento que chega atrasado não reabre o escritório cancelado", async () => {
+    await admin.organizacao.update({ where: { id: organizacaoId }, data: { assinatura: "CANCELADA" } });
+    asaas.chamadas = [];
+
+    // No cartão, o RECEIVED do último mês chega uns 30 dias depois da cobrança.
+    await processarEventoAsaas(
+      evento("PAYMENT_RECEIVED", { payment: { subscription: "sub_teste_checkout", customer: clienteId } }),
+    );
+    await processarEventoAsaas(
+      evento("PAYMENT_CONFIRMED", { payment: { subscription: "sub_teste_checkout", customer: clienteId } }),
+    );
+
+    expect((await situacao()).assinatura).toBe("CANCELADA");
+    // E o acerto da mensalidade não vai a uma assinatura que não cobra mais.
+    expect(asaas.chamadas).toHaveLength(0);
+  });
+
+  it("a remoção vinda do Asaas não apaga o prazo de quem cancelou pela tela", async () => {
+    const fimDoMes = new Date(Date.now() + 20 * DIA_MS);
+    await admin.organizacao.update({
+      where: { id: organizacaoId },
+      data: { assinatura: "ATIVA", acessoAte: fimDoMes },
+    });
+
+    await processarEventoAsaas(
+      evento("SUBSCRIPTION_DELETED", { subscription: { id: "sub_teste_checkout", customer: clienteId } }),
+    );
+
+    expect((await situacao()).assinatura).toBe("CANCELADA");
+    expect(await prazo()).toEqual(fimDoMes);
+  });
+
+  it("assinar de novo pelo checkout libera e apaga o prazo do cancelamento", async () => {
+    await admin.organizacao.update({ where: { id: organizacaoId }, data: { asaasCheckoutId: checkoutDaVolta } });
+
+    await processarEventoAsaas(evento("CHECKOUT_PAID", { checkout: { id: checkoutDaVolta, customer: null } }));
+    await processarEventoAsaas(
+      evento("SUBSCRIPTION_CREATED", {
+        subscription: { id: `sub3_${sufixo}`, customer: clienteId, checkoutSession: checkoutDaVolta },
+      }),
+    );
+
+    expect(await situacao()).toEqual({
+      assinatura: "ATIVA",
+      asaasClienteId: clienteId,
+      asaasAssinaturaId: `sub3_${sufixo}`,
+    });
+    expect(await prazo()).toBeNull();
+  });
+
+  it("a assinatura antiga não bloqueia nem cancela quem paga a nova", async () => {
+    // Do mesmo cliente: sem a assinatura gravada, o webhook acha o escritório pelo cliente.
+    await processarEventoAsaas(
+      evento("PAYMENT_OVERDUE", { payment: { subscription: "sub_teste_checkout", customer: clienteId } }),
+    );
+    expect((await situacao()).assinatura).toBe("ATIVA");
+
+    await processarEventoAsaas(
+      evento("SUBSCRIPTION_DELETED", { subscription: { id: "sub_teste_checkout", customer: clienteId } }),
+    );
+    expect(await situacao()).toEqual({
+      assinatura: "ATIVA",
+      asaasClienteId: clienteId,
+      asaasAssinaturaId: `sub3_${sufixo}`,
+    });
+  });
+
+  it("estorno não muda a situação: vira alerta para decidir à mão", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await processarEventoAsaas(
+      evento("PAYMENT_REFUNDED", { payment: { subscription: `sub3_${sufixo}`, customer: clienteId } }),
+    );
+
+    expect((await situacao()).assinatura).toBe("ATIVA");
+    expect(log).toHaveBeenCalledWith(expect.stringMatching(/PAYMENT_REFUNDED .* do escritório [0-9a-f-]+ — conferir/));
+    log.mockRestore();
   });
 });

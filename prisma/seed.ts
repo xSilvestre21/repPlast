@@ -11,9 +11,17 @@
 
 import "dotenv/config";
 
+import { bancoEhLocal } from "../src/lib/banco-local";
 import { dbAdministrativo } from "../src/lib/db";
 import { descricaoFita, descricaoRolo, descricaoSaco } from "../src/lib/descricao";
 import { gerarHashSenha } from "../src/lib/senha";
+
+// O seed planta um login de senha conhecida (logo abaixo), num escritório que
+// nasce ATIVA sem cobrança: só no banco desta máquina, nunca na nuvem.
+if (!bancoEhLocal(process.env.DATABASE_URL)) {
+  console.error("O seed só roda no banco desta máquina — o DATABASE_URL aponta para outro lugar.");
+  process.exit(1);
+}
 
 const db = dbAdministrativo();
 

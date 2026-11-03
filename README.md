@@ -205,12 +205,16 @@ próprio domínio (`/monitoramento`), então bloqueador de anúncio não derruba
 NEXT_PUBLIC_SENTRY_DSN="https://...@o123.ingest.sentry.io/456"  # Settings → Client Keys (DSN)
 SENTRY_ORG="slug-da-organizacao"
 SENTRY_PROJECT="slug-do-projeto"
-SENTRY_AUTH_TOKEN="sntrys_..."  # só no Vercel: manda os source maps no build
+SENTRY_AUTH_TOKEN="sntrys_..."  # segredo do build (Vercel ou GitHub Actions): manda os source maps
+SENTRY_ENVIRONMENT="producao"   # servidor; no Vercel, cai no VERCEL_ENV
+NEXT_PUBLIC_SENTRY_ENVIRONMENT="producao"  # navegador, gravado no build
+SENTRY_RELEASE="<commit>"       # gravado pelo build da imagem (Dockerfile)
 ```
 
-O DSN é a única variável `NEXT_PUBLIC_*`: ele vai para o navegador de propósito e só permite
-*mandar* erros, não ler. Sem ele, ou fora de produção, o Sentry fica desligado. O token, ao
-contrário, é segredo — nunca no repositório.
+O DSN e o nome do ambiente são as únicas variáveis `NEXT_PUBLIC_*`: vão para o navegador de
+propósito — o DSN só permite *mandar* erros, não ler. Sem o DSN, ou fora de produção, o Sentry
+fica desligado. O token, ao contrário, é segredo — nunca no repositório, no `.env` ou no servidor.
+E-mail, CPF e CNPJ são mascarados antes de sair (`src/lib/monitoramento.ts`).
 
 ## Identidade visual: Papel & Tinta
 
@@ -313,7 +317,10 @@ Use sempre [`dbParaOrganizacao(id)`](src/lib/db.ts) — nunca o cliente Prisma c
 | `npx prisma studio` | Navegador visual dos dados |
 
 Os testes de isolamento **se pulam com aviso** quando o papel efetivo do banco ignora RLS — assim
-um ambiente limitado não vira falha enganosa.
+um ambiente limitado não vira falha enganosa. No CI (`CI=true`) o pulo vira falha.
+
+Os testes de integração e o seed só rodam num banco **desta máquina**: com o `.env` apontado para a
+nuvem, recusam. Para o ensaio num banco descartável remoto, `BANCO_DE_TESTE=descartavel`.
 
 ## Estrutura
 
@@ -325,3 +332,106 @@ src/lib/db.ts             acesso ao banco com escopo de escritório
 prisma/schema.prisma      modelo de dados
 referencia/               pedidos reais que servem de fixture e de referência de layout
 ```
+
+## Produção (AWS Lightsail)
+
+A produção roda numa instância do **Lightsail** (São Paulo) com Docker: o sistema atrás do
+**Caddy**, que cuida do HTTPS (Let's Encrypt), e o banco no **PostgreSQL gerenciado** do
+Lightsail. O Vercel + Neon (`rep-plast.vercel.app`) continua só como demonstração e homologação,
+com o Asaas sandbox.
+
+| Arquivo | O que é |
+| --- | --- |
+| `Dockerfile` | A imagem: `runner` (o sistema, em modo standalone) e `migrador` (migrations + papel restrito) |
+| `deploy/compose.yaml` | O sistema, o Caddy e o migrador na instância |
+| `deploy/Caddyfile` | HTTPS, `www` → domínio principal, limite de 26 MB por envio |
+| `deploy/publicar.sh` | Põe uma versão no ar — ou volta uma: migrations, troca, espera o `/api/saude` |
+| `deploy/backup.sh` | `pg_dump` semanal para o S3 (o Lightsail guarda só 7 dias) |
+| `.github/workflows/ci.yml` | As quatro baterias num Postgres com dono sem superusuário, como o da AWS |
+| `.github/workflows/deploy.yml` | Depois do CI verde na `main`: imagens no ECR e `publicar.sh` por SSH |
+
+### Montar, uma vez
+
+1. **Conta AWS**: MFA no usuário raiz, acesso diário pelo IAM Identity Center, AWS Budgets com
+   alerta. Região `sa-east-1` em tudo.
+2. **Domínio**: registrado no Registro.br, com a zona no Route 53 (os NS do Route 53 no
+   Registro.br).
+3. **Banco** (Lightsail → Databases): PostgreSQL, a versão mais nova oferecida, **modo privado**,
+   backup automático ligado. Crie os bancos `repplast` e `repplast_ensaio`.
+4. **Instância** (Lightsail → Instances): Ubuntu 24.04, 2 GB, IP estático, firewall só 22, 80 e
+   443 (SSH só por chave). Nela: Docker com o plugin compose, AWS CLI, 2 GB de swap,
+   `unattended-upgrades`, e a pasta `/opt/repplast` com:
+   - `app.env` (`chmod 600`): as variáveis da tabela abaixo;
+   - `.env`: `REPOSITORIO=<conta>.dkr.ecr.sa-east-1.amazonaws.com/repplast`, `DOMINIO=` e
+     `EMAIL_CERTIFICADO=`;
+   - `rds-global-bundle.pem` (a CA da AWS, para o backup) e `backup.env`, se for usar o backup.
+5. **ECR**: o repositório `repplast`, com regra de guardar as 20 últimas imagens. Um papel IAM
+   para o GitHub Actions por OIDC (push nesse repositório) e um usuário IAM só de leitura dele
+   para a instância (`aws configure` lá).
+6. **Amazon SES**: o domínio verificado (DKIM publicado no Route 53), SPF e DMARC, e o pedido de
+   **saída do sandbox**. As credenciais SMTP do SES vão para `SISTEMA_SMTP_*`
+   (`email-smtp.sa-east-1.amazonaws.com`, porta 587).
+7. **GitHub**: as variáveis do repositório e os segredos do ambiente `producao` listados no topo de
+   `deploy.yml`. Enquanto `AWS_ROLE_ARN` estiver vazia, o deploy nem tenta. "Required reviewers" no
+   ambiente exige aprovação a cada deploy.
+8. **Ensaio**, antes de abrir: as migrations, o `db:setup` e o `npm run test:db` no
+   `repplast_ensaio` (pela instância, `BANCO_DE_TESTE=descartavel`) — o banco da AWS não deixa o
+   dono ignorar o RLS, e é ali que se confirma o isolamento.
+
+### Variáveis da produção (`app.env`)
+
+| Variável | Valor |
+| --- | --- |
+| `DATABASE_URL` | `postgresql://<dono>:<senha>@<endpoint>:5432/repplast?sslmode=verify-full` |
+| `DIRECT_DATABASE_URL` | a mesma, com `sslmode=require` (o motor de migração do Prisma) |
+| `APP_DB_ROLE` / `APP_DB_PASSWORD` | `repplast_app` e uma senha nova |
+| `SESSAO_SECRET`, `EMAIL_CHAVE` | novas — nunca as do `.env` do PC (ver "Banco de dados" e "Envio por e-mail") |
+| `APP_URL` | `https://<domínio>` |
+| `ASAAS_URL` | `https://api.asaas.com` |
+| `ASAAS_API_KEY` | a chave de produção **sem a barra** que o `.env` exige antes do `$` |
+| `ASAAS_WEBHOOK_TOKEN` | inventado no painel ao cadastrar o webhook — nunca a chave de API |
+| `SISTEMA_SMTP_*`, `SISTEMA_EMAIL_REMETENTE` | o SES, e um remetente do domínio (`nao-responda@…`) |
+| `SENTRY_ENVIRONMENT` | `producao` |
+
+Um `NOME=valor` por linha, **sem aspas e sem barra antes do `$`**: o compose lê o arquivo como está
+escrito (`format: raw`), diferente do `.env` do PC.
+
+Faltou alguma, ou está errada (`APP_DB_ROLE` vazio, chave com a barra, `APP_URL` sem https)? O
+servidor **não sobe** e diz qual (`src/lib/ambiente.ts`) — e o deploy volta para a versão anterior.
+
+### O webhook do Asaas de produção
+
+Painel do Asaas → Integrações → Webhooks: URL `https://<domínio>/api/asaas/webhook`, o token de
+`ASAAS_WEBHOOK_TOKEN` e os eventos de `scripts/tunel-webhook.mjs` (`CHECKOUT_PAID`,
+`SUBSCRIPTION_CREATED`, `PAYMENT_*`, `SUBSCRIPTION_DELETED`/`INACTIVATED`…). Sem o
+`SUBSCRIPTION_CREATED`, a assinatura não se liga ao escritório.
+
+### Publicar e voltar
+
+O push na `main` publica sozinho, depois do CI. À mão, na instância:
+
+```
+sh /opt/repplast/publicar.sh <commit>
+```
+
+O mesmo comando, com o commit anterior, **volta** uma versão. As migrations não voltam: toda
+migration tem de funcionar com o código de antes (acrescentar coluna, sim; apagar, só numa
+versão seguinte).
+
+### Restaurar o banco
+
+- **Snapshot do Lightsail** (até 7 dias, ou um ponto no tempo): Lightsail → o banco → Backups →
+  criar um banco novo a partir dele, e apontar o `DATABASE_URL` para o novo.
+- **Do S3** (`backup.sh`): `pg_restore` num banco novo e vazio, e depois o migrador, que refaz o
+  papel restrito e as permissões dele:
+
+  ```
+  pg_restore --no-owner --dbname "<url do banco novo>" repplast-….dump
+  ```
+
+  O dump é que precisa do `app.bypass_rls` (o `backup.sh` já liga): com o RLS forçado, o dono do
+  banco da AWS não vê as linhas, e o `pg_dump` recusa a tabela. Na restauração os dados entram
+  antes das policies, que vêm no fim do arquivo. Conferido num banco com dono sem superusuário.
+
+Ensaie a restauração antes de abrir para clientes, e depois a cada trimestre.
+

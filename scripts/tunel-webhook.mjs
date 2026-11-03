@@ -37,6 +37,10 @@ const EVENTOS = [
   "SUBSCRIPTION_CREATED",
   "SUBSCRIPTION_DELETED",
   "SUBSCRIPTION_INACTIVATED",
+  // Não mudam a situação: viram alerta no Sentry, para decidir à mão.
+  "PAYMENT_REFUNDED",
+  "PAYMENT_CHARGEBACK_REQUESTED",
+  "PAYMENT_CHARGEBACK_DISPUTE",
 ];
 
 function parar(mensagem) {

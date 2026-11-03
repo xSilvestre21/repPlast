@@ -3,7 +3,10 @@
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 
-import { criarCheckout, ErroAsaas, pagamentoConfigurado } from "@/lib/asaas";
+import type Decimal from "decimal.js";
+
+import { assinaturaLiberada } from "@/lib/acesso-assinatura";
+import { criarCheckout, ErroAsaas, faturaEmAtraso, pagamentoConfigurado } from "@/lib/asaas";
 import { dbAdministrativo } from "@/lib/db";
 import {
   ErroDeCampo,
@@ -12,7 +15,7 @@ import {
   type EstadoFormulario,
 } from "@/lib/erro-formulario";
 import { mascararTelefone, normalizarCep, somenteDigitos } from "@/lib/mascara";
-import { planoDaUrl, type CodigoPlano } from "@/lib/planos";
+import { planoDaUrl, valorMensal, type CodigoPlano } from "@/lib/planos";
 import { conferirSenha, gerarHashSenha } from "@/lib/senha";
 import { conferirSenhaNova } from "@/lib/senha-nova";
 import { normalizarNomeEscritorio, problemaNoNomeEscritorio } from "@/lib/escritorio-regras";
@@ -22,7 +25,7 @@ import { dominioRecebeEmail } from "@/lib/dominio-email";
 import { documentoSemPontuacao, problemaNoDocumento } from "@/lib/documento";
 import { enviarDoSistema, urlDoSistema } from "@/lib/email-sistema";
 import { problemaNoEmail } from "@/lib/email-valido";
-import { VERSAO_TERMOS } from "@/lib/lgpd";
+import { CONTROLADOR, VERSAO_TERMOS } from "@/lib/lgpd";
 import { montarEmailSistema } from "@/lib/email-sistema-html";
 import { minutosAte, minutosPorExtenso } from "@/lib/limite-tentativas";
 import {
@@ -33,6 +36,7 @@ import {
   VALIDADE_MIN,
 } from "@/lib/redefinicao-senha";
 import { criarSessao, encerrarSessao, inicioDa, sessaoAtual } from "@/lib/sessao";
+import { bloqueioDoCadastro, registrarTentativaDeCadastro } from "@/lib/tentativas-cadastro";
 import { LINK_TROCA_VENCIDO, trocarPeloLink } from "@/lib/troca-email";
 import {
   bloqueioDoLogin,
@@ -143,7 +147,7 @@ export async function entrar(
         id: true,
         senhaHash: true,
         senhaProvisoria: true,
-        organizacao: { select: { ativa: true, assinatura: true } },
+        organizacao: { select: { ativa: true, assinatura: true, acessoAte: true } },
       },
     });
 
@@ -158,7 +162,7 @@ export async function entrar(
     if (!usuario.organizacao.ativa) {
       throw new ErroParaUsuario(
         "Este escritório está desativado, e por isso não dá para entrar. Se acha que é engano, " +
-          "fale com o suporte.",
+          `escreva para ${CONTROLADOR.email}.`,
       );
     }
 
@@ -263,7 +267,7 @@ export async function redefinirSenha(
           botao: { rotulo: "Entrar no RepPlast", url: `${urlDoSistema()}/entrar` },
           notas: [
             "Se foi você, está tudo certo. Se não foi, use “Esqueceu sua senha?” na tela de entrar " +
-              "para criar outra agora e fale com o suporte.",
+              `para criar outra agora e escreva para ${CONTROLADOR.email}.`,
           ],
         }),
       }),
@@ -321,7 +325,7 @@ export async function confirmarTrocaEmail(
               "endereço. Os aparelhos que estavam conectados precisam entrar de novo.",
           ],
           notas: [
-            "Se foi você, está tudo certo. Se não foi, fale com o suporte agora — e avise o " +
+            `Se foi você, está tudo certo. Se não foi, escreva agora para ${CONTROLADOR.email} — e avise o ` +
               "administrador do escritório.",
           ],
         }),
@@ -366,18 +370,24 @@ async function abrirPagamento(organizacao: {
   numero?: string;
   complemento?: string;
   bairro?: string;
+  /** A mensalidade, quando não é a do plano puro (o Max com prepostos a mais). */
+  valor?: Decimal;
 }): Promise<string> {
-  const checkout = await criarCheckout(organizacao.plano, {
-    nome: organizacao.nome,
-    email: organizacao.email,
-    cpfCnpj: organizacao.documento,
-    cep: organizacao.cep,
-    telefone: organizacao.telefone,
-    endereco: organizacao.endereco,
-    numero: organizacao.numero,
-    complemento: organizacao.complemento,
-    bairro: organizacao.bairro,
-  });
+  const checkout = await criarCheckout(
+    organizacao.plano,
+    {
+      nome: organizacao.nome,
+      email: organizacao.email,
+      cpfCnpj: organizacao.documento,
+      cep: organizacao.cep,
+      telefone: organizacao.telefone,
+      endereco: organizacao.endereco,
+      numero: organizacao.numero,
+      complemento: organizacao.complemento,
+      bairro: organizacao.bairro,
+    },
+    organizacao.valor,
+  );
 
   await dbAdministrativo().organizacao.update({
     where: { id: organizacao.id },
@@ -492,6 +502,19 @@ export async function cadastrar(
       );
     }
 
+    // Daqui em diante cada tentativa custa caro — o CEP, o domínio do e-mail e
+    // o checkout do Asaas —, e por isso conta no limite (`tentativas-cadastro.ts`).
+    const ip = await ipDaRequisicao();
+    const libera = await bloqueioDoCadastro({ email, ip });
+    if (libera) {
+      throw new ErroParaUsuario(
+        `Foram muitas tentativas de cadastro em pouco tempo. Espere ${minutosPorExtenso(
+          minutosAte(libera, new Date()),
+        )} e tente de novo — se precisar de ajuda, escreva para ${CONTROLADOR.email}.`,
+      );
+    }
+    await registrarTentativaDeCadastro({ email, ip });
+
     // Por último, as duas que dependem de rede — e deixam passar se a rede
     // não responder (ver `consultarCep` e `dominioRecebeEmail`).
     const [cepExiste, emailRecebe] = await Promise.all([
@@ -513,7 +536,7 @@ export async function cadastrar(
     if (!pagamentoConfigurado()) {
       throw new ErroParaUsuario(
         "O pagamento está fora do ar no momento, e por isso o escritório ainda não foi criado. " +
-          "Tente de novo mais tarde — se continuar, fale com o suporte.",
+          `Tente de novo mais tarde — se continuar, escreva para ${CONTROLADOR.email}.`,
       );
     }
 
@@ -602,9 +625,35 @@ export async function cadastrar(
   redirect(pagamento);
 }
 
+/** A fatura em atraso da assinatura, ou a frase de por que não deu. */
+async function faturaParaPagar(assinaturaId: string): Promise<string> {
+  let fatura: string | null;
+  try {
+    fatura = await faturaEmAtraso(assinaturaId);
+  } catch (erro) {
+    if (!(erro instanceof ErroAsaas)) throw erro;
+    console.error(`[asaas] fatura em atraso não veio: ${erro.message}`);
+    throw new ErroParaUsuario("Não conseguimos abrir a fatura em atraso agora. Tente de novo em alguns minutos.");
+  }
+
+  if (!fatura) {
+    throw new ErroParaUsuario(
+      "Não encontramos mensalidade em atraso para pagar. Se ela acabou de ser paga, o acesso volta em " +
+        `alguns minutos; se continuar assim, escreva para ${CONTROLADOR.email}.`,
+    );
+  }
+  return fatura;
+}
+
 /**
- * Abre outro checkout para o escritório da sessão — o anterior venceu, foi
- * fechado, ou a assinatura atrasou ou foi cancelada.
+ * O botão da tela `/assinatura`: leva quem não está em dia para onde pagar.
+ *
+ *   - Em atraso: a fatura atrasada da assinatura que o escritório já tem. Um
+ *     checkout novo abriria uma SEGUNDA assinatura no cartão, e a atrasada
+ *     continuaria lá, devendo.
+ *   - Pagamento pendente (o checkout do cadastro venceu ou foi fechado) ou
+ *     cancelada: outro checkout, no valor de hoje — o plano e os prepostos
+ *     ativos, e não só o preço do plano.
  *
  * Usa `sessaoAtual` e não `escopoAtual`: este é justamente o caminho de quem
  * ainda não tem a assinatura em dia.
@@ -626,7 +675,7 @@ export async function reabrirPagamento(
           "concluir o pagamento.",
       );
     }
-    if (sessao.assinatura === "ATIVA") {
+    if (assinaturaLiberada(sessao)) {
       throw new ErroParaUsuario("A assinatura já está em dia. Use “Ir para o sistema”.");
     }
 
@@ -634,6 +683,7 @@ export async function reabrirPagamento(
       where: { id: sessao.organizacaoId },
       select: {
         plano: true,
+        asaasAssinaturaId: true,
         cobrancaDocumento: true,
         cobrancaCep: true,
         cobrancaEndereco: true,
@@ -642,33 +692,44 @@ export async function reabrirPagamento(
         cobrancaBairro: true,
       },
     });
-    const pagador = await dbAdministrativo().usuario.findUniqueOrThrow({
-      where: { id: sessao.usuarioId },
-      select: { telefone: true },
-    });
 
-    if (!organizacao.cobrancaDocumento || !organizacao.cobrancaCep) {
-      throw new ErroParaUsuario(
-        "Faltam o CPF/CNPJ e o CEP de quem paga neste escritório. Fale com o suporte para concluir.",
+    if (sessao.assinatura === "ATRASADA" && organizacao.asaasAssinaturaId) {
+      pagamento = await faturaParaPagar(organizacao.asaasAssinaturaId);
+    } else {
+      const [pagador, prepostosAtivos] = await Promise.all([
+        dbAdministrativo().usuario.findUniqueOrThrow({
+          where: { id: sessao.usuarioId },
+          select: { telefone: true },
+        }),
+        dbAdministrativo().usuario.count({
+          where: { organizacaoId: sessao.organizacaoId, papel: "REPRESENTANTE", ativo: true },
+        }),
+      ]);
+
+      if (!organizacao.cobrancaDocumento || !organizacao.cobrancaCep) {
+        throw new ErroParaUsuario(
+          `Faltam o CPF/CNPJ e o CEP de quem paga neste escritório. Escreva para ${CONTROLADOR.email} para concluir.`,
+        );
+      }
+
+      pagamento = await abrirPagamentoOu(
+        "Não conseguimos abrir a página de pagamento agora. Tente de novo em alguns minutos.",
+        {
+          id: sessao.organizacaoId,
+          plano: organizacao.plano,
+          nome: sessao.nome,
+          email: sessao.email,
+          documento: organizacao.cobrancaDocumento,
+          cep: organizacao.cobrancaCep,
+          endereco: organizacao.cobrancaEndereco ?? undefined,
+          numero: organizacao.cobrancaNumero ?? undefined,
+          complemento: organizacao.cobrancaComplemento ?? undefined,
+          bairro: organizacao.cobrancaBairro ?? undefined,
+          telefone: pagador.telefone ? somenteDigitos(pagador.telefone) : undefined,
+          valor: valorMensal(organizacao.plano, prepostosAtivos),
+        },
       );
     }
-
-    pagamento = await abrirPagamentoOu(
-      "Não conseguimos abrir a página de pagamento agora. Tente de novo em alguns minutos.",
-      {
-        id: sessao.organizacaoId,
-        plano: organizacao.plano,
-        nome: sessao.nome,
-        email: sessao.email,
-        documento: organizacao.cobrancaDocumento,
-        cep: organizacao.cobrancaCep,
-        endereco: organizacao.cobrancaEndereco ?? undefined,
-        numero: organizacao.cobrancaNumero ?? undefined,
-        complemento: organizacao.cobrancaComplemento ?? undefined,
-        bairro: organizacao.cobrancaBairro ?? undefined,
-        telefone: pagador.telefone ? somenteDigitos(pagador.telefone) : undefined,
-      },
-    );
   } catch (erro) {
     return falhou(erro, formData);
   }

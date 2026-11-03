@@ -12,9 +12,12 @@ import {
   falhou,
   type EstadoFormulario as EstadoBase,
 } from "@/lib/erro-formulario";
+import { CONTROLADOR } from "@/lib/lgpd";
+import { minutosAte, minutosPorExtenso } from "@/lib/limite-tentativas";
 import { conferirSenha, gerarHashSenha } from "@/lib/senha";
 import { conferirSenhaNova } from "@/lib/senha-nova";
 import { criarSessao, escopoAtual } from "@/lib/sessao";
+import { bloqueioDoLogin, ipDaRequisicao, limparFalhas, registrarFalha } from "@/lib/tentativas-login";
 
 /** O estado de sempre mais o recado verde de "senha trocada". */
 export type EstadoFormulario = EstadoBase & { aviso?: string };
@@ -53,7 +56,19 @@ export async function trocarMinhaSenha(
     });
     if (!usuario) throw new ErroParaUsuario("Não encontramos o seu usuário. Saia e entre de novo.");
 
+    // A mesma porta do login, como a troca de e-mail: senão, quem achasse uma
+    // sessão aberta testaria senhas à vontade aqui. Bloqueado, nem confere.
+    const quem = { email: usuario.email, ip: await ipDaRequisicao() };
+    const fechado = await bloqueioDoLogin(quem);
+    if (fechado) {
+      throw new ErroDeCampo(
+        "atual",
+        `Muitas tentativas com senha errada. Espere ${minutosPorExtenso(minutosAte(fechado, new Date()))} ` +
+          "e tente de novo.",
+      );
+    }
     if (!(await conferirSenha(atual, usuario.senhaHash))) {
+      await registrarFalha(quem);
       throw new ErroDeCampo(
         "atual",
         "Esta não é a sua senha atual. Digite de novo — se não lembrar, saia e use “Esqueceu sua senha?” na tela de entrar.",
@@ -77,6 +92,8 @@ export async function trocarMinhaSenha(
     });
     // A versão subiu: sem um cookie novo, esta sessão também cairia.
     await criarSessao(usuarioId);
+    // Senha nova: os erros com a antiga não contam mais contra esta conta.
+    await limparFalhas(usuario.email);
 
     after(() =>
       enviarDoSistema({
@@ -91,7 +108,7 @@ export async function trocarMinhaSenha(
           botao: { rotulo: "Entrar no RepPlast", url: `${urlDoSistema()}/entrar` },
           notas: [
             "Se foi você, está tudo certo. Se não foi, use “Esqueceu sua senha?” na tela de entrar " +
-              "para criar outra agora e fale com o suporte.",
+              `para criar outra agora e escreva para ${CONTROLADOR.email}.`,
           ],
         }),
       }),

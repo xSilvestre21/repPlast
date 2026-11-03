@@ -4,6 +4,7 @@ import { EsquecerBuscas } from "@/components/esquecer-buscas";
 import { GuardaDaAba } from "@/components/guarda-da-aba";
 import { Navegacao } from "@/components/navegacao";
 import { SCRIPT_ABA } from "@/lib/aba";
+import { assinaturaLiberada } from "@/lib/acesso-assinatura";
 import { sessaoAtual } from "@/lib/sessao";
 
 /**
@@ -18,10 +19,11 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
   const sessao = await sessaoAtual();
 
   if (!sessao) redirect("/entrar");
-  // Pagamento pendente, atrasado ou cancelado: a tela de assinatura explica o
-  // que houve e reabre o pagamento. As ações e as rotas de arquivo têm a mesma
-  // barreira em `sessao.ts`, para quem chegar sem passar por aqui.
-  if (sessao.assinatura !== "ATIVA") redirect("/assinatura");
+  // Pagamento pendente, atrasado ou cancelado (passado o mês já pago): a tela
+  // de assinatura explica o que houve e reabre o pagamento. As ações e as
+  // rotas de arquivo têm a mesma barreira em `sessao.ts`, para quem chegar sem
+  // passar por aqui.
+  if (!assinaturaLiberada(sessao)) redirect("/assinatura");
 
   return (
     <>

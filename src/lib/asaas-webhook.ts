@@ -14,6 +14,11 @@
  *     (`checkoutSession`), e por ele se acha o escritório. O caminho pelo
  *     cliente fica de reserva.
  *   - Os eventos de cobrança (`PAYMENT_*`) trazem a assinatura e o cliente.
+ *
+ * E o que um evento NÃO pode fazer (ver `mudancaRecusada`): mexer na situação
+ * por uma assinatura que não é mais a do escritório — a de antes de um
+ * cancelamento, por exemplo —, nem reabrir um escritório cancelado por um
+ * pagamento que chega atrasado. Os dois ficam registrados, sem efeito.
  */
 
 import "server-only";
@@ -86,6 +91,38 @@ function situacaoDoEvento(tipo: string): Situacao | null {
 }
 
 /**
+ * O evento que chegou ao escritório, mas não pode mudar a situação dele:
+ *
+ *   - de OUTRA assinatura que não a gravada. Depois de cancelar e assinar de
+ *     novo, a antiga ainda manda eventos (o pagamento de um mês velho, a
+ *     remoção) — e o atraso ou a remoção dela não podem bloquear quem paga a
+ *     nova. A única que troca a gravada é a criada por um checkout do próprio
+ *     escritório (`SUBSCRIPTION_CREATED` com `checkoutSession`);
+ *   - um pagamento (`PAYMENT_*`) para quem está CANCELADA. No cartão, o
+ *     `PAYMENT_RECEIVED` chega uns 30 dias depois da cobrança: sem isto, o
+ *     recebimento do último mês reabria o escritório que cancelou. Voltar é
+ *     por checkout novo (`CHECKOUT_PAID`).
+ */
+function mudancaRecusada(
+  evento: EventoAsaas,
+  onde: { asaasCheckoutId: string } | { asaasAssinaturaId: string } | { asaasClienteId: string },
+  alvo: { asaasAssinaturaId: string | null; assinatura: Situacao },
+): boolean {
+  const assinaturaDoEvento = evento.subscription?.id ?? evento.payment?.subscription ?? null;
+  const peloCheckout = "asaasCheckoutId" in onde;
+
+  if (
+    !peloCheckout &&
+    assinaturaDoEvento &&
+    alvo.asaasAssinaturaId &&
+    assinaturaDoEvento !== alvo.asaasAssinaturaId
+  ) {
+    return true;
+  }
+  return alvo.assinatura === "CANCELADA" && evento.event?.startsWith("PAYMENT_") === true;
+}
+
+/**
  * Processa um evento, uma vez só.
  *
  * A entrega é "pelo menos uma vez": o id do evento é gravado antes da
@@ -107,6 +144,8 @@ export async function processarEventoAsaas(corpo: unknown): Promise<void> {
     asaasAssinaturaId?: string;
   } = {};
   if (situacao) dados.assinatura = situacao;
+  // Pago de novo: o prazo de quem tinha cancelado deixa de valer.
+  const limparAcesso = situacao === "ATIVA";
 
   let onde: { asaasCheckoutId: string } | { asaasAssinaturaId: string } | { asaasClienteId: string } | null =
     null;
@@ -152,7 +191,10 @@ export async function processarEventoAsaas(corpo: unknown): Promise<void> {
   // Asaas), e isso não é erro. Achado antes da trava, para o registro do evento
   // já dizer de quem é — também o que não muda nada, como a cobrança criada.
   const alvo = onde
-    ? await db.organizacao.findFirst({ where: onde, select: { id: true, asaasAssinaturaId: true } })
+    ? await db.organizacao.findFirst({
+        where: onde,
+        select: { id: true, asaasAssinaturaId: true, assinatura: true },
+      })
     : null;
 
   // O registro do evento é a trava: a chave primária faz a segunda entrega —
@@ -183,14 +225,27 @@ export async function processarEventoAsaas(corpo: unknown): Promise<void> {
     })
     .catch((erro) => console.error("[asaas] não deu para apagar o corpo dos eventos antigos:", erro));
 
+  // Estorno e chargeback não mudam a situação sozinhos — é dinheiro voltando,
+  // e quem decide é uma pessoa. O erro no log vira alerta no Sentry.
+  if (/^PAYMENT_(REFUNDED|CHARGEBACK)/.test(evento.event)) {
+    console.error(
+      `[asaas] ${evento.event} (evento ${evento.id}) do escritório ${alvo?.id ?? "não identificado"} — ` +
+        "conferir no painel do Asaas e decidir o acesso à mão.",
+    );
+  }
+
   try {
     if (!onde || !alvo || Object.keys(dados).length === 0) return;
+    if (mudancaRecusada(evento, onde, alvo)) return;
 
     // Assinatura já gravada não é trocada por um evento de cliente — o
     // cliente pode ter mais de uma, e a do checkout pago é a que vale.
     if (alvo.asaasAssinaturaId && "asaasClienteId" in onde) delete dados.asaasAssinaturaId;
 
-    await db.organizacao.update({ where: { id: alvo.id }, data: dados });
+    await db.organizacao.update({
+      where: { id: alvo.id },
+      data: limparAcesso ? { ...dados, acessoAte: null } : dados,
+    });
 
     /*
      * Fatura paga: a redução do ciclo (preposto inativado, volta ao Solo) passa

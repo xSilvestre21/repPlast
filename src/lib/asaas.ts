@@ -1,7 +1,7 @@
 /**
  * Cobrança da assinatura pelo Asaas.
  *
- * Um `fetch` fino em vez de SDK: são três chamadas, e o SDK oficial é PHP. O
+ * Um `fetch` fino em vez de SDK: são poucas chamadas, e o SDK oficial é PHP. O
  * pagamento acontece na página do próprio Asaas (Checkout), então o cartão
  * nunca passa por aqui — o sistema só abre o checkout e escuta o webhook
  * (`app/api/asaas/webhook/route.ts`).
@@ -68,7 +68,7 @@ export function pagamentoConfigurado(): boolean {
   }
 }
 
-async function chamar<T>(caminho: string, init: { method: "GET" | "POST"; corpo?: unknown }): Promise<T> {
+async function chamar<T>(caminho: string, init: { method: "GET" | "POST" | "DELETE"; corpo?: unknown }): Promise<T> {
   const { url, chave } = configuracao();
 
   const resposta = await fetch(`${url}${caminho}`, {
@@ -128,7 +128,12 @@ export interface ClienteCobranca {
  * cobrando o cartão todo mês a partir daí. O checkout vence em 1 hora — quem
  * demorar mais pede outro em `/assinatura`.
  */
-export async function criarCheckout(plano: CodigoPlano, cliente: ClienteCobranca) {
+export async function criarCheckout(
+  plano: CodigoPlano,
+  cliente: ClienteCobranca,
+  /** A mensalidade, quando não é a do plano puro: o Max com prepostos além dos inclusos. */
+  valor: Decimal = PLANOS[plano].precoMensal,
+) {
   const { app } = configuracao();
   const dados = PLANOS[plano];
 
@@ -149,7 +154,7 @@ export async function criarCheckout(plano: CodigoPlano, cliente: ClienteCobranca
           name: `RepPlast ${dados.nome}`,
           description: dados.publico,
           quantity: 1,
-          value: dados.precoMensal.toNumber(),
+          value: valor.toNumber(),
         },
       ],
       customerData: {
@@ -217,4 +222,40 @@ export async function atualizarValorAssinatura(
       ...(plano && { description: `RepPlast ${PLANOS[plano].nome}` }),
     },
   });
+}
+
+/** O próximo vencimento da assinatura, como o Asaas escreve: "2026-12-03". */
+export async function proximoVencimento(assinaturaId: string): Promise<string> {
+  const assinatura = await chamar<{ nextDueDate: string }>(`/v3/subscriptions/${encodeURIComponent(assinaturaId)}`, {
+    method: "GET",
+  });
+
+  return assinatura.nextDueDate;
+}
+
+/**
+ * Remove a assinatura: o Asaas para de gerar cobranças e apaga as pendentes e
+ * as em atraso — inclusive a do próximo vencimento, já gerada (ele gera 40 dias
+ * antes). As pagas ficam. Não tem volta: assinar de novo é outro checkout.
+ */
+export async function removerAssinatura(assinaturaId: string): Promise<void> {
+  await chamar(`/v3/subscriptions/${encodeURIComponent(assinaturaId)}`, { method: "DELETE" });
+}
+
+/**
+ * A página de pagamento da mensalidade em atraso mais antiga, ou `null` se não
+ * há nenhuma. É a fatura do próprio Asaas (`invoiceUrl`), onde dá para pagar
+ * com outro cartão — e paga, ela libera o escritório pela assinatura que ele já
+ * tem, sem criar outra.
+ */
+export async function faturaEmAtraso(assinaturaId: string): Promise<string | null> {
+  const lista = await chamar<{ data: { dueDate: string; invoiceUrl?: string | null }[] }>(
+    `/v3/subscriptions/${encodeURIComponent(assinaturaId)}/payments?status=OVERDUE`,
+    { method: "GET" },
+  );
+
+  const maisAntiga = lista.data
+    .filter((cobranca) => cobranca.invoiceUrl)
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
+  return maisAntiga?.invoiceUrl ?? null;
 }

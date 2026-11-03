@@ -55,6 +55,21 @@ describe("falhou", () => {
     expect(console.error).toHaveBeenCalled();
   });
 
+  it("leva ao log o erro do Prisma sem os dados da consulta", () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const prisma = new Error(
+      "Invalid `prisma.cliente.create()` invocation:\n\n{\n  data: {\n    nome: \"Maria da Silva\",\n" +
+        "    endereco: \"Rua Alfa, 12\"\n  }\n}\n\nArgument `cidade` is missing.",
+    );
+    prisma.name = "PrismaClientValidationError";
+    falhou(prisma);
+
+    const registrado = log.mock.calls.at(-1)?.[0] as Error;
+    expect(registrado.name).toBe("PrismaClientValidationError");
+    expect(registrado.message).toBe("Invalid `prisma.cliente.create()` invocation: … Argument `cidade` is missing.");
+    expect(registrado.stack).not.toMatch(/Maria|Rua Alfa/);
+  });
+
   it("traduz o duplicado do Prisma, sem o texto técnico", () => {
     const prisma = Object.assign(new Error("Unique constraint failed on the fields: (`email`)"), {
       code: "P2002",

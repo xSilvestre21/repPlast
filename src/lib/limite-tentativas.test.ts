@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { liberacao, minutosAte, minutosPorExtenso, restantes } from "./limite-tentativas";
+import { ipDoEncaminhamento, liberacao, minutosAte, minutosPorExtenso, restantes } from "./limite-tentativas";
 
 const agora = new Date("2026-10-15T12:00:00Z");
 const ha = (min: number) => new Date(agora.getTime() - min * 60 * 1000);
@@ -48,5 +48,24 @@ describe("restantes", () => {
   it("no limite ou acima, é zero — nunca negativo", () => {
     expect(restantes([ha(1), ha(2), ha(3), ha(4), ha(5)], regra)).toBe(0);
     expect(restantes([ha(1), ha(2), ha(3), ha(4), ha(5), ha(6)], regra)).toBe(0);
+  });
+});
+
+describe("ipDoEncaminhamento", () => {
+  it("um valor só: é ele", () => {
+    expect(ipDoEncaminhamento("203.0.113.7")).toBe("203.0.113.7");
+  });
+
+  it("vários: vale o último, o que o proxy da frente escreveu", () => {
+    // O primeiro é o que o cliente mandou — inventado para escapar do limite.
+    expect(ipDoEncaminhamento("1.2.3.4, 203.0.113.7")).toBe("203.0.113.7");
+    expect(ipDoEncaminhamento(" 1.2.3.4 ,5.6.7.8,  203.0.113.7 ")).toBe("203.0.113.7");
+  });
+
+  it("vazio ou ausente: nenhum", () => {
+    expect(ipDoEncaminhamento(null)).toBeNull();
+    expect(ipDoEncaminhamento(undefined)).toBeNull();
+    expect(ipDoEncaminhamento("")).toBeNull();
+    expect(ipDoEncaminhamento(" , ")).toBeNull();
   });
 });

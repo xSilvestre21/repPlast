@@ -7,12 +7,16 @@
  * Max → Solo com preposto ativo nem oferece o botão: a pergunta diz o motivo e
  * o caminho (`impedimento`), em vez de perguntar "tem certeza?" e recusar
  * depois do sim. A ação recusa igual, para quem chegar sem passar por aqui.
+ *
+ * Embaixo, discreto, o cancelamento da assinatura (`cancelarAssinatura`).
+ * Cancelada, o cartão só diz até quando vai o acesso: não há mais fatura para
+ * levar uma troca de plano.
  */
 
 import { Check, Gem } from "lucide-react";
 
 import { AcaoComRecusa } from "@/components/acao-com-recusa";
-import { Botao, formatarMoeda, SecaoCartao, Selo } from "@/components/ui";
+import { Botao, BotaoTexto, formatarMoeda, Mensagem, SecaoCartao, Selo } from "@/components/ui";
 import type { EstadoFormulario } from "@/lib/erro-formulario";
 import { type CodigoPlano, PLANOS, valorMensal } from "@/lib/planos";
 
@@ -20,13 +24,18 @@ export function CartaoPlano({
   plano,
   prepostosAtivos,
   temCobranca,
+  ultimoDiaDeAcesso,
   trocar,
+  cancelar,
 }: {
   plano: CodigoPlano;
   prepostosAtivos: number;
   /** O escritório paga pelo Asaas — os de antes da cobrança, não. */
   temCobranca: boolean;
+  /** "02/12/2026" quando a assinatura foi cancelada e o mês pago ainda corre. */
+  ultimoDiaDeAcesso: string | null;
   trocar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
+  cancelar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
 }) {
   const atual = PLANOS[plano];
   const outro = PLANOS[plano === "PLUS" ? "PADRAO" : "PLUS"];
@@ -101,25 +110,58 @@ export function CartaoPlano({
         </div>
       </div>
 
-      <div className="mt-5 flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-4">
-        <p className="text-mini text-tinta-3 sm:text-right">{quando}</p>
-        <AcaoComRecusa
-          acao={trocar}
-          confirmar={{
-            titulo: `Passar para o ${outro.nome}?`,
-            texto:
-              `${valores || quando}` +
-              (sobe ? " O menu do seu nome, no alto, ganha “Prepostos”." : " O menu do seu nome, no alto, perde “Prepostos”."),
-            rotulo: `Passar para o ${outro.nome}`,
-            perigo: false,
-            impedimento,
-          }}
-        >
-          <Botao type="submit" variante={sobe ? "primaria" : "secundaria"}>
-            Passar para o {outro.nome}
-          </Botao>
-        </AcaoComRecusa>
-      </div>
+      {ultimoDiaDeAcesso ? (
+        <div className="mt-5">
+          <Mensagem tom="verde">
+            Assinatura cancelada. O escritório continua usando o sistema até {ultimoDiaDeAcesso}, o fim do mês
+            já pago, e nada mais é cobrado. Depois disso, para voltar, é só assinar de novo — os dados continuam
+            guardados.
+          </Mensagem>
+        </div>
+      ) : (
+        <>
+          <div className="mt-5 flex flex-col items-end gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-4">
+            <p className="text-mini text-tinta-3 sm:text-right">{quando}</p>
+            <AcaoComRecusa
+              acao={trocar}
+              confirmar={{
+                titulo: `Passar para o ${outro.nome}?`,
+                texto:
+                  `${valores || quando}` +
+                  (sobe ? " O menu do seu nome, no alto, ganha “Prepostos”." : " O menu do seu nome, no alto, perde “Prepostos”."),
+                rotulo: `Passar para o ${outro.nome}`,
+                perigo: false,
+                impedimento,
+              }}
+            >
+              <Botao type="submit" variante={sobe ? "primaria" : "secundaria"}>
+                Passar para o {outro.nome}
+              </Botao>
+            </AcaoComRecusa>
+          </div>
+
+          {temCobranca && (
+            <div className="mt-5 flex justify-end border-t border-filete pt-4">
+              <AcaoComRecusa
+                acao={cancelar}
+                confirmar={{
+                  titulo: "Cancelar a assinatura?",
+                  texto:
+                    "A cobrança para agora: a próxima mensalidade não é cobrada. O escritório continua usando o " +
+                    "sistema até o fim do mês já pago; depois disso, para voltar, é só assinar de novo — os dados " +
+                    "continuam guardados.",
+                  rotulo: "Cancelar a assinatura",
+                  desistir: "Manter a assinatura",
+                }}
+              >
+                <BotaoTexto type="submit" perigoso>
+                  Cancelar a assinatura
+                </BotaoTexto>
+              </AcaoComRecusa>
+            </div>
+          )}
+        </>
+      )}
     </SecaoCartao>
   );
 }

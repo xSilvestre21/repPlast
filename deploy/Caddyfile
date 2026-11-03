@@ -1,0 +1,46 @@
+# O Caddy na frente do sistema: HTTPS automático (Let's Encrypt) para o
+# domínio, e o proxy até o container `app`.
+#
+# O `X-Forwarded-For` que o cliente manda é descartado: o Caddy só confia no
+# que vem de um proxy listado em `trusted_proxies`, e aqui não há nenhum. O
+# sistema lê o valor mais à direita (`lib/limite-tentativas.ts`), que é o que
+# o Caddy escreveu — o IP de verdade, para o limite de tentativas do login.
+
+{
+	# Para onde o Let's Encrypt avisa de certificado perto de vencer.
+	email {$EMAIL_CERTIFICADO}
+}
+
+# Um endereço só: o cookie da sessão não tem `domain`, e "www" e o domínio
+# principal teriam cada um a sua sessão.
+www.{$DOMINIO} {
+	redir https://{$DOMINIO}{uri} permanent
+}
+
+{$DOMINIO} {
+	encode zstd gzip
+
+	# 20 MB de anexos no envio do pedido por e-mail, mais o multipart — o
+	# mesmo limite das server actions (`next.config.ts`).
+	request_body {
+		max_size 26MB
+	}
+
+	reverse_proxy app:3000 {
+		# No deploy o container reinicia em alguns segundos: em vez de 502, a
+		# requisição espera ele voltar.
+		lb_try_duration 30s
+		lb_try_interval 500ms
+
+		# O envio do pedido por e-mail espera o servidor de e-mail da pessoa.
+		transport http {
+			read_timeout 180s
+			write_timeout 180s
+		}
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

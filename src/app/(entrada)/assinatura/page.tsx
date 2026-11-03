@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { TopoEntrada } from "@/components/entrada/topo-entrada";
 import { BotaoTexto, Cartao } from "@/components/ui";
+import { assinaturaLiberada } from "@/lib/acesso-assinatura";
 import { PLANOS } from "@/lib/planos";
 import { sessaoAtual } from "@/lib/sessao";
 
@@ -46,7 +47,9 @@ const TEXTOS = {
 export default async function PaginaAssinatura({ searchParams }: PageProps<"/assinatura">) {
   const sessao = await sessaoAtual();
   if (!sessao) redirect("/entrar");
-  if (sessao.assinatura === "ATIVA") redirect("/");
+  // O "ATIVA" explícito, além da regra, é o que deixa o TypeScript saber que
+  // daqui para baixo a situação tem texto em `TEXTOS`.
+  if (sessao.assinatura === "ATIVA" || assinaturaLiberada(sessao)) redirect("/");
 
   const { status } = await searchParams;
   const voltouPago = status === "pago" && sessao.assinatura === "AGUARDANDO_PAGAMENTO";

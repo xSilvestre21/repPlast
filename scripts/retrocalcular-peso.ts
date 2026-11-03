@@ -98,6 +98,11 @@ async function principal() {
 
   try {
     await db.$transaction(async (tx) => {
+      // Rotina administrativa: o bypass ligado para a transação inteira. Sem
+      // ele, só o dono que ignora o RLS por natureza (superusuário local,
+      // BYPASSRLS no Neon) acharia o escritório — no banco da AWS, não.
+      await tx.$executeRaw`SELECT set_config('app.bypass_rls', 'on', TRUE)`;
+
       const org = await tx.organizacao.findFirst({
         where: { nome: ESCRITORIO! },
         select: { id: true },

@@ -1384,17 +1384,15 @@ function conferirPrecos(sicov: any) {
  *
  * Roda como DONO do banco e antes da troca de papel: sob o RLS o admin não vê a
  * meta nem a caixa de e-mail dos prepostos, e uma limpeza pela metade deixaria
- * lixo pendurado. O `app.bypass_rls` é ligado só aqui dentro — os triggers de
- * cadastro e de acerto respeitam ele — e desligado antes de devolver: com ele
- * ligado, o papel restrito que vem depois enxergaria tudo.
+ * lixo pendurado. Conta com o `app.bypass_rls` ligado — os triggers de
+ * cadastro e de acerto respeitam ele —, que a transação liga no começo da fase
+ * de dono e desliga antes da troca de papel (ver `principal`).
  *
  * A ordem respeita as chaves `Restrict`: pedido e orçamento antes de cliente e
  * indústria, produto antes de indústria. Itens, parcelas, envios, edições,
  * vínculos, materiais e aditivos vão em cascata.
  */
 async function limparEscritorio(tx: any, orgId: string, adminId: string) {
-  await tx.$executeRaw`SELECT set_config('app.bypass_rls', 'on', TRUE)`;
-
   const comLogo = await tx.fornecedor.findMany({
     where: { organizacaoId: orgId, logo: { not: null } },
     select: { nome: true, logo: true, logoTipo: true },
@@ -1418,8 +1416,6 @@ async function limparEscritorio(tx: any, orgId: string, adminId: string) {
       await tx.usuario.deleteMany({ where: { organizacaoId: orgId, id: { not: adminId } } })
     ).count,
   };
-
-  await tx.$executeRaw`SELECT set_config('app.bypass_rls', 'off', TRUE)`;
 
   console.log("\nLimpeza do escritório (antes da importação):");
   for (const [o, n] of Object.entries(apagados)) console.log(`  ${String(n).padStart(5)}  ${o}`);
@@ -1856,7 +1852,14 @@ async function main() {
          * dia a dia da aplicação, onde cada query abre a sua. Assim a
          * importação inteira cabe num só `commit`, e o papel restrito continua
          * valendo: se alguma policy estiver errada, a importação quebra aqui.
+         *
+         * A fase de dono, até a troca de papel, roda com o `app.bypass_rls`
+         * ligado. Sem ele, só o dono que ignora o RLS por natureza
+         * (superusuário local, BYPASSRLS no Neon) acharia o escritório — no
+         * banco da AWS o dono não ignora, e o `findFirst` voltaria vazio.
          */
+        await tx.$executeRaw`SELECT set_config('app.bypass_rls', 'on', TRUE)`;
+
         const escritorio = await tx.organizacao.findFirst({ where: { nome: NOME_ESCRITORIO! } });
         if (!escritorio) throw new Error(`Escritório "${NOME_ESCRITORIO}" não encontrado.`);
 
@@ -1883,6 +1886,9 @@ async function main() {
 
         const todos = await tx.usuario.findMany({ select: { email: true } });
         const emailsOcupados = new Set(todos.map((u: { email: string }) => u.email.toLowerCase()));
+
+        // Desligado ANTES da troca: com ele ligado, o papel restrito enxergaria tudo.
+        await tx.$executeRaw`SELECT set_config('app.bypass_rls', 'off', TRUE)`;
 
         if (papelApp) {
           if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(papelApp)) {

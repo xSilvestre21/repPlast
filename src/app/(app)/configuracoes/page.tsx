@@ -1,20 +1,24 @@
 import { KeyRound, Palette, Sparkles, Wind } from "lucide-react";
+import Link from "next/link";
 
 import { EscolhaTema } from "@/components/alternador-tema";
 
 import { Pagina } from "@/components/pagina";
 import { Botao, BotaoLink, Cabecalho, Mensagem, SecaoCartao } from "@/components/ui";
+import { ultimoDiaDeAcesso } from "@/lib/acesso-assinatura";
 import { CAMPOS_PUBLICOS_CONTA } from "@/lib/conta-email";
 import { criptoConfigurada } from "@/lib/cripto";
 import { MODELOS_DE_EMAIL } from "@/lib/tipos-de-email";
 import { escopoAtual, sessaoAtual } from "@/lib/sessao";
 import { dataDaProximaTroca } from "@/lib/escritorio-regras";
+import { CONTROLADOR } from "@/lib/lgpd";
 import { situacaoDoNome } from "@/lib/nome-escritorio";
 import { nomeCompleto } from "@/lib/nome-usuario";
 import { trocaPendente } from "@/lib/troca-email";
 
 import {
   alternarReduzirAnimacoes,
+  cancelarAssinatura,
   definirAssinaturaPadrao,
   definirContaPadrao,
   excluirAssinaturaEmail,
@@ -79,7 +83,7 @@ export default async function PaginaConfiguracoes({ searchParams }: PageProps<"/
     ehAdmin
       ? db.organizacao.findUnique({
           where: { id: organizacaoId },
-          select: { plano: true, asaasAssinaturaId: true },
+          select: { plano: true, asaasAssinaturaId: true, assinatura: true, acessoAte: true },
         })
       : null,
     ehAdmin ? db.usuario.count({ where: { organizacaoId, papel: "REPRESENTANTE", ativo: true } }) : 0,
@@ -147,12 +151,18 @@ export default async function PaginaConfiguracoes({ searchParams }: PageProps<"/
               />
             </ItemConfiguracao>
 
-            <ItemConfiguracao busca="plano assinatura mensalidade pagamento pagar cobrança fatura preço valor solo max preposto prepostos upgrade mudar trocar cartão">
+            <ItemConfiguracao busca="plano assinatura mensalidade pagamento pagar cobrança fatura preço valor solo max preposto prepostos upgrade mudar trocar cartão cancelar cancelamento encerrar">
               <CartaoPlano
                 plano={organizacao.plano}
                 prepostosAtivos={prepostosAtivos}
                 temCobranca={organizacao.asaasAssinaturaId !== null}
+                ultimoDiaDeAcesso={
+                  organizacao.assinatura === "CANCELADA" && organizacao.acessoAte
+                    ? ultimoDiaDeAcesso(organizacao.acessoAte)
+                    : null
+                }
                 trocar={trocarPlano.bind(null, organizacao.plano === "PLUS" ? "PADRAO" : "PLUS")}
+                cancelar={cancelarAssinatura}
               />
             </ItemConfiguracao>
           </SecaoConfiguracao>
@@ -245,6 +255,19 @@ export default async function PaginaConfiguracoes({ searchParams }: PageProps<"/
           </ItemConfiguracao>
         </SecaoConfiguracao>
       </SecoesConfiguracao>
+
+      {/* Quem já está dentro também precisa achar os termos e o contato. */}
+      <footer className="mt-10 flex flex-wrap justify-center gap-x-4 gap-y-1 text-mini text-tinta-3">
+        <Link href="/termos" className="underline underline-offset-2 hover:text-carimbo">
+          Termos de Uso
+        </Link>
+        <Link href="/privacidade" className="underline underline-offset-2 hover:text-carimbo">
+          Política de Privacidade
+        </Link>
+        <a href={`mailto:${CONTROLADOR.email}`} className="underline underline-offset-2 hover:text-carimbo">
+          Dúvidas: {CONTROLADOR.email}
+        </a>
+      </footer>
     </Pagina>
   );
 }

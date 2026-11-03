@@ -32,10 +32,13 @@ CREATE UNIQUE INDEX "organizacao_nome_unico"
 -- abrir o `dbAdministrativo` numa requisição de usuário é justamente o que
 -- `db.ts` proíbe. Esta função vê todos, mas só devolve sim ou não: nem o nome
 -- nem o escritório que o usa saem daqui.
+--
+-- (Esta definição tinha `SET app.bypass_rls = 'on'`, que só um superusuário
+-- consegue gravar numa função — num banco novo sem superusuário, como o da
+-- AWS, a migration parava aqui. A versão que vale é a de 20261103120000.)
 CREATE OR REPLACE FUNCTION app_nome_escritorio_em_uso(nome text, exceto uuid) RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = public
-SET app.bypass_rls = 'on'
 AS $fn$
   SELECT EXISTS (
     SELECT 1 FROM "organizacao" o

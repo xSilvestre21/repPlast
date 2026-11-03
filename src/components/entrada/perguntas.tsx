@@ -42,13 +42,13 @@ const PERGUNTAS: { pergunta: string; resposta: string }[] = [
     pergunta: "Posso começar no Solo e passar para o Max depois?",
     resposta:
       "Pode. Seus pedidos, clientes e comissões continuam onde estão; a troca só libera as telas " +
-      "de preposto. Fale com o suporte para mudar de plano.",
+      "de preposto. Você mesmo troca, em Configurações → Plano e mensalidade.",
   },
   {
     pergunta: "Como cancelo?",
     resposta:
-      "Peça o cancelamento ao suporte a qualquer momento. A cobrança para no ciclo seguinte e " +
-      "não há multa.",
+      "Pelo botão “Cancelar a assinatura”, em Configurações, quando quiser. A cobrança para na " +
+      "hora, o acesso continua até o fim do mês já pago, e não há multa.",
   },
   {
     pergunta: "Meus dados ficam seguros?",

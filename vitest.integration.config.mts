@@ -20,7 +20,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.itest.ts"],
-    setupFiles: ["dotenv/config"],
+    // A trava depois do `.env`: é ela que confere para onde ele aponta.
+    setupFiles: ["dotenv/config", "./test/banco-descartavel.ts"],
     // O banco é compartilhado entre os arquivos; rodar em série evita
     // interferência entre eles.
     fileParallelism: false,

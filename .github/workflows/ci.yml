@@ -1,0 +1,73 @@
+# As quatro baterias a cada push e pull request — e o deploy só sai depois
+# delas (`deploy.yml`).
+#
+# O banco é montado como o da AWS: o dono NÃO é superusuário nem ignora o RLS
+# (o superusuário do Postgres ignoraria, e o teste de isolamento passaria por
+# engano). É aqui que se pega o que só funcionava porque o dono do banco local
+# ou do Neon via tudo.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: superusuario-do-ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      CI: "true"
+      DATABASE_URL: postgresql://repplast_dono:dono-do-ci@localhost:5432/repplast?sslmode=disable
+      DIRECT_DATABASE_URL: postgresql://repplast_dono:dono-do-ci@localhost:5432/repplast?sslmode=disable
+      APP_DB_ROLE: repplast_app
+      # Só para os testes — nada aqui vale fora do CI.
+      SESSAO_SECRET: segredo-de-sessao-so-para-o-ci-com-32-caracteres-ou-mais
+      EMAIL_CHAVE: AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Os tipos das rotas (`PageProps<"/...">`) e o `next-env.d.ts` são
+      # gerados pelo Next, e não ficam no git.
+      - run: npx next typegen
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+
+      - name: Banco como o da AWS (dono sem superusuário e sem BYPASSRLS)
+        env:
+          PGPASSWORD: superusuario-do-ci
+        run: |
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE repplast_dono LOGIN CREATEROLE NOSUPERUSER NOBYPASSRLS PASSWORD 'dono-do-ci';
+          CREATE DATABASE repplast OWNER repplast_dono;
+          SQL
+
+      - run: npx prisma migrate deploy
+      - run: npm run db:setup
+      - run: npm run test:db
+
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:navegador

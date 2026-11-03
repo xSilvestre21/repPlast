@@ -16,6 +16,8 @@
  * Sem `server-only`: o tipo do estado e as classes são lidos pelos dois lados.
  */
 
+import { CONTROLADOR } from "./lgpd";
+
 /** O que uma ação de formulário devolve. Vazio é "deu certo". */
 export type EstadoFormulario = {
   erro?: string;
@@ -105,9 +107,32 @@ function codigoPrisma(erro: unknown): string | null {
   return typeof code === "string" && /^P\d{4}$/.test(code) ? code : null;
 }
 
+/**
+ * O erro do Prisma sem os dados da consulta, para o log (e o Sentry). O de
+ * validação repete os argumentos inteiros — nome, endereço, o que a pessoa
+ * digitou —, e o que diz o que houve é a primeira linha (qual chamada) e a
+ * última (o motivo). A pilha fica, sem a mensagem que a encabeça.
+ */
+function paraOLog(erro: unknown): unknown {
+  if (!(erro instanceof Error) || !erro.name.startsWith("PrismaClient")) return erro;
+
+  const linhas = erro.message
+    .split("\n")
+    .map((linha) => linha.trim())
+    .filter(Boolean);
+  const codigo = codigoPrisma(erro);
+  const resumo = [codigo, linhas[0], linhas.length > 1 ? `… ${linhas.at(-1)}` : null].filter(Boolean).join(" ");
+
+  const limpo = new Error(resumo);
+  limpo.name = erro.name;
+  const quadros = (erro.stack ?? "").split("\n").filter((linha) => linha.trimStart().startsWith("at "));
+  limpo.stack = [`${erro.name}: ${resumo}`, ...quadros].join("\n");
+  return limpo;
+}
+
 const GENERICO =
   "Não conseguimos concluir agora. Confira a internet e tente de novo em instantes; " +
-  "se continuar, fale com o suporte.";
+  `se continuar, escreva para ${CONTROLADOR.email}.`;
 
 /**
  * Converte qualquer erro na resposta da ação — o `catch` de todas elas.
@@ -143,7 +168,7 @@ export function falhou(
       };
   }
 
-  console.error(erro);
+  console.error(paraOLog(erro));
   return { erro: GENERICO, valores };
 }
 

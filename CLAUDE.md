@@ -19,7 +19,8 @@ comissões. Porta o sistema legado SICOV (dados reais em `referencia/`, nunca ve
 - `npm run dev` — servidor local
 - `npm run build` / `npm start` — build e produção
 - `npm test` — testes unitários (Vitest, sem banco)
-- `npm run test:db` — testes de integração (`*.itest.ts`), incluindo isolamento multi-tenant
+- `npm run test:db` — testes de integração (`*.itest.ts`), incluindo isolamento multi-tenant; só
+  rodam (e o seed também) num banco desta máquina — remoto, só com `BANCO_DE_TESTE=descartavel`
 - `npm run test:navegador` — testes em Chromium (`*.btest.tsx`), para o que só existe depois do
   layout: um componente que mede a janela não é testável em `node`, onde tudo tem altura zero
 - `npm run typecheck` — TypeScript sem emitir
@@ -73,10 +74,15 @@ O erro aparece **embaixo do campo que o causou**, em português, dizendo o que f
 - Remetente do sistema (só o "Esqueceu sua senha?"): `SISTEMA_SMTP_HOST`, `SISTEMA_SMTP_PORTA`,
   `SISTEMA_SMTP_USUARIO`, `SISTEMA_SMTP_SENHA`, `SISTEMA_EMAIL_REMETENTE`; o link usa `APP_URL`
   (obrigatória em produção — nunca o `Host` da requisição). Ver README, "Esqueceu sua senha?"
-- Monitoramento (Sentry, só em produção): `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`
-  e `SENTRY_AUTH_TOKEN` (segredo, só no Vercel — source maps). Ver README, "Monitoramento de erros"
-- `NEXT_PUBLIC_SENTRY_DSN` é a única `NEXT_PUBLIC_*` — o DSN é feito para o navegador (só manda
-  erro). Confirmar que o valor é seguro no client antes de criar outra
+- Monitoramento (Sentry, só em produção): `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`,
+  `SENTRY_AUTH_TOKEN` (segredo do build — Vercel ou GitHub Actions; source maps),
+  `SENTRY_ENVIRONMENT`/`NEXT_PUBLIC_SENTRY_ENVIRONMENT` (o nome do ambiente) e `SENTRY_RELEASE` (o
+  commit, gravado pelo `Dockerfile`). Ver README, "Monitoramento de erros"
+- `NEXT_PUBLIC_SENTRY_DSN` e `NEXT_PUBLIC_SENTRY_ENVIRONMENT` são as únicas `NEXT_PUBLIC_*` — o DSN
+  é feito para o navegador (só manda erro), e o ambiente é só um nome. Confirmar que o valor é
+  seguro no client antes de criar outra
+- Produção (AWS Lightsail, ver README, "Produção"): as variáveis são conferidas na subida
+  (`src/lib/ambiente.ts`) — faltando uma, o servidor não sobe; variável nova obrigatória entra lá
 - `.env` inteiro é ignorado pelo git, não só `.env.local`
 
 ## Workflow
@@ -95,6 +101,9 @@ O erro aparece **embaixo do campo que o causou**, em português, dizendo o que f
   `respostaDeErro`/`sessaoExpiradaNoArquivo` (`src/lib/resposta-de-erro.ts`)
 - Superusuário do Postgres ignora Row Level Security — nunca validar isolamento multi-tenant
   conectado como dono do banco
+- No banco da AWS o dono NÃO ignora o RLS (nem superusuário, nem BYPASSRLS, ao contrário do local e
+  do Neon): rotina administrativa liga `app.bypass_rls` explicitamente, e migration não pode fixar
+  parâmetro `app.*` em função (`SET app.x = …` exige superusuário). O CI testa assim
 - Componente de ícone não atravessa de Server para Client Component como prop ("Only plain
   objects..."); passar o nome do ícone e resolver do lado client
 - Constante exportada de módulo `'use client'` chega ao Server Component como referência, não

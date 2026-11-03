@@ -65,8 +65,9 @@ export default function PaginaPrivacidade() {
           </li>
           <li>
             <strong className="text-tinta">De segurança:</strong> o endereço IP
-            e o horário de senhas erradas e de pedidos de nova senha, para
-            limitar tentativas de invasão.
+            e o horário de senhas erradas, de pedidos de nova senha e de
+            tentativas de cadastro, para limitar tentativas de invasão e de
+            abuso.
           </li>
           <li>
             <strong className="text-tinta">
@@ -97,6 +98,11 @@ export default function PaginaPrivacidade() {
             7º, IX), limitado ao necessário.
           </li>
           <li>
+            Registrar os erros do sistema para corrigi-los — legítimo interesse
+            (art. 7º, IX). O registro diz o que falhou, e e-mail, CPF e CNPJ são
+            mascarados antes de ele sair do RepPlast.
+          </li>
+          <li>
             Guardar registros que a lei exige, como os de cobrança — obrigação
             legal (art. 7º, II).
           </li>
@@ -118,23 +124,40 @@ export default function PaginaPrivacidade() {
             para emitir a cobrança.
           </li>
           <li>
+            <strong className="text-tinta">Amazon Web Services (AWS)</strong>, na
+            região de São Paulo: onde o sistema roda e os dados — e as cópias de
+            segurança — ficam guardados, e o serviço que manda os e-mails do
+            próprio sistema (como o link de nova senha). Os pedidos que você
+            envia saem pela sua própria caixa de e-mail.
+          </li>
+          <li>
             <strong className="text-tinta">ViaCEP</strong>: só o CEP digitado no
             cadastro, para preencher o endereço.
           </li>
           <li>
-            <strong className="text-tinta">Provedores de e-mail</strong>: os
-            e-mails do sistema saem por um serviço de e-mail; os pedidos que
-            você envia saem pela sua própria caixa.
+            <strong className="text-tinta">Cloudflare</strong>: só o que vem
+            depois do @ no e-mail informado, para conferir que aquele domínio
+            recebe e-mails.
           </li>
           <li>
-            <strong className="text-tinta">Hospedagem e banco de dados</strong>:
-            onde o sistema roda e os dados ficam guardados.
+            <strong className="text-tinta">Sentry</strong> (monitoramento de
+            erros): o registro técnico de uma falha — qual tela ou operação
+            falhou —, com e-mail, CPF e CNPJ mascarados.
           </li>
           <li>Autoridades, quando a lei ou uma ordem judicial exigir.</li>
         </Itens>
       </Clausula>
 
-      <Clausula numero={5} titulo="Os dados dos seus clientes">
+      <Clausula numero={5} titulo="Dados fora do Brasil">
+        <p>
+          Os dados do sistema ficam no Brasil, na região de São Paulo da AWS. O
+          que sai do país é só o registro de erros do Sentry, que fica fora do
+          Brasil — com as garantias que a LGPD exige para isso (art. 33) e sem
+          e-mail, CPF ou CNPJ, que são mascarados antes do envio.
+        </p>
+      </Clausula>
+
+      <Clausula numero={6} titulo="Os dados dos seus clientes">
         <p>
           Os dados que você cadastra sobre os seus clientes e contatos são do
           seu escritório: quanto a eles, o seu escritório é o controlador, e o
@@ -144,7 +167,7 @@ export default function PaginaPrivacidade() {
         </p>
       </Clausula>
 
-      <Clausula numero={6} titulo="Como protegemos">
+      <Clausula numero={7} titulo="Como protegemos">
         <Itens>
           <li>
             Cada escritório é isolado dos outros no próprio banco de dados (Row
@@ -172,16 +195,17 @@ export default function PaginaPrivacidade() {
         </p>
       </Clausula>
 
-      <Clausula numero={7} titulo="Por quanto tempo">
+      <Clausula numero={8} titulo="Por quanto tempo">
         <p>
           Enquanto a sua conta existir. Pedido o encerramento, os dados são
           apagados em até 30 dias — menos o que a lei obriga a guardar por mais
           tempo, como os registros de cobrança, mantidos só pelo prazo legal. Os
-          registros de senha errada são apagados em 24 horas.
+          registros de senha errada e de tentativa de cadastro são apagados em
+          24 horas.
         </p>
       </Clausula>
 
-      <Clausula numero={8} titulo="Os seus direitos">
+      <Clausula numero={9} titulo="Os seus direitos">
         <p>
           Pelo art. 18 da LGPD, você pode pedir a qualquer momento, sem custo:
         </p>
@@ -212,16 +236,18 @@ export default function PaginaPrivacidade() {
         </p>
       </Clausula>
 
-      <Clausula numero={9} titulo="Cookies">
+      <Clausula numero={10} titulo="Cookies">
         <p>
-          O RepPlast usa um único cookie, o da sessão, que mantém você conectado
-          e é indispensável para o sistema funcionar. Preferências como o tema
+          O RepPlast usa só cookies necessários para funcionar: o da sessão, que
+          mantém você conectado; um de poucos minutos, que marca que você acabou
+          de entrar (é o que permite sair sozinho quando a aba é fechada); e os
+          que lembram a última busca de cada lista. Preferências como o tema
           claro ou escuro ficam guardadas no seu próprio navegador. Não usamos
           cookies de publicidade nem de rastreamento.
         </p>
       </Clausula>
 
-      <Clausula numero={10} titulo="Mudanças nesta política">
+      <Clausula numero={11} titulo="Mudanças nesta política">
         <p>
           Se esta política mudar, a data no topo muda junto, e mudanças
           importantes serão avisadas por e-mail ou no sistema. O uso do RepPlast

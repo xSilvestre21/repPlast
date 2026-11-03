@@ -8,7 +8,8 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 
-import { ErroAsaas } from "@/lib/asaas";
+import { fimDoPeriodoPago } from "@/lib/acesso-assinatura";
+import { ErroAsaas, proximoVencimento, removerAssinatura } from "@/lib/asaas";
 import { limparAssinatura } from "@/lib/assinatura-email";
 import { contaParaEnvio } from "@/lib/conta-email";
 import { cifrar, decifrar } from "@/lib/cripto";
@@ -19,6 +20,7 @@ import { enviarDoSistema, urlDoSistema } from "@/lib/email-sistema";
 import { montarEmailSistema } from "@/lib/email-sistema-html";
 import { problemaNoEmail } from "@/lib/email-valido";
 import { emailValido } from "@/lib/envio-pedido";
+import { CONTROLADOR } from "@/lib/lgpd";
 import { minutosAte, minutosPorExtenso } from "@/lib/limite-tentativas";
 import { normalizarTelefone } from "@/lib/mascara";
 import { subirMensalidade } from "@/lib/mensalidade";
@@ -249,7 +251,7 @@ export async function trocarPlano(
     const [organizacao, ativos] = await Promise.all([
       db.organizacao.findUniqueOrThrow({
         where: { id: organizacaoId },
-        select: { plano: true, asaasAssinaturaId: true },
+        select: { plano: true, asaasAssinaturaId: true, assinatura: true },
       }),
       db.usuario.count({ where: { organizacaoId, papel: "REPRESENTANTE", ativo: true } }),
     ]);
@@ -257,6 +259,14 @@ export async function trocarPlano(
     const destino = PLANOS[planoNovo];
     if (organizacao.plano === planoNovo) {
       throw new ErroParaUsuario(`O escritório já está no plano ${destino.nome}.`);
+    }
+    // Cancelada, ainda no mês pago: a assinatura do Asaas já foi removida, e
+    // não há fatura para levar o valor do Max.
+    if (planoNovo === "PLUS" && organizacao.assinatura === "CANCELADA") {
+      throw new ErroParaUsuario(
+        "A assinatura foi cancelada, e por isso o plano não sobe agora. Quando o mês já pago terminar, " +
+          "assine de novo escolhendo o Max.",
+      );
     }
     if (planoNovo === "PADRAO" && ativos > 0) {
       throw new ErroParaUsuario(
@@ -287,6 +297,65 @@ export async function trocarPlano(
 
   // O menu (Prepostos) e as telas com coluna de preposto dependem do plano.
   revalidatePath("/", "layout");
+  return {};
+}
+
+/**
+ * Cancela a assinatura — o que os Termos prometem pela própria tela, sem
+ * precisar escrever para o suporte.
+ *
+ * O Asaas para de cobrar na hora (a fatura do próximo vencimento, já gerada,
+ * é apagada), e o escritório continua entrando até o fim do mês já pago —
+ * `acessoAte`, o próximo vencimento. Depois dele, a tela `/assinatura` oferece
+ * assinar de novo, com tudo guardado.
+ *
+ * A ordem protege o acesso já pago: a data é gravada ANTES de remover a
+ * assinatura. O Asaas avisa a remoção pelo webhook (`SUBSCRIPTION_DELETED` →
+ * CANCELADA); se esse aviso chegasse antes da data, o escritório perderia na
+ * hora o resto do mês. Com a data já gravada, tanto faz quem chega primeiro.
+ * E a data sozinha, numa assinatura que continuou ATIVA porque o Asaas
+ * recusou a remoção, não muda nada (`lib/acesso-assinatura.ts`).
+ */
+export async function cancelarAssinatura(
+  _estado: EstadoFormulario,
+  _formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    await exigirAdmin();
+    const { organizacaoId } = await escopoAtual();
+    const admin = dbAdministrativo();
+
+    const organizacao = await admin.organizacao.findUniqueOrThrow({
+      where: { id: organizacaoId },
+      select: { assinatura: true, asaasAssinaturaId: true },
+    });
+    if (organizacao.assinatura === "CANCELADA") {
+      throw new ErroParaUsuario("A assinatura já está cancelada. Recarregue a página para ver até quando vai o acesso.");
+    }
+    if (!organizacao.asaasAssinaturaId) {
+      throw new ErroParaUsuario(
+        `Este escritório não paga pela assinatura do sistema, e não há o que cancelar por aqui. ` +
+          `Para encerrar o uso, escreva para ${CONTROLADOR.email}.`,
+      );
+    }
+
+    try {
+      const acessoAte = fimDoPeriodoPago(await proximoVencimento(organizacao.asaasAssinaturaId));
+      await admin.organizacao.update({ where: { id: organizacaoId }, data: { acessoAte } });
+      await removerAssinatura(organizacao.asaasAssinaturaId);
+    } catch (erro) {
+      if (!(erro instanceof ErroAsaas)) throw erro;
+      throw new ErroParaUsuario(
+        "Não conseguimos cancelar agora, e a assinatura continua como estava. Tente de novo em alguns minutos.",
+      );
+    }
+
+    await admin.organizacao.update({ where: { id: organizacaoId }, data: { assinatura: "CANCELADA" } });
+  } catch (erro) {
+    return falhou(erro);
+  }
+
+  revalidatePath("/configuracoes");
   return {};
 }
 

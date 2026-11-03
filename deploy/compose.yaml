@@ -1,0 +1,65 @@
+# A produção na instância do Lightsail: o sistema atrás do Caddy, que cuida do
+# HTTPS (Let's Encrypt) — ver o README, "Produção (AWS Lightsail)".
+#
+# Na instância, esta pasta fica em /opt/repplast, com:
+#   - app.env   as variáveis de produção (chmod 600; nunca no git);
+#   - .env      IMAGEM e IMAGEM_MIGRADOR (o deploy reescreve a cada versão),
+#               DOMINIO e EMAIL_CERTIFICADO (escritos uma vez).
+#
+# Deploy (o GitHub Actions faz isto — `.github/workflows/deploy.yml`):
+#   docker compose pull
+#   docker compose run --rm migrar
+#   docker compose up -d app caddy
+
+name: repplast
+
+services:
+  app:
+    image: ${IMAGEM:?defina IMAGEM no .env}
+    # `raw`: cada valor entra como está escrito. Sem isto o Compose expande `$`,
+    # e a chave do Asaas (`$aact_…`) chegaria cortada. Valores sem aspas.
+    env_file:
+      - path: app.env
+        format: raw
+    restart: unless-stopped
+    # O `init` na frente do Node passa o SIGTERM adiante, e os 30 s dão tempo
+    # às requisições em curso e aos e-mails pendentes (`after()`) de terminar.
+    init: true
+    stop_grace_period: 30s
+    expose:
+      - "3000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMINIO: ${DOMINIO:?defina DOMINIO no .env}
+      EMAIL_CERTIFICADO: ${EMAIL_CERTIFICADO:?defina EMAIL_CERTIFICADO no .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_dados:/data
+      - caddy_config:/config
+
+  # As migrations e o papel restrito, antes de cada versão nova. Só roda quando
+  # chamado (`docker compose run --rm migrar`), nunca no `up`.
+  migrar:
+    image: ${IMAGEM_MIGRADOR:?defina IMAGEM_MIGRADOR no .env}
+    env_file:
+      - path: app.env
+        format: raw
+    profiles: ["manual"]
+
+volumes:
+  caddy_dados:
+  caddy_config:

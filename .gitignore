@@ -53,3 +53,9 @@ next-env.d.ts
 
 # Anexos de falha dos testes de navegador (capturas), regenerados a cada run
 /.vitest
+
+# Documentos e apresentações soltos na raiz (trabalhos, relatórios, slides):
+# têm nomes e dados pessoais e o plano do negócio — o repositório é público
+/*.docx
+/*.pdf
+/*.pptx

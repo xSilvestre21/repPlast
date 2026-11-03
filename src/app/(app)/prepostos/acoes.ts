@@ -82,7 +82,7 @@ async function cobrarPrepostoAMais(db: DbOrganizacao, organizacaoId: string): Pr
   const [organizacao, ativos] = await Promise.all([
     db.organizacao.findUniqueOrThrow({
       where: { id: organizacaoId },
-      select: { plano: true, asaasAssinaturaId: true },
+      select: { plano: true, asaasAssinaturaId: true, assinatura: true },
     }),
     db.usuario.count({ where: { organizacaoId, papel: "REPRESENTANTE", ativo: true } }),
   ]);
@@ -91,6 +91,16 @@ async function cobrarPrepostoAMais(db: DbOrganizacao, organizacaoId: string): Pr
 
   const depois = valorMensal(organizacao.plano, ativos + 1);
   if (depois.equals(valorMensal(organizacao.plano, ativos))) return;
+
+  // Cancelada, ainda no mês pago: a assinatura do Asaas já foi removida, e o
+  // preposto a mais não teria fatura onde entrar.
+  if (organizacao.assinatura === "CANCELADA") {
+    throw new ErroParaUsuario(
+      `A assinatura foi cancelada: até o fim do mês já pago, o escritório segue com até ` +
+        `${PLANOS.PLUS.prepostosInclusos} prepostos ativos, os inclusos no Max. Para ter mais, assine de novo ` +
+        "quando o mês terminar.",
+    );
+  }
 
   try {
     await subirMensalidade(organizacao.asaasAssinaturaId, depois);

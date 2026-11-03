@@ -15,6 +15,7 @@ import "server-only";
 import { cache } from "react";
 import { cookies } from "next/headers";
 
+import { assinaturaLiberada, type SituacaoAssinatura } from "./acesso-assinatura";
 import { type Ator, dbAdministrativo, dbParaOrganizacao } from "./db";
 import { ErroParaUsuario } from "./erro-formulario";
 import { nomeCompleto } from "./nome-usuario";
@@ -47,8 +48,11 @@ export interface Sessao {
   papel: "ADMIN" | "REPRESENTANTE";
   /// Plano do escritório. Decide se as telas de preposto existem.
   plano: "PADRAO" | "PLUS";
-  /// Só ATIVA usa o sistema; o resto vai para `/assinatura`.
-  assinatura: "AGUARDANDO_PAGAMENTO" | "ATIVA" | "ATRASADA" | "CANCELADA";
+  /// Só ATIVA usa o sistema — e CANCELADA até `acessoAte`; o resto vai para
+  /// `/assinatura` (`lib/acesso-assinatura.ts`).
+  assinatura: SituacaoAssinatura;
+  /// Até quando o escritório que cancelou ainda entra; `null` fora disso.
+  acessoAte: Date | null;
   /// Nome do escritório, para exibir no lugar do nome do produto na barra.
   organizacaoNome: string;
   /// Preferência de conta que substitui `prefers-reduced-motion` do sistema.
@@ -115,7 +119,7 @@ export const sessaoAtual = cache(async (): Promise<Sessao | null> => {
       sessaoVersao: true,
       reduzirAnimacoes: true,
       ocultarValores: true,
-      organizacao: { select: { nome: true, ativa: true, plano: true, assinatura: true } },
+      organizacao: { select: { nome: true, ativa: true, plano: true, assinatura: true, acessoAte: true } },
     },
   });
 
@@ -134,6 +138,7 @@ export const sessaoAtual = cache(async (): Promise<Sessao | null> => {
     papel: usuario.papel,
     plano: usuario.organizacao.plano,
     assinatura: usuario.organizacao.assinatura,
+    acessoAte: usuario.organizacao.acessoAte,
     organizacaoNome: usuario.organizacao.nome,
     reduzirAnimacoes: usuario.reduzirAnimacoes,
     ocultarValores: usuario.ocultarValores,
@@ -160,7 +165,7 @@ export async function organizacaoAtual(): Promise<string> {
  */
 export async function sessaoComAcesso(): Promise<Sessao | null> {
   const sessao = await sessaoAtual();
-  return sessao?.assinatura === "ATIVA" ? sessao : null;
+  return sessao && assinaturaLiberada(sessao) ? sessao : null;
 }
 
 /**
@@ -171,8 +176,8 @@ export async function sessaoComAcesso(): Promise<Sessao | null> {
  * `ASSINATURA_PENDENTE` antes de o redirecionamento do layout valer — a tela
  * fica carregando para sempre. Por isso as telas de entrada já mandam direto.
  */
-export function inicioDa(sessao: { assinatura: Sessao["assinatura"] }): "/" | "/assinatura" {
-  return sessao.assinatura === "ATIVA" ? "/" : "/assinatura";
+export function inicioDa(sessao: Pick<Sessao, "assinatura" | "acessoAte">): "/" | "/assinatura" {
+  return assinaturaLiberada(sessao) ? "/" : "/assinatura";
 }
 
 /**
@@ -186,7 +191,7 @@ async function sessaoComAssinatura(): Promise<Sessao> {
   const sessao = await sessaoAtual();
 
   if (!sessao) throw new ErroParaUsuario(SESSAO_EXPIRADA);
-  if (sessao.assinatura !== "ATIVA") throw new ErroParaUsuario(ASSINATURA_PENDENTE);
+  if (!assinaturaLiberada(sessao)) throw new ErroParaUsuario(ASSINATURA_PENDENTE);
   return sessao;
 }
 

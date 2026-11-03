@@ -6,6 +6,7 @@ import { useEffect } from "react";
 
 import { SCRIPT_TEMA } from "@/components/alternador-tema";
 import { Botao, EstadoVazio } from "@/components/ui";
+import { CONTROLADOR } from "@/lib/lgpd";
 
 import { classesDasFontes } from "./fontes";
 import "./globals.css";
@@ -51,7 +52,10 @@ export default function ErroGlobal({
             }
           >
             Algo deu errado do nosso lado, e o que já estava salvo continua salvo. Tente de novo em
-            instantes; se continuar acontecendo, fale com o suporte
+            instantes; se continuar acontecendo, escreva para{" "}
+            <a href={`mailto:${CONTROLADOR.email}`} className="text-carimbo underline underline-offset-4">
+              {CONTROLADOR.email}
+            </a>
             {error.digest ? (
               <>
                 {" "}

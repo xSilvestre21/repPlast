@@ -29,6 +29,12 @@ export type Pergunta = {
   texto?: string;
   /** O botão que confirma: "Excluir", "Remover", "Apagar". */
   rotulo: string;
+  /**
+   * O botão que desiste. "Cancelar" por padrão — e outro quando a própria ação
+   * é um cancelamento: "Cancelar" ao lado de "Cancelar a assinatura" não diz
+   * qual dos dois mantém tudo como está.
+   */
+  desistir?: string;
   /** Falso para a confirmação que não apaga nada (marcar como enviado). */
   perigo?: boolean;
   /**
@@ -111,7 +117,7 @@ export function usePerguntaAntes(pergunta: Pergunta | undefined, aoConfirmar?: (
       </p>
       <div className="mt-6 flex flex-wrap justify-end gap-3">
         <Botao type="button" variante="secundaria" onClick={() => setAberta(false)} data-autofocus>
-          Cancelar
+          {pergunta.desistir ?? "Cancelar"}
         </Botao>
         <Botao
           type="button"

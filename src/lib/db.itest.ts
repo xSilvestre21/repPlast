@@ -62,6 +62,12 @@ async function papelIgnoraRls() {
 
 const ignoraRls = await papelIgnoraRls();
 
+// No PC, pular avisa e deixa o resto rodar. No CI (e no ensaio antes do
+// lançamento) é o teste que mais importa: pulado, ele passaria em verde.
+if (ignoraRls && process.env.CI) {
+  throw new Error("O isolamento entre escritórios não foi testado: o papel do banco ignora o RLS (ver o aviso acima).");
+}
+
 const admin = dbAdministrativo();
 
 /** Ator genérico: quem só mede o isolamento ENTRE escritórios entra como dono. */

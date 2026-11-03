@@ -3,7 +3,7 @@ import "server-only";
 import { headers } from "next/headers";
 
 import { dbAdministrativo } from "./db";
-import { liberacao, restantes } from "./limite-tentativas";
+import { ipDoEncaminhamento, liberacao, restantes } from "./limite-tentativas";
 
 /**
  * O limite de tentativas do login.
@@ -28,7 +28,7 @@ export const JANELA_MIN = 15;
 const GUARDAR_HORAS = 24;
 
 /**
- * O endereço de quem pede.
+ * O endereço de quem pede — ver `ipDoEncaminhamento`.
  *
  * `x-forwarded-for` só merece confiança atrás de um proxy que o escreva (a
  * hospedagem). Sem proxy, quem ataca pode inventá-lo a cada pedido e escapar
@@ -37,8 +37,11 @@ const GUARDAR_HORAS = 24;
  */
 export async function ipDaRequisicao(): Promise<string> {
   const cabecalhos = await headers();
-  const encaminhado = cabecalhos.get("x-forwarded-for")?.split(",")[0]?.trim();
-  return encaminhado || cabecalhos.get("x-real-ip")?.trim() || "desconhecido";
+  return (
+    ipDoEncaminhamento(cabecalhos.get("x-forwarded-for")) ||
+    cabecalhos.get("x-real-ip")?.trim() ||
+    "desconhecido"
+  );
 }
 
 /** As falhas dentro da janela, das duas portas. */

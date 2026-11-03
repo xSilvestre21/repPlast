@@ -1,5 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 
+import { filtrarEvento } from "@/lib/monitoramento";
+
 /**
  * O Sentry no navegador: o erro que acontece na tela de quem usa — e que ele
  * só veria como "Esta tela não carregou". O mesmo de `instrumentation.ts`:
@@ -12,5 +14,7 @@ import * as Sentry from "@sentry/nextjs";
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
   enabled: process.env.NODE_ENV === "production",
-  environment: process.env.NEXT_PUBLIC_VERCEL_ENV,
+  // Gravado no pacote pelo build, como o DSN: só o nome do ambiente.
+  environment: process.env.NEXT_PUBLIC_SENTRY_ENVIRONMENT ?? process.env.NEXT_PUBLIC_VERCEL_ENV,
+  beforeSend: filtrarEvento,
 });
