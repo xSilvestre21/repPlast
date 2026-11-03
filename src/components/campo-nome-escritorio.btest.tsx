@@ -36,7 +36,10 @@ describe("prévia do nome do escritório", () => {
     await tela.unmount();
   });
 
-  test.each(["Vera & Assis", "Moreira Rep.", "Assis & Cia", "Grupo Moreira"])(
+  // Até 12 caracteres, como a dica promete. "Grupo Moreira" (13) estava aqui e
+  // ocupa 120,5 px dos 121 do pior caso: cabia no Windows e não no Chromium do
+  // Linux (o CI), que desenha a mesma fonte um pouco mais larga.
+  test.each(["Vera & Assis", "Moreira Rep.", "Assis & Cia", "Grupo Mattos"])(
     "“%s” (até uns 12 caracteres) fica no tamanho cheio, mesmo no pior caso",
     async (nome) => {
       const tela = await render(<CampoNomeEscritorio valorInicial={nome} dica="dica" />);
