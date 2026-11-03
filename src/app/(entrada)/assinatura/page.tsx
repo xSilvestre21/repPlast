@@ -52,7 +52,11 @@ export default async function PaginaAssinatura({ searchParams }: PageProps<"/ass
   if (sessao.assinatura === "ATIVA" || assinaturaLiberada(sessao)) redirect("/");
 
   const { status } = await searchParams;
-  const voltouPago = status === "pago" && sessao.assinatura === "AGUARDANDO_PAGAMENTO";
+  // Qualquer volta de checkout pago espera o webhook: a do cadastro e a de quem
+  // assina de novo depois de cancelar. Só para o primeiro caso, quem voltava
+  // antes do aviso do Asaas via "A assinatura foi cancelada" com o botão de
+  // assinar — um convite a pagar duas vezes.
+  const voltouPago = status === "pago";
   const texto = TEXTOS[sessao.assinatura];
   const plano = PLANOS[sessao.plano];
 
