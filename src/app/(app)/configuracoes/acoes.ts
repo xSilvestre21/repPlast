@@ -8,9 +8,9 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 
-import { fimDoPeriodoPago } from "@/lib/acesso-assinatura";
-import { ErroAsaas, proximoVencimento, removerAssinatura } from "@/lib/asaas";
+import { ErroAsaas } from "@/lib/asaas";
 import { limparAssinatura } from "@/lib/assinatura-email";
+import { cancelarAssinaturaDoEscritorio } from "@/lib/cancelamento";
 import { contaParaEnvio } from "@/lib/conta-email";
 import { cifrar, decifrar } from "@/lib/cripto";
 import { dbAdministrativo } from "@/lib/db";
@@ -20,7 +20,6 @@ import { enviarDoSistema, urlDoSistema } from "@/lib/email-sistema";
 import { montarEmailSistema } from "@/lib/email-sistema-html";
 import { problemaNoEmail } from "@/lib/email-valido";
 import { emailValido } from "@/lib/envio-pedido";
-import { CONTROLADOR } from "@/lib/lgpd";
 import { minutosAte, minutosPorExtenso } from "@/lib/limite-tentativas";
 import { normalizarTelefone } from "@/lib/mascara";
 import { subirMensalidade } from "@/lib/mensalidade";
@@ -301,20 +300,9 @@ export async function trocarPlano(
 }
 
 /**
- * Cancela a assinatura — o que os Termos prometem pela própria tela, sem
- * precisar escrever para o suporte.
- *
- * O Asaas para de cobrar na hora (a fatura do próximo vencimento, já gerada,
- * é apagada), e o escritório continua entrando até o fim do mês já pago —
- * `acessoAte`, o próximo vencimento. Depois dele, a tela `/assinatura` oferece
- * assinar de novo, com tudo guardado.
- *
- * A ordem protege o acesso já pago: a data é gravada ANTES de remover a
- * assinatura. O Asaas avisa a remoção pelo webhook (`SUBSCRIPTION_DELETED` →
- * CANCELADA); se esse aviso chegasse antes da data, o escritório perderia na
- * hora o resto do mês. Com a data já gravada, tanto faz quem chega primeiro.
- * E a data sozinha, numa assinatura que continuou ATIVA porque o Asaas
- * recusou a remoção, não muda nada (`lib/acesso-assinatura.ts`).
+ * Cancela a assinatura de quem está em dia: o Asaas para de cobrar, e o
+ * escritório continua entrando até o fim do mês já pago. A regra mora em
+ * `lib/cancelamento.ts`, a mesma da tela de mensalidade em atraso.
  */
 export async function cancelarAssinatura(
   _estado: EstadoFormulario,
@@ -323,34 +311,7 @@ export async function cancelarAssinatura(
   try {
     await exigirAdmin();
     const { organizacaoId } = await escopoAtual();
-    const admin = dbAdministrativo();
-
-    const organizacao = await admin.organizacao.findUniqueOrThrow({
-      where: { id: organizacaoId },
-      select: { assinatura: true, asaasAssinaturaId: true },
-    });
-    if (organizacao.assinatura === "CANCELADA") {
-      throw new ErroParaUsuario("A assinatura já está cancelada. Recarregue a página para ver até quando vai o acesso.");
-    }
-    if (!organizacao.asaasAssinaturaId) {
-      throw new ErroParaUsuario(
-        `Este escritório não paga pela assinatura do sistema, e não há o que cancelar por aqui. ` +
-          `Para encerrar o uso, escreva para ${CONTROLADOR.email}.`,
-      );
-    }
-
-    try {
-      const acessoAte = fimDoPeriodoPago(await proximoVencimento(organizacao.asaasAssinaturaId));
-      await admin.organizacao.update({ where: { id: organizacaoId }, data: { acessoAte } });
-      await removerAssinatura(organizacao.asaasAssinaturaId);
-    } catch (erro) {
-      if (!(erro instanceof ErroAsaas)) throw erro;
-      throw new ErroParaUsuario(
-        "Não conseguimos cancelar agora, e a assinatura continua como estava. Tente de novo em alguns minutos.",
-      );
-    }
-
-    await admin.organizacao.update({ where: { id: organizacaoId }, data: { assinatura: "CANCELADA" } });
+    await cancelarAssinaturaDoEscritorio(organizacaoId);
   } catch (erro) {
     return falhou(erro);
   }

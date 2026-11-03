@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 
@@ -7,6 +8,7 @@ import type Decimal from "decimal.js";
 
 import { assinaturaLiberada } from "@/lib/acesso-assinatura";
 import { criarCheckout, ErroAsaas, faturaEmAtraso, pagamentoConfigurado } from "@/lib/asaas";
+import { cancelarAssinaturaDoEscritorio } from "@/lib/cancelamento";
 import { dbAdministrativo } from "@/lib/db";
 import {
   ErroDeCampo,
@@ -736,3 +738,40 @@ export async function reabrirPagamento(
 
   redirect(pagamento);
 }
+
+/**
+ * Cancela a assinatura em atraso, pela tela `/assinatura` — quem está em atraso
+ * não chega às Configurações, onde fica o botão de quem está em dia. Sem isso,
+ * o único jeito de parar a cobrança era escrever para o suporte.
+ *
+ * O Asaas apaga a mensalidade vencida junto com a assinatura: ela deixa de ser
+ * devida. A tela passa a dizer que a assinatura foi cancelada e oferece assinar
+ * de novo. A regra é a mesma das Configurações (`lib/cancelamento.ts`).
+ */
+export async function cancelarAssinaturaEmAtraso(
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    const sessao = await sessaoAtual();
+    if (!sessao) {
+      throw new ErroParaUsuario("Sua sessão expirou. Entre de novo para cancelar a assinatura.");
+    }
+    if (sessao.papel !== "ADMIN") {
+      throw new ErroParaUsuario(
+        "Quem cancela a assinatura é o administrador do escritório. Peça a essa pessoa para entrar e cancelar.",
+      );
+    }
+    if (sessao.assinatura !== "ATRASADA") {
+      throw new ErroParaUsuario("Esta assinatura não está em atraso. Recarregue a página para ver a situação de agora.");
+    }
+
+    await cancelarAssinaturaDoEscritorio(sessao.organizacaoId);
+  } catch (erro) {
+    return falhou(erro, formData);
+  }
+
+  revalidatePath("/assinatura");
+  return {};
+}
+

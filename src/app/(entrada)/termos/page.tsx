@@ -100,12 +100,14 @@ export default function PaginaTermos() {
 
       <Clausula numero={8} titulo="Encerramento">
         <p>
-          Você pode cancelar a assinatura quando quiser, pelo botão “Cancelar a assinatura”, em
-          Configurações (é o administrador do escritório quem vê), ou escrevendo para{" "}
+          Você pode cancelar a assinatura quando quiser, pelo botão “Cancelar a assinatura” — em
+          Configurações ou, com a mensalidade em atraso, na tela de pagamento; é o administrador do
+          escritório quem vê —, ou escrevendo para{" "}
           <a href={`mailto:${CONTROLADOR.email}`} className="text-carimbo underline underline-offset-4">
             {CONTROLADOR.email}
           </a>
-          . A cobrança para na hora, o acesso continua até o fim do mês já pago, e não há reembolso de mês em curso —
+          . A cobrança para na hora: em dia, o acesso continua até o fim do mês já pago; em atraso, a
+          mensalidade vencida deixa de ser cobrada e o acesso se encerra. Não há reembolso de mês em curso —
           ressalvado o direito de arrependimento de 7 dias após a contratação, quando o Código de
           Defesa do Consumidor se aplicar (art. 49). Antes de
           encerrar, você pode pedir uma cópia dos seus dados; depois, eles são apagados como diz a

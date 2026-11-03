@@ -1,12 +1,13 @@
 import { redirect } from "next/navigation";
 
+import { AcaoComRecusa } from "@/components/acao-com-recusa";
 import { TopoEntrada } from "@/components/entrada/topo-entrada";
 import { BotaoTexto, Cartao } from "@/components/ui";
 import { assinaturaLiberada } from "@/lib/acesso-assinatura";
 import { PLANOS } from "@/lib/planos";
 import { sessaoAtual } from "@/lib/sessao";
 
-import { reabrirPagamento, sair } from "../acoes";
+import { cancelarAssinaturaEmAtraso, reabrirPagamento, sair } from "../acoes";
 import { AguardarConfirmacao, ReabrirPagamento } from "./acompanhar";
 
 /**
@@ -90,7 +91,33 @@ export default async function PaginaAssinatura({ searchParams }: PageProps<"/ass
           ) : (
             <div className="mt-8">
               {sessao.papel === "ADMIN" ? (
-                <ReabrirPagamento acao={reabrirPagamento} rotulo={texto.botao} />
+                <>
+                  <ReabrirPagamento acao={reabrirPagamento} rotulo={texto.botao} />
+                  {/*
+                    Em atraso, quem não vai pagar também precisa poder parar a
+                    cobrança daqui: as Configurações, onde fica o botão de quem
+                    está em dia, não abrem sem a assinatura em dia.
+                  */}
+                  {sessao.assinatura === "ATRASADA" && (
+                    <div className="mt-4 text-center">
+                      <AcaoComRecusa
+                        acao={cancelarAssinaturaEmAtraso}
+                        confirmar={{
+                          titulo: "Cancelar a assinatura?",
+                          texto:
+                            "A mensalidade em atraso deixa de ser cobrada, e o acesso, que está suspenso, fica " +
+                            "encerrado. O escritório e os dados continuam guardados: para voltar, é só assinar de novo.",
+                          rotulo: "Cancelar a assinatura",
+                          desistir: "Manter a assinatura",
+                        }}
+                      >
+                        <BotaoTexto type="submit" perigoso>
+                          Cancelar a assinatura
+                        </BotaoTexto>
+                      </AcaoComRecusa>
+                    </div>
+                  )}
+                </>
               ) : (
                 <p className="text-corpo text-tinta-2">
                   Quem acerta a assinatura é o administrador do escritório. Avise essa pessoa — assim
