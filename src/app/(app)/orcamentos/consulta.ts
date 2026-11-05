@@ -20,6 +20,8 @@ import { formatarMoeda } from "@/components/ui";
 
 import { destinatario } from "./selo";
 
+export { prepostoDoParametro } from "../clientes/consulta";
+
 /** Quantas linhas por fatia, na primeira e em todas as seguintes. */
 export const POR_PAGINA = 20;
 
@@ -78,7 +80,12 @@ export async function buscarOrcamentos(
   db: DbOrganizacao,
   organizacaoId: string,
   ehAdmin: boolean,
-  { busca, status, pagina }: { busca: string; status: FiltroStatusOrcamento; pagina: number },
+  {
+    busca,
+    status,
+    preposto,
+    pagina,
+  }: { busca: string; status: FiltroStatusOrcamento; preposto?: string; pagina: number },
 ): Promise<FatiaDeOrcamentos> {
   const procurado = busca.trim();
   const numero = numeroProcurado(procurado);
@@ -87,6 +94,9 @@ export async function buscarOrcamentos(
   const onde = {
     organizacaoId,
     ...(status !== "todos" ? { status: { in: STATUS_DO_FILTRO[status] } } : {}),
+    // O mesmo preposto que a linha mostra: quem fez a proposta, e não o dono da
+    // carteira. A que o escritório montou para um cliente dele é do escritório.
+    ...(preposto ? { criadoPorId: preposto } : {}),
     ...(procurado
       ? {
           OR: [

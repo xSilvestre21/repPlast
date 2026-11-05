@@ -17,6 +17,7 @@ import { Loader2, Search, UserRoundPlus, Users, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useDefinirContagem } from "@/components/contagem-lista";
+import { FiltroPreposto } from "@/components/filtro-preposto";
 import {
   Avatar,
   Botao,
@@ -37,10 +38,11 @@ import type { ClienteDaLista, FatiaDeClientes, FiltroSituacaoCliente } from "./c
 /** O tempo entre a última tecla e a ida ao servidor. */
 const ESPERA_MS = 250;
 
-function endereco(busca: string, situacao: FiltroSituacaoCliente) {
+function endereco(busca: string, situacao: FiltroSituacaoCliente, preposto: string) {
   const parametros = new URLSearchParams();
   if (busca.trim()) parametros.set("busca", busca.trim());
   if (situacao !== "ativos") parametros.set("situacao", situacao);
+  if (preposto) parametros.set("preposto", preposto);
 
   const consulta = parametros.toString();
   return consulta ? `/clientes?${consulta}` : "/clientes";
@@ -50,16 +52,23 @@ export function ListaClientes({
   inicial,
   buscaInicial,
   situacaoInicial,
+  prepostoInicial,
+  prepostos,
   semNenhumCliente,
 }: {
   inicial: FatiaDeClientes;
   buscaInicial: string;
   situacaoInicial: FiltroSituacaoCliente;
+  /** O id do preposto do filtro, ou vazio em "Todos". */
+  prepostoInicial: string;
+  /** As opções do filtro; vazio quando ele não existe para quem está vendo. */
+  prepostos: { id: string; nome: string }[];
   /** O escritório não tem cliente nenhum — nem ativo, nem inativo. */
   semNenhumCliente: boolean;
 }) {
   const [busca, setBusca] = useState(buscaInicial);
   const [situacao, setSituacao] = useState(situacaoInicial);
+  const [preposto, setPreposto] = useState(prepostoInicial);
 
   const [linhas, setLinhas] = useState(inicial.linhas);
   const [temMais, setTemMais] = useState(inicial.temMais);
@@ -80,7 +89,12 @@ export function ListaClientes({
   const definirContagem = useDefinirContagem();
 
   const buscarFatia = useCallback(
-    async (alvo: { busca: string; situacao: FiltroSituacaoCliente; pagina: number }) => {
+    async (alvo: {
+      busca: string;
+      situacao: FiltroSituacaoCliente;
+      preposto: string;
+      pagina: number;
+    }) => {
       emVoo.current?.abort();
       const controle = new AbortController();
       emVoo.current = controle;
@@ -90,6 +104,7 @@ export function ListaClientes({
         const consulta = new URLSearchParams({ pagina: String(alvo.pagina) });
         if (alvo.busca.trim()) consulta.set("busca", alvo.busca.trim());
         if (alvo.situacao !== "ativos") consulta.set("situacao", alvo.situacao);
+        if (alvo.preposto) consulta.set("preposto", alvo.preposto);
 
         const resposta = await fetch(`/clientes/busca?${consulta}`, { signal: controle.signal });
         if (!resposta.ok) return;
@@ -121,18 +136,18 @@ export function ListaClientes({
    * piscando embaixo da lista e as linhas entrando duas vezes. Só é marcada
    * quando a busca sai de verdade, para uma espera cancelada não contar.
    */
-  const naTela = useRef(endereco(buscaInicial, situacaoInicial));
+  const naTela = useRef(endereco(buscaInicial, situacaoInicial, prepostoInicial));
   /** A pessoa já mexeu em algum filtro desde que a página abriu. */
   const mexeu = useRef(false);
 
   useEffect(() => {
-    const alvo = endereco(busca, situacao);
+    const alvo = endereco(busca, situacao, preposto);
     if (alvo !== naTela.current) mexeu.current = true;
 
     // O endereço acompanha os filtros — inclusive quem volta ao da tela antes
     // da busca sair. Ao abrir, não: o endereço é o da navegação, e quem cuida
     // dele ainda é o roteador.
-    const url = endereco(busca, situacao);
+    const url = endereco(busca, situacao, preposto);
     // E fica lembrado para quem abrir um item e voltar (`busca-lembrada.ts`) —
     // inclusive o filtro com que a lista abriu, vindo de um link.
     lembrarBusca(url);
@@ -143,11 +158,11 @@ export function ListaClientes({
 
     const espera = setTimeout(() => {
       naTela.current = alvo;
-      void buscarFatia({ busca, situacao, pagina: 0 });
+      void buscarFatia({ busca, situacao, preposto, pagina: 0 });
     }, ESPERA_MS);
 
     return () => clearTimeout(espera);
-  }, [busca, situacao, buscarFatia]);
+  }, [busca, situacao, preposto, buscarFatia]);
 
   /* A sentinela: encostou na janela, a fatia seguinte é pedida. */
   useEffect(() => {
@@ -157,7 +172,7 @@ export function ListaClientes({
     const observador = new IntersectionObserver(
       (entradas) => {
         if (entradas[0]?.isIntersecting) {
-          void buscarFatia({ busca, situacao, pagina: pagina + 1 });
+          void buscarFatia({ busca, situacao, preposto, pagina: pagina + 1 });
         }
       },
       { rootMargin: "400px" },
@@ -165,13 +180,14 @@ export function ListaClientes({
 
     observador.observe(alvo);
     return () => observador.disconnect();
-  }, [temMais, buscando, pagina, busca, situacao, buscarFatia]);
+  }, [temMais, buscando, pagina, busca, situacao, preposto, buscarFatia]);
 
-  const algumFiltro = Boolean(busca.trim()) || situacao !== "ativos";
+  const algumFiltro = Boolean(busca.trim()) || situacao !== "ativos" || Boolean(preposto);
 
   const limpar = () => {
     setBusca("");
     setSituacao("ativos");
+    setPreposto("");
   };
 
   if (semNenhumCliente) {
@@ -181,30 +197,34 @@ export function ListaClientes({
   return (
     <>
       <div className="folha p-4 sm:p-5 mb-5 space-y-4">
-        <label className="block">
-          <span className="rotulo block mb-1.5 text-tinta-2">Buscar</span>
-          <div className="relative">
-            <Search
-              size={15}
-              strokeWidth={2}
-              aria-hidden="true"
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-tinta-3 pointer-events-none"
-            />
-            <input
-              type="search"
-              enterKeyHint="search"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              name="busca"
-              autoComplete="off"
-              value={busca}
-              onChange={(evento) => setBusca(evento.target.value)}
-              placeholder="Apelido, razão social, CNPJ, cidade ou e-mail"
-              className={`${CLASSE_CONTROLE} pl-10`}
-            />
-          </div>
-        </label>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex-1 min-w-56">
+            <span className="rotulo block mb-1.5 text-tinta-2">Buscar</span>
+            <div className="relative">
+              <Search
+                size={15}
+                strokeWidth={2}
+                aria-hidden="true"
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-tinta-3 pointer-events-none"
+              />
+              <input
+                type="search"
+                enterKeyHint="search"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                name="busca"
+                autoComplete="off"
+                value={busca}
+                onChange={(evento) => setBusca(evento.target.value)}
+                placeholder="Apelido, razão social, CNPJ, cidade ou e-mail"
+                className={`${CLASSE_CONTROLE} pl-10`}
+              />
+            </div>
+          </label>
+
+          <FiltroPreposto prepostos={prepostos} value={preposto} aoEscolher={setPreposto} />
+        </div>
 
         <div className="flex flex-wrap items-center gap-3">
           <Segmentado
@@ -238,7 +258,7 @@ export function ListaClientes({
             ) : undefined
           }
         >
-          {situacao === "inativos" && !busca.trim()
+          {situacao === "inativos" && !busca.trim() && !preposto
             ? "Nenhum cliente inativo. Um cliente fica inativo pela ficha dele."
             : "Nenhum cliente corresponde ao que você procurou."}
         </EstadoVazio>

@@ -27,6 +27,19 @@ export function situacaoDoParametro(valor: unknown): FiltroSituacaoCliente {
     : "ativos";
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * O preposto pedido às rotas de busca das listas — vale para clientes, pedidos e
+ * orçamentos. Só o administrador filtra; e, como a coluna é `uuid`, um texto
+ * qualquer na URL derrubaria a consulta em vez de não achar nada.
+ *
+ * A página usa `filtroDePreposto` (`carteira.ts`), que confere contra as opções.
+ */
+export function prepostoDoParametro(valor: unknown, ehAdmin: boolean): string {
+  return ehAdmin && typeof valor === "string" && UUID.test(valor) ? valor : "";
+}
+
 /**
  * Os dígitos digitados, com a máscara do CNPJ aplicada do começo.
  *
@@ -70,8 +83,9 @@ export async function buscarClientes(
   {
     busca,
     situacao,
+    preposto,
     pagina,
-  }: { busca: string; situacao: FiltroSituacaoCliente; pagina: number },
+  }: { busca: string; situacao: FiltroSituacaoCliente; preposto?: string; pagina: number },
 ): Promise<FatiaDeClientes> {
   const procurado = busca.trim();
   const soDigitos = /^[\d.\-/\s]+$/.test(procurado) ? procurado.replace(/\D/g, "") : "";
@@ -80,6 +94,8 @@ export async function buscarClientes(
   const onde = {
     organizacaoId,
     ...(situacao === "ativos" ? { ativo: true } : situacao === "inativos" ? { ativo: false } : {}),
+    // Quem atende, e não quem vendeu: um cliente pode ser de vários prepostos.
+    ...(preposto ? { prepostos: { some: { usuarioId: preposto } } } : {}),
     ...(procurado
       ? {
           OR: [

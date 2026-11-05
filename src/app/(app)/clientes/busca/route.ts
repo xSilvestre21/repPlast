@@ -1,7 +1,7 @@
 import { dbParaOrganizacao } from "@/lib/db";
 import { sessaoComAcesso } from "@/lib/sessao";
 
-import { buscarClientes, situacaoDoParametro } from "../consulta";
+import { buscarClientes, prepostoDoParametro, situacaoDoParametro } from "../consulta";
 
 /**
  * As fatias que a lista pede enquanto a pessoa digita e rola.
@@ -26,6 +26,7 @@ export async function GET(requisicao: Request) {
   const fatia = await buscarClientes(db, sessao.organizacaoId, {
     busca: parametros.get("busca") ?? "",
     situacao: situacaoDoParametro(parametros.get("situacao")),
+    preposto: prepostoDoParametro(parametros.get("preposto"), sessao.papel === "ADMIN"),
     pagina,
   });
 

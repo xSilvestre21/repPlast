@@ -21,6 +21,8 @@ import { incluirItemAchado, itemAchado, itemProcurado, type ItemAchado } from "@
 import { numeroProcurado } from "@/lib/numero-procurado";
 import { formatarMoeda } from "@/components/ui";
 
+export { prepostoDoParametro } from "../clientes/consulta";
+
 /** Quantas linhas por fatia, na primeira e em todas as seguintes. */
 export const POR_PAGINA = 20;
 
@@ -93,7 +95,12 @@ export async function buscarPedidos(
   db: DbOrganizacao,
   organizacaoId: string,
   ehAdmin: boolean,
-  { busca, status, pagina }: { busca: string; status: FiltroStatusPedido; pagina: number },
+  {
+    busca,
+    status,
+    preposto,
+    pagina,
+  }: { busca: string; status: FiltroStatusPedido; preposto?: string; pagina: number },
 ): Promise<FatiaDePedidos> {
   const procurado = busca.trim();
   const numero = numeroProcurado(procurado);
@@ -106,6 +113,20 @@ export async function buscarPedidos(
       : status !== "todos"
         ? { status: STATUS_DO_FILTRO[status] }
         : {}),
+    /*
+     * O mesmo preposto que a linha mostra (`preposto`, lá embaixo): o da
+     * comissão, e quem digitou só quando o pedido não paga preposto nenhum.
+     *
+     * Dentro de um `AND` porque a busca logo abaixo também é um `OR`: dois no
+     * mesmo objeto, o segundo apagaria o primeiro.
+     */
+    ...(preposto
+      ? {
+          AND: [
+            { OR: [{ representanteId: preposto }, { representanteId: null, criadoPorId: preposto }] },
+          ],
+        }
+      : {}),
     ...(procurado
       ? {
           OR: [

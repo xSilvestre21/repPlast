@@ -6,11 +6,13 @@ import { BotaoLink, Cabecalho } from "@/components/ui";
 import { parametrosDaLista } from "@/lib/busca-lembrada-servidor";
 import { escopoAtual } from "@/lib/sessao";
 
+import { filtroDePreposto } from "../clientes/carteira";
 import { buscarPedidos, statusDoParametro } from "./consulta";
 import { ListaPedidos } from "./lista";
 
 export default async function PaginaPedidos({ searchParams }: PageProps<"/pedidos">) {
-  const { organizacaoId, ehAdmin, db } = await escopoAtual();
+  const escopo = await escopoAtual();
+  const { organizacaoId, ehAdmin, db } = escopo;
   // Sem filtro na URL, a busca que a pessoa deixou nesta seção (`busca-lembrada.ts`).
   const parametros = await parametrosDaLista("pedidos", await searchParams);
 
@@ -21,6 +23,7 @@ export default async function PaginaPedidos({ searchParams }: PageProps<"/pedido
    */
   const busca = typeof parametros.busca === "string" ? parametros.busca.trim() : "";
   const status = statusDoParametro(parametros.status);
+  const { prepostos, preposto } = await filtroDePreposto(escopo, parametros.preposto);
 
   /*
    * A primeira fatia vem daqui, renderizada no servidor. É isso que mantém a
@@ -28,7 +31,7 @@ export default async function PaginaPedidos({ searchParams }: PageProps<"/pedido
    * abrindo — não de uma lista que trocou de conteúdo.
    */
   const [inicial, total] = await Promise.all([
-    buscarPedidos(db, organizacaoId, ehAdmin, { busca, status, pagina: 0 }),
+    buscarPedidos(db, organizacaoId, ehAdmin, { busca, status, preposto, pagina: 0 }),
     // O "de 128" do topo, cancelados inclusive — para o preposto, só os dele (RLS).
     db.pedido.count({ where: { organizacaoId } }),
   ]);
@@ -48,7 +51,13 @@ export default async function PaginaPedidos({ searchParams }: PageProps<"/pedido
           }
         />
 
-        <ListaPedidos inicial={inicial} buscaInicial={busca} statusInicial={status} />
+        <ListaPedidos
+          inicial={inicial}
+          buscaInicial={busca}
+          statusInicial={status}
+          prepostoInicial={preposto}
+          prepostos={prepostos}
+        />
       </ContagemProvider>
     </Pagina>
   );

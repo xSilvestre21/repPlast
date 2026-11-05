@@ -405,10 +405,15 @@ export default async function PaginaPreposto({
                     )}
                   </LinhaLista>
                 ))}
+                {/* A lista inteira mora em Clientes, com busca e rolagem — repeti-la
+                    aqui seria a mesma tabela em dois lugares. `situacao=todos`
+                    porque o número daqui conta os inativos. */}
                 {clientes.length > 10 && (
-                  <p className="px-4 py-3 text-mini text-tinta-3">
-                    e mais {clientes.length - 10} {clientes.length - 10 === 1 ? "cliente" : "clientes"}
-                  </p>
+                  <LinhaLista href={`/clientes?situacao=todos&preposto=${preposto.id}`}>
+                    <span className="text-mini font-semibold text-tinta-2">
+                      Ver todos os {clientes.length} clientes
+                    </span>
+                  </LinhaLista>
                 )}
               </Cartao>
             )}

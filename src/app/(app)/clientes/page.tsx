@@ -6,11 +6,13 @@ import { escopoAtual } from "@/lib/sessao";
 import { ContagemDaLista, ContagemProvider } from "@/components/contagem-lista";
 import { Pagina } from "@/components/pagina";
 
+import { filtroDePreposto } from "./carteira";
 import { buscarClientes, situacaoDoParametro } from "./consulta";
 import { ListaClientes } from "./lista";
 
 export default async function PaginaClientes({ searchParams }: PageProps<"/clientes">) {
-  const { organizacaoId, ehAdmin, db } = await escopoAtual();
+  const escopo = await escopoAtual();
+  const { organizacaoId, ehAdmin, db } = escopo;
   // Sem filtro na URL, a busca que a pessoa deixou nesta seção (`busca-lembrada.ts`).
   const parametros = await parametrosDaLista("clientes", await searchParams);
 
@@ -21,9 +23,10 @@ export default async function PaginaClientes({ searchParams }: PageProps<"/clien
    */
   const busca = typeof parametros.busca === "string" ? parametros.busca.trim() : "";
   const situacao = situacaoDoParametro(parametros.situacao);
+  const { prepostos, preposto } = await filtroDePreposto(escopo, parametros.preposto);
 
   const [inicial, total] = await Promise.all([
-    buscarClientes(db, organizacaoId, { busca, situacao, pagina: 0 }),
+    buscarClientes(db, organizacaoId, { busca, situacao, preposto, pagina: 0 }),
     // O "de 128" do topo, inativos inclusive. Zero também distingue "não achei"
     // de "ainda não há cliente nenhum", que pede outro recado.
     db.cliente.count({ where: { organizacaoId } }),
@@ -51,6 +54,8 @@ export default async function PaginaClientes({ searchParams }: PageProps<"/clien
           inicial={inicial}
           buscaInicial={busca}
           situacaoInicial={situacao}
+          prepostoInicial={preposto}
+          prepostos={prepostos}
           semNenhumCliente={total === 0}
         />
       </ContagemProvider>

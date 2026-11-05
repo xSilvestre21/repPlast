@@ -28,6 +28,7 @@ import { FileText, Loader2, ScrollText, Search, ThumbsDown, X } from "lucide-rea
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useDefinirContagem } from "@/components/contagem-lista";
+import { FiltroPreposto } from "@/components/filtro-preposto";
 import {
   Botao,
   CLASSE_CONTROLE,
@@ -49,10 +50,11 @@ import { SeloOrcamento } from "./selo";
 /** O tempo entre a última tecla e a ida ao servidor. */
 const ESPERA_MS = 250;
 
-function endereco(busca: string, status: FiltroStatusOrcamento) {
+function endereco(busca: string, status: FiltroStatusOrcamento, preposto: string) {
   const parametros = new URLSearchParams();
   if (busca.trim()) parametros.set("busca", busca.trim());
   if (status !== "todos") parametros.set("status", status);
+  if (preposto) parametros.set("preposto", preposto);
 
   const consulta = parametros.toString();
   return consulta ? `/orcamentos?${consulta}` : "/orcamentos";
@@ -62,13 +64,20 @@ export function ListaOrcamentos({
   inicial,
   buscaInicial,
   statusInicial,
+  prepostoInicial,
+  prepostos,
 }: {
   inicial: FatiaDeOrcamentos;
   buscaInicial: string;
   statusInicial: FiltroStatusOrcamento;
+  /** O id do preposto do filtro, ou vazio em "Todos". */
+  prepostoInicial: string;
+  /** As opções do filtro; vazio quando ele não existe para quem está vendo. */
+  prepostos: { id: string; nome: string }[];
 }) {
   const [busca, setBusca] = useState(buscaInicial);
   const [status, setStatus] = useState(statusInicial);
+  const [preposto, setPreposto] = useState(prepostoInicial);
 
   const [linhas, setLinhas] = useState(inicial.linhas);
   const [temMais, setTemMais] = useState(inicial.temMais);
@@ -97,7 +106,7 @@ export function ListaOrcamentos({
   const definirContagem = useDefinirContagem();
 
   const buscarFatia = useCallback(
-    async (alvo: { busca: string; status: FiltroStatusOrcamento; pagina: number }) => {
+    async (alvo: { busca: string; status: FiltroStatusOrcamento; preposto: string; pagina: number }) => {
       emVoo.current?.abort();
       const controle = new AbortController();
       emVoo.current = controle;
@@ -107,6 +116,7 @@ export function ListaOrcamentos({
         const consulta = new URLSearchParams({ pagina: String(alvo.pagina) });
         if (alvo.busca.trim()) consulta.set("busca", alvo.busca.trim());
         if (alvo.status !== "todos") consulta.set("status", alvo.status);
+        if (alvo.preposto) consulta.set("preposto", alvo.preposto);
 
         const resposta = await fetch(`/orcamentos/busca?${consulta}`, {
           signal: controle.signal,
@@ -143,18 +153,18 @@ export function ListaOrcamentos({
    * piscando embaixo da lista e as linhas entrando duas vezes. Só é marcada
    * quando a busca sai de verdade, para uma espera cancelada não contar.
    */
-  const naTela = useRef(endereco(buscaInicial, statusInicial));
+  const naTela = useRef(endereco(buscaInicial, statusInicial, prepostoInicial));
   /** A pessoa já mexeu em algum filtro desde que a página abriu. */
   const mexeu = useRef(false);
 
   useEffect(() => {
-    const alvo = endereco(busca, status);
+    const alvo = endereco(busca, status, preposto);
     if (alvo !== naTela.current) mexeu.current = true;
 
     // O endereço acompanha os filtros — inclusive quem volta ao da tela antes
     // da busca sair. Ao abrir, não: o endereço é o da navegação, e quem cuida
     // dele ainda é o roteador.
-    const url = endereco(busca, status);
+    const url = endereco(busca, status, preposto);
     // E fica lembrado para quem abrir um item e voltar (`busca-lembrada.ts`) —
     // inclusive o filtro com que a lista abriu, vindo de um link.
     lembrarBusca(url);
@@ -165,11 +175,11 @@ export function ListaOrcamentos({
 
     const espera = setTimeout(() => {
       naTela.current = alvo;
-      void buscarFatia({ busca, status, pagina: 0 });
+      void buscarFatia({ busca, status, preposto, pagina: 0 });
     }, ESPERA_MS);
 
     return () => clearTimeout(espera);
-  }, [busca, status, buscarFatia]);
+  }, [busca, status, preposto, buscarFatia]);
 
   /*
    * A sentinela: um bloco vazio depois da última linha. Quando ele encosta na
@@ -183,7 +193,7 @@ export function ListaOrcamentos({
     const observador = new IntersectionObserver(
       (entradas) => {
         if (entradas[0]?.isIntersecting) {
-          void buscarFatia({ busca, status, pagina: pagina + 1 });
+          void buscarFatia({ busca, status, preposto, pagina: pagina + 1 });
         }
       },
       // Começa a carregar antes de a pessoa chegar no fim de verdade.
@@ -192,13 +202,14 @@ export function ListaOrcamentos({
 
     observador.observe(alvo);
     return () => observador.disconnect();
-  }, [temMais, buscando, pagina, busca, status, buscarFatia]);
+  }, [temMais, buscando, pagina, busca, status, preposto, buscarFatia]);
 
-  const algumFiltro = Boolean(busca.trim()) || status !== "todos";
+  const algumFiltro = Boolean(busca.trim()) || status !== "todos" || Boolean(preposto);
 
   const limpar = () => {
     setBusca("");
     setStatus("todos");
+    setPreposto("");
   };
 
   return (
@@ -232,6 +243,8 @@ export function ListaOrcamentos({
               />
             </div>
           </label>
+
+          <FiltroPreposto prepostos={prepostos} value={preposto} aoEscolher={setPreposto} />
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
