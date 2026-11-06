@@ -34,6 +34,8 @@ export function itemProcurado(busca: string) {
         { descricao: { contains: termo, mode: INSENSIVEL } },
         { codigoFornecedor: { contains: termo, mode: INSENSIVEL } },
         { codigoCliente: { contains: termo, mode: INSENSIVEL } },
+        { codigoTampa: { contains: termo, mode: INSENSIVEL } },
+        { fornecedorTampaNome: { contains: termo, mode: INSENSIVEL } },
       ],
     })),
   };

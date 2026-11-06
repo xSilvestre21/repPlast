@@ -19,15 +19,20 @@ export async function carregarFornecedores(produtoId?: string): Promise<Forneced
    * Na edição, a indústria do produto e os aditivos que ele já usa entram
    * mesmo inativos — pelo mesmo motivo do dono em `carregarClientes`: fora do
    * seletor, salvar o produto trocaria a indústria ou largaria o aditivo em
-   * silêncio, e o aditivo largado muda o preço.
+   * silêncio, e o aditivo largado muda o preço. A da tampa também: o preposto
+   * lê o nome dela na ficha mesmo sem tê-la marcada, e o campo não pode vir vazio.
    */
-  const doProduto = produtoId ? [{ produtos: { some: { id: produtoId } } }] : [];
+  const doProduto = produtoId
+    ? [
+        { produtos: { some: { id: produtoId } } },
+        { produtosDaTampa: { some: { id: produtoId } } },
+      ]
+    : [];
 
   const fornecedores = await db.fornecedor.findMany({
     where: {
       organizacaoId,
-      OR: [{ ativo: true }, ...doProduto],
-      ...soIndustriasMarcadas({ ehAdmin, usuarioId }),
+      OR: [{ ativo: true, ...soIndustriasMarcadas({ ehAdmin, usuarioId }) }, ...doProduto],
     },
     orderBy: { nome: "asc" },
     include: {

@@ -249,7 +249,10 @@ export async function excluirFornecedor(
     // Pedido e proposta também guardam a indústria: sem contá-los, o banco
     // recusava pela chave estrangeira e a pessoa via um erro sem explicação.
     const [produtos, pedidos, propostas] = await Promise.all([
-      db.produto.count({ where: { fornecedorId: id, organizacaoId } }),
+      // Fornecedora da tampa de um conjunto conta como produto dela.
+      db.produto.count({
+        where: { organizacaoId, OR: [{ fornecedorId: id }, { fornecedorTampaId: id }] },
+      }),
       db.pedido.count({ where: { fornecedorId: id, organizacaoId } }),
       db.orcamento.count({ where: { fornecedorId: id, organizacaoId } }),
     ]);

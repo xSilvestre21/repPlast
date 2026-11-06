@@ -20,6 +20,8 @@
 import { ChevronDown } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
+import { achatar } from "@/lib/busca";
+
 import { useCampoDoFormulario } from "./contexto-formulario";
 import { CLASSE_CONTROLE, CLASSE_ERRO, RodapeCampo, Rotulo } from "./ui";
 
@@ -30,18 +32,6 @@ export type OpcaoBuscavel = {
   detalhe?: string;
 };
 
-/**
- * Sem acento e sem caixa.
- *
- * "Conceição" tem de aparecer para quem digitou "conceicao", e "PÉROLA"
- * para quem digitou "perola" — ninguém procura cliente com acento certo.
- */
-export function achatar(texto: string): string {
-  return texto
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase();
-}
 
 /**
  * Casa quando TODOS os pedaços digitados aparecem, em qualquer ordem.
@@ -107,9 +97,10 @@ export function SelecaoBuscavel({
   required,
   dica,
   erro: erroExplicito,
-  placeholder = "Escolha…",
-  vazio = "Nada encontrado.",
+  placeholder,
+  vazio,
   lado = "auto",
+  livre = false,
   className = "",
 }: {
   name: string;
@@ -127,6 +118,18 @@ export function SelecaoBuscavel({
   vazio?: string;
   /** Fixa o lado onde a lista abre. Ver `LadoDaLista`. */
   lado?: LadoDaLista;
+  /**
+   * A lista só sugere: o que se digita já é o valor, e `aoEscolher` recebe o
+   * texto a cada tecla. Para campo como o material da bombona, em que o que está
+   * na lista é o comum, mas outra coisa também vale.
+   *
+   * Por isso o `Enter` não pega a primeira da lista: só a que foi escolhida com as
+   * setas. Quem digitou "PEAD 100% virgem" não pode ter o texto trocado por "PEAD".
+   *
+   * O texto do campo e a frase da lista dizem isso às claras: "digite para achar"
+   * faria parecer que só vale o que está na lista.
+   */
+  livre?: boolean;
   className?: string;
 }) {
   const controlado = value !== undefined;
@@ -165,8 +168,8 @@ export function SelecaoBuscavel({
   const idLista = useId();
 
   const rotuloSelecionado = useMemo(
-    () => opcoes.find((o) => o.id === idSelecionado)?.rotulo ?? "",
-    [opcoes, idSelecionado],
+    () => opcoes.find((o) => o.id === idSelecionado)?.rotulo ?? (livre ? idSelecionado : ""),
+    [opcoes, idSelecionado, livre],
   );
 
   const filtradas = useMemo(() => {
@@ -223,7 +226,8 @@ export function SelecaoBuscavel({
     if (campoRef.current) setPosicao(medir(campoRef.current, lado));
     setAberto(true);
     setFiltro(null);
-    setDestaque(Math.max(0, opcoes.findIndex((o) => o.id === idSelecionado)));
+    const atual = opcoes.findIndex((o) => o.id === idSelecionado);
+    setDestaque(livre ? atual : Math.max(0, atual));
     // Selecionado por inteiro: a primeira tecla troca o rótulo pelo filtro.
     // Já agora, para quem digita antes do próximo quadro; e de novo nele,
     // porque soltar o clique desfaz a seleção — mas só se nada foi digitado
@@ -247,6 +251,15 @@ export function SelecaoBuscavel({
     fechar();
   }
 
+  /** No modo livre, "pead" digitado vira o "PEAD" da lista: a grafia é a dela. */
+  function fecharDigitado() {
+    const texto = achatar(idSelecionado.trim());
+    const igual = livre ? opcoes.find((o) => achatar(o.rotulo) === texto) : undefined;
+
+    if (igual && igual.id !== idSelecionado) escolher(igual);
+    else fechar();
+  }
+
   function aoTeclar(evento: React.KeyboardEvent<HTMLInputElement>) {
     if (evento.key === "ArrowDown" || evento.key === "ArrowUp") {
       evento.preventDefault();
@@ -261,6 +274,7 @@ export function SelecaoBuscavel({
       evento.preventDefault();
       const escolhida = filtradas[destaque];
       if (escolhida) escolher(escolhida);
+      else if (livre) fecharDigitado();
       return;
     }
 
@@ -276,7 +290,7 @@ export function SelecaoBuscavel({
       className={className}
       onBlur={(evento) => {
         // Sair do conjunto fecha; andar entre a caixa e a lista, não.
-        if (!raizRef.current?.contains(evento.relatedTarget)) fechar();
+        if (!raizRef.current?.contains(evento.relatedTarget)) fecharDigitado();
       }}
     >
       <label htmlFor={idCampo}>
@@ -310,12 +324,16 @@ export function SelecaoBuscavel({
           // O nome de verdade está no input escondido; este diz ao
           // `Formulario` de qual campo é o erro que o navegador achou aqui.
           data-campo={name}
-          placeholder={placeholder}
+          placeholder={placeholder ?? (livre ? "Escolha ou digite outro…" : "Escolha…")}
           value={filtro ?? rotuloSelecionado}
           onChange={(evento) => {
             setFiltro(evento.target.value);
-            setDestaque(0);
+            setDestaque(livre ? -1 : 0);
             if (!aberto) setAberto(true);
+            if (livre) {
+              if (!controlado) setInterno(evento.target.value);
+              aoEscolher?.(evento.target.value);
+            }
           }}
           onMouseDown={abrir}
           onFocus={abrir}
@@ -330,7 +348,8 @@ export function SelecaoBuscavel({
             transition-transform duration-150 ${aberto ? "rotate-180" : ""}`}
         />
 
-        {aberto && (
+        {/* Sem sugestão nenhuma, como no avulso, é só uma caixa de texto. */}
+        {aberto && !(livre && opcoes.length === 0) && (
           <ul
             ref={listaRef}
             id={idLista}
@@ -341,7 +360,12 @@ export function SelecaoBuscavel({
             }`}
           >
             {filtradas.length === 0 && (
-              <li className="px-3.5 py-2 text-corpo text-tinta-3">{vazio}</li>
+              <li className="px-3.5 py-2 text-corpo text-tinta-3">
+                {vazio ??
+                  (livre
+                    ? "Não está na lista, mas vale: sai como você digitou."
+                    : "Nada encontrado.")}
+              </li>
             )}
 
             {filtradas.map((opcao, i) => (

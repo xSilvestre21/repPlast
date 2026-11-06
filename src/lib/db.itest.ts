@@ -1116,6 +1116,58 @@ describe.skipIf(ignoraRls)("isolamento entre prepostos do mesmo escritório", ()
     await admin.produto.deleteMany({ where: { organizacaoId: escritorio } });
   });
 
+  it("o preposto lê o nome da indústria da tampa, e não o catálogo dela", async () => {
+    const industria = await admin.fornecedor.findFirstOrThrow({
+      where: { organizacaoId: escritorio },
+      select: { id: true },
+    });
+    const daTampa = await admin.fornecedor.create({
+      data: { organizacaoId: escritorio, nome: "Tampas de fora" },
+    });
+    await admin.aditivo.create({
+      data: {
+        fornecedorId: daTampa.id,
+        nome: "Secreto",
+        sufixoDescricao: "S",
+        tipo: "POR_KG",
+        valor: "1",
+      },
+    });
+
+    const comoAna = dbParaOrganizacao(escritorio, ana);
+    const nome = () =>
+      comoAna.fornecedor.findFirst({ where: { id: daTampa.id }, select: { nome: true } });
+
+    expect(await nome()).toBeNull();
+
+    const produto = await admin.produto.create({
+      data: {
+        organizacaoId: escritorio,
+        fornecedorId: industria.id,
+        familia: "FRASCO_TAMPA",
+        descricao: "conjunto",
+        precoAvulso: "1000",
+        unidadeAvulsa: "MIL",
+        capacidade: "500",
+        capacidadeUnidade: "mL",
+        diametroMm: "28",
+        fornecedorTampaId: daTampa.id,
+      },
+    });
+
+    expect(await nome()).toEqual({ nome: "Tampas de fora" });
+    expect(await comoAna.aditivo.findMany({ where: { fornecedorId: daTampa.id } })).toEqual([]);
+    expect(
+      await comoAna.produto.findFirst({
+        where: { id: produto.id },
+        select: { fornecedorTampa: { select: { nome: true } } },
+      }),
+    ).toEqual({ fornecedorTampa: { nome: "Tampas de fora" } });
+
+    await admin.produto.delete({ where: { id: produto.id } });
+    await admin.fornecedor.delete({ where: { id: daTampa.id } });
+  });
+
   /*
    * O produto tem CLIENTE, e é o preço daquele cliente que ele carrega.
    *

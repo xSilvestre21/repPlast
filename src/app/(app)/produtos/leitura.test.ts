@@ -14,8 +14,10 @@ import {
   contaDoFormulario,
   contaDoProduto,
   dadosDoFormulario,
+  fornecedorDaTampaVaria,
   formularioDaConta,
   lerConta,
+  lerMaoDeObra,
 } from "./leitura";
 
 function formulario(campos: Record<string, string>, aditivos: string[] = []): FormData {
@@ -133,11 +135,323 @@ describe("conta de quem não guardou uma", () => {
       precoKg: coluna(produto.precoKg),
       unidadeAvulsa: produto.unidadeAvulsa ?? null,
       precoAvulso: coluna(produto.precoAvulso),
+      capacidade: coluna(produto.capacidade),
+      capacidadeUnidade: produto.capacidadeUnidade ?? null,
+      alturaCm: coluna(produto.alturaCm),
+      diametroMm: coluna(produto.diametroMm),
+      materialTampa: produto.materialTampa ?? null,
+      complementoTampa: produto.complementoTampa ?? null,
+      fornecedorTampaId: produto.fornecedorTampaId ?? null,
+      fornecedorTampaVariavel: produto.fornecedorTampaVariavel,
+      acabamento: produto.acabamento ?? null,
+      acabamentoValorCom: coluna(produto.acabamentoValorCom),
+      acabamentoValorSem: coluna(produto.acabamentoValorSem),
       aditivos: ["a1"],
     });
 
     expect(conta.espessuraMm).toBe("0,06");
     expect(conta.aditivos).toEqual(["a1"]);
     expect(dadosDoFormulario(formularioDaConta(conta, extras))).toEqual(produto);
+  });
+
+  it("a linha por milheiro leva o preço; a por unidade, não", () => {
+    expect(contaDaLinha({ familia: "TAMPA", unidade: "MIL", precoUnitario: preco })).toMatchObject({
+      familia: "TAMPA",
+      precoAvulso: "17,98",
+      precoKg: "",
+    });
+    expect(contaDaLinha({ familia: "TAMPA", unidade: "UN", precoUnitario: preco }).precoAvulso).toBe(
+      "",
+    );
+  });
+});
+
+describe("tampa e acabamento do conjunto", () => {
+  const CONJUNTO = {
+    fornecedorId: "f",
+    descricao: "Frasco 500mL + Tampa 28mm",
+    familia: "FRASCO_TAMPA",
+    capacidade: "500",
+    capacidadeUnidade: "mL",
+    diametroMm: "28",
+    precoAvulso: "2.000,00",
+  };
+
+  const dados = (campos: Record<string, string>) =>
+    dadosDoFormulario(formulario({ ...CONJUNTO, ...campos }));
+
+  it("guarda o fornecedor e o código da tampa", () => {
+    expect(dados({ fornecedorTampaId: "f2", codigoTampa: "T-42" })).toMatchObject({
+      fornecedorTampaId: "f2",
+      fornecedorTampaVariavel: false,
+      codigoTampa: "T-42",
+    });
+  });
+
+  it("no variável, quem diz o fornecedor é o item", () => {
+    expect(dados({ fornecedorTampaId: "f2", fornecedorTampaVariavel: "1" })).toMatchObject({
+      fornecedorTampaId: null,
+      fornecedorTampaVariavel: true,
+    });
+  });
+
+  it("frasco sem tampa não guarda fornecedor de tampa", () => {
+    const frasco = dadosDoFormulario(
+      formulario({
+        ...CONJUNTO,
+        familia: "FRASCO",
+        fornecedorTampaId: "f2",
+        fornecedorTampaVariavel: "1",
+        codigoTampa: "T-42",
+      }),
+    );
+
+    expect(frasco).toMatchObject({
+      fornecedorTampaId: null,
+      fornecedorTampaVariavel: false,
+      codigoTampa: null,
+    });
+  });
+
+  it("o cadastro guarda só os valores, e um basta", () => {
+    const produto = dados({ acabamento: "Serigrafado", acabamentoValorSem: "90,00" });
+
+    expect(produto).toMatchObject({
+      acabamento: "Serigrafado",
+      acabamentoValorSem: "90",
+      acabamentoValorCom: null,
+    });
+    expect(produto).not.toHaveProperty("acabamentoMaoDeObra");
+  });
+
+  it("recusa o acabamento sem valor nenhum, apontando o campo", () => {
+    try {
+      dados({ acabamento: "Sleeve" });
+      expect.unreachable("devia recusar");
+    } catch (erro) {
+      expect(erro).toMatchObject({ campo: "acabamentoValorCom" });
+      expect((erro as Error).message).toMatch(/pelo menos um valor/);
+    }
+  });
+
+  it("recusa valor que não é número", () => {
+    expect(() => dados({ acabamento: "Sleeve", acabamentoValorCom: "abc" })).toThrow(/como 150,00/);
+  });
+
+  describe("a escolha da linha", () => {
+    const AMBOS = {
+      acabamento: "Serigrafado",
+      acabamentoValorCom: "150",
+      acabamentoValorSem: "90",
+    };
+
+    it("com os dois valores, é obrigatória, apontando o campo", () => {
+      try {
+        lerMaoDeObra(formulario({}), AMBOS);
+        expect.unreachable("devia recusar");
+      } catch (erro) {
+        expect(erro).toMatchObject({ campo: "acabamentoMaoDeObra" });
+      }
+    });
+
+    it("lê com e sem mão de obra", () => {
+      expect(lerMaoDeObra(formulario({ acabamentoMaoDeObra: "COM" }), AMBOS)).toBe(true);
+      expect(lerMaoDeObra(formulario({ acabamentoMaoDeObra: "SEM" }), AMBOS)).toBe(false);
+    });
+
+    it("com um valor só, não pergunta", () => {
+      const soCom = { ...AMBOS, acabamentoValorSem: null };
+
+      expect(lerMaoDeObra(formulario({}), soCom)).toBe(true);
+      expect(lerMaoDeObra(formulario({ acabamentoMaoDeObra: "SEM" }), soCom)).toBe(true);
+    });
+
+    it("sem acabamento, não há escolha", () => {
+      expect(lerMaoDeObra(formulario({ acabamentoMaoDeObra: "COM" }), {})).toBeNull();
+    });
+  });
+
+  it("tipo sem acabamento ignora o que vier no formulário", () => {
+    const tampa = dadosDoFormulario(
+      formulario({
+        fornecedorId: "f",
+        descricao: "Tampa 28mm",
+        familia: "TAMPA",
+        diametroMm: "28",
+        precoAvulso: "100",
+        acabamento: "Serigrafado",
+        acabamentoValorCom: "150",
+      }),
+    );
+
+    expect(tampa).toMatchObject({ acabamento: null, acabamentoValorCom: null });
+  });
+
+  it("a conta vai e volta com tampa e acabamento", () => {
+    const campos = {
+      ...CONJUNTO,
+      fornecedorTampaId: "f2",
+      acabamento: "Rotulado Adesivo",
+      acabamentoValorCom: "150,00",
+      acabamentoValorSem: "90,00",
+    };
+    const conta = lerConta(JSON.parse(JSON.stringify(contaDoFormulario(formulario(campos)))))!;
+    const extras = { fornecedorId: "f", descricao: CONJUNTO.descricao };
+
+    expect(dadosDoFormulario(formularioDaConta(conta, extras))).toEqual(
+      dadosDoFormulario(formulario(campos)),
+    );
+  });
+
+  it("a conta variável guarda a escolha da proposta, mas o produto não", () => {
+    const conta = contaDoFormulario(
+      formulario({ ...CONJUNTO, fornecedorTampaId: "f2", fornecedorTampaVariavel: "1" }),
+    );
+
+    expect(conta.fornecedorTampaId).toBe("f2");
+    expect(
+      dadosDoFormulario(formularioDaConta(conta, { fornecedorId: "f", descricao: "x" })),
+    ).toMatchObject({ fornecedorTampaId: null, fornecedorTampaVariavel: true });
+  });
+
+  it("linha de produto pergunta ao produto; linha de conta, à conta", () => {
+    const variavel = contaDoFormulario(
+      formulario({ ...CONJUNTO, fornecedorTampaVariavel: "1" }),
+    );
+
+    expect(
+      fornecedorDaTampaVaria({ produto: { fornecedorTampaVariavel: true }, conta: null }),
+    ).toBe(true);
+    expect(
+      fornecedorDaTampaVaria({ produto: { fornecedorTampaVariavel: false }, conta: variavel }),
+    ).toBe(false);
+    expect(fornecedorDaTampaVaria({ produto: null, conta: variavel })).toBe(true);
+    expect(fornecedorDaTampaVaria({ produto: null, conta: null })).toBe(false);
+  });
+});
+
+describe("tipos vendidos por milheiro", () => {
+  const COMUM = {
+    fornecedorId: "f",
+    descricao: "Texto impresso",
+    precoAvulso: "1.250,00",
+  };
+
+  const dados = (campos: Record<string, string>) =>
+    dadosDoFormulario(formulario({ ...COMUM, ...campos }));
+
+  it("grava sempre em milheiro, com o preço digitado", () => {
+    const produto = dados({ familia: "TAMPA", diametroMm: "28" });
+
+    expect(produto.unidadeAvulsa).toBe("MIL");
+    expect(produto.precoAvulso).toBe("1250");
+    expect(produto.diametroMm).toBe("28");
+    expect(produto.precoKg).toBeNull();
+  });
+
+  it("recusa preço vazio apontando o campo", () => {
+    expect(() =>
+      dadosDoFormulario(
+        formulario({ fornecedorId: "f", descricao: "x", familia: "TAMPA", diametroMm: "28" }),
+      ),
+    ).toThrow(/preço/);
+  });
+
+  it("a bombona é sempre em litros, mesmo que venha outra coisa", () => {
+    const produto = dados({ familia: "BOMBONA", capacidade: "20", capacidadeUnidade: "mL" });
+    expect(produto.capacidade).toBe("20");
+    expect(produto.capacidadeUnidade).toBe("L");
+  });
+
+  it("o frasco aceita mL e L", () => {
+    expect(
+      dados({ familia: "FRASCO", capacidade: "500", capacidadeUnidade: "mL" }).capacidadeUnidade,
+    ).toBe("mL");
+    expect(
+      dados({ familia: "FRASCO", capacidade: "1,5", capacidadeUnidade: "L" }).capacidade,
+    ).toBe("1.5");
+  });
+
+  it("recusa frasco sem unidade conhecida", () => {
+    expect(() =>
+      dados({ familia: "FRASCO", capacidade: "500", capacidadeUnidade: "kg" }),
+    ).toThrow(/mL ou em L/);
+  });
+
+  it("recusa a medida que falta, e texto no lugar de número", () => {
+    expect(() => dados({ familia: "BOMBONA" })).toThrow(/capacidade/);
+    expect(() => dados({ familia: "TAMPA", diametroMm: "abc" })).toThrow(/como 28/);
+    expect(() => dados({ familia: "PAPELAO", comprimentoCm: "30" })).toThrow(/largura/);
+    expect(() =>
+      dados({ familia: "FRASCO_TAMPA", capacidade: "500", capacidadeUnidade: "mL" }),
+    ).toThrow(/diâmetro/);
+  });
+
+  it("no papelão a altura é opcional, para a chapa", () => {
+    const produto = dados({ familia: "PAPELAO", comprimentoCm: "100", larguraCm: "80" });
+    expect(produto.comprimentoCm).toBe("100");
+    expect(produto.larguraCm).toBe("80");
+    expect(produto.alturaCm).toBeNull();
+  });
+
+  it("só o conjunto guarda material e complemento da tampa", () => {
+    const tampa = { materialTampa: "PP", complementoTampa: "Azul", diametroMm: "28" };
+
+    expect(
+      dados({ familia: "FRASCO_TAMPA", capacidade: "500", capacidadeUnidade: "mL", ...tampa }),
+    ).toMatchObject({ materialTampa: "PP", complementoTampa: "Azul", diametroMm: "28" });
+
+    expect(dados({ familia: "TAMPA", ...tampa })).toMatchObject({
+      materialTampa: null,
+      complementoTampa: null,
+    });
+  });
+
+  it("zera as colunas dos outros tipos", () => {
+    const produto = dados({
+      familia: "TAMPA",
+      diametroMm: "28",
+      capacidade: "20",
+      larguraCm: "30",
+      alturaCm: "15",
+    });
+
+    expect(produto.capacidade).toBeNull();
+    expect(produto.larguraCm).toBeNull();
+    expect(produto.alturaCm).toBeNull();
+  });
+
+  it("as outras famílias ficam sem as colunas novas", () => {
+    expect(dadosDoFormulario(formulario({ ...SACO, fornecedorId: "f", descricao: "x" }))).toMatchObject(
+      { capacidade: null, diametroMm: null, materialTampa: null },
+    );
+  });
+
+  it("a conta do conjunto vai e volta sem perder nada", () => {
+    const campos = {
+      familia: "FRASCO_TAMPA",
+      material: "PEAD",
+      complemento: "Oval Branco",
+      capacidade: "500",
+      capacidadeUnidade: "mL",
+      diametroMm: "28",
+      materialTampa: "PP",
+      complementoTampa: "Flip Top Azul",
+      precoAvulso: "1.250,00",
+    };
+    const extras = { fornecedorId: "f", descricao: "Frasco 500mL" };
+
+    const conta = lerConta(contaDoFormulario(formulario({ ...campos, ...extras })));
+
+    expect(conta).toMatchObject(campos);
+    expect(dadosDoFormulario(formularioDaConta(conta!, extras))).toEqual(
+      dadosDoFormulario(formulario({ ...campos, ...extras })),
+    );
+  });
+
+  it("conta gravada antes dos campos novos continua sendo lida", () => {
+    const conta = lerConta({ familia: "SACO", larguraCm: "30" });
+    expect(conta?.capacidade).toBe("");
+    expect(conta?.materialTampa).toBe("");
   });
 });

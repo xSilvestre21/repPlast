@@ -17,10 +17,15 @@
  */
 
 import {
+  Box,
+  CircleDashed,
   CircleDot,
+  Combine,
+  Cylinder,
   Disc3,
   Layers,
   Loader2,
+  Milk,
   Package,
   PackagePlus,
   Search,
@@ -63,6 +68,12 @@ const ROTULO_FAMILIA: Record<string, string> = {
   STRETCH: "Stretch",
   BOBINA: "Bobina",
   AVULSO: "Avulso",
+  BOMBONA: "Bombona",
+  BOMBONA_TAMPA: "Bombona + Tampa",
+  FRASCO: "Frasco",
+  FRASCO_TAMPA: "Frasco + Tampa",
+  PAPELAO: "Papelão",
+  TAMPA: "Tampa",
 };
 
 /**
@@ -77,6 +88,12 @@ const ICONE_FAMILIA: Record<string, LucideIcon> = {
   FITA: CircleDot,
   STRETCH: Layers,
   BOBINA: Disc3,
+  BOMBONA: Cylinder,
+  BOMBONA_TAMPA: Combine,
+  FRASCO: Milk,
+  FRASCO_TAMPA: Combine,
+  PAPELAO: Box,
+  TAMPA: CircleDashed,
 };
 
 const MEDIDAS = [

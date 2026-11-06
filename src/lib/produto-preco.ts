@@ -12,8 +12,31 @@ import Decimal from "decimal.js";
 
 import { type Aditivo, fatorEfetivo, pesoMilheiroKg, precoMilheiroSaco } from "./precificacao";
 
-export type Familia = "SACO" | "FITA" | "STRETCH" | "BOBINA" | "AVULSO";
+export type Familia =
+  | "SACO"
+  | "FITA"
+  | "STRETCH"
+  | "BOBINA"
+  | "AVULSO"
+  | "BOMBONA"
+  | "FRASCO"
+  | "PAPELAO"
+  | "TAMPA"
+  | "FRASCO_TAMPA"
+  | "BOMBONA_TAMPA";
 export type UnidadeVenda = "MIL" | "KG" | "UN" | "CX";
+
+const FAMILIAS_POR_MILHEIRO: readonly string[] = [
+  "BOMBONA",
+  "FRASCO",
+  "PAPELAO",
+  "TAMPA",
+  "FRASCO_TAMPA",
+  "BOMBONA_TAMPA",
+];
+
+/** A família é vendida por milheiro, com preço digitado e medida só na descrição? */
+export const ehPorMilheiro = (familia: string) => FAMILIAS_POR_MILHEIRO.includes(familia);
 
 export interface ProdutoPrecificavel {
   familia: Familia;
@@ -34,11 +57,65 @@ export interface ProdutoPrecificavel {
   // Stretch e bobina
   precoKg?: Decimal.Value | null;
 
-  // Avulso: um preço só, na unidade em que o item é vendido
+  // Avulso: um preço só, na unidade em que o item é vendido. As famílias por
+  // milheiro usam os mesmos campos, sempre em MIL.
   unidadeAvulsa?: UnidadeVenda | null;
   precoAvulso?: Decimal.Value | null;
 
+  // Acabamento de bombona e frasco. Ver `valorDoAcabamento`.
+  acabamento?: string | null;
+  acabamentoValorCom?: Decimal.Value | null;
+  acabamentoValorSem?: Decimal.Value | null;
+  /** A escolha da linha, e não do cadastro: `true` é com mão de obra. */
+  acabamentoMaoDeObra?: boolean | null;
+
   aditivos?: Aditivo[];
+}
+
+type ValoresDoAcabamento = Pick<
+  ProdutoPrecificavel,
+  "acabamento" | "acabamentoValorCom" | "acabamentoValorSem"
+>;
+
+export type MarcaMaoDeObra = "COM" | "SEM";
+
+/** Como cada linha pode cobrar o acabamento: só o que tem valor no cadastro. */
+export function opcoesDeMaoDeObra(produto: ValoresDoAcabamento) {
+  if (!produto.acabamento) return [];
+
+  const opcoes = [
+    {
+      marca: "COM" as MarcaMaoDeObra,
+      rotulo: "Com mão de obra",
+      valor: produto.acabamentoValorCom,
+    },
+    {
+      marca: "SEM" as MarcaMaoDeObra,
+      rotulo: "Sem mão de obra",
+      valor: produto.acabamentoValorSem,
+    },
+  ];
+
+  return opcoes.flatMap((opcao) =>
+    opcao.valor === null || opcao.valor === undefined || opcao.valor === ""
+      ? []
+      : [{ ...opcao, valor: new Decimal(opcao.valor) }],
+  );
+}
+
+/**
+ * Quanto o acabamento soma ao preço do milheiro: o valor que a linha escolheu.
+ * Sem escolha, zero: o cadastro guarda os dois, e nenhum vale sozinho.
+ */
+export function valorDoAcabamento(
+  produto: ValoresDoAcabamento & Pick<ProdutoPrecificavel, "acabamentoMaoDeObra">,
+): Decimal {
+  if (produto.acabamentoMaoDeObra === null || produto.acabamentoMaoDeObra === undefined) {
+    return new Decimal(0);
+  }
+
+  const marca = produto.acabamentoMaoDeObra ? "COM" : "SEM";
+  return opcoesDeMaoDeObra(produto).find((o) => o.marca === marca)?.valor ?? new Decimal(0);
 }
 
 /** Rótulo da coluna de preço no PDF — muda por família, como nos pedidos reais. */
@@ -48,6 +125,12 @@ export const ROTULO_COLUNA_PRECO: Record<Familia, string> = {
   STRETCH: "PREÇO/KG",
   BOBINA: "PREÇO/KG",
   AVULSO: "PREÇO UNIT.",
+  BOMBONA: "MILHEIRO",
+  FRASCO: "MILHEIRO",
+  PAPELAO: "MILHEIRO",
+  TAMPA: "MILHEIRO",
+  FRASCO_TAMPA: "MILHEIRO",
+  BOMBONA_TAMPA: "MILHEIRO",
 };
 
 /**
@@ -140,6 +223,13 @@ export function unidadesDaFamilia(familia: Familia): UnidadeVenda[] {
        * unidade escolhida tem preço, então `unidadesComPreco` filtra sozinho.
        */
       return ["UN", "KG", "CX", "MIL"];
+    case "BOMBONA":
+    case "FRASCO":
+    case "PAPELAO":
+    case "TAMPA":
+    case "FRASCO_TAMPA":
+    case "BOMBONA_TAMPA":
+      return ["MIL", "UN"];
     default:
       // Stretch e bobina: o cadastro não tem o peso do rolo, então por
       // unidade não há preço calculado — ele é digitado no item.
@@ -234,6 +324,15 @@ export function precoUnitario(
     return null;
   }
 
+  if (ehPorMilheiro(produto.familia)) {
+    if (produto.precoAvulso == null) return null;
+    const milheiro = new Decimal(produto.precoAvulso).plus(valorDoAcabamento(produto));
+
+    // Como no saco: a unidade é o milheiro dividido por mil, sem arredondar.
+    if (unidade === "MIL") return milheiro;
+    return unidade === "UN" ? milheiro.dividedBy(1000) : null;
+  }
+
   if (produto.familia === "AVULSO") {
     // Preço digitado, e só vale na unidade em que o item é vendido.
     if (produto.precoAvulso == null || produto.unidadeAvulsa !== unidade) return null;
@@ -296,6 +395,9 @@ export function paraPrecificavel(produto: {
   unidadeAvulsa: unknown;
   precoAvulso: unknown;
   unidadesPorCaixa: number | null;
+  acabamento: string | null;
+  acabamentoValorCom: unknown;
+  acabamentoValorSem: unknown;
   aditivos: { aditivo: { nome: string; sufixoDescricao: string; tipo: string; valor: unknown } }[];
 }): ProdutoPrecificavel {
   const texto = (v: unknown) => (v === null || v === undefined ? null : String(v));
@@ -313,6 +415,9 @@ export function paraPrecificavel(produto: {
     unidadeAvulsa: (texto(produto.unidadeAvulsa) as UnidadeVenda | null) ?? null,
     precoAvulso: texto(produto.precoAvulso),
     unidadesPorCaixa: produto.unidadesPorCaixa,
+    acabamento: produto.acabamento,
+    acabamentoValorCom: texto(produto.acabamentoValorCom),
+    acabamentoValorSem: texto(produto.acabamentoValorSem),
     aditivos: produto.aditivos.map(({ aditivo }) => ({
       nome: aditivo.nome,
       sufixoDescricao: aditivo.sufixoDescricao,

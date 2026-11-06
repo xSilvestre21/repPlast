@@ -34,6 +34,10 @@ comissões. Porta o sistema legado SICOV (dados reais em `referencia/`, nunca ve
 - `src/components/` — sem separação ui/feature; um arquivo por componente, kebab-case
 - `src/lib/` — regras de negócio puras (`precificacao.ts`, `totais.ts`, `comissao.ts`,
   `descricao.ts`) e infraestrutura (`db.ts`, `sessao.ts`, `email.ts`)
+- `src/lib/tipos-produto.ts` — catálogo dos tipos de produto (materiais sugeridos, medidas,
+  complementos e acabamentos prontos), fonte única do cadastro e do item por conta. Mudar
+  complemento é mudar uma linha; tipo com família nova também pede enum, CHECK
+  `produto_campos_por_familia` e `dadosDoFormulario`
 - `src/generated/prisma/` — cliente gerado, nunca editar (fora do lint e do git)
 - Sem `types/` central: schemas Zod e tipos ficam junto do módulo que os usa
 - Comportamento herdado do SICOV que parece mal resolvido não é bug — perguntar antes de remover

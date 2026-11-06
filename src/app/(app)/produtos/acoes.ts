@@ -30,13 +30,14 @@ async function contexto() {
   return escopoAtual();
 }
 
-/** Confirma que fornecedor e aditivos pertencem ao escritório antes de gravar. */
+/** Confirma que indústrias, cliente e aditivos pertencem ao escritório antes de gravar. */
 async function validarVinculos(
   db: Awaited<ReturnType<typeof contexto>>["db"],
   organizacaoId: string,
   fornecedorId: string,
   aditivos: string[],
   clienteId: string | null,
+  fornecedorTampaId: string | null,
 ) {
   const fornecedor = await db.fornecedor.count({ where: { id: fornecedorId, organizacaoId } });
   if (fornecedor === 0) {
@@ -44,6 +45,16 @@ async function validarVinculos(
       "fornecedorId",
       "Esta indústria não foi encontrada — ela pode ter sido excluída. Escolha outra na lista.",
     );
+  }
+
+  if (fornecedorTampaId) {
+    const daTampa = await db.fornecedor.count({ where: { id: fornecedorTampaId, organizacaoId } });
+    if (daTampa === 0) {
+      throw new ErroDeCampo(
+        "fornecedorTampaId",
+        "Esta indústria não foi encontrada — ela pode ter sido excluída. Escolha outra na lista.",
+      );
+    }
   }
 
   /*
@@ -76,34 +87,38 @@ async function validarVinculos(
   }
 }
 
+/** Cadastrou, volta à lista: é onde se continua, como ao salvar a ficha de um produto. */
 export async function criarProduto(
   _estado: EstadoFormulario,
   formData: FormData,
 ): Promise<EstadoFormulario> {
-  let destino: string;
-
   try {
     const { organizacaoId, db } = await contexto();
     const dados = dadosDoFormulario(formData);
     const aditivos = lerAditivos(formData);
 
-    await validarVinculos(db, organizacaoId, dados.fornecedorId, aditivos, dados.clienteId);
+    await validarVinculos(
+      db,
+      organizacaoId,
+      dados.fornecedorId,
+      aditivos,
+      dados.clienteId,
+      dados.fornecedorTampaId,
+    );
 
-    const produto = await db.produto.create({
+    await db.produto.create({
       data: {
         organizacaoId,
         ...dados,
         aditivos: { create: aditivos.map((aditivoId) => ({ aditivoId })) },
       },
     });
-
-    destino = `/produtos/${produto.id}`;
   } catch (erro) {
     return falhou(erro, formData);
   }
 
   revalidatePath("/produtos");
-  redirect(destino);
+  redirect("/produtos");
 }
 
 /**
@@ -165,7 +180,14 @@ export async function criarProdutoDoItem(
       );
     }
 
-    await validarVinculos(db, organizacaoId, dados.fornecedorId, aditivos, dados.clienteId);
+    await validarVinculos(
+      db,
+      organizacaoId,
+      dados.fornecedorId,
+      aditivos,
+      dados.clienteId,
+      dados.fornecedorTampaId,
+    );
 
     const produto = await db.produto.create({
       data: {
@@ -173,7 +195,15 @@ export async function criarProdutoDoItem(
         ...dados,
         aditivos: { create: aditivos.map((aditivoId) => ({ aditivoId })) },
       },
-      select: { id: true, codigoFornecedor: true, codigoCliente: true },
+      select: {
+        id: true,
+        codigoFornecedor: true,
+        codigoCliente: true,
+        codigoTampa: true,
+        fornecedorTampaId: true,
+        fornecedorTampaVariavel: true,
+        fornecedorTampa: { select: { nome: true } },
+      },
     });
 
     await db.orcamentoItem.update({
@@ -182,6 +212,14 @@ export async function criarProdutoDoItem(
         produtoId: produto.id,
         codigoFornecedor: produto.codigoFornecedor,
         codigoCliente: produto.codigoCliente,
+        codigoTampa: produto.codigoTampa,
+        // No variável, a escolha é da linha e fica como estava.
+        ...(produto.fornecedorTampaVariavel
+          ? {}
+          : {
+              fornecedorTampaId: produto.fornecedorTampaId,
+              fornecedorTampaNome: produto.fornecedorTampa?.nome ?? null,
+            }),
       },
     });
 
@@ -205,7 +243,14 @@ export async function atualizarProduto(
     const dados = dadosDoFormulario(formData);
     const aditivos = lerAditivos(formData);
 
-    await validarVinculos(db, organizacaoId, dados.fornecedorId, aditivos, dados.clienteId);
+    await validarVinculos(
+      db,
+      organizacaoId,
+      dados.fornecedorId,
+      aditivos,
+      dados.clienteId,
+      dados.fornecedorTampaId,
+    );
 
     const { count } = await db.produto.updateMany({
       where: { id, organizacaoId },

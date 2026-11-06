@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   ROTULO_COLUNA_PRECO,
+  ehPorMilheiro,
   rotuloPrecoDosItens,
   unidadeDoRotulo,
   pesoDoItem,
@@ -19,6 +20,8 @@ import {
   unidadesDaFamilia,
   unidadesDoItem,
   type ProdutoPrecificavel,
+  opcoesDeMaoDeObra,
+  valorDoAcabamento,
 } from "./produto-preco";
 
 const SACO_2253: ProdutoPrecificavel = {
@@ -254,5 +257,119 @@ describe("unidade do rótulo do produto", () => {
     expect(unidadeDoRotulo(null)).toBeNull();
     expect(unidadeDoRotulo("")).toBeNull();
     expect(unidadeDoRotulo("rolo")).toBeNull();
+  });
+});
+
+describe("acabamento de frasco e bombona", () => {
+  const FRASCO = {
+    familia: "FRASCO" as const,
+    precoAvulso: "2000",
+    acabamento: "Serigrafado",
+    acabamentoValorCom: "150",
+    acabamentoValorSem: "90",
+  };
+
+  it("soma o valor com mão de obra", () => {
+    const produto = { ...FRASCO, acabamentoMaoDeObra: true };
+    expect(precoUnitario(produto, "MIL")?.toString()).toBe("2150");
+  });
+
+  it("soma o valor sem mão de obra", () => {
+    const produto = { ...FRASCO, acabamentoMaoDeObra: false };
+    expect(precoUnitario(produto, "MIL")?.toString()).toBe("2090");
+  });
+
+  it("a unidade é o milheiro já com o acabamento, dividido por mil", () => {
+    const produto = { ...FRASCO, acabamentoMaoDeObra: true };
+    expect(precoUnitario(produto, "UN")?.toString()).toBe("2.15");
+  });
+
+  it("sem acabamento, o valor que sobrou não entra", () => {
+    const produto = { ...FRASCO, acabamento: null, acabamentoMaoDeObra: true };
+    expect(precoUnitario(produto, "MIL")?.toString()).toBe("2000");
+  });
+
+  it("antes de a linha escolher, nenhum dos dois entra", () => {
+    expect(precoUnitario(FRASCO, "MIL")?.toString()).toBe("2000");
+    expect(precoUnitario({ ...FRASCO, acabamentoMaoDeObra: null }, "MIL")?.toString()).toBe("2000");
+  });
+
+  it("a linha só pode cobrar o que tem valor no cadastro", () => {
+    expect(opcoesDeMaoDeObra(FRASCO).map((o) => o.marca)).toEqual(["COM", "SEM"]);
+    expect(
+      opcoesDeMaoDeObra({ ...FRASCO, acabamentoValorSem: null }).map((o) => o.marca),
+    ).toEqual(["COM"]);
+    expect(opcoesDeMaoDeObra({ ...FRASCO, acabamento: null })).toEqual([]);
+  });
+
+  it("valor zero é um valor: a opção existe", () => {
+    expect(
+      opcoesDeMaoDeObra({ ...FRASCO, acabamentoValorCom: "0" }).map((o) => o.marca),
+    ).toEqual(["COM", "SEM"]);
+  });
+
+  it("sem preço do milheiro continua sem preço", () => {
+    const produto = { ...FRASCO, precoAvulso: null, acabamentoMaoDeObra: true };
+    expect(precoUnitario(produto, "MIL")).toBeNull();
+  });
+
+  it("o valor sai só do que a linha marca", () => {
+    expect(valorDoAcabamento({}).toString()).toBe("0");
+    expect(
+      valorDoAcabamento({ ...FRASCO, acabamentoMaoDeObra: false }).toString(),
+    ).toBe("90");
+  });
+});
+
+describe("famílias vendidas por milheiro", () => {
+  const FAMILIAS = ["BOMBONA", "FRASCO", "PAPELAO", "TAMPA", "FRASCO_TAMPA", "BOMBONA_TAMPA"] as const;
+
+  const produto = (familia: (typeof FAMILIAS)[number]): ProdutoPrecificavel => ({
+    familia,
+    unidadeAvulsa: "MIL",
+    precoAvulso: "1250.50",
+  });
+
+  it("são reconhecidas, e as outras não", () => {
+    for (const familia of FAMILIAS) expect(ehPorMilheiro(familia)).toBe(true);
+    expect(ehPorMilheiro("AVULSO")).toBe(false);
+    expect(ehPorMilheiro("SACO")).toBe(false);
+  });
+
+  it("abrem no milheiro, e a unidade fica para a amostra", () => {
+    for (const familia of FAMILIAS) {
+      expect(unidadesDaFamilia(familia)).toEqual(["MIL", "UN"]);
+      expect(unidadesDoItem(produto(familia))).toEqual(["MIL", "UN"]);
+    }
+  });
+
+  it("o preço do milheiro é o digitado", () => {
+    for (const familia of FAMILIAS) {
+      expect(precoUnitario(produto(familia), "MIL")?.toString()).toBe("1250.5");
+    }
+  });
+
+  it("a unidade é o milheiro dividido por mil, sem arredondar", () => {
+    expect(precoUnitario(produto("TAMPA"), "UN")?.toString()).toBe("1.2505");
+  });
+
+  it("não têm preço por quilo nem por caixa", () => {
+    expect(precoUnitario(produto("FRASCO"), "KG")).toBeNull();
+    expect(precoUnitario(produto("FRASCO"), "CX")).toBeNull();
+  });
+
+  it("sem preço digitado, não inventa nenhum", () => {
+    expect(precoUnitario({ familia: "BOMBONA" }, "MIL")).toBeNull();
+  });
+
+  it("saem no PDF sob MILHEIRO", () => {
+    for (const familia of FAMILIAS) {
+      expect(ROTULO_COLUNA_PRECO[familia]).toBe("MILHEIRO");
+      expect(rotuloColunaPreco(familia, "MIL")).toBe("MILHEIRO");
+    }
+  });
+
+  it("não têm peso cadastrado", () => {
+    expect(pesoDoItem(produto("BOMBONA"), "MIL", 5).toNumber()).toBe(0);
   });
 });

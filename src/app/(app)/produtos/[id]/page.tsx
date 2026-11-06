@@ -131,6 +131,18 @@ export default async function PaginaProduto({
           precoKg: paraCampo(produto.precoKg, 2),
           unidadeAvulsa: produto.unidadeAvulsa ?? "UN",
           precoAvulso: paraCampo(produto.precoAvulso, 2),
+          capacidade: paraCampo(produto.capacidade),
+          capacidadeUnidade: produto.capacidadeUnidade ?? "",
+          alturaCm: paraCampo(produto.alturaCm),
+          diametroMm: paraCampo(produto.diametroMm),
+          materialTampa: produto.materialTampa ?? "",
+          complementoTampa: produto.complementoTampa ?? "",
+          fornecedorTampaId: produto.fornecedorTampaId ?? "",
+          fornecedorTampaVariavel: produto.fornecedorTampaVariavel ? "1" : "",
+          codigoTampa: produto.codigoTampa ?? "",
+          acabamento: produto.acabamento ?? "",
+          acabamentoValorCom: paraCampo(produto.acabamentoValorCom, 2),
+          acabamentoValorSem: paraCampo(produto.acabamentoValorSem, 2),
           aditivos: produto.aditivos.map((a) => a.aditivoId),
         }}
       />

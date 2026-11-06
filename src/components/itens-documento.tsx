@@ -20,8 +20,9 @@ import {
   formatarMoeda,
 } from "@/components/ui";
 import { AcaoComRecusa } from "@/components/acao-com-recusa";
+import { AcabamentoDoItem } from "@/components/campo-acabamento";
 import { ErroGeral, Formulario } from "@/components/formulario";
-import { SelecaoBuscavel } from "@/components/selecao-buscavel";
+import { type OpcaoBuscavel, SelecaoBuscavel } from "@/components/selecao-buscavel";
 import type { EstadoFormulario } from "@/lib/erro-formulario";
 import { CAMPO_IPI, CAMPO_IPI_DEFINIDO } from "@/lib/ipi-do-formulario";
 import { escreverNumeroBr, lerNumeroBr } from "@/lib/numero-br";
@@ -29,12 +30,15 @@ import type { Aditivo } from "@/lib/precificacao";
 import {
   ROTULO_UNIDADE,
   type Familia,
+  type MarcaMaoDeObra,
   type UnidadeVenda,
+  opcoesDeMaoDeObra,
   precoUnitario,
   rotuloColunaPreco,
   rotuloPrecoDosItens,
   unidadesDoItem,
 } from "@/lib/produto-preco";
+import type { TampaDaLinha } from "@/lib/tampa-do-item";
 
 /**
  * O retorno de qualquer ação de item — o mesmo de todo formulário do sistema
@@ -71,7 +75,12 @@ export type ProdutoOpcao = {
   unidadeAvulsa: UnidadeVenda | null;
   precoAvulso: string | null;
   unidadesPorCaixa: number | null;
+  acabamento: string | null;
+  acabamentoValorCom: string | null;
+  acabamentoValorSem: string | null;
   aditivos: Aditivo[];
+  /** O conjunto em que a tampa muda de fornecedor: pede a escolha ao lançar. */
+  fornecedorTampaVariavel: boolean;
   /**
    * A unidade em que o produto é vendido, lida do rótulo dele. É a que o item
    * abre escolhida: um saco vendido por quilo não pode nascer em MIL e depender
@@ -94,6 +103,10 @@ export type ItemPedido = {
   totalSemIpi: string;
   valorIpi: string;
   total: string;
+  /** A tampa do conjunto, quando há o que dizer dela. Não vai para o PDF. */
+  tampa?: TampaDaLinha;
+  /** Como o acabamento foi cobrado. Nulo sem acabamento. Também fora do PDF. */
+  maoDeObra?: boolean | null;
   /**
    * Onde cadastrar esta linha como produto, quando ela ainda não é um.
    *
@@ -124,6 +137,8 @@ export function SecaoItens({
   remover,
   definirIpiDeTodos,
   semPreco = false,
+  fornecedoresDaTampa = [],
+  fornecedorTampaObrigatorio = false,
 }: {
   itens: ItemPedido[];
   produtos: ProdutoOpcao[];
@@ -148,6 +163,10 @@ export function SecaoItens({
    * de todo jeito; esconder é para a tela não mostrar um R$ 0,00 em cada linha.
    */
   semPreco?: boolean;
+  /** As indústrias que o conjunto de fornecedor variável pode escolher. */
+  fornecedoresDaTampa?: OpcaoBuscavel[];
+  /** O pedido é a compra e exige a escolha; a proposta pode deixá-la para depois. */
+  fornecedorTampaObrigatorio?: boolean;
 }) {
   const [estadoAdicao, enviarAdicao, adicionando] = useActionState(adicionar, {});
 
@@ -230,6 +249,7 @@ export function SecaoItens({
               atualizar={atualizar}
               remover={remover}
               semPreco={semPreco}
+              fornecedoresDaTampa={fornecedoresDaTampa}
             />
           ))}
         </Tabela>
@@ -280,11 +300,75 @@ export function SecaoItens({
               enviar={enviarAdicao}
               enviando={adicionando}
               semPreco={semPreco}
+              fornecedoresDaTampa={fornecedoresDaTampa}
+              fornecedorTampaObrigatorio={fornecedorTampaObrigatorio}
             />
           ))}
         </div>
       )}
     </SecaoCartao>
+  );
+}
+
+/**
+ * A tampa embaixo da descrição: só para quem lê na tela, e por isso fora das colunas
+ * que imitam o PDF.
+ *
+ * O seletor é nativo porque a tabela rola de lado, e essa rolagem cortaria a lista
+ * da `SelecaoBuscavel`. Grava sozinho, como a caixa do IPI.
+ */
+function TampaNaLinha({
+  itemId,
+  tampa,
+  editavel,
+  salvando,
+  fornecedores,
+}: {
+  itemId: string;
+  tampa: TampaDaLinha;
+  editavel: boolean;
+  salvando: boolean;
+  fornecedores: OpcaoBuscavel[];
+}) {
+  const atual = tampa.fornecedorId ?? "";
+  const semEscolha = tampa.variavel && !tampa.fornecedorNome;
+  const opcoes =
+    atual && !fornecedores.some((f) => f.id === atual)
+      ? [{ id: atual, rotulo: tampa.fornecedorNome ?? "Indústria escolhida" }, ...fornecedores]
+      : fornecedores;
+
+  return (
+    <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1 mt-1 font-sans text-mini text-tinta-3">
+      Tampa:
+      {tampa.variavel && editavel ? (
+        <select
+          form={`item-${itemId}`}
+          name="fornecedorTampaId"
+          aria-label="Fornecedor da tampa"
+          defaultValue={atual}
+          disabled={salvando}
+          onChange={(evento) => evento.currentTarget.form?.requestSubmit()}
+          className={`${CLASSE_CONTROLE_CELULA} max-w-48 ${semEscolha ? CLASSE_ERRO : ""}`}
+        >
+          <option value="">a escolher</option>
+          {opcoes.map((opcao) => (
+            <option key={opcao.id} value={opcao.id}>
+              {opcao.rotulo}
+            </option>
+          ))}
+        </select>
+      ) : semEscolha ? (
+        <span className="text-perigo">fornecedor a escolher</span>
+      ) : (
+        tampa.fornecedorNome && <span>{tampa.fornecedorNome}</span>
+      )}
+      {/* Com o seletor, a coluna estreita põe o código em outra linha, e o ponto sobraria. */}
+      {tampa.codigo && (
+        <span>
+          {tampa.fornecedorNome && !(tampa.variavel && editavel) ? "· " : ""}cód. {tampa.codigo}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -295,6 +379,7 @@ function LinhaItem({
   atualizar,
   remover,
   semPreco,
+  fornecedoresDaTampa,
 }: {
   item: ItemPedido;
   editavel: boolean;
@@ -302,6 +387,7 @@ function LinhaItem({
   atualizar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   remover: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   semPreco: boolean;
+  fornecedoresDaTampa: OpcaoBuscavel[];
 }) {
   const [estado, enviar, salvando] = useActionState(atualizar, {});
   // No cartão do celular, cada linha diz o preço na unidade dela.
@@ -367,6 +453,20 @@ function LinhaItem({
       </Celula>
       <Celula data-area="descricao" className="font-mono text-mini">
         {item.descricao}
+        {item.tampa && (
+          <TampaNaLinha
+            itemId={item.id}
+            tampa={item.tampa}
+            editavel={editavel}
+            salvando={salvando}
+            fornecedores={fornecedoresDaTampa}
+          />
+        )}
+        {item.maoDeObra !== null && item.maoDeObra !== undefined && (
+          <span className="block mt-1 font-sans text-mini text-tinta-3">
+            {item.maoDeObra ? "Com mão de obra" : "Sem mão de obra"}
+          </span>
+        )}
         {item.cadastrarEm && (
           <Link
             href={item.cadastrarEm}
@@ -549,14 +649,20 @@ function FormularioAdicao({
   enviar,
   enviando,
   semPreco,
+  fornecedoresDaTampa,
+  fornecedorTampaObrigatorio,
 }: {
   produtos: ProdutoOpcao[];
   estado: EstadoFormulario;
   enviar: (formData: FormData) => void;
   enviando: boolean;
   semPreco: boolean;
+  fornecedoresDaTampa: OpcaoBuscavel[];
+  fornecedorTampaObrigatorio: boolean;
 }) {
   const [produtoId, setProdutoId] = useState("");
+  const [fornecedorTampaId, setFornecedorTampaId] = useState("");
+  const [maoDeObra, setMaoDeObra] = useState<MarcaMaoDeObra | "">("");
   const [unidade, setUnidade] = useState<UnidadeVenda | "">("");
   const [quantidade, setQuantidade] = useState("");
   const [precoManual, setPrecoManual] = useState<string | null>(null);
@@ -573,6 +679,8 @@ function FormularioAdicao({
     setEstadoVisto(estado);
     if (!estado.erro) {
       setProdutoId("");
+      setFornecedorTampaId("");
+      setMaoDeObra("");
       setUnidade("");
       setQuantidade("");
       setPrecoManual(null);
@@ -580,6 +688,14 @@ function FormularioAdicao({
   }
 
   const produto = produtos.find((p) => p.id === produtoId);
+  const escolheFornecedorTampa = produto?.fornecedorTampaVariavel ?? false;
+
+  /*
+   * O acabamento vem do cadastro, e a linha só diz com ou sem mão de obra. Com um
+   * valor só no cadastro, não há o que perguntar.
+   */
+  const opcoesMaoDeObra = useMemo(() => (produto ? opcoesDeMaoDeObra(produto) : []), [produto]);
+  const marcaCobrada = opcoesMaoDeObra.length === 1 ? opcoesMaoDeObra[0].marca : maoDeObra;
 
   /*
    * O código da indústria entra como detalhe porque também é buscável: quem
@@ -608,8 +724,11 @@ function FormularioAdicao({
   /** Preço sugerido pelo motor de preço — o usuário pode sobrescrever. */
   const precoCalculado = useMemo(() => {
     if (!produto || !unidadeEfetiva) return null;
-    return precoUnitario(produto, unidadeEfetiva);
-  }, [produto, unidadeEfetiva]);
+    return precoUnitario(
+      { ...produto, acabamentoMaoDeObra: marcaCobrada ? marcaCobrada === "COM" : null },
+      unidadeEfetiva,
+    );
+  }, [produto, unidadeEfetiva, marcaCobrada]);
 
   // O preço vai para o campo com a precisão cheia, e não arredondado para
   // centavos: no pedido 2253 o milheiro é 1.774,872, e enviar 1.774,87 faria
@@ -637,8 +756,12 @@ function FormularioAdicao({
       <div
         className={`grid gap-3 sm:grid-cols-2 lg:items-start ${
           semPreco
-            ? "lg:grid-cols-[minmax(12rem,2fr)_7rem_8rem_auto]"
-            : "lg:grid-cols-[minmax(12rem,2fr)_7rem_8rem_9.5rem_auto_auto]"
+            ? escolheFornecedorTampa
+              ? "lg:grid-cols-[minmax(12rem,2fr)_minmax(10rem,1fr)_7rem_8rem_auto]"
+              : "lg:grid-cols-[minmax(12rem,2fr)_7rem_8rem_auto]"
+            : escolheFornecedorTampa
+              ? "lg:grid-cols-[minmax(12rem,2fr)_minmax(10rem,1fr)_7rem_8rem_9.5rem_auto_auto]"
+              : "lg:grid-cols-[minmax(12rem,2fr)_7rem_8rem_9.5rem_auto_auto]"
         }`}
       >
         <SelecaoBuscavel
@@ -649,6 +772,8 @@ function FormularioAdicao({
           value={produtoId}
           aoEscolher={(id) => {
             setProdutoId(id);
+            setFornecedorTampaId("");
+            setMaoDeObra("");
             setUnidade("");
             setPrecoManual(null);
           }}
@@ -664,6 +789,39 @@ function FormularioAdicao({
            */
           lado="cima"
         />
+
+        {escolheFornecedorTampa && (
+          <SelecaoBuscavel
+            name="fornecedorTampaId"
+            rotulo="Fornecedor da tampa"
+            required={fornecedorTampaObrigatorio}
+            opcoes={fornecedoresDaTampa}
+            value={fornecedorTampaId}
+            aoEscolher={setFornecedorTampaId}
+            placeholder="Buscar…"
+            dica={fornecedorTampaObrigatorio ? undefined : "Pode ficar para quando virar pedido."}
+            lado="cima"
+          />
+        )}
+
+        {/*
+          Logo depois do produto, porque muda o preço: no celular, onde tudo vem em
+          coluna, a pergunta fica antes do Adicionar. No computador a fileira de
+          campos está cheia, e ela desce para a linha de baixo.
+        */}
+        {produto?.acabamento && opcoesMaoDeObra.length > 0 && (
+          <div className="col-span-full lg:order-last">
+            <AcabamentoDoItem
+              acabamento={produto.acabamento}
+              opcoes={opcoesMaoDeObra}
+              value={marcaCobrada}
+              aoMudar={(marca) => {
+                setMaoDeObra(marca);
+                setPrecoManual(null);
+              }}
+            />
+          </div>
+        )}
 
         <Selecao
           name="unidade"

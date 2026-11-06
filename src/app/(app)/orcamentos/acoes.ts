@@ -39,6 +39,7 @@ import {
 } from "@/lib/envio-pedido";
 import { carregarOrcamentoParaPdf, gerarPdfOrcamento } from "@/lib/pdf/gerar-orcamento";
 import { soIndustriasMarcadas } from "@/lib/industrias-do-ator";
+import { tampaDaConta, tampaDoItem, trocaDeTampa } from "@/lib/tampa-do-item";
 import {
   ErroDeCampo,
   ErroParaUsuario,
@@ -52,6 +53,8 @@ import { nomeCompleto } from "@/lib/nome-usuario";
 import {
   contaDoFormulario,
   dadosDoFormulario,
+  fornecedorDaTampaVaria,
+  lerMaoDeObra,
   formularioDaConta,
   lerConta,
 } from "../produtos/leitura";
@@ -586,7 +589,7 @@ export async function adicionarItem(
   formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
-    const { organizacaoId, db } = await contexto();
+    const { organizacaoId, usuarioId, ehAdmin, db } = await contexto();
     const orcamento = await exigirAberto(db, orcamentoId, organizacaoId);
 
     /*
@@ -609,7 +612,10 @@ export async function adicionarItem(
 
     const produto = await db.produto.findFirst({
       where: { id: produtoId, organizacaoId },
-      include: { aditivos: { include: { aditivo: true } } },
+      include: {
+        aditivos: { include: { aditivo: true } },
+        fornecedorTampa: { select: { nome: true } },
+      },
     });
 
     if (!produto) {
@@ -644,8 +650,18 @@ export async function adicionarItem(
       );
     }
 
+    const tampa = await tampaDoItem(
+      db,
+      { organizacaoId, usuarioId, ehAdmin },
+      produto,
+      formData,
+      { obrigatorio: false },
+    );
+
     const unidade = String(formData.get("unidade") ?? "") as UnidadeVenda;
-    const precificavel = paraPrecificavel(produto);
+    const doCadastro = paraPrecificavel(produto);
+    const acabamentoMaoDeObra = lerMaoDeObra(formData, doCadastro);
+    const precificavel = { ...doCadastro, acabamentoMaoDeObra };
 
     const precoInformado = lerPreco(formData);
     const precoCalculado = precoUnitario(precificavel, unidade);
@@ -673,6 +689,8 @@ export async function adicionarItem(
         // A guarda lá em cima garantiu que o produto é do cliente, então o
         // código do produto é o número que ELE usa.
         codigoCliente: produto.codigoCliente,
+        ...tampa,
+        acabamentoMaoDeObra,
         unidade,
         quantidade: String(quantidade),
         comIpi: comIpiItem,
@@ -707,7 +725,7 @@ export async function adicionarItemPorConta(
   formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
-    const { organizacaoId, db } = await contexto();
+    const { organizacaoId, usuarioId, ehAdmin, db } = await contexto();
     const orcamento = await exigirAberto(db, orcamentoId, organizacaoId);
 
     if (orcamento.clienteId) {
@@ -746,10 +764,19 @@ export async function adicionarItemPorConta(
       );
     }
 
+    const acabamentoMaoDeObra = lerMaoDeObra(formData, dados);
+
     const precificavel: ProdutoPrecificavel = {
       ...dados,
+      acabamentoMaoDeObra,
       aditivos: aditivos.map((a) => ({ ...a, valor: a.valor.toString() })),
     };
+
+    const tampa = await tampaDaConta(
+      db,
+      { organizacaoId, usuarioId, ehAdmin },
+      conta.fornecedorTampaId,
+    );
 
     const unidade = String(formData.get("unidade") ?? "") as UnidadeVenda;
     if (!unidadesDaFamilia(dados.familia).includes(unidade)) {
@@ -786,6 +813,8 @@ export async function adicionarItemPorConta(
         descricao,
         codigoFornecedor: null,
         codigoCliente: null,
+        ...tampa,
+        acabamentoMaoDeObra,
         unidade,
         quantidade: String(quantidade),
         comIpi,
@@ -813,7 +842,7 @@ export async function atualizarItem(
   formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
-    const { organizacaoId, db } = await contexto();
+    const { organizacaoId, usuarioId, ehAdmin, db } = await contexto();
     await exigirAberto(db, orcamentoId, organizacaoId);
 
     const itemId = lerTexto(formData.get("itemId"));
@@ -843,9 +872,18 @@ export async function atualizarItem(
           .toString()
       : item.pesoKg.toString();
 
+    const tampa = await trocaDeTampa(
+      db,
+      { organizacaoId, usuarioId, ehAdmin },
+      item,
+      fornecedorDaTampaVaria(item),
+      formData,
+    );
+
     await db.orcamentoItem.update({
       where: { id: itemId },
       data: {
+        ...tampa,
         quantidade: String(quantidade),
         precoUnitario: String(preco),
         // Aqui lia-se `comIpi`, campo que formulário nenhum envia — ver
@@ -1042,6 +1080,10 @@ async function gerarPedido(orcamentoId: string): Promise<string> {
           familia: i.familia,
           codigoFornecedor: i.codigoFornecedor,
           codigoCliente: i.codigoCliente,
+          fornecedorTampaId: i.fornecedorTampaId,
+          fornecedorTampaNome: i.fornecedorTampaNome,
+          codigoTampa: i.codigoTampa,
+          acabamentoMaoDeObra: i.acabamentoMaoDeObra,
           descricao: i.descricao,
           unidade: i.unidade,
           quantidade: i.quantidade,
@@ -1144,6 +1186,18 @@ export async function cadastrarProdutosDaProposta(
           `Na linha “${item.descricao}”: ${erro.message} Use “cadastrar como produto” nessa linha ` +
             "para corrigir.",
         );
+      }
+
+      if (dados.fornecedorTampaId) {
+        const existe = await db.fornecedor.count({
+          where: { id: dados.fornecedorTampaId, organizacaoId },
+        });
+        if (existe === 0) {
+          throw new ErroParaUsuario(
+            `A linha “${item.descricao}” tem como fornecedor da tampa uma indústria que não existe ` +
+              "mais. Use “cadastrar como produto” nessa linha e escolha outra.",
+          );
+        }
       }
 
       const aditivos = await db.aditivo.count({

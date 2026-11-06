@@ -14,7 +14,9 @@
  * Rode com:  npm run test:navegador
  */
 
+import { useState } from "react";
 import { expect, test, describe } from "vitest";
+import { userEvent } from "vitest/browser";
 import { render } from "vitest-browser-react";
 
 import {
@@ -253,5 +255,151 @@ describe("digitar logo ao entrar", () => {
     // E o quadro seguinte não seleciona o que já foi digitado.
     expect(campo.selectionStart).toBe(campo.value.length);
     await expect.element(tela.getByRole("option", { name: /Caixa/ })).toBeVisible();
+  });
+});
+
+describe("modo livre: a lista só sugere", () => {
+  const MATERIAIS: OpcaoBuscavel[] = [
+    { id: "PEAD", rotulo: "PEAD" },
+    { id: "PEAD Reciclado", rotulo: "PEAD Reciclado" },
+    { id: "PP", rotulo: "PP" },
+  ];
+
+  /** Como a tela usa: controlado, com o valor guardado pelo pai. */
+  function Livre({ inicial = "", opcoes = MATERIAIS }: { inicial?: string; opcoes?: OpcaoBuscavel[] }) {
+    const [valor, setValor] = useState(inicial);
+
+    return (
+      <form onSubmit={(e) => e.preventDefault()}>
+        <SelecaoBuscavel
+          livre
+          name="material"
+          rotulo="Material"
+          opcoes={opcoes}
+          value={valor}
+          aoEscolher={setValor}
+        />
+        <button type="button">fora</button>
+        <output>{valor}</output>
+      </form>
+    );
+  }
+
+  const enviado = () =>
+    document.querySelector<HTMLInputElement>('input[name="material"]')?.value;
+
+  test("o que se digita já é o valor, a cada tecla", async () => {
+    const tela = await render(<Livre />);
+
+    await userEvent.type(tela.getByRole("combobox"), "PEAD 100% virgem");
+
+    await expect.element(tela.getByRole("status")).toHaveTextContent("PEAD 100% virgem");
+    expect(enviado()).toBe("PEAD 100% virgem");
+  });
+
+  test("a lista filtra enquanto se digita", async () => {
+    const tela = await render(<Livre />);
+
+    await userEvent.type(tela.getByRole("combobox"), "recic");
+
+    await expect.element(tela.getByRole("option")).toHaveTextContent("PEAD Reciclado");
+  });
+
+  test("Enter guarda o texto digitado, e não a primeira da lista", async () => {
+    const tela = await render(<Livre />);
+
+    await userEvent.type(tela.getByRole("combobox"), "PE{Enter}");
+
+    expect(enviado()).toBe("PE");
+    await expect.element(tela.getByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  test("a seta escolhe a sugestão", async () => {
+    const tela = await render(<Livre />);
+
+    await userEvent.type(tela.getByRole("combobox"), "PE{ArrowDown}{Enter}");
+
+    expect(enviado()).toBe("PEAD");
+  });
+
+  test("o clique escolhe a sugestão", async () => {
+    const tela = await render(<Livre />);
+
+    await tela.getByRole("combobox").click();
+    await tela.getByRole("option", { name: "PP" }).click();
+
+    expect(enviado()).toBe("PP");
+  });
+
+  test("ao sair do campo, a grafia vira a da lista", async () => {
+    const tela = await render(<Livre />);
+
+    await userEvent.type(tela.getByRole("combobox"), "pead");
+    await userEvent.tab();
+
+    expect(enviado()).toBe("PEAD");
+  });
+
+  test("o valor fora da lista aparece na caixa ao abrir a tela", async () => {
+    const tela = await render(<Livre inicial="Fita adesiva marrom" />);
+
+    await expect.element(tela.getByRole("combobox")).toHaveValue("Fita adesiva marrom");
+  });
+
+  test("sem sugestão nenhuma, é só uma caixa de texto", async () => {
+    const tela = await render(<Livre opcoes={[]} />);
+
+    await userEvent.type(tela.getByRole("combobox"), "Item especial");
+
+    await expect.element(tela.getByRole("listbox")).not.toBeInTheDocument();
+    expect(enviado()).toBe("Item especial");
+  });
+});
+
+describe("modo livre: deixa claro que outro texto também vale", () => {
+  const OPCOES: OpcaoBuscavel[] = [{ id: "PP", rotulo: "PP" }];
+
+  function Livre() {
+    const [valor, setValor] = useState("");
+    return (
+      <SelecaoBuscavel
+        livre
+        name="material"
+        rotulo="Material"
+        opcoes={OPCOES}
+        value={valor}
+        aoEscolher={setValor}
+      />
+    );
+  }
+
+  test("o campo diz que dá para digitar outro", async () => {
+    const tela = await render(<Livre />);
+
+    await expect
+      .element(tela.getByRole("combobox"))
+      .toHaveAttribute("placeholder", "Escolha ou digite outro…");
+  });
+
+  test("fora da lista, avisa que o texto vale, e ele fica", async () => {
+    const tela = await render(<Livre />);
+
+    await userEvent.type(tela.getByRole("combobox"), "ABS");
+
+    await expect
+      .element(tela.getByText("Não está na lista, mas vale: sai como você digitou."))
+      .toBeVisible();
+
+    await userEvent.tab();
+
+    await expect.element(tela.getByRole("combobox")).toHaveValue("ABS");
+  });
+
+  test("sem o modo livre, a frase continua sendo a de sempre", async () => {
+    const tela = await render(<SelecaoBuscavel name="x" rotulo="Tipo" opcoes={OPCOES} />);
+
+    await userEvent.type(tela.getByRole("combobox"), "zzz");
+
+    await expect.element(tela.getByText("Nada encontrado.")).toBeVisible();
   });
 });

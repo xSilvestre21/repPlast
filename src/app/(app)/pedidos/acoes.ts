@@ -32,10 +32,13 @@ import {
   precoUnitario,
 } from "@/lib/produto-preco";
 import { soIndustriasMarcadas } from "@/lib/industrias-do-ator";
+import { tampaDoItem, trocaDeTampa } from "@/lib/tampa-do-item";
 import { prepostoDoNovoPedido } from "@/lib/preposto-do-pedido";
 import { escopoAtual } from "@/lib/sessao";
 import { calcularTotaisPedido } from "@/lib/totais";
 import { nomeCompleto } from "@/lib/nome-usuario";
+
+import { lerMaoDeObra } from "../produtos/leitura";
 
 export type { EstadoFormulario };
 
@@ -489,7 +492,7 @@ export async function adicionarItem(
   formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
-    const { organizacaoId, usuarioId, db } = await contexto();
+    const { organizacaoId, usuarioId, ehAdmin, db } = await contexto();
     const pedido = await exigirAberto(db, pedidoId, organizacaoId);
 
     const produtoId = lerTexto(formData.get("produtoId"));
@@ -499,7 +502,10 @@ export async function adicionarItem(
 
     const produto = await db.produto.findFirst({
       where: { id: produtoId, organizacaoId },
-      include: { aditivos: { include: { aditivo: true } } },
+      include: {
+        aditivos: { include: { aditivo: true } },
+        fornecedorTampa: { select: { nome: true } },
+      },
     });
 
     if (!produto) {
@@ -530,8 +536,18 @@ export async function adicionarItem(
       );
     }
 
+    const tampa = await tampaDoItem(
+      db,
+      { organizacaoId, usuarioId, ehAdmin },
+      produto,
+      formData,
+      { obrigatorio: true },
+    );
+
     const unidade = String(formData.get("unidade") ?? "") as UnidadeVenda;
-    const precificavel = paraPrecificavel(produto);
+    const doCadastro = paraPrecificavel(produto);
+    const acabamentoMaoDeObra = lerMaoDeObra(formData, doCadastro);
+    const precificavel = { ...doCadastro, acabamentoMaoDeObra };
 
     /*
      * Sem o formulário opinar, o item novo acompanha as linhas que já estão lá.
@@ -589,6 +605,8 @@ export async function adicionarItem(
         codigoFornecedor: produto.codigoFornecedor,
         // O COD.CLI do PDF: o código que ESTE cliente usa para ESTE produto.
         codigoCliente: produto.codigoCliente,
+        ...tampa,
+        acabamentoMaoDeObra,
         unidade,
         quantidade: String(quantidade),
         comIpi: comIpiItem,
@@ -616,7 +634,7 @@ export async function atualizarItem(
   formData: FormData,
 ): Promise<EstadoFormulario> {
   try {
-    const { organizacaoId, usuarioId, db } = await contexto();
+    const { organizacaoId, usuarioId, ehAdmin, db } = await contexto();
     const pedido = await exigirAberto(db, pedidoId, organizacaoId);
 
     const itemId = String(formData.get("itemId") ?? "");
@@ -643,9 +661,18 @@ export async function atualizarItem(
       ? pesoDoItem(paraPrecificavel(item.produto), item.unidade as UnidadeVenda, quantidade)
       : null;
 
+    const tampa = await trocaDeTampa(
+      db,
+      { organizacaoId, usuarioId, ehAdmin },
+      item,
+      item.produto?.fornecedorTampaVariavel ?? false,
+      formData,
+    );
+
     await db.pedidoItem.update({
       where: { id: itemId },
       data: {
+        ...tampa,
         quantidade: String(quantidade),
         precoUnitario: String(preco),
         // Sem opinião no formulário, o valor do item fica como está — é o que
@@ -729,12 +756,19 @@ export async function alternarAmostra(
         select: {
           id: true,
           unidade: true,
+          acabamentoMaoDeObra: true,
           produto: { include: { aditivos: { include: { aditivo: true } } } },
         },
       });
       for (const item of itens) {
         const preco = item.produto
-          ? precoUnitario(paraPrecificavel(item.produto), item.unidade as UnidadeVenda)
+          ? precoUnitario(
+              {
+                ...paraPrecificavel(item.produto),
+                acabamentoMaoDeObra: item.acabamentoMaoDeObra,
+              },
+              item.unidade as UnidadeVenda,
+            )
           : null;
         if (preco === null) continue;
         await db.pedidoItem.update({ where: { id: item.id }, data: { precoUnitario: preco.toString() } });
@@ -1196,6 +1230,10 @@ async function copiarPedido(pedidoId: string): Promise<string> {
           descricao: item.descricao,
           codigoFornecedor: item.codigoFornecedor,
           codigoCliente: item.codigoCliente,
+          fornecedorTampaId: item.fornecedorTampaId,
+          fornecedorTampaNome: item.fornecedorTampaNome,
+          codigoTampa: item.codigoTampa,
+          acabamentoMaoDeObra: item.acabamentoMaoDeObra,
           unidade: item.unidade,
           quantidade: item.quantidade,
           // A isenção é do ITEM, então acompanha a cópia. Sem esta linha o

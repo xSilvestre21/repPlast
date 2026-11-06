@@ -13,8 +13,6 @@ import Decimal from "decimal.js";
 
 Decimal.set({ rounding: Decimal.ROUND_HALF_UP, precision: 40 });
 
-export type Familia = "SACO" | "FITA" | "STRETCH" | "BOBINA" | "AVULSO";
-
 /**
  * Onde o valor do aditivo é somado — antes ou depois da fórmula.
  *

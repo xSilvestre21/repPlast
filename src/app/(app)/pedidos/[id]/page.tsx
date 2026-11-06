@@ -40,6 +40,8 @@ import { AcaoPedido, CancelarPedido, MotivoDoCancelamento } from "./acoes-status
 import { SecaoCabecalho } from "./cabecalho";
 import { BotaoEnviarEmail } from "./envio";
 import { SecaoItens } from "@/components/itens-documento";
+import { soIndustriasMarcadas } from "@/lib/industrias-do-ator";
+import { tampaParaTela } from "@/lib/tampa-do-item";
 import { MaisAcoes } from "@/components/mais-acoes";
 import { Pagina } from "@/components/pagina";
 import { enderecoCompleto } from "@/lib/endereco";
@@ -71,7 +73,10 @@ export default async function PaginaPedido({
           },
         },
       },
-      itens: { orderBy: { ordem: "asc" } },
+      itens: {
+        orderBy: { ordem: "asc" },
+        include: { produto: { select: { fornecedorTampaVariavel: true } } },
+      },
       envios: {
         orderBy: { enviadoEm: "desc" },
         select: { id: true, de: true, para: true, cc: true, anexos: true, enviadoEm: true },
@@ -150,6 +155,19 @@ export default async function PaginaPedido({
     orderBy: { descricao: "asc" },
     include: { aditivos: { include: { aditivo: true } } },
   });
+
+  /** Só o conjunto de fornecedor variável pergunta, e aí vale a lista de escolher. */
+  const escolheFornecedorTampa =
+    produtos.some((p) => p.fornecedorTampaVariavel) ||
+    pedido.itens.some((i) => i.produto?.fornecedorTampaVariavel);
+
+  const fornecedoresDaTampa = escolheFornecedorTampa
+    ? await db.fornecedor.findMany({
+        where: { organizacaoId, ativo: true, ...soIndustriasMarcadas({ ehAdmin, usuarioId }) },
+        orderBy: { nome: "asc" },
+        select: { id: true, nome: true },
+      })
+    : [];
 
   /*
    * Mesma regra do orçamento: o pedido abre para LEITURA depois de pronto.
@@ -479,7 +497,11 @@ export default async function PaginaPedido({
             comIpi: item.comIpi,
             valorIpi: item.valorIpi.toString(),
             total: item.total.toString(),
+            maoDeObra: item.acabamentoMaoDeObra,
+            tampa: tampaParaTela(item, item.produto?.fornecedorTampaVariavel ?? false),
           }))}
+          fornecedorTampaObrigatorio
+          fornecedoresDaTampa={fornecedoresDaTampa.map((f) => ({ id: f.id, rotulo: f.nome }))}
           produtos={produtos.map((p) => ({
             id: p.id,
             descricao: p.descricao,
@@ -496,6 +518,10 @@ export default async function PaginaPedido({
             unidadeAvulsa: p.unidadeAvulsa,
             precoAvulso: texto(p.precoAvulso),
             unidadesPorCaixa: p.unidadesPorCaixa,
+            acabamento: p.acabamento,
+            acabamentoValorCom: texto(p.acabamentoValorCom),
+            acabamentoValorSem: texto(p.acabamentoValorSem),
+            fornecedorTampaVariavel: p.fornecedorTampaVariavel,
             unidadePadrao: unidadeDoRotulo(p.unidadeRotulo),
             aditivos: p.aditivos.map(({ aditivo }) => ({
               nome: aditivo.nome,

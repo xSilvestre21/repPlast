@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import { type MouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
 
-import { achatar } from "@/components/selecao-buscavel";
+import { achatar } from "@/lib/busca";
 import { CLASSE_CONTROLE, EstadoVazio } from "@/components/ui";
 
 /** O ícone de cada seção, pelo nome — componente de ícone não atravessa do servidor. */

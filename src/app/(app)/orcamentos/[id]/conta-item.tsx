@@ -13,7 +13,15 @@
 
 import { useActionState, useMemo, useState } from "react";
 
-import { SelecaoBuscavel } from "@/components/selecao-buscavel";
+import { CampoAcabamento, EscolhaMaoDeObra } from "@/components/campo-acabamento";
+import { CampoAditivos } from "@/components/campo-aditivos";
+import { CampoComplemento } from "@/components/campo-complemento";
+import {
+  CampoFornecedorDaTampa,
+  CamposDaTampa,
+  MedidasEmbalagem,
+} from "@/components/campos-embalagem";
+import { type OpcaoBuscavel, SelecaoBuscavel } from "@/components/selecao-buscavel";
 import { ErroGeral, Formulario } from "@/components/formulario";
 import {
   Botao,
@@ -30,39 +38,27 @@ import { DENSIDADE_PADRAO, pesoMilheiroKg } from "@/lib/precificacao";
 import {
   ROTULO_UNIDADE,
   type Familia,
+  type MarcaMaoDeObra,
   type ProdutoPrecificavel,
   type UnidadeVenda,
+  ehPorMilheiro,
+  opcoesDeMaoDeObra,
   precoUnitario,
   unidadesDaFamilia,
 } from "@/lib/produto-preco";
+import {
+  OPCOES_TIPO,
+  TIPOS,
+  type CamposDaEmbalagem,
+  type TipoProduto,
+  camposAoTrocarDeTipo,
+  descricaoDoTipo,
+  tipoPorValor,
+} from "@/lib/tipos-produto";
 
 import type { EstadoFormulario } from "../acoes";
 import type { Conta } from "../../produtos/leitura";
 import type { AditivoOpcao, MaterialOpcao } from "../../produtos/formulario";
-
-/**
- * O que se escolhe na tela: o TIPO, não a família.
- *
- * Quase sempre são a mesma coisa. O shrink é a exceção: o representante vende
- * e fala dele como coisa própria, mas no cadastro ele é STRETCH — por kg, sem
- * medida de saco —, que é como a importação do SICOV já o grava. O tipo vive
- * só aqui; o que vai para o servidor é a família.
- *
- * `nome` é o que abre a descrição impressa (a nomenclatura dos pedidos 133 e
- * 146: tipo, medidas sem unidade, complemento). Vem preenchido para a
- * descrição se montar sozinha; o saco não tem, porque ali o que abre são as
- * medidas e o material vem depois.
- */
-const TIPOS = [
-  { valor: "SACO", familia: "SACO", rotulo: "Saco plástico", nome: "" },
-  { valor: "FITA", familia: "FITA", rotulo: "Fita", nome: "Fita adesiva" },
-  { valor: "STRETCH", familia: "STRETCH", rotulo: "Stretch", nome: "FILME STRETCH" },
-  { valor: "SHRINK", familia: "STRETCH", rotulo: "Shrink", nome: "FILME SHRINK" },
-  { valor: "BOBINA", familia: "BOBINA", rotulo: "Bobina", nome: "BOBINA" },
-  { valor: "AVULSO", familia: "AVULSO", rotulo: "Avulso", nome: "" },
-] as const satisfies readonly { valor: string; familia: Familia; rotulo: string; nome: string }[];
-
-type Tipo = (typeof TIPOS)[number];
 
 /**
  * Como a fita é vendida — escolhido ANTES dos preços, para a tela pedir só o
@@ -90,10 +86,6 @@ const MODOS_FITA = [
 
 type ModoFita = (typeof MODOS_FITA)[number];
 
-const tipoPorValor = (valor: string): Tipo => TIPOS.find((t) => t.valor === valor) ?? TIPOS[0];
-
-const OPCOES_TIPO = TIPOS.map((t) => ({ id: t.valor, rotulo: t.rotulo }));
-
 const CONTA_VAZIA: Conta = {
   familia: "SACO",
   material: "",
@@ -114,6 +106,17 @@ const CONTA_VAZIA: Conta = {
   precoKg: "",
   unidadeAvulsa: "UN",
   precoAvulso: "",
+  capacidade: "",
+  capacidadeUnidade: "",
+  alturaCm: "",
+  diametroMm: "",
+  materialTampa: "",
+  complementoTampa: "",
+  fornecedorTampaId: "",
+  fornecedorTampaVariavel: "",
+  acabamento: "",
+  acabamentoValorCom: "",
+  acabamentoValorSem: "",
   aditivos: [],
 };
 
@@ -126,19 +129,24 @@ const numero = (texto: string) => {
 export function ContaItem({
   materiais,
   aditivos,
+  industrias,
   adicionar,
 }: {
   materiais: MaterialOpcao[];
   aditivos: AditivoOpcao[];
+  /** Quem pode fornecer a tampa dos conjuntos. */
+  industrias: OpcaoBuscavel[];
   adicionar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
 }) {
   const [conta, setConta] = useState<Conta>(CONTA_VAZIA);
-  const [tipo, setTipo] = useState<Tipo>(TIPOS[0]);
+  const [tipo, setTipo] = useState<TipoProduto>(TIPOS[0]);
   const [modoFita, setModoFita] = useState<ModoFita>(MODOS_FITA[0]);
   const [descricaoManual, setDescricaoManual] = useState<string | null>(null);
   const [unidadeEscolhida, setUnidadeEscolhida] = useState<UnidadeVenda | "">("");
   const [quantidade, setQuantidade] = useState("");
   const [precoManual, setPrecoManual] = useState<string | null>(null);
+  /** Com ou sem mão de obra: a conta é o item, e por isso a escolha mora aqui. */
+  const [maoDeObra, setMaoDeObra] = useState<MarcaMaoDeObra | "">("");
 
   /*
    * Lançou, zera: cada linha é uma conta nova, e campo que sobra da anterior
@@ -158,6 +166,7 @@ export function ContaItem({
         setUnidadeEscolhida("");
         setQuantidade("");
         setPrecoManual(null);
+        setMaoDeObra("");
       }
       return resultado;
     },
@@ -176,27 +185,32 @@ export function ContaItem({
   const ehFita = familia === "FITA";
   const ehAvulso = familia === "AVULSO";
   const ehShrink = tipo.valor === "SHRINK";
+  const ehEmbalagem = ehPorMilheiro(familia);
 
-  /**
-   * Troca o tipo e, com ele, o nome que abre a descrição.
-   *
-   * Só reescreve o nome se ele ainda for o padrão do tipo anterior (ou vazio):
-   * o que a pessoa digitou ali — "ECOFILME", "Fita adesiva marrom" — é dela, e
-   * trocar de tipo não pode apagar. Saindo do saco, reescreve sempre: ali o
-   * campo é o material da tabela (PEAD), que não tem o que fazer abrindo a
-   * descrição de uma fita ou de um shrink.
-   */
+  /** As sugestões do campo Material fora do saco, conforme o tipo. */
+  const sugestoesMaterial = useMemo(
+    () => tipo.materiais.map((m) => ({ id: m, rotulo: m })),
+    [tipo],
+  );
+
+  const alterarEmbalagem = (campo: keyof CamposDaEmbalagem, valor: string) => {
+    alterar(campo)(valor);
+    if (campo === "acabamento") setMaoDeObra("");
+  };
+
+  /** Troca o tipo. Mudou de família, a conta recomeça: ver `camposAoTrocarDeTipo`. */
   function escolherTipo(valor: string) {
     const novo = tipoPorValor(valor);
 
-    setConta((atual) => ({
-      ...atual,
-      familia: novo.familia,
-      material:
-        tipo.valor === "SACO" || atual.material.trim() === "" || atual.material === tipo.nome
-          ? novo.nome
-          : atual.material,
-    }));
+    setConta((atual) => camposAoTrocarDeTipo(tipo, novo, atual, CONTA_VAZIA));
+
+    if (novo.familia !== tipo.familia) {
+      setModoFita(MODOS_FITA[0]);
+      setDescricaoManual(null);
+      setUnidadeEscolhida("");
+      setQuantidade("");
+      setMaoDeObra("");
+    }
     setTipo(novo);
     setPrecoManual(null);
   }
@@ -238,6 +252,16 @@ export function ContaItem({
   const usaNaFita = (campo: ModoFita["campos"][number]) =>
     familia !== "FITA" || (modoFita.campos as readonly string[]).includes(campo);
 
+  const opcoesMaoDeObra = opcoesDeMaoDeObra({
+    acabamento: conta.acabamento,
+    acabamentoValorCom: numero(conta.acabamentoValorCom),
+    acabamentoValorSem: numero(conta.acabamentoValorSem),
+  });
+  const marcaCobrada =
+    opcoesMaoDeObra.length === 1
+      ? opcoesMaoDeObra[0].marca
+      : opcoesMaoDeObra.find((o) => o.marca === maoDeObra)?.marca;
+
   /** A conta no formato do motor de preço — o mesmo que o produto usaria. */
   const precificavel: ProdutoPrecificavel = {
     familia,
@@ -252,6 +276,10 @@ export function ContaItem({
     precoKg: numero(conta.precoKg),
     unidadeAvulsa: (conta.unidadeAvulsa || null) as UnidadeVenda | null,
     precoAvulso: numero(conta.precoAvulso),
+    acabamento: conta.acabamento,
+    acabamentoMaoDeObra: marcaCobrada ? marcaCobrada === "COM" : null,
+    acabamentoValorCom: numero(conta.acabamentoValorCom),
+    acabamentoValorSem: numero(conta.acabamentoValorSem),
     aditivos: aditivosEscolhidos,
   };
 
@@ -278,6 +306,8 @@ export function ContaItem({
   const sufixos = aditivosEscolhidos.map((a) => a.sufixoDescricao);
 
   const descricaoGerada = (() => {
+    if (ehEmbalagem) return descricaoDoTipo(tipo, conta, sufixos);
+
     if (ehSaco) {
       const { larguraCm, comprimentoCm, espessuraMm } = precificavel;
       if (larguraCm == null || comprimentoCm == null || espessuraMm == null) return "";
@@ -375,13 +405,20 @@ export function ContaItem({
           opcoes={OPCOES_TIPO}
           value={tipo.valor}
           aoEscolher={escolherTipo}
-          dica={ehShrink ? "Vendido por kg; entra no cadastro como stretch." : undefined}
+          placeholder="Digite para achar…"
+          dica={
+            ehShrink
+              ? "Vendido por kg; entra no cadastro como stretch."
+              : ehEmbalagem
+                ? "Vendido por milheiro, com preço digitado."
+                : undefined
+          }
         />
         <input type="hidden" name="familia" value={conta.familia} />
 
         {/*
           No saco, material é a tabela de preço da indústria: escolhe-se dela,
-          digitando. Nos outros tipos o campo abre a descrição com texto livre.
+          digitando. Nos outros tipos a lista só sugere, e o que se digita vale.
         */}
         {ehSaco ? (
           <SelecaoBuscavel
@@ -401,33 +438,81 @@ export function ContaItem({
             }
           />
         ) : (
-          <Campo
+          <SelecaoBuscavel
+            livre
             name="material"
-            rotulo="Nome na descrição"
-            placeholder={tipo.nome || "Nome do item"}
+            rotulo={tipo.rotuloMaterial ?? "Nome na descrição"}
+            opcoes={sugestoesMaterial}
             value={conta.material}
-            onChange={(e) => escolherMaterial(e.target.value)}
+            aoEscolher={escolherMaterial}
+            placeholder={tipo.materialAbre ? tipo.nome || "Nome do item" : undefined}
           />
         )}
 
-        <Campo
-          name="complemento"
-          rotulo="Complemento"
+        {/* Com etiquetas, ocupa a linha inteira: elas não cabem numa coluna. */}
+        <CampoComplemento
+          key={tipo.valor}
+          rotulo={tipo.rotuloComplemento}
+          grupos={tipo.complementos}
+          value={conta.complemento}
+          aoMudar={alterar("complemento")}
           placeholder={
             ehSaco
               ? "AZUL"
               : ehFita
                 ? "transparente"
-                : ehAvulso
+                : ehAvulso || ehEmbalagem
                   ? ""
                   : ehShrink
                     ? "BOBINA COM 20 KG"
                     : "BOBINA 4KG PESO LÍQUIDO"
           }
-          value={conta.complemento}
-          onChange={(e) => alterar("complemento")(e.target.value)}
+          className={tipo.complementos.length > 0 ? "sm:col-span-2 lg:col-span-3" : ""}
         />
       </div>
+
+      {ehEmbalagem && (
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 lg:items-start">
+          <MedidasEmbalagem tipo={tipo} valores={conta} aoMudar={alterarEmbalagem} />
+          <CampoNumero rotulo="Preço do milheiro" sufixo="R$" nome="precoAvulso" conta={conta} alterar={alterar} obrigatorio />
+        </div>
+      )}
+
+      {tipo.comTampa && (
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 lg:items-start">
+          <CamposDaTampa valores={conta} aoMudar={alterarEmbalagem} />
+          <CampoFornecedorDaTampa
+            naConta
+            industrias={industrias}
+            valores={conta}
+            aoMudar={alterarEmbalagem}
+          />
+        </div>
+      )}
+
+      {tipo.acabamentos && (
+        <div>
+          <span className="rotulo block mb-1.5">Acabamento</span>
+          <CampoAcabamento
+            grupos={tipo.acabamentos}
+            valores={conta}
+            aoMudar={alterarEmbalagem}
+          />
+          {opcoesMaoDeObra.length > 0 && (
+            <div className="mt-3">
+              <EscolhaMaoDeObra
+                acabamento={conta.acabamento}
+                opcoes={opcoesMaoDeObra}
+                value={marcaCobrada ?? ""}
+                aoMudar={(marca) => {
+                  setMaoDeObra(marca);
+                  setPrecoManual(null);
+                }}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {ehSaco && (
         <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 lg:items-start">
@@ -533,47 +618,19 @@ export function ContaItem({
       )}
 
       {aditivos.length > 0 && (
-        <div>
-          <span className="rotulo block mb-1.5">Aditivos</span>
-          <div className="flex flex-wrap gap-2">
-            {aditivos.map((aditivo) => {
-              const marcado = conta.aditivos.includes(aditivo.id);
-
-              return (
-                <label
-                  key={aditivo.id}
-                  className={`flex items-center gap-2 rounded-suave border px-3 py-1.5 text-corpo cursor-pointer transition-colors ${
-                    marcado
-                      ? "border-carimbo bg-carimbo-fraco text-tinta"
-                      : "border-filete hover:border-filete-forte text-tinta-2"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    name="aditivos"
-                    value={aditivo.id}
-                    checked={marcado}
-                    onChange={(e) => {
-                      setConta((atual) => ({
-                        ...atual,
-                        aditivos: e.target.checked
-                          ? [...atual.aditivos, aditivo.id]
-                          : atual.aditivos.filter((id) => id !== aditivo.id),
-                      }));
-                      setPrecoManual(null);
-                    }}
-                    className="accent-carimbo"
-                  />
-                  {aditivo.nome}
-                  <span className="text-mini text-tinta-3 numerico">
-                    +{formatarMoeda(Number(aditivo.valor))}
-                    {aditivo.tipo === "POR_KG" ? "/kg" : "/mil"}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-        </div>
+        <CampoAditivos
+          aditivos={aditivos}
+          marcados={conta.aditivos}
+          aoAlternar={(id) => {
+            setConta((atual) => ({
+              ...atual,
+              aditivos: atual.aditivos.includes(id)
+                ? atual.aditivos.filter((a) => a !== id)
+                : [...atual.aditivos, id],
+            }));
+            setPrecoManual(null);
+          }}
+        />
       )}
 
       <div>

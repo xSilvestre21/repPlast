@@ -13,6 +13,8 @@
 import type { Familia, UnidadeVenda } from "@/generated/prisma/enums";
 import { ErroDeCampo } from "@/lib/erro-formulario";
 import { escreverNumeroBr, exigirNumero } from "@/lib/numero-br";
+import { type ProdutoPrecificavel, ehPorMilheiro, opcoesDeMaoDeObra } from "@/lib/produto-preco";
+import { type TipoProduto, tipoPorValor } from "@/lib/tipos-produto";
 
 export function lerTexto(valor: FormDataEntryValue | null): string | null {
   const texto = typeof valor === "string" ? valor.trim() : "";
@@ -43,6 +45,11 @@ const MEDIDAS = {
   micragem: { rotulo: "a micragem", exemplo: "45" },
   precoAvulso: { rotulo: "o preço", exemplo: "12,50" },
   precoKg: { rotulo: "o preço por quilo", exemplo: "14,00" },
+  capacidade: { rotulo: "a capacidade", exemplo: "20" },
+  alturaCm: { rotulo: "a altura", exemplo: "15" },
+  diametroMm: { rotulo: "o diâmetro", exemplo: "28" },
+  acabamentoValorCom: { rotulo: "o valor com mão de obra", exemplo: "150,00" },
+  acabamentoValorSem: { rotulo: "o valor sem mão de obra", exemplo: "90,00" },
 } as const;
 
 type Medida = keyof typeof MEDIDAS;
@@ -69,8 +76,97 @@ function lerMedidaObrigatoria(formData: FormData, campo: Medida): string {
   return String(numero);
 }
 
-const FAMILIAS: Familia[] = ["SACO", "FITA", "STRETCH", "BOBINA", "AVULSO"];
+const FAMILIAS: Familia[] = [
+  "SACO",
+  "FITA",
+  "STRETCH",
+  "BOBINA",
+  "AVULSO",
+  "BOMBONA",
+  "FRASCO",
+  "PAPELAO",
+  "TAMPA",
+  "FRASCO_TAMPA",
+  "BOMBONA_TAMPA",
+];
 const UNIDADES = ["MIL", "KG", "UN", "CX"] as const;
+
+/** A unidade da capacidade: a que o tipo tem, ou a escolhida, quando ele tem duas. */
+function lerUnidadeDaCapacidade(formData: FormData, tipo: TipoProduto) {
+  const unidades = tipo.unidadesCapacidade ?? [];
+  const bruta = String(formData.get("capacidadeUnidade") ?? "");
+  const unidade = unidades.length === 1 ? unidades[0] : unidades.find((u) => u === bruta);
+
+  if (!unidade) {
+    throw new ErroDeCampo(
+      "capacidadeUnidade",
+      "Escolha se a capacidade é em mL ou em L, como 500 mL ou 1 L.",
+    );
+  }
+  return unidade;
+}
+
+/**
+ * Quem fornece a tampa do conjunto.
+ *
+ * No variável, quem diz é o item. O que vier no campo é a escolha da conta da
+ * proposta, e não fica no produto.
+ */
+function lerFornecedorDaTampa(formData: FormData) {
+  const variavel = formData.get("fornecedorTampaVariavel") === "1";
+
+  return {
+    fornecedorTampaVariavel: variavel,
+    fornecedorTampaId: variavel ? null : lerTexto(formData.get("fornecedorTampaId")),
+    codigoTampa: lerTexto(formData.get("codigoTampa")),
+  };
+}
+
+/**
+ * O acabamento de frasco e bombona: só os valores. Qual deles vale é escolha de
+ * cada item (`lerMaoDeObra`), e por isso basta um: sem o outro, a linha não pergunta.
+ */
+function lerAcabamento(formData: FormData) {
+  const acabamento = lerTexto(formData.get("acabamento"));
+  if (!acabamento) return {};
+
+  const acabamentoValorCom = lerMedida(formData, "acabamentoValorCom");
+  const acabamentoValorSem = lerMedida(formData, "acabamentoValorSem");
+
+  if (acabamentoValorCom === null && acabamentoValorSem === null) {
+    throw new ErroDeCampo(
+      "acabamentoValorCom",
+      "Informe pelo menos um valor do acabamento, como 150,00: é ele que soma ao preço do milheiro.",
+    );
+  }
+
+  return { acabamento, acabamentoValorCom, acabamentoValorSem };
+}
+
+/**
+ * A escolha da linha: com ou sem mão de obra.
+ *
+ * Com um valor só no cadastro não há o que escolher. Com os dois, é obrigatório: o
+ * preço depende disso, e nenhum dos dois pode valer por omissão.
+ */
+export function lerMaoDeObra(
+  formData: FormData,
+  produto: Pick<ProdutoPrecificavel, "acabamento" | "acabamentoValorCom" | "acabamentoValorSem">,
+): boolean | null {
+  const opcoes = opcoesDeMaoDeObra(produto);
+  if (opcoes.length === 0) return null;
+
+  const marcada = String(formData.get("acabamentoMaoDeObra") ?? "");
+  const opcao = opcoes.length === 1 ? opcoes[0] : opcoes.find((o) => o.marca === marcada);
+
+  if (!opcao) {
+    throw new ErroDeCampo(
+      "acabamentoMaoDeObra",
+      "Marque se este item é com ou sem mão de obra: cada opção tem o seu preço.",
+    );
+  }
+  return opcao.marca === "COM";
+}
 
 /**
  * Monta o produto a partir do formulário.
@@ -83,7 +179,7 @@ export function dadosDoFormulario(formData: FormData) {
   const familiaBruta = String(formData.get("familia") ?? "");
   const familia = FAMILIAS.find((f) => f === familiaBruta);
   if (!familia) {
-    throw new ErroDeCampo("familia", "Escolha que tipo de produto é: saco, fita, stretch, bobina ou avulso.");
+    throw new ErroDeCampo("familia", "Escolha o tipo do produto na lista do campo Tipo.");
   }
 
   const fornecedorId = lerTexto(formData.get("fornecedorId"));
@@ -118,6 +214,19 @@ export function dadosDoFormulario(formData: FormData) {
     material: lerTexto(formData.get("material")),
     complemento: lerTexto(formData.get("complemento")),
     unidadeRotulo: lerTexto(formData.get("unidadeRotulo")),
+    // Colunas dos tipos por milheiro: só o ramo deles as preenche.
+    capacidade: null,
+    capacidadeUnidade: null,
+    alturaCm: null,
+    diametroMm: null,
+    materialTampa: null,
+    complementoTampa: null,
+    fornecedorTampaId: null,
+    fornecedorTampaVariavel: false,
+    codigoTampa: null,
+    acabamento: null,
+    acabamentoValorCom: null,
+    acabamentoValorSem: null,
   };
 
   if (familia === "SACO") {
@@ -174,6 +283,42 @@ export function dadosDoFormulario(formData: FormData) {
       precoKg: null,
       unidadeAvulsa: null,
       precoAvulso: null,
+    };
+  }
+
+  if (ehPorMilheiro(familia)) {
+    const tipo = tipoPorValor(familia);
+    const porCapacidade = tipo.medida === "CAPACIDADE";
+    const porCaixa = tipo.medida === "CAIXA";
+    const comDiametro = tipo.medida === "DIAMETRO" || tipo.comTampa === true;
+
+    return {
+      ...comum,
+      capacidade: porCapacidade ? lerMedidaObrigatoria(formData, "capacidade") : null,
+      capacidadeUnidade: porCapacidade ? lerUnidadeDaCapacidade(formData, tipo) : null,
+      comprimentoCm: porCaixa ? lerMedidaObrigatoria(formData, "comprimentoCm") : null,
+      larguraCm: porCaixa ? lerMedidaObrigatoria(formData, "larguraCm") : null,
+      // A chapa não tem altura.
+      alturaCm: porCaixa ? lerMedida(formData, "alturaCm") : null,
+      diametroMm: comDiametro ? lerMedidaObrigatoria(formData, "diametroMm") : null,
+      materialTampa: tipo.comTampa ? lerTexto(formData.get("materialTampa")) : null,
+      complementoTampa: tipo.comTampa ? lerTexto(formData.get("complementoTampa")) : null,
+      ...(tipo.comTampa ? lerFornecedorDaTampa(formData) : {}),
+      ...(tipo.acabamentos ? lerAcabamento(formData) : {}),
+      // O preço é o do milheiro, sempre: a unidade não se escolhe nestes tipos.
+      unidadeAvulsa: "MIL" as const,
+      precoAvulso: lerMedidaObrigatoria(formData, "precoAvulso"),
+      espessuraMm: null,
+      fatorKg: null,
+      densidade: null,
+      sanfona: null,
+      larguraMm: null,
+      metragemM: null,
+      micragem: null,
+      unidadesPorCaixa: null,
+      precoUnidade: null,
+      precoCaixa: null,
+      precoKg: null,
     };
   }
 
@@ -262,6 +407,17 @@ const CAMPOS_DA_CONTA = [
   "precoKg",
   "unidadeAvulsa",
   "precoAvulso",
+  "capacidade",
+  "capacidadeUnidade",
+  "alturaCm",
+  "diametroMm",
+  "materialTampa",
+  "complementoTampa",
+  "fornecedorTampaId",
+  "fornecedorTampaVariavel",
+  "acabamento",
+  "acabamentoValorCom",
+  "acabamentoValorSem",
 ] as const;
 
 /**
@@ -301,6 +457,19 @@ export function lerConta(valor: unknown): Conta | null {
     : [];
 
   return campos.familia ? { ...campos, aditivos } : null;
+}
+
+/**
+ * Se a linha da proposta escolhe o fornecedor da tampa: a de produto pergunta ao
+ * produto; a de conta, ao que foi marcado nela.
+ */
+export function fornecedorDaTampaVaria(item: {
+  produto: { fornecedorTampaVariavel: boolean } | null;
+  conta: unknown;
+}): boolean {
+  return item.produto
+    ? item.produto.fornecedorTampaVariavel
+    : lerConta(item.conta)?.fornecedorTampaVariavel === "1";
 }
 
 /**
@@ -364,6 +533,15 @@ export function contaDaLinha(linha: LinhaSemConta): Conta {
       conta.unidadeAvulsa = linha.unidade;
       conta.precoAvulso = preco;
       break;
+    case "BOMBONA":
+    case "FRASCO":
+    case "PAPELAO":
+    case "TAMPA":
+    case "FRASCO_TAMPA":
+    case "BOMBONA_TAMPA":
+      // O preço da conta é o do milheiro; o da unidade não entra nele.
+      if (linha.unidade === "MIL") conta.precoAvulso = preco;
+      break;
     default:
       conta.precoKg = preco;
   }
@@ -394,6 +572,17 @@ type ProdutoDaConta = {
   precoKg: Coluna;
   unidadeAvulsa: string | null;
   precoAvulso: Coluna;
+  capacidade: Coluna;
+  capacidadeUnidade: string | null;
+  alturaCm: Coluna;
+  diametroMm: Coluna;
+  materialTampa: string | null;
+  complementoTampa: string | null;
+  fornecedorTampaId: string | null;
+  fornecedorTampaVariavel: boolean;
+  acabamento: string | null;
+  acabamentoValorCom: Coluna;
+  acabamentoValorSem: Coluna;
   aditivos: string[];
 };
 
@@ -429,6 +618,17 @@ export function contaDoProduto(produto: ProdutoDaConta): Conta {
     precoKg: campo(produto.precoKg, 2),
     unidadeAvulsa: produto.unidadeAvulsa ?? "UN",
     precoAvulso: campo(produto.precoAvulso, 2),
+    capacidade: campo(produto.capacidade),
+    capacidadeUnidade: produto.capacidadeUnidade ?? "",
+    alturaCm: campo(produto.alturaCm),
+    diametroMm: campo(produto.diametroMm),
+    materialTampa: produto.materialTampa ?? "",
+    complementoTampa: produto.complementoTampa ?? "",
+    fornecedorTampaId: produto.fornecedorTampaId ?? "",
+    fornecedorTampaVariavel: produto.fornecedorTampaVariavel ? "1" : "",
+    acabamento: produto.acabamento ?? "",
+    acabamentoValorCom: campo(produto.acabamentoValorCom, 2),
+    acabamentoValorSem: campo(produto.acabamentoValorSem, 2),
     aditivos: produto.aditivos,
   };
 }

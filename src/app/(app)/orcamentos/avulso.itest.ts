@@ -52,7 +52,7 @@ vi.mock("next/navigation", () => ({
 const { adicionarItem, adicionarItemPorConta, cadastrarProdutosDaProposta, converterEmPedido } =
   await import("./acoes");
 const { criarClienteDaProposta, excluirCliente } = await import("../clientes/acoes");
-const { criarProdutoDoItem, excluirProduto } = await import("../produtos/acoes");
+const { criarProduto, criarProdutoDoItem, excluirProduto } = await import("../produtos/acoes");
 const { excluirFornecedor } = await import("../fornecedores/acoes");
 
 let fornecedorId = "";
@@ -473,5 +473,143 @@ describe("saco vendido por quilo", () => {
     expect(item.precoUnitario.toString()).toBe("15");
     expect(item.totalSemIpi.toString()).toBe("1800");
     expect(item.pesoKg.toString()).toBe("120");
+  });
+});
+
+describe("tipos vendidos por milheiro", () => {
+  /** O que `ContaItem` envia para o conjunto. */
+  const CONJUNTO = {
+    familia: "FRASCO_TAMPA",
+    material: "PEAD",
+    complemento: "Oval Branco",
+    capacidade: "500",
+    capacidadeUnidade: "mL",
+    diametroMm: "28",
+    materialTampa: "PP",
+    complementoTampa: "Flip Top Azul",
+    precoAvulso: "1.250,00",
+    descricao: "Frasco 500mL PEAD Oval Branco + Tampa 28mm PP Flip Top Azul",
+    unidade: "MIL",
+    quantidade: "2",
+  };
+
+  async function proposta(numero: number) {
+    return admin.orcamento.create({
+      data: {
+        organizacaoId: sessao.organizacaoId,
+        fornecedorId,
+        clienteAvulsoNome: "QUEM COMPRA EMBALAGEM",
+        numero,
+      },
+    });
+  }
+
+  it("lança pela conta, com o preço do milheiro digitado", async () => {
+    const { id } = await proposta(16);
+
+    const estado = await adicionarItemPorConta(id, {}, formulario(CONJUNTO));
+    expect(estado.erro).toBeUndefined();
+
+    const [item] = await admin.orcamentoItem.findMany({ where: { orcamentoId: id } });
+
+    expect(item.familia).toBe("FRASCO_TAMPA");
+    expect(item.unidade).toBe("MIL");
+    expect(item.precoUnitario.toString()).toBe("1250");
+    expect(item.totalSemIpi.toString()).toBe("2500");
+    expect(item.descricao).toBe(CONJUNTO.descricao);
+    expect(item.conta).toMatchObject({ diametroMm: "28", complementoTampa: "Flip Top Azul" });
+  });
+
+  it("por unidade, o preço é o milheiro dividido por mil", async () => {
+    const { id } = await proposta(17);
+
+    const estado = await adicionarItemPorConta(
+      id,
+      {},
+      formulario({ ...CONJUNTO, unidade: "UN", quantidade: "500" }),
+    );
+    expect(estado.erro).toBeUndefined();
+
+    const [item] = await admin.orcamentoItem.findMany({ where: { orcamentoId: id } });
+
+    expect(item.precoUnitario.toString()).toBe("1.25");
+    expect(item.totalSemIpi.toString()).toBe("625");
+  });
+
+  it("recusa a conta sem a medida, apontando o campo", async () => {
+    const { id } = await proposta(18);
+
+    const estado = await adicionarItemPorConta(
+      id,
+      {},
+      formulario({ ...CONJUNTO, diametroMm: "" }),
+    );
+
+    expect(estado.erro).toMatch(/diâmetro/);
+    expect(estado.campo).toBe("diametroMm");
+  });
+
+  it("vira produto do cliente com as medidas e as duas peças", async () => {
+    const { id } = await proposta(19);
+    await adicionarItemPorConta(id, {}, formulario(CONJUNTO));
+
+    const cliente = await admin.cliente.create({
+      data: {
+        organizacaoId: sessao.organizacaoId,
+        apelido: "EMBALAGENS LTDA",
+        razaoSocial: "Embalagens LTDA",
+      },
+    });
+    await admin.orcamento.update({
+      where: { id },
+      data: { clienteId: cliente.id, clienteAvulsoNome: null },
+    });
+
+    const estado = await cadastrarProdutosDaProposta(id, {}, new FormData());
+    expect(estado.erro).toBeUndefined();
+
+    const item = await admin.orcamentoItem.findFirstOrThrow({
+      where: { orcamentoId: id },
+      include: { produto: true },
+    });
+
+    expect(item.produto).toMatchObject({
+      familia: "FRASCO_TAMPA",
+      capacidadeUnidade: "mL",
+      materialTampa: "PP",
+      complementoTampa: "Flip Top Azul",
+      unidadeAvulsa: "MIL",
+      descricao: CONJUNTO.descricao,
+    });
+    expect(item.produto?.capacidade?.toString()).toBe("500");
+    expect(item.produto?.diametroMm?.toString()).toBe("28");
+    expect(item.produto?.precoAvulso?.toString()).toBe("1250");
+  });
+});
+
+describe("cadastrar produto", () => {
+  it("salva e volta para a lista de produtos", async () => {
+    const descricao = "Tampa 28mm para voltar à lista";
+
+    await expect(
+      criarProduto(
+        {},
+        formulario({ familia: "TAMPA", fornecedorId, descricao, diametroMm: "28", precoAvulso: "900,00" }),
+      ),
+    ).rejects.toMatchObject({ destino: "/produtos" });
+
+    const gravados = await admin.produto.count({
+      where: { organizacaoId: sessao.organizacaoId, descricao },
+    });
+    expect(gravados).toBe(1);
+  });
+
+  it("recusado, continua na tela com o erro", async () => {
+    const estado = await criarProduto(
+      {},
+      formulario({ familia: "TAMPA", fornecedorId, descricao: "Tampa sem medida", precoAvulso: "900,00" }),
+    );
+
+    expect(estado.campo).toBe("diametroMm");
   });
 });

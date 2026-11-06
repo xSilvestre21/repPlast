@@ -8,15 +8,14 @@ import {
   FlaskConical,
   Layers,
   Package,
+  Paintbrush,
   Ruler,
-  Search,
 } from "lucide-react";
 import { useActionState, useMemo, useState } from "react";
 
 import {
   Botao,
   BotaoTexto,
-  CLASSE_CONTROLE,
   Campo,
   Cartao,
   SecaoCartao,
@@ -24,10 +23,27 @@ import {
   formatarMoeda,
 } from "@/components/ui";
 import { ErroGeral, Formulario } from "@/components/formulario";
-import { SelecaoBuscavel, achatar } from "@/components/selecao-buscavel";
+import { CampoAcabamento } from "@/components/campo-acabamento";
+import { CampoAditivos } from "@/components/campo-aditivos";
+import { CampoComplemento } from "@/components/campo-complemento";
+import {
+  CampoFornecedorDaTampa,
+  CamposDaTampa,
+  MedidasEmbalagem,
+} from "@/components/campos-embalagem";
+import { SelecaoBuscavel } from "@/components/selecao-buscavel";
 import { descricaoFita, descricaoRolo, descricaoSaco, formatarNumero } from "@/lib/descricao";
 import { lerNumeroBr } from "@/lib/numero-br";
-import { unidadeDoRotulo } from "@/lib/produto-preco";
+import { ehPorMilheiro, unidadeDoRotulo } from "@/lib/produto-preco";
+import {
+  OPCOES_TIPO,
+  type CamposDaEmbalagem,
+  type TipoProduto,
+  camposAoTrocarDeTipo,
+  descricaoDoTipo,
+  tipoDoProduto,
+  tipoPorValor,
+} from "@/lib/tipos-produto";
 import {
   DENSIDADE_PADRAO,
   type Aditivo,
@@ -38,7 +54,7 @@ import {
 } from "@/lib/precificacao";
 
 import type { EstadoFormulario } from "./acoes";
-import type { ValoresProduto } from "./valores";
+import { VALORES_VAZIOS, type ValoresProduto } from "./valores";
 
 export type AditivoOpcao = Aditivo & { id: string };
 
@@ -58,47 +74,13 @@ export type FornecedorOpcao = {
   materiais: MaterialOpcao[];
 };
 
-/** id do <datalist> com os materiais da indústria escolhida. */
-
-/**
- * O que se escolhe na tela: o TIPO, não a família — os mesmos `TIPOS` do item
- * por conta da proposta.
- *
- * Quase sempre são a mesma coisa. O shrink é a exceção: o representante vende
- * e fala dele como coisa própria, mas no cadastro ele é STRETCH — por kg, sem
- * medida de saco —, que é como a importação do SICOV já o grava. O tipo vive
- * só na tela; o que vai para o servidor é a família.
- *
- * `nome` é o que abre a descrição impressa. Vem preenchido para a descrição se
- * montar sozinha; o saco não tem, porque ali o que abre são as medidas e o
- * material vem depois.
- */
-const TIPOS = [
-  { valor: "SACO", familia: "SACO", rotulo: "Saco plástico", nome: "" },
-  { valor: "FITA", familia: "FITA", rotulo: "Fita", nome: "Fita adesiva" },
-  { valor: "STRETCH", familia: "STRETCH", rotulo: "Stretch", nome: "FILME STRETCH" },
-  { valor: "SHRINK", familia: "STRETCH", rotulo: "Shrink", nome: "FILME SHRINK" },
-  { valor: "BOBINA", familia: "BOBINA", rotulo: "Bobina", nome: "BOBINA" },
-  { valor: "AVULSO", familia: "AVULSO", rotulo: "Avulso", nome: "" },
-] as const;
-
-type Tipo = (typeof TIPOS)[number];
-
-const tipoPorValor = (valor: string): Tipo => TIPOS.find((t) => t.valor === valor) ?? TIPOS[0];
-
-/**
- * O tipo de um produto já gravado.
- *
- * O shrink não tem marca própria no banco — é um STRETCH —, então é
- * reconhecido pelo nome: os importados trazem "Shrink" na descrição e o
- * material vazio; os cadastrados aqui, "FILME SHRINK" no material.
- */
-function tipoDoProduto(valores: ValoresProduto): Tipo {
-  if (valores.familia === "STRETCH" && /shrink/i.test(`${valores.material} ${valores.descricao}`)) {
-    return tipoPorValor("SHRINK");
-  }
-  return tipoPorValor(valores.familia);
-}
+/** O que não depende do tipo: trocar de bombona para tampa não muda quem fabrica. */
+const CAMPOS_DA_ORIGEM = [
+  "fornecedorId",
+  "clienteId",
+  "codigoFornecedor",
+  "codigoCliente",
+] as const satisfies readonly (keyof ValoresProduto)[];
 
 /**
  * Como a fita é vendida — escolhido ANTES dos preços, para a tela pedir só o
@@ -157,9 +139,6 @@ const UNIDADES_AVULSO = [
   { valor: "MIL", rotulo: "Milheiro" },
 ] as const;
 
-/** Até quantos aditivos as etiquetas bastam; acima disso aparece a busca. */
-const LIMITE_SEM_BUSCA = 6;
-
 /** `detalhe` desempata apelidos parecidos: a cidade, ou "inativo" para o dono antigo. */
 export type ClienteOpcao = { id: string; apelido: string; detalhe?: string };
 
@@ -205,6 +184,9 @@ export function FormularioProduto({
   const alterar = (campo: keyof ValoresProduto) => (valor: string) =>
     setCampos((atual) => ({ ...atual, [campo]: valor }));
 
+  const alterarEmbalagem = (campo: keyof CamposDaEmbalagem, valor: string) =>
+    alterar(campo)(valor);
+
   const [modoFita, setModoFita] = useState<ModoFita>(() => modoDaFita(valores));
 
   /*
@@ -215,33 +197,38 @@ export function FormularioProduto({
   const usaNaFita = (campo: ModoFita["campos"][number]) =>
     (modoFita.campos as readonly string[]).includes(campo);
 
-  const [tipo, setTipo] = useState<Tipo>(() => tipoDoProduto(valores));
+  const [tipo, setTipo] = useState<TipoProduto>(() => tipoDoProduto(valores));
 
-  const opcoesTipo = useMemo(() => TIPOS.map((t) => ({ id: t.valor, rotulo: t.rotulo })), []);
+  const ehEmbalagem = ehPorMilheiro(campos.familia);
 
-  /**
-   * Troca o tipo e, com ele, a família e o nome que abre a descrição.
-   *
-   * Só reescreve o nome se ele ainda for o padrão do tipo anterior (ou vazio):
-   * o que a pessoa digitou ali — "Fita adesiva marrom" — é dela, e trocar de
-   * tipo não pode apagar. Saindo do saco, reescreve sempre: ali o campo é o
-   * material da tabela (PEAD), que não tem o que fazer abrindo a descrição de
-   * uma fita ou de um shrink.
-   */
+  /** As sugestões do campo Material fora do saco, conforme o tipo. */
+  const sugestoesMaterial = useMemo(
+    () => tipo.materiais.map((m) => ({ id: m, rotulo: m })),
+    [tipo],
+  );
+
+  /** O fator kg que a indústria sugere: é o que o saco abre preenchido. */
+  const fatorPadraoDa = (fornecedorId: string) => {
+    const sugestao = fornecedores.find((f) => f.id === fornecedorId)?.fatorKgPadrao;
+    return sugestao ? formatarNumero(sugestao, 2) : "";
+  };
+
+  /** Troca o tipo. Mudou de família, o produto recomeça: ver `camposAoTrocarDeTipo`. */
   function escolherTipo(valor: string) {
     const novo = tipoPorValor(valor);
 
-    setCampos((atual) => ({
-      ...atual,
-      familia: novo.familia,
-      // A unidade era da família anterior: "KG" de um saco não diz nada de uma
-      // fita. Trocar de tipo sem trocar de família (stretch ↔ shrink) mantém.
-      unidadeRotulo: novo.familia === atual.familia ? atual.unidadeRotulo : "",
-      material:
-        tipo.valor === "SACO" || atual.material.trim() === "" || atual.material === tipo.nome
-          ? novo.nome
-          : atual.material,
-    }));
+    setCampos((atual) => {
+      const campos = camposAoTrocarDeTipo(tipo, novo, atual, VALORES_VAZIOS, CAMPOS_DA_ORIGEM);
+      return campos.familia === "SACO" && !campos.fatorKg
+        ? { ...campos, fatorKg: fatorPadraoDa(atual.fornecedorId) }
+        : campos;
+    });
+
+    if (novo.familia !== tipo.familia) {
+      setModoFita(MODOS_FITA[0]);
+      setDescricaoManual(null);
+      setDensidadeSugerida("");
+    }
     setTipo(novo);
   }
 
@@ -320,26 +307,6 @@ export function FormularioProduto({
   const comissaoDaIndustria =
     comissaoBruta && Number(comissaoBruta) > 0 ? Number(comissaoBruta) : null;
 
-  /*
-   * A busca dos aditivos. Uma indústria chega a ter quase trinta, e achar o
-   * "anti-UV" no meio de trinta etiquetas é ler todas.
-   *
-   * O escolhido continua na tela qualquer que seja a busca, e não só por
-   * conforto: etiqueta que some não vai no formulário, e salvar desmarcaria em
-   * silêncio um aditivo que ninguém tirou.
-   */
-  const [buscaAditivo, setBuscaAditivo] = useState("");
-
-  const aditivosVisiveis = useMemo(() => {
-    const termos = achatar(buscaAditivo).split(/\s+/).filter(Boolean);
-    if (termos.length === 0) return aditivosDisponiveis;
-    return aditivosDisponiveis.filter((a) => {
-      if (campos.aditivos.includes(a.id)) return true;
-      const alvo = achatar(`${a.nome} ${a.sufixoDescricao}`);
-      return termos.every((termo) => alvo.includes(termo));
-    });
-  }, [aditivosDisponiveis, buscaAditivo, campos.aditivos]);
-
   const aditivosEscolhidos = useMemo(
     () => aditivosDisponiveis.filter((a) => campos.aditivos.includes(a.id)),
     [aditivosDisponiveis, campos.aditivos],
@@ -348,6 +315,8 @@ export function FormularioProduto({
   const sufixos = aditivosEscolhidos.map((a) => a.sufixoDescricao);
 
   const descricaoGerada = useMemo(() => {
+    if (ehEmbalagem) return descricaoDoTipo(tipo, campos, sufixos);
+
     if (campos.familia === "SACO") {
       const largura = lerNumeroBr(campos.larguraCm);
       const comprimento = lerNumeroBr(campos.comprimentoCm);
@@ -383,7 +352,7 @@ export function FormularioProduto({
       complemento: campos.complemento,
       adicionais: sufixos,
     });
-  }, [campos, sufixos]);
+  }, [campos, sufixos, tipo, ehEmbalagem]);
 
   /*
    * Mexeu numa especificação que entra na descrição (medidas, material,
@@ -542,14 +511,11 @@ export function FormularioProduto({
               aoEscolher={(novo) => {
                 // Trocar de indústria invalida os aditivos escolhidos, que são
                 // dela; e sugere o fator kg padrão quando ainda não há um.
-                const sugestao = fornecedores.find((f) => f.id === novo)?.fatorKgPadrao;
-                const padrao = sugestao ? formatarNumero(sugestao, 2) : "";
-
                 setCampos((atual) => ({
                   ...atual,
                   fornecedorId: novo,
                   aditivos: [],
-                  fatorKg: atual.fatorKg || padrao,
+                  fatorKg: atual.fatorKg || fatorPadraoDa(novo),
                 }));
                 // A densidade sugerida era da OUTRA indústria; deixá-la de pé
                 // faria o campo parecer mexido à mão e travaria a sugestão do
@@ -579,17 +545,20 @@ export function FormularioProduto({
               name="tipo"
               rotulo="Tipo"
               required
-              opcoes={opcoesTipo}
+              opcoes={OPCOES_TIPO}
               value={tipo.valor}
               aoEscolher={escolherTipo}
+              placeholder="Digite para achar…"
               dica={
                 ehSaco
                   ? "Só o saco tem preço calculado por fórmula."
                   : ehAvulso
-                    ? "Para o que não é saco, fita, stretch nem bobina."
+                    ? "Para o que não está nesta lista."
                     : ehShrink
                       ? "Vendido por kg; entra no cadastro como stretch."
-                      : "Preço de tabela."
+                      : ehEmbalagem
+                        ? "Vendido por milheiro, com preço digitado."
+                        : "Preço de tabela."
               }
             />
             <input type="hidden" name="familia" value={campos.familia} />
@@ -619,8 +588,8 @@ export function FormularioProduto({
 
             {/*
               No saco, material é a tabela de preço da indústria: escolhe-se
-              dela, digitando. Nas outras famílias o campo abre a descrição com
-              texto livre ("Fita adesiva"), e oferecer PEAD ali só atrapalharia.
+              dela, digitando. Nos outros tipos a lista só sugere, e o que se
+              digita vale: é texto, sem preço por trás.
             */}
             {ehSaco ? (
               <SelecaoBuscavel
@@ -644,33 +613,42 @@ export function FormularioProduto({
                 }
               />
             ) : (
-              <Campo
+              <SelecaoBuscavel
+                livre
                 name="material"
-                rotulo="Tipo do produto"
-                dica="Abre a descrição, como “Fita adesiva” ou “FILM STRETCH”."
-                placeholder={tipo.nome || "Nome do item"}
+                rotulo={tipo.rotuloMaterial ?? "Tipo do produto"}
+                opcoes={sugestoesMaterial}
                 value={campos.material}
-                onChange={(e) => escolherMaterial(e.target.value)}
+                aoEscolher={escolherMaterial}
+                placeholder={tipo.materialAbre ? tipo.nome || "Nome do item" : undefined}
+                dica={
+                  tipo.materialAbre
+                    ? `Abre a descrição, como “${tipo.nome || "Fita adesiva"}”.`
+                    : `Escolha da lista ou digite outro. Sai depois da medida, como em “${tipo.nome} PEAD”.`
+                }
               />
             )}
 
-            <Campo
-              name="complemento"
-              rotulo="Complemento"
-              dica="Fecha a descrição: cor, acabamento, peso da bobina."
+            <CampoComplemento
+              key={tipo.valor}
+              rotulo={tipo.rotuloComplemento}
+              grupos={tipo.complementos}
+              value={campos.complemento}
+              aoMudar={alterar("complemento")}
+              dica={
+                tipo.complementos.length > 0
+                  ? "Fecha a descrição. Abra um grupo ou digite: o que não estiver na lista entra como escrito."
+                  : "Fecha a descrição: cor, acabamento, peso da bobina."
+              }
               placeholder={
-                ehSaco
+                ehSaco || ehAvulso || ehEmbalagem
                   ? ""
                   : ehFita
                     ? "transparente"
-                    : ehAvulso
-                      ? ""
-                      : ehShrink
-                        ? "BOBINA COM 20 KG"
-                        : "BOBINA 4KG PESO LÍQUIDO"
+                    : ehShrink
+                      ? "BOBINA COM 20 KG"
+                      : "BOBINA 4KG PESO LÍQUIDO"
               }
-              value={campos.complemento}
-              onChange={(e) => alterar("complemento")(e.target.value)}
               className="sm:col-span-2"
             />
           </div>
@@ -784,6 +762,66 @@ export function FormularioProduto({
                 onChange={(e) => alterar("densidade")(e.target.value)}
               />
             </div>
+          </SecaoCartao>
+        )}
+
+        {ehEmbalagem && (
+          <SecaoCartao
+            icone={Ruler}
+            titulo="Medidas"
+            descricao="Vendido por milheiro, com preço digitado. As medidas formam a descrição."
+          >
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <MedidasEmbalagem tipo={tipo} valores={campos} aoMudar={alterarEmbalagem} />
+              <Campo
+                name="precoAvulso"
+                rotulo="Preço do milheiro"
+                sufixo="R$"
+                inputMode="decimal"
+                required
+                value={campos.precoAvulso}
+                onChange={(e) => alterar("precoAvulso")(e.target.value)}
+              />
+            </div>
+          </SecaoCartao>
+        )}
+
+        {tipo.comTampa && (
+          <SecaoCartao
+            icone={CircleDot}
+            titulo="Tampa"
+            descricao="Sai depois do “+” na descrição, com material e complemento próprios."
+          >
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <CamposDaTampa valores={campos} aoMudar={alterarEmbalagem} />
+              <CampoFornecedorDaTampa
+                industrias={opcoesIndustria}
+                valores={campos}
+                aoMudar={alterarEmbalagem}
+              />
+              <Campo
+                name="codigoTampa"
+                rotulo="Código da tampa"
+                autoCapitalize="characters"
+                dica="Não sai no PDF."
+                value={campos.codigoTampa}
+                onChange={(e) => alterar("codigoTampa")(e.target.value)}
+              />
+            </div>
+          </SecaoCartao>
+        )}
+
+        {tipo.acabamentos && (
+          <SecaoCartao
+            icone={Paintbrush}
+            titulo="Acabamento"
+            descricao="Um só por peça. Sai na descrição. Com ou sem mão de obra se escolhe ao lançar o item, e o valor soma ao milheiro."
+          >
+            <CampoAcabamento
+              grupos={tipo.acabamentos}
+              valores={campos}
+              aoMudar={alterarEmbalagem}
+            />
           </SecaoCartao>
         )}
 
@@ -917,7 +955,7 @@ export function FormularioProduto({
           </SecaoCartao>
         )}
 
-        {!ehSaco && !ehFita && !ehAvulso && (
+        {!ehSaco && !ehFita && !ehAvulso && !ehEmbalagem && (
           <SecaoCartao
             icone={campos.familia === "BOBINA" ? Disc3 : Layers}
             titulo={tipo.rotulo}
@@ -972,82 +1010,20 @@ export function FormularioProduto({
                   : "Entram na descrição. O efeito no preço só existe no saco, que é calculado por fórmula."
             }
           >
-            {/* Com poucos aditivos a caixa só ficaria entre a pessoa e a
-                etiqueta — o mesmo critério que deixa unidade e frete sem busca. */}
-            {aditivosDisponiveis.length > LIMITE_SEM_BUSCA && (
-              <label className="block mb-3">
-                <span className="sr-only">Buscar aditivo</span>
-                <div className="relative">
-                  <Search
-                    size={15}
-                    strokeWidth={2}
-                    aria-hidden="true"
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-tinta-3 pointer-events-none"
-                  />
-                  <input
-                    type="search"
-                    enterKeyHint="search"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    autoComplete="off"
-                    value={buscaAditivo}
-                    onChange={(e) => setBuscaAditivo(e.target.value)}
-                    onKeyDown={(e) => {
-                      // Enter aqui é "achei", não "salvar o produto".
-                      if (e.key === "Enter") e.preventDefault();
-                    }}
-                    placeholder="Buscar aditivo pelo nome ou pelo sufixo"
-                    className={`${CLASSE_CONTROLE} pl-10`}
-                  />
-                </div>
-              </label>
-            )}
-
-            {aditivosDisponiveis.length > 0 && aditivosVisiveis.length === 0 && (
-              <p className="text-corpo text-tinta-3">
-                Nenhum aditivo com &ldquo;{buscaAditivo.trim()}&rdquo;.
-              </p>
-            )}
-
-            {aditivosVisiveis.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {aditivosVisiveis.map((aditivo) => {
-                  const marcado = campos.aditivos.includes(aditivo.id);
-
-                  return (
-                    <label
-                      key={aditivo.id}
-                      className={`flex items-center gap-2 rounded-suave border px-3 py-2 text-corpo cursor-pointer transition-colors ${
-                        marcado
-                          ? "border-carimbo bg-carimbo-fraco text-tinta"
-                          : "border-filete hover:border-filete-forte text-tinta-2"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        name="aditivos"
-                        value={aditivo.id}
-                        checked={marcado}
-                        onChange={(e) =>
-                          setCampos((atual) => ({
-                            ...atual,
-                            aditivos: e.target.checked
-                              ? [...atual.aditivos, aditivo.id]
-                              : atual.aditivos.filter((id) => id !== aditivo.id),
-                          }))
-                        }
-                        className="accent-carimbo"
-                      />
-                      {aditivo.nome}
-                      <span className="text-mini text-tinta-3 numerico">
-                        +{formatarMoeda(Number(aditivo.valor))}
-                        {aditivo.tipo === "POR_KG" ? "/kg" : "/mil"}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
+            {aditivosDisponiveis.length > 0 && (
+              <CampoAditivos
+                ocultarRotulo
+                aditivos={aditivosDisponiveis}
+                marcados={campos.aditivos}
+                aoAlternar={(id) =>
+                  setCampos((atual) => ({
+                    ...atual,
+                    aditivos: atual.aditivos.includes(id)
+                      ? atual.aditivos.filter((a) => a !== id)
+                      : [...atual.aditivos, id],
+                  }))
+                }
+              />
             )}
           </SecaoCartao>
         )}

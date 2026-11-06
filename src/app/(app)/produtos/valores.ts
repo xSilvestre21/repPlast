@@ -34,6 +34,18 @@ export type ValoresProduto = {
   precoKg: string;
   unidadeAvulsa: string;
   precoAvulso: string;
+  capacidade: string;
+  capacidadeUnidade: string;
+  alturaCm: string;
+  diametroMm: string;
+  materialTampa: string;
+  complementoTampa: string;
+  fornecedorTampaId: string;
+  fornecedorTampaVariavel: string;
+  codigoTampa: string;
+  acabamento: string;
+  acabamentoValorCom: string;
+  acabamentoValorSem: string;
   aditivos: string[];
 };
 
@@ -62,5 +74,17 @@ export const VALORES_VAZIOS: ValoresProduto = {
   precoKg: "",
   unidadeAvulsa: "UN",
   precoAvulso: "",
+  capacidade: "",
+  capacidadeUnidade: "",
+  alturaCm: "",
+  diametroMm: "",
+  materialTampa: "",
+  complementoTampa: "",
+  fornecedorTampaId: "",
+  fornecedorTampaVariavel: "",
+  codigoTampa: "",
+  acabamento: "",
+  acabamentoValorCom: "",
+  acabamentoValorSem: "",
   aditivos: [],
 };

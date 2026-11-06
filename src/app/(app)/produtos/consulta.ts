@@ -10,9 +10,11 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { DbOrganizacao } from "@/lib/db";
 import { lerNumeroBr } from "@/lib/numero-br";
-import { precoUnitario, unidadeDoRotulo } from "@/lib/produto-preco";
+import { ehPorMilheiro, precoUnitario, unidadeDoRotulo } from "@/lib/produto-preco";
 
 import { faixasDoPrefixo } from "./prefixo-medida";
+
+const NOME_DA_UNIDADE = { MIL: "milheiro", KG: "kg", UN: "unidade", CX: "caixa" } as const;
 
 /** Quantas linhas por fatia, na primeira e em todas as seguintes. */
 export const POR_PAGINA = 20;
@@ -145,6 +147,11 @@ export async function buscarProdutos(
             { descricao: contem(termo) },
             { material: contem(termo) },
             { complemento: contem(termo) },
+            { materialTampa: contem(termo) },
+            { complementoTampa: contem(termo) },
+            { acabamento: contem(termo) },
+            { codigoTampa: contem(termo) },
+            { fornecedorTampa: { nome: contem(termo) } },
             { codigoFornecedor: contem(termo) },
             { cliente: { apelido: contem(termo) } },
             { cliente: { razaoSocial: contem(termo) } },
@@ -220,9 +227,16 @@ export async function buscarProdutos(
       return null;
     }
 
-    if (produto.familia === "AVULSO") {
+    if (produto.familia === "AVULSO" || ehPorMilheiro(produto.familia)) {
       return produto.precoAvulso
-        ? { valor: Number(produto.precoAvulso), unidade: produto.unidadeRotulo ?? "unidade" }
+        ? {
+            // Sem o acabamento: com ou sem mão de obra, só cada linha sabe.
+            valor: Number(produto.precoAvulso),
+            // O rótulo do sistema anterior vem primeiro; sem ele, a unidade em
+            // que o item é vendido. Era sempre "unidade", mesmo no milheiro.
+            unidade:
+              produto.unidadeRotulo ?? NOME_DA_UNIDADE[produto.unidadeAvulsa ?? "UN"],
+          }
         : null;
     }
 

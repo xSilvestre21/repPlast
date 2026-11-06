@@ -29,8 +29,17 @@ enum Familia {
   FITA
   STRETCH
   BOBINA
-  /// O que não é nenhuma das quatro: preço digitado, sem fórmula.
+  /// O que não é nenhuma das outras: preço digitado, sem fórmula.
   AVULSO
+  // Vendidas por milheiro, com preço digitado e medida própria na descrição.
+  BOMBONA
+  FRASCO
+  PAPELAO
+  TAMPA
+  /// Frasco e tampa vendidos juntos, com um preço de milheiro só.
+  FRASCO_TAMPA
+  /// Bombona e tampa vendidas juntas, com um preço de milheiro só.
+  BOMBONA_TAMPA
 }
 
 /// Onde o valor do aditivo entra: somado ao fator kg (antes da fórmula) ou ao
@@ -686,6 +695,11 @@ model Fornecedor {
   prepostos   FornecedorPreposto[]
   contatos    ContatoFornecedor[]
 
+  /// Onde ela entra só como fornecedora da tampa de um conjunto.
+  produtosDaTampa       Produto[]       @relation("TampaDoProduto")
+  itensPedidoDaTampa    PedidoItem[]    @relation("TampaDoItemDePedido")
+  itensOrcamentoDaTampa OrcamentoItem[] @relation("TampaDoItemDeOrcamento")
+
   @@index([organizacaoId])
   @@map("fornecedor")
 }
@@ -813,8 +827,8 @@ model Aditivo {
 }
 
 /// Produto de qualquer família. As colunas específicas são anuláveis e
-/// protegidas por CHECK no banco (ver migration), porque o escopo é fechado em
-/// quatro famílias de plástico — mais simples que herança em tabelas separadas.
+/// protegidas por CHECK no banco (ver migration), porque o escopo é fechado nas
+/// famílias do enum — mais simples que herança em tabelas separadas.
 model Produto {
   id            String  @id @default(uuid()) @db.Uuid
   organizacaoId String  @db.Uuid
@@ -846,8 +860,9 @@ model Produto {
   codigoCliente    String?
   /// Descrição gerada a partir das medidas; é ela que sai impressa.
   descricao        String
-  /// Texto que abre a descrição nas famílias fita/stretch/bobina
-  /// ("Fita adesiva", "FILM STRETCH") e que a fecha no saco ("PEAD").
+  /// Texto que abre a descrição nas famílias fita/stretch/bobina/papelão
+  /// ("Fita adesiva", "FILM STRETCH", "Caixa de papelão") e o plástico que vem
+  /// depois das medidas no saco, na bombona, no frasco e na tampa ("PEAD").
   material         String?
   /// Texto livre acrescentado ao fim da descrição: cor, acabamento, peso da
   /// bobina. Vem dos pedidos reais — "transparente", "BOBINA 4KG PESO LÍQUIDO".
@@ -878,9 +893,43 @@ model Produto {
   precoCaixa       Decimal? @db.Decimal(14, 4)
 
   // --- AVULSO: preço digitado, na unidade em que o item é vendido ---
+  // Bombona, frasco, papelão, tampa e os conjuntos usam estas mesmas colunas,
+  // sempre com a unidade MIL: o preço deles é o do milheiro, digitado.
   /// Em que unidade este avulso é vendido. É ela que aparece no pedido.
   unidadeAvulsa UnidadeVenda?
   precoAvulso   Decimal?      @db.Decimal(14, 4)
+
+  // --- BOMBONA, FRASCO, PAPELAO, TAMPA e conjuntos: só entram na descrição ---
+  /// Capacidade de bombona e frasco, na unidade de `capacidadeUnidade`.
+  capacidade        Decimal? @db.Decimal(10, 3)
+  /// "L" ou "mL": guarda como foi pedido, porque "500mL" e "0,5L" são escritas
+  /// de produtos diferentes no catálogo das indústrias.
+  capacidadeUnidade String?
+  /// Altura da caixa de papelão. Comprimento e largura são as colunas do saco;
+  /// a chapa não tem altura.
+  alturaCm          Decimal? @db.Decimal(10, 2)
+  /// Diâmetro da tampa, sozinha ou no conjunto.
+  diametroMm        Decimal? @db.Decimal(10, 2)
+  /// Material e complemento da tampa do conjunto: `material` e `complemento`
+  /// ficam com o frasco ou a bombona, e as duas peças costumam ser diferentes.
+  materialTampa     String?
+  complementoTampa  String?
+  /// Quem fornece a tampa do conjunto. Vazia, é a própria `fornecedorId`.
+  fornecedorTampaId       String? @db.Uuid
+  /// A tampa muda de fornecedor conforme a compra: quem diz qual é o item do
+  /// pedido ou da proposta, e por isso aqui `fornecedorTampaId` fica vazia.
+  fornecedorTampaVariavel Boolean @default(false)
+  /// Código da tampa no fornecedor dela. Não sai no PDF.
+  codigoTampa             String?
+
+  // --- BOMBONA, FRASCO e conjuntos ---
+  /// Acabamento da peça: uma opção só. Sai na descrição; a mão de obra, não.
+  acabamento         String?
+  /// Os dois valores, somados ao milheiro. São do produto, e não da indústria,
+  /// porque decorar um frasco de 100 mL não custa o que custa uma bombona de 20 L.
+  /// Qual deles vale é escolha de cada item: `acabamentoMaoDeObra`, no item.
+  acabamentoValorCom Decimal? @db.Decimal(14, 4)
+  acabamentoValorSem Decimal? @db.Decimal(14, 4)
 
   // --- STRETCH / BOBINA ---
   precoKg   Decimal? @db.Decimal(14, 4)
@@ -893,15 +942,17 @@ model Produto {
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
 
-  organizacao    Organizacao      @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
-  fornecedor     Fornecedor       @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
-  cliente        Cliente?         @relation(fields: [clienteId], references: [id], onDelete: SetNull)
-  aditivos       ProdutoAditivo[]
-  itensPedido    PedidoItem[]
-  itensOrcamento OrcamentoItem[]
+  organizacao     Organizacao      @relation(fields: [organizacaoId], references: [id], onDelete: Cascade)
+  fornecedor      Fornecedor       @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
+  fornecedorTampa Fornecedor?      @relation("TampaDoProduto", fields: [fornecedorTampaId], references: [id], onDelete: Restrict)
+  cliente         Cliente?         @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  aditivos        ProdutoAditivo[]
+  itensPedido     PedidoItem[]
+  itensOrcamento  OrcamentoItem[]
 
   @@index([organizacaoId])
   @@index([fornecedorId])
+  @@index([fornecedorTampaId])
   @@index([clienteId])
   @@index([organizacaoId, familia])
   @@index([organizacaoId, descricao])
@@ -1149,11 +1200,26 @@ model PedidoItem {
   total       Decimal @db.Decimal(14, 2)
   pesoKg      Decimal @default(0) @db.Decimal(14, 3)
 
-  pedido  Pedido   @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
-  produto Produto? @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+  // --- A tampa do conjunto: aparece na tela e nunca no PDF ---
+  /// Quem fornece a tampa nesta compra: a do produto ou, no fornecedor variável,
+  /// a escolhida ao lançar. Vazia num variável, ainda falta escolher.
+  fornecedorTampaId   String? @db.Uuid
+  /// Congelado, como a descrição: a linha continua dizendo o que dizia, e o
+  /// preposto lê o nome mesmo sem ter essa indústria marcada para ele.
+  fornecedorTampaNome String?
+  codigoTampa         String?
+
+  /// Qual valor do acabamento esta linha cobra: `true` é com mão de obra, `false`
+  /// é sem. Nulo quando o produto não tem acabamento. Aparece na tela, não no PDF.
+  acabamentoMaoDeObra Boolean?
+
+  pedido          Pedido      @relation(fields: [pedidoId], references: [id], onDelete: Cascade)
+  produto         Produto?    @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+  fornecedorTampa Fornecedor? @relation("TampaDoItemDePedido", fields: [fornecedorTampaId], references: [id], onDelete: SetNull)
 
   @@index([pedidoId])
   @@index([produtoId])
+  @@index([fornecedorTampaId])
   @@map("pedido_item")
 }
 
@@ -1310,11 +1376,21 @@ model OrcamentoItem {
   /// O formato é o do formulário de produto (ver `produtos/leitura.ts`).
   conta Json?
 
-  orcamento Orcamento @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
-  produto   Produto?  @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+  // --- A tampa do conjunto: ver `PedidoItem` ---
+  fornecedorTampaId   String? @db.Uuid
+  fornecedorTampaNome String?
+  codigoTampa         String?
+
+  /// Ver `PedidoItem.acabamentoMaoDeObra`.
+  acabamentoMaoDeObra Boolean?
+
+  orcamento       Orcamento   @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  produto         Produto?    @relation(fields: [produtoId], references: [id], onDelete: SetNull)
+  fornecedorTampa Fornecedor? @relation("TampaDoItemDeOrcamento", fields: [fornecedorTampaId], references: [id], onDelete: SetNull)
 
   @@index([orcamentoId])
   @@index([produtoId])
+  @@index([fornecedorTampaId])
   @@map("orcamento_item")
 }
 

@@ -75,7 +75,9 @@ export default async function PaginaFornecedor({
   // Se dá para excluir, e o que a exclusão leva junto — dito antes do clique.
   const [produtosDela, pedidosDela, propostasDela] = ehAdmin
     ? await Promise.all([
-        db.produto.count({ where: { organizacaoId, fornecedorId: id } }),
+        db.produto.count({
+          where: { organizacaoId, OR: [{ fornecedorId: id }, { fornecedorTampaId: id }] },
+        }),
         db.pedido.count({ where: { organizacaoId, fornecedorId: id } }),
         db.orcamento.count({ where: { organizacaoId, fornecedorId: id } }),
       ])

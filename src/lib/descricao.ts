@@ -137,6 +137,76 @@ export function descricaoRolo(rolo: DescricaoRolo): string {
   ]);
 }
 
+/* -------------------------------------------------------------------------- */
+/* Vendidos por milheiro: bombona, frasco, papelão, tampa e conjuntos         */
+/*                                                                            */
+/* Formato dos catálogos das indústrias: "1,5L" e "20L Bombona" na Greco &    */
+/* Guerreiro, "TAMPA 42MM COM BATOQUE" na Soroplast. A diferença para as      */
+/* famílias acima é a unidade colada no número: sem ela, "28" não diz se é    */
+/* diâmetro ou capacidade, e papelão se pede tanto em cm quanto em mm.        */
+/*                                                                            */
+/*     Bombona 20L PEAD Tampa Removível C/ Lacre Natural                      */
+/*     Caixa de papelão 30x20x15cm Onda B Kraft                               */
+/*     Frasco 500mL PEAD Oval Branco + Tampa 28mm PP Flip Top Azul            */
+/* -------------------------------------------------------------------------- */
+
+/** "20L", "500mL", "1,5L". */
+export function medidaCapacidade(
+  capacidade: Decimal.Value | null | undefined,
+  unidade: string,
+): string | null {
+  const texto = medidasSeparadas([capacidade], "");
+  return texto ? `${texto}${unidade}` : null;
+}
+
+/** "30x20x15cm". A chapa não tem altura: "100x80cm". */
+export function medidaCaixa(
+  comprimentoCm: Decimal.Value | null | undefined,
+  larguraCm: Decimal.Value | null | undefined,
+  alturaCm: Decimal.Value | null | undefined,
+): string | null {
+  const texto = medidasSeparadas([comprimentoCm, larguraCm, alturaCm], "x");
+  return texto ? `${texto}cm` : null;
+}
+
+/** "28mm". */
+export function medidaDiametro(diametroMm: Decimal.Value | null | undefined): string | null {
+  const texto = medidasSeparadas([diametroMm], "");
+  return texto ? `${texto}mm` : null;
+}
+
+export interface DescricaoEmbalagem {
+  /** O que abre a descrição, ex.: "Bombona", "Caixa de papelão". */
+  nome?: string | null;
+  /** A medida já escrita, de `medidaCapacidade`, `medidaCaixa` ou `medidaDiametro`. */
+  medida?: string | null;
+  material?: string | null;
+  complemento?: string | null;
+  /** O acabamento é do frasco ou da bombona: sai antes do "+" da tampa. */
+  acabamento?: string | null;
+  /** A segunda peça do conjunto: sai depois de um "+", com material e complemento dela. */
+  tampa?: {
+    medida?: string | null;
+    material?: string | null;
+    complemento?: string | null;
+  } | null;
+  adicionais?: string[];
+}
+
+export function descricaoEmbalagem(embalagem: DescricaoEmbalagem): string {
+  const { tampa } = embalagem;
+
+  return juntar([
+    embalagem.nome,
+    embalagem.medida,
+    embalagem.material,
+    embalagem.complemento,
+    embalagem.acabamento,
+    ...(tampa ? ["+", "Tampa", tampa.medida, tampa.material, tampa.complemento] : []),
+    ...(embalagem.adicionais ?? []),
+  ]);
+}
+
 /** Junta as medidas presentes com o separador dado, ou devolve null se não houver nenhuma. */
 function medidasSeparadas(
   valores: (Decimal.Value | null | undefined)[],

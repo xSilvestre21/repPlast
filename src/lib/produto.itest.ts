@@ -130,6 +130,161 @@ afterAll(async () => {
   await admin.organizacao.deleteMany({ where: { id: organizacaoId } });
 });
 
+describe("o banco guarda cada tipo por milheiro com a sua medida", () => {
+  const base = () => ({
+    organizacaoId,
+    fornecedorId: industriaA,
+    descricao: "por milheiro",
+    precoAvulso: "1250",
+    unidadeAvulsa: "MIL" as const,
+  });
+
+  const capacidade = { capacidade: "20", capacidadeUnidade: "L" };
+
+  const COMPLETOS = [
+    { familia: "BOMBONA" as const, ...capacidade },
+    { familia: "FRASCO" as const, ...capacidade },
+    { familia: "PAPELAO" as const, comprimentoCm: "30", larguraCm: "20" },
+    { familia: "TAMPA" as const, diametroMm: "28" },
+    { familia: "FRASCO_TAMPA" as const, ...capacidade, diametroMm: "28" },
+    { familia: "BOMBONA_TAMPA" as const, ...capacidade, diametroMm: "63" },
+  ];
+
+  it.each(COMPLETOS)("aceita $familia completo", async (campos) => {
+    const produto = await admin.produto.create({ data: { ...base(), ...campos } });
+    expect(produto.familia).toBe(campos.familia);
+    await admin.produto.delete({ where: { id: produto.id } });
+  });
+
+  it.each(COMPLETOS.map(({ familia }) => familia))("recusa %s sem medida", async (familia) => {
+    await expect(admin.produto.create({ data: { ...base(), familia } })).rejects.toThrow();
+  });
+
+  it("recusa conjunto sem o diâmetro da tampa", async () => {
+    await expect(
+      admin.produto.create({ data: { ...base(), familia: "FRASCO_TAMPA", ...capacidade } }),
+    ).rejects.toThrow();
+  });
+
+  it("recusa tipo por milheiro sem preço", async () => {
+    await expect(
+      admin.produto.create({
+        data: { ...base(), precoAvulso: null, familia: "TAMPA", diametroMm: "28" },
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("recusa unidade de capacidade desconhecida", async () => {
+    await expect(
+      admin.produto.create({
+        data: { ...base(), familia: "FRASCO", capacidade: "1", capacidadeUnidade: "kg" },
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("recusa medida negativa", async () => {
+    await expect(
+      admin.produto.create({ data: { ...base(), familia: "TAMPA", diametroMm: "-1" } }),
+    ).rejects.toThrow();
+  });
+
+  describe("tampa e acabamento", () => {
+    const frasco = () => ({ ...base(), familia: "FRASCO" as const, ...capacidade });
+    const conjunto = () => ({ ...frasco(), familia: "FRASCO_TAMPA" as const, diametroMm: "28" });
+    const serigrafia = { acabamento: "Serigrafado" };
+
+    it("aceita conjunto com fornecedor, código e acabamento", async () => {
+      const produto = await admin.produto.create({
+        data: {
+          ...conjunto(),
+          ...serigrafia,
+          acabamentoValorCom: "150",
+          fornecedorTampaId: industriaB,
+          codigoTampa: "T-42",
+        },
+      });
+      await admin.produto.delete({ where: { id: produto.id } });
+    });
+
+    it("recusa fornecedor de tampa em quem não é conjunto", async () => {
+      await expect(
+        admin.produto.create({ data: { ...frasco(), fornecedorTampaId: industriaB } }),
+      ).rejects.toThrow();
+      await expect(
+        admin.produto.create({ data: { ...frasco(), fornecedorTampaVariavel: true } }),
+      ).rejects.toThrow();
+      await expect(
+        admin.produto.create({ data: { ...frasco(), codigoTampa: "T-42" } }),
+      ).rejects.toThrow();
+    });
+
+    it("recusa fornecedor variável com fornecedor fixo", async () => {
+      await expect(
+        admin.produto.create({
+          data: { ...conjunto(), fornecedorTampaVariavel: true, fornecedorTampaId: industriaB },
+        }),
+      ).rejects.toThrow();
+    });
+
+    it("aceita acabamento com um valor só", async () => {
+      const produto = await admin.produto.create({
+        data: { ...frasco(), ...serigrafia, acabamentoValorSem: "90" },
+      });
+      await admin.produto.delete({ where: { id: produto.id } });
+    });
+
+    it("recusa acabamento sem valor nenhum", async () => {
+      await expect(admin.produto.create({ data: { ...frasco(), ...serigrafia } })).rejects.toThrow();
+    });
+
+    it("recusa valor solto, sem acabamento", async () => {
+      await expect(
+        admin.produto.create({ data: { ...frasco(), acabamentoValorCom: "150" } }),
+      ).rejects.toThrow();
+    });
+
+    it("recusa acabamento em tipo que não tem", async () => {
+      await expect(
+        admin.produto.create({
+          data: {
+            ...base(),
+            familia: "TAMPA",
+            diametroMm: "28",
+            ...serigrafia,
+            acabamentoValorCom: "150",
+          },
+        }),
+      ).rejects.toThrow();
+    });
+
+    it("recusa valor negativo", async () => {
+      await expect(
+        admin.produto.create({ data: { ...frasco(), ...serigrafia, acabamentoValorCom: "-1" } }),
+      ).rejects.toThrow();
+    });
+
+    it("não apaga a indústria que fornece a tampa de um produto", async () => {
+      const fornecedora = await admin.fornecedor.create({
+        data: { organizacaoId, nome: "Só tampa" },
+      });
+      const produto = await admin.produto.create({
+        data: { ...conjunto(), fornecedorTampaId: fornecedora.id },
+      });
+
+      await expect(admin.fornecedor.delete({ where: { id: fornecedora.id } })).rejects.toThrow();
+
+      await admin.produto.delete({ where: { id: produto.id } });
+      await admin.fornecedor.delete({ where: { id: fornecedora.id } });
+    });
+  });
+
+  it("stretch continua exigindo o preço por quilo", async () => {
+    await expect(
+      admin.produto.create({ data: { ...base(), familia: "STRETCH" } }),
+    ).rejects.toThrow();
+  });
+});
+
 describe("o que dá para lançar num documento", () => {
   it("traz o produto do cliente naquela indústria", async () => {
     const lista = await aoLancarPara(clienteA, industriaA);

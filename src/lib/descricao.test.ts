@@ -14,7 +14,16 @@
 
 import { describe, expect, it } from "vitest";
 
-import { descricaoFita, descricaoRolo, descricaoSaco, formatarNumero } from "./descricao";
+import {
+  descricaoEmbalagem,
+  descricaoFita,
+  descricaoRolo,
+  descricaoSaco,
+  formatarNumero,
+  medidaCaixa,
+  medidaCapacidade,
+  medidaDiametro,
+} from "./descricao";
 
 describe("saco plástico — pedidos 2253 e 2256", () => {
   it("monta as três descrições exatamente como saem nos PDFs", () => {
@@ -154,5 +163,48 @@ describe("formatarNumero", () => {
     expect(formatarNumero(0.006, 2)).toBe("0,006");
     expect(formatarNumero(0.08, 2)).toBe("0,08");
     expect(formatarNumero(99)).toBe("99");
+  });
+});
+
+describe("vendidos por milheiro", () => {
+  it("escreve a medida com a unidade colada, e vírgula decimal", () => {
+    expect(medidaCapacidade(20, "L")).toBe("20L");
+    expect(medidaCapacidade(500, "mL")).toBe("500mL");
+    expect(medidaCapacidade(1.5, "L")).toBe("1,5L");
+    expect(medidaCaixa(30, 20, 15)).toBe("30x20x15cm");
+    expect(medidaDiametro(28)).toBe("28mm");
+  });
+
+  it("sem altura, a caixa fica em duas medidas", () => {
+    expect(medidaCaixa(100, 80, null)).toBe("100x80cm");
+  });
+
+  it("sem medida nenhuma, não escreve unidade solta", () => {
+    expect(medidaCapacidade(null, "L")).toBeNull();
+    expect(medidaCaixa(null, null, null)).toBeNull();
+    expect(medidaDiametro(null)).toBeNull();
+  });
+
+  it("junta nome, medida, material e complemento", () => {
+    expect(
+      descricaoEmbalagem({
+        nome: "Bombona",
+        medida: "20L",
+        material: "PEAD",
+        complemento: "Natural",
+      }),
+    ).toBe("Bombona 20L PEAD Natural");
+  });
+
+  it("no conjunto, a tampa vem depois do +, e os aditivos no fim", () => {
+    expect(
+      descricaoEmbalagem({
+        nome: "Frasco",
+        medida: "500mL",
+        material: "PEAD",
+        tampa: { medida: "28mm", material: "PP", complemento: "Azul" },
+        adicionais: ["ANTI-UV"],
+      }),
+    ).toBe("Frasco 500mL PEAD + Tampa 28mm PP Azul ANTI-UV");
   });
 });

@@ -5,6 +5,8 @@ import { Building2, Factory, FileDown, Mail, Pencil, ScrollText } from "lucide-r
 import { BotaoExcluir } from "@/components/botao-excluir";
 import { type ContatoEnvio, EnvioPorEmail } from "@/components/envio-email";
 import { SecaoItens } from "@/components/itens-documento";
+import { soIndustriasMarcadas } from "@/lib/industrias-do-ator";
+import { tampaParaTela } from "@/lib/tampa-do-item";
 import { Pagina } from "@/components/pagina";
 import {
   BotaoLink,
@@ -22,6 +24,8 @@ import { unidadeDoRotulo } from "@/lib/produto-preco";
 import { nomeArquivoOrcamento } from "@/lib/pdf/nome-arquivo";
 import { escopoAtual } from "@/lib/sessao";
 import { nomeCompleto } from "@/lib/nome-usuario";
+
+import { fornecedorDaTampaVaria } from "../../produtos/leitura";
 
 import { SeloOrcamento, destinatario } from "../selo";
 import {
@@ -63,7 +67,10 @@ export default async function PaginaOrcamento({
     include: {
       cliente: true,
       fornecedor: { select: { id: true, nome: true } },
-      itens: { orderBy: { ordem: "asc" } },
+      itens: {
+        orderBy: { ordem: "asc" },
+        include: { produto: { select: { fornecedorTampaVariavel: true } } },
+      },
       pedidos: { select: { id: true, numero: true }, orderBy: { numero: "asc" } },
       edicoes: {
         orderBy: { editadoEm: "desc" },
@@ -135,6 +142,22 @@ export default async function PaginaOrcamento({
           materiais: { where: { ativo: true }, orderBy: { nome: "asc" } },
         },
       });
+
+  /** A conta pode ser de conjunto; no catálogo, só o de fornecedor variável pergunta. */
+  const escolheFornecedorTampa =
+    industria !== null ||
+    produtos.some((p) => p.fornecedorTampaVariavel) ||
+    orcamento.itens.some(fornecedorDaTampaVaria);
+
+  const fornecedoresDaTampa = escolheFornecedorTampa
+    ? await db.fornecedor
+        .findMany({
+          where: { organizacaoId, ativo: true, ...soIndustriasMarcadas({ ehAdmin, usuarioId }) },
+          orderBy: { nome: "asc" },
+          select: { id: true, nome: true },
+        })
+        .then((lista) => lista.map((f) => ({ id: f.id, rotulo: f.nome })))
+    : [];
 
   /** Linhas feitas de conta que ainda não são produto — o que segura o pedido. */
   const itensSemProduto = orcamento.itens.filter((i) => i.produtoId === null).length;
@@ -388,6 +411,8 @@ export default async function PaginaOrcamento({
             totalSemIpi: item.totalSemIpi.toString(),
             valorIpi: item.valorIpi.toString(),
             total: item.total.toString(),
+            maoDeObra: item.acabamentoMaoDeObra,
+            tampa: tampaParaTela(item, fornecedorDaTampaVaria(item)),
             cadastrarEm:
               ehAdmin && orcamento.cliente && item.produtoId === null
                 ? `/produtos/novo?orcamentoItem=${item.id}`
@@ -409,10 +434,12 @@ export default async function PaginaOrcamento({
                   tipo: a.tipo,
                   valor: a.valor.toString(),
                 }))}
+                industrias={fornecedoresDaTampa}
                 adicionar={adicionarItemPorConta.bind(null, orcamento.id)}
               />
             ) : undefined
           }
+          fornecedoresDaTampa={fornecedoresDaTampa}
           produtos={produtos.map((p) => ({
             id: p.id,
             descricao: p.descricao,
@@ -429,6 +456,10 @@ export default async function PaginaOrcamento({
             unidadeAvulsa: p.unidadeAvulsa,
             precoAvulso: texto(p.precoAvulso),
             unidadesPorCaixa: p.unidadesPorCaixa,
+            acabamento: p.acabamento,
+            acabamentoValorCom: texto(p.acabamentoValorCom),
+            acabamentoValorSem: texto(p.acabamentoValorSem),
+            fornecedorTampaVariavel: p.fornecedorTampaVariavel,
             unidadePadrao: unidadeDoRotulo(p.unidadeRotulo),
             aditivos: p.aditivos.map(({ aditivo }) => ({
               nome: aditivo.nome,

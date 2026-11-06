@@ -1,0 +1,328 @@
+/**
+ * O catálogo dos tipos: a descrição de cada um e o que acontece ao trocar de tipo.
+ *
+ * As frases são as combinadas para sair no pedido. A forma delas vem dos
+ * catálogos das indústrias ("1,5L", "20L Bombona", "TAMPA 42MM COM BATOQUE").
+ */
+
+import { describe, expect, it } from "vitest";
+
+import {
+  type CamposDaEmbalagem,
+  OPCOES_TIPO,
+  TIPOS,
+  camposAoTrocarDeTipo,
+  descricaoDoTipo,
+  materialAoTrocarDeTipo,
+  tipoDoProduto,
+  tipoPorValor,
+  unidadeDaCapacidade,
+} from "./tipos-produto";
+
+const VAZIO: CamposDaEmbalagem = {
+  material: "",
+  complemento: "",
+  capacidade: "",
+  capacidadeUnidade: "",
+  comprimentoCm: "",
+  larguraCm: "",
+  alturaCm: "",
+  diametroMm: "",
+  materialTampa: "",
+  complementoTampa: "",
+  fornecedorTampaId: "",
+  fornecedorTampaVariavel: "",
+  acabamento: "",
+  acabamentoValorCom: "",
+  acabamentoValorSem: "",
+};
+
+const descricao = (
+  valor: string,
+  campos: Partial<CamposDaEmbalagem>,
+  adicionais?: string[],
+) => descricaoDoTipo(tipoPorValor(valor), { ...VAZIO, ...campos }, adicionais);
+
+describe("descrição impressa", () => {
+  it("bombona, em litros", () => {
+    expect(descricao("BOMBONA", { capacidade: "20" })).toBe("Bombona 20L");
+    expect(
+      descricao("BOMBONA", {
+        capacidade: "20",
+        material: "PEAD",
+        complemento: "Tampa Removível C/ Lacre Natural",
+      }),
+    ).toBe("Bombona 20L PEAD Tampa Removível C/ Lacre Natural");
+  });
+
+  it("frasco, em mL ou em L, com vírgula decimal", () => {
+    expect(
+      descricao("FRASCO", {
+        capacidade: "500",
+        capacidadeUnidade: "mL",
+        material: "PEAD",
+        complemento: "Oval Tampa Flip Top Branco",
+      }),
+    ).toBe("Frasco 500mL PEAD Oval Tampa Flip Top Branco");
+    expect(descricao("FRASCO", { capacidade: "1,5", capacidadeUnidade: "L" })).toBe("Frasco 1,5L");
+  });
+
+  it("papelão: o modelo abre, e a altura é opcional", () => {
+    expect(
+      descricao("PAPELAO", {
+        material: "Caixa de papelão",
+        comprimentoCm: "30",
+        larguraCm: "20",
+        alturaCm: "15",
+        complemento: "Onda B Kraft Maleta (FEFCO 0201)",
+      }),
+    ).toBe("Caixa de papelão 30x20x15cm Onda B Kraft Maleta (FEFCO 0201)");
+
+    expect(
+      descricao("PAPELAO", {
+        material: "Chapa de papelão",
+        comprimentoCm: "100",
+        larguraCm: "80",
+        complemento: "Onda B",
+      }),
+    ).toBe("Chapa de papelão 100x80cm Onda B");
+  });
+
+  it("tampa, pelo diâmetro", () => {
+    expect(
+      descricao("TAMPA", {
+        diametroMm: "38",
+        material: "PP",
+        complemento: "Lacre Baixa C/ Selo de Indução Azul",
+      }),
+    ).toBe("Tampa 38mm PP Lacre Baixa C/ Selo de Indução Azul");
+    expect(descricao("TAMPA", { diametroMm: "42", complemento: "C/ Batoque" })).toBe(
+      "Tampa 42mm C/ Batoque",
+    );
+  });
+
+  it("conjunto: as duas peças, ligadas por +", () => {
+    expect(
+      descricao("FRASCO_TAMPA", {
+        capacidade: "500",
+        capacidadeUnidade: "mL",
+        material: "PEAD",
+        complemento: "Oval Branco",
+        diametroMm: "28",
+        materialTampa: "PP",
+        complementoTampa: "Flip Top Azul",
+      }),
+    ).toBe("Frasco 500mL PEAD Oval Branco + Tampa 28mm PP Flip Top Azul");
+
+    expect(
+      descricao("BOMBONA_TAMPA", {
+        capacidade: "20",
+        material: "PEAD",
+        complemento: "Natural",
+        diametroMm: "63",
+        materialTampa: "PP",
+        complementoTampa: "Lacre Azul",
+      }),
+    ).toBe("Bombona 20L PEAD Natural + Tampa 63mm PP Lacre Azul");
+  });
+
+  it("os aditivos fecham a descrição, inclusive no conjunto", () => {
+    expect(
+      descricao("BOMBONA_TAMPA", { capacidade: "20", diametroMm: "63" }, ["ANTI-UV"]),
+    ).toBe("Bombona 20L + Tampa 63mm ANTI-UV");
+  });
+
+  it("o acabamento fecha a peça, antes da tampa e dos aditivos", () => {
+    expect(
+      descricao("FRASCO", {
+        capacidade: "500",
+        capacidadeUnidade: "mL",
+        material: "PEAD",
+        complemento: "Oval Branco",
+        acabamento: "Serigrafado",
+      }),
+    ).toBe("Frasco 500mL PEAD Oval Branco Serigrafado");
+
+    expect(
+      descricao(
+        "BOMBONA_TAMPA",
+        { capacidade: "20", acabamento: "Sleeve", diametroMm: "63", materialTampa: "PP" },
+        ["ANTI-UV"],
+      ),
+    ).toBe("Bombona 20L Sleeve + Tampa 63mm PP ANTI-UV");
+  });
+
+  it("os valores do acabamento não saem na descrição", () => {
+    expect(
+      descricao("BOMBONA", {
+        capacidade: "20",
+        acabamento: "Rotulado Adesivo",
+        acabamentoValorCom: "150,00",
+        acabamentoValorSem: "90,00",
+      }),
+    ).toBe("Bombona 20L Rotulado Adesivo");
+  });
+
+  it("tipo sem acabamento ignora o que sobrou no campo", () => {
+    expect(descricao("TAMPA", { diametroMm: "28", acabamento: "Serigrafado" })).toBe("Tampa 28mm");
+  });
+
+  it("antes de digitar a medida, sai o que já se sabe", () => {
+    expect(descricao("BOMBONA", { material: "PEAD" })).toBe("Bombona PEAD");
+  });
+});
+
+describe("unidade da capacidade", () => {
+  it("usa a escolhida, se o tipo aceita", () => {
+    expect(unidadeDaCapacidade(tipoPorValor("FRASCO"), "L")).toBe("L");
+  });
+
+  it("senão cai na primeira do tipo", () => {
+    expect(unidadeDaCapacidade(tipoPorValor("FRASCO"), "")).toBe("mL");
+    expect(unidadeDaCapacidade(tipoPorValor("BOMBONA"), "mL")).toBe("L");
+  });
+});
+
+describe("trocar de tipo", () => {
+  const trocar = (de: string, para: string, material: string) =>
+    materialAoTrocarDeTipo(tipoPorValor(de), tipoPorValor(para), material);
+
+  it("o padrão do tipo anterior dá lugar ao do novo", () => {
+    expect(trocar("FITA", "PAPELAO", "Fita adesiva")).toBe("Caixa de papelão");
+  });
+
+  it("o que a pessoa digitou fica", () => {
+    expect(trocar("FITA", "STRETCH", "Fita adesiva marrom")).toBe("Fita adesiva marrom");
+  });
+
+  it("o plástico não vai abrir a descrição de outro tipo", () => {
+    expect(trocar("SACO", "FITA", "PEAD")).toBe("Fita adesiva");
+    expect(trocar("BOMBONA", "PAPELAO", "PEAD")).toBe("Caixa de papelão");
+  });
+
+  it("o tipo em que o campo é plástico começa vazio", () => {
+    expect(trocar("FITA", "BOMBONA", "Fita adesiva")).toBe("");
+  });
+
+  it("o modelo do papelão não vira material de outro tipo", () => {
+    expect(trocar("PAPELAO", "TAMPA", "Chapa de papelão")).toBe("");
+    expect(trocar("PAPELAO", "FITA", "Chapa de papelão")).toBe("Fita adesiva");
+    expect(trocar("AVULSO", "PAPELAO", "Item especial")).toBe("Caixa de papelão");
+  });
+
+  it("escolher de novo o mesmo tipo não apaga nada", () => {
+    expect(trocar("TAMPA", "TAMPA", "PP")).toBe("PP");
+    expect(trocar("SACO", "SACO", "PEAD")).toBe("PEAD");
+  });
+});
+
+describe("trocar de tipo limpa o que era da outra peça", () => {
+  const VAZIOS = {
+    familia: "SACO",
+    fornecedorId: "",
+    material: "",
+    complemento: "",
+    capacidade: "",
+    capacidadeUnidade: "",
+    diametroMm: "",
+    materialTampa: "",
+    fornecedorTampaId: "",
+    fornecedorTampaVariavel: "",
+    acabamento: "",
+    acabamentoValorCom: "",
+    precoAvulso: "",
+    unidadeAvulsa: "UN",
+    aditivos: [] as string[],
+  };
+
+  const CONJUNTO = {
+    ...VAZIOS,
+    familia: "BOMBONA_TAMPA",
+    fornecedorId: "f1",
+    material: "PEAD",
+    complemento: "Natural",
+    capacidade: "20",
+    capacidadeUnidade: "L",
+    diametroMm: "63",
+    materialTampa: "PP",
+    fornecedorTampaId: "f2",
+    fornecedorTampaVariavel: "1",
+    acabamento: "Serigrafado",
+    acabamentoValorCom: "150,00",
+    precoAvulso: "2.000,00",
+    aditivos: ["a1"],
+  };
+
+  const trocar = (de: string, para: string, campos: typeof VAZIOS) =>
+    camposAoTrocarDeTipo(tipoPorValor(de), tipoPorValor(para), campos, VAZIOS, ["fornecedorId"]);
+
+  it("do conjunto para só a tampa, recomeça", () => {
+    expect(trocar("BOMBONA_TAMPA", "TAMPA", CONJUNTO)).toEqual({
+      ...VAZIOS,
+      familia: "TAMPA",
+      fornecedorId: "f1",
+    });
+  });
+
+  it("guarda o que foi pedido para manter", () => {
+    expect(trocar("BOMBONA_TAMPA", "FRASCO", CONJUNTO).fornecedorId).toBe("f1");
+  });
+
+  it("abre na unidade de capacidade do tipo novo", () => {
+    expect(trocar("BOMBONA", "FRASCO", CONJUNTO).capacidadeUnidade).toBe("mL");
+  });
+
+  it("na mesma família, é o mesmo produto: nada muda", () => {
+    const stretch = { ...VAZIOS, familia: "STRETCH", material: "FILME STRETCH", complemento: "BOBINA 4KG" };
+    expect(trocar("STRETCH", "SHRINK", stretch)).toEqual({ ...stretch, material: "FILME SHRINK" });
+  });
+
+  it("escolher de novo o mesmo tipo não muda nada", () => {
+    expect(trocar("BOMBONA_TAMPA", "BOMBONA_TAMPA", CONJUNTO)).toEqual(CONJUNTO);
+  });
+});
+
+describe("catálogo de frascos e bombonas", () => {
+  const grupo = (valor: string, titulo: string) =>
+    tipoPorValor(valor).complementos.find((g) => g.titulo === titulo);
+
+  it("a bombona tem os bocais dos fabricantes, um por vez", () => {
+    expect(grupo("BOMBONA", "Bocal")?.umaSo).toBe(true);
+    expect(grupo("BOMBONA", "Bocal")?.opcoes).toEqual(
+      expect.arrayContaining(["Bocal 38mm", "Bocal 42mm", "Bocal 45mm", "Bocal 63mm"]),
+    );
+  });
+
+  it("o conjunto mantém bocal e gargalo, e deixa a tampa para a seção dela", () => {
+    expect(grupo("BOMBONA_TAMPA", "Bocal")).toBeDefined();
+    expect(grupo("FRASCO_TAMPA", "Gargalo")).toBeDefined();
+    expect(grupo("BOMBONA_TAMPA", "Fechamento")).toBeUndefined();
+    expect(grupo("FRASCO_TAMPA", "Tampa")).toBeUndefined();
+  });
+
+  it("nenhuma opção se repete dentro do mesmo tipo", () => {
+    for (const { complementos, valor } of TIPOS) {
+      const opcoes = complementos.flatMap((g) => g.opcoes);
+      expect(new Set(opcoes).size, valor).toBe(opcoes.length);
+    }
+  });
+
+  it("só frasco e bombona têm acabamento", () => {
+    const comAcabamento = TIPOS.filter((t) => t.acabamentos).map((t) => t.valor);
+    expect(comAcabamento.sort()).toEqual(["BOMBONA", "BOMBONA_TAMPA", "FRASCO", "FRASCO_TAMPA"]);
+  });
+});
+
+describe("reabrir um produto", () => {
+  it("cada família nova volta ao seu tipo", () => {
+    for (const { id } of OPCOES_TIPO.filter((o) => o.id !== "SHRINK")) {
+      expect(tipoDoProduto({ familia: id, material: "", descricao: "" }).valor).toBe(id);
+    }
+  });
+
+  it("o shrink continua reconhecido pelo nome", () => {
+    expect(
+      tipoDoProduto({ familia: "STRETCH", material: "FILME SHRINK", descricao: "" }).valor,
+    ).toBe("SHRINK");
+  });
+});
