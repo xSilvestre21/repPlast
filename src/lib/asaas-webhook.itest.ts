@@ -29,9 +29,10 @@ vi.mock("./asaas", () => ({
 }));
 
 import { fimDoPeriodoPago } from "./acesso-assinatura";
+import { assinaturaDoCliente } from "./asaas";
 import { processarEventoAsaas, tokenDoWebhookConfere } from "./asaas-webhook";
 import { dbAdministrativo, dbParaOrganizacao } from "./db";
-import { hojeEmBrasilia, primeiraCobranca } from "./teste-gratis";
+import { primeiraCobranca } from "./teste-gratis";
 
 const admin = dbAdministrativo();
 const sufixo = randomUUID().slice(0, 8);
@@ -363,24 +364,29 @@ describe("os 7 dias grátis", () => {
     await admin.organizacao.deleteMany({ where: { id: { in: criados } } });
   });
 
-  it("a assinatura do checkout do teste libera o escritório, sem pagamento, e grava o fim real do teste", async () => {
-    const cobrancaEsperada = primeiraCobranca();
-    const { id, checkout } = await escritorio("libera", fimDoPeriodoPago(cobrancaEsperada));
-    // O checkout foi concluído um dia depois de aberto: vale a data da assinatura.
-    const daAssinatura = primeiraCobranca(new Date(Date.now() + 24 * 60 * 60 * 1000));
+  /** Como o Asaas manda: o `nextDueDate` da assinatura criada é a cobrança SEGUINTE, um mês depois. */
+  function cobrancaSeguinte(dia: string) {
+    const [ano, mes, d] = dia.split("-").map(Number);
+    return new Date(Date.UTC(ano, mes, d)).toISOString().slice(0, 10);
+  }
 
-    await processarEventoAsaas(criada(checkout, "libera", daAssinatura));
+  it("a assinatura do checkout do teste libera o escritório, sem pagamento, e o fim do teste é o do cadastro", async () => {
+    const testeAte = fimDoPeriodoPago(primeiraCobranca());
+    const { id, checkout } = await escritorio("libera", testeAte);
+
+    // No sandbox: primeira cobrança em 16/11, e o evento trouxe `nextDueDate: 16/12`.
+    await processarEventoAsaas(criada(checkout, "libera", cobrancaSeguinte(primeiraCobranca())));
 
     expect(await ler(id)).toEqual({
       assinatura: "ATIVA",
-      testeAte: fimDoPeriodoPago(daAssinatura),
+      testeAte,
       asaasAssinaturaId: `subt_libera_${sufixo}`,
     });
   });
 
   it("depois do teste, a primeira cobrança recusada suspende como qualquer outra", async () => {
     const { id, checkout } = await escritorio("recusa", fimDoPeriodoPago(primeiraCobranca()));
-    await processarEventoAsaas(criada(checkout, "recusa", primeiraCobranca()));
+    await processarEventoAsaas(criada(checkout, "recusa", cobrancaSeguinte(primeiraCobranca())));
 
     await processarEventoAsaas(
       evento("PAYMENT_OVERDUE", { payment: { subscription: `subt_recusa_${sufixo}`, customer: `cust_recusa_${sufixo}` } }),
@@ -392,7 +398,7 @@ describe("os 7 dias grátis", () => {
   it("sem o teste no cadastro, a assinatura só liga — quem libera é o pagamento, como sempre", async () => {
     const { id, checkout } = await escritorio("sem", null);
 
-    await processarEventoAsaas(criada(checkout, "sem", primeiraCobranca()));
+    await processarEventoAsaas(criada(checkout, "sem", cobrancaSeguinte(primeiraCobranca())));
 
     expect(await ler(id)).toEqual({
       assinatura: "AGUARDANDO_PAGAMENTO",
@@ -401,17 +407,18 @@ describe("os 7 dias grátis", () => {
     });
   });
 
-  it("assinatura que cobra hoje não é teste, mesmo em escritório que o ganhou", async () => {
+  it("na ordem do sandbox — assinatura criada, depois o CHECKOUT_PAID sem cobrança —, o fim do teste não muda", async () => {
     const testeAte = fimDoPeriodoPago(primeiraCobranca());
-    const { id, checkout } = await escritorio("hoje", testeAte);
+    const { id, checkout } = await escritorio("ordem", testeAte);
 
-    await processarEventoAsaas(criada(checkout, "hoje", hojeEmBrasilia()));
+    await processarEventoAsaas(criada(checkout, "ordem", cobrancaSeguinte(primeiraCobranca())));
+    // O cliente do checkout tem uma assinatura só: a que acabou de ser criada.
+    vi.mocked(assinaturaDoCliente).mockResolvedValueOnce(`subt_ordem_${sufixo}`);
+    await processarEventoAsaas(evento("CHECKOUT_PAID", { checkout: { id: checkout, customer: `cust_ordem_${sufixo}` } }));
 
-    expect(await ler(id)).toEqual({
-      assinatura: "AGUARDANDO_PAGAMENTO",
-      testeAte,
-      asaasAssinaturaId: `subt_hoje_${sufixo}`,
-    });
+    const depois = await ler(id);
+    expect(depois.assinatura).toBe("ATIVA");
+    expect(depois.testeAte).toEqual(testeAte);
   });
 });
 

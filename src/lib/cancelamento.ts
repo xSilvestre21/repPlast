@@ -30,13 +30,14 @@ import { ErroAsaas, proximoVencimento, removerAssinatura } from "./asaas";
 import { dbAdministrativo } from "./db";
 import { ErroParaUsuario } from "./erro-formulario";
 import { CONTROLADOR } from "./lgpd";
+import { emTesteGratis } from "./teste-gratis";
 
 export async function cancelarAssinaturaDoEscritorio(organizacaoId: string): Promise<void> {
   const admin = dbAdministrativo();
 
   const organizacao = await admin.organizacao.findUniqueOrThrow({
     where: { id: organizacaoId },
-    select: { assinatura: true, asaasAssinaturaId: true },
+    select: { assinatura: true, asaasAssinaturaId: true, testeAte: true },
   });
   if (organizacao.assinatura === "CANCELADA") {
     throw new ErroParaUsuario("A assinatura já está cancelada. Recarregue a página para ver a situação de agora.");
@@ -51,7 +52,16 @@ export async function cancelarAssinaturaDoEscritorio(organizacaoId: string): Pro
   const emDia = organizacao.assinatura === "ATIVA";
   try {
     if (emDia) {
-      const acessoAte = fimDoPeriodoPago(await proximoVencimento(organizacao.asaasAssinaturaId));
+      /*
+       * Nos 7 dias grátis, o acesso vai até a primeira cobrança, que o
+       * cancelamento apaga — o `testeAte`. NÃO o próximo vencimento do Asaas:
+       * nesse período ele já aponta a cobrança SEGUINTE (a primeira nasce com a
+       * assinatura), e daria um mês de graça a mais.
+       */
+      const acessoAte =
+        emTesteGratis(organizacao) && organizacao.testeAte
+          ? organizacao.testeAte
+          : fimDoPeriodoPago(await proximoVencimento(organizacao.asaasAssinaturaId));
       await admin.organizacao.update({ where: { id: organizacaoId }, data: { acessoAte } });
     }
     await removerAssinatura(organizacao.asaasAssinaturaId);

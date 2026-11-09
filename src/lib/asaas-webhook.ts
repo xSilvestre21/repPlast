@@ -33,11 +33,9 @@ import { timingSafeEqual } from "node:crypto";
 
 import { Prisma } from "@/generated/prisma/client";
 
-import { fimDoPeriodoPago } from "./acesso-assinatura";
 import { assinaturaDoCliente } from "./asaas";
 import { dbAdministrativo } from "./db";
 import { acertarDepoisDoPagamento } from "./mensalidade";
-import { hojeEmBrasilia } from "./teste-gratis";
 
 /** Quanto o corpo do evento fica guardado — o bastante para investigar uma cobrança. */
 const GUARDA_DO_CORPO_MS = 90 * 24 * 60 * 60 * 1000;
@@ -52,8 +50,6 @@ interface EventoAsaas {
     id?: string;
     customer?: string;
     checkoutSession?: string | null;
-    /** "2026-11-16": a primeira cobrança, na assinatura recém-criada. */
-    nextDueDate?: string;
   };
   payment?: { subscription?: string | null; customer?: string };
 }
@@ -156,7 +152,6 @@ export async function processarEventoAsaas(corpo: unknown): Promise<void> {
     assinatura?: Situacao;
     asaasClienteId?: string;
     asaasAssinaturaId?: string;
-    testeAte?: Date;
   } = {};
   if (situacao) dados.assinatura = situacao;
 
@@ -211,22 +206,25 @@ export async function processarEventoAsaas(corpo: unknown): Promise<void> {
     : null;
 
   /*
-   * O checkout dos 7 dias grátis: o escritório ganhou o teste no cadastro
-   * (`testeAte` preenchido) e a assinatura que ele criou só cobra no futuro.
-   * Sem os dois, é um checkout que cobra hoje — o de quem já usou o teste, ou
-   * o de quem assina de novo —, e quem libera é o pagamento, como sempre.
+   * O checkout dos 7 dias grátis não cobra nada, e quem libera o escritório é
+   * a assinatura que ele criou. O teste foi dado no cadastro (`testeAte`
+   * preenchido), com a mesma data mandada ao checkout como primeira cobrança —
+   * sem ele, é um checkout que cobra hoje, e quem libera é o pagamento.
+   *
+   * O fim do teste NÃO vem do `nextDueDate` deste evento: no Asaas, ele é o
+   * vencimento da PRÓXIMA cobrança a gerar, e a primeira já nasce junto com a
+   * assinatura. No sandbox, o checkout com primeira cobrança em 16/11 mandou
+   * `nextDueDate: 16/12` — e o teste viraria 37 dias.
    */
-  const primeiraCobranca = evento.subscription?.nextDueDate?.slice(0, 10) ?? "";
   if (
     evento.event === "SUBSCRIPTION_CREATED" &&
     onde &&
     "asaasCheckoutId" in onde &&
     alvo?.testeAte &&
-    /^\d{4}-\d{2}-\d{2}$/.test(primeiraCobranca) &&
-    primeiraCobranca > hojeEmBrasilia()
+    alvo.testeAte.getTime() > Date.now() &&
+    alvo.assinatura === "AGUARDANDO_PAGAMENTO"
   ) {
-    dados.testeAte = fimDoPeriodoPago(primeiraCobranca);
-    if (alvo.assinatura === "AGUARDANDO_PAGAMENTO") dados.assinatura = "ATIVA";
+    dados.assinatura = "ATIVA";
   }
   // Liberado de novo: o prazo de quem tinha cancelado deixa de valer.
   const limparAcesso = dados.assinatura === "ATIVA";

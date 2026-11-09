@@ -28,6 +28,7 @@ vi.mock("./asaas", () => {
 import { assinaturaLiberada, fimDoPeriodoPago } from "./acesso-assinatura";
 import { cancelarAssinaturaDoEscritorio } from "./cancelamento";
 import { dbAdministrativo } from "./db";
+import { primeiraCobranca } from "./teste-gratis";
 
 const admin = dbAdministrativo();
 const sufixo = randomUUID().slice(0, 8);
@@ -78,8 +79,9 @@ describe("cancelarAssinaturaDoEscritorio", () => {
 
   it("nos 7 dias grátis: remove a cobrança agendada e deixa usar até o último dia do teste", async () => {
     const id = await escritorio("ATIVA", `sub_teste_${sufixo}`);
-    // O teste acaba no dia da primeira cobrança — o próximo vencimento do Asaas.
-    const testeAte = fimDoPeriodoPago("2026-12-03");
+    // O teste acaba no dia da primeira cobrança. O próximo vencimento do Asaas
+    // (o mock: 03/12) é o da cobrança SEGUINTE, e não pode virar o prazo.
+    const testeAte = fimDoPeriodoPago(primeiraCobranca());
     await admin.organizacao.update({ where: { id }, data: { testeAte } });
 
     await cancelarAssinaturaDoEscritorio(id);
@@ -91,8 +93,8 @@ describe("cancelarAssinaturaDoEscritorio", () => {
     });
     // Usa até a véspera da cobrança que não vai acontecer, e o teste fica registrado como usado.
     expect(depois).toEqual({ assinatura: "CANCELADA", acessoAte: testeAte, testeAte });
-    expect(assinaturaLiberada(depois, new Date("2026-12-02T23:00:00-03:00"))).toBe(true);
-    expect(assinaturaLiberada(depois, new Date("2026-12-03T00:00:00-03:00"))).toBe(false);
+    expect(assinaturaLiberada(depois, new Date(testeAte.getTime() - 60 * 60 * 1000))).toBe(true);
+    expect(assinaturaLiberada(depois, testeAte)).toBe(false);
   });
 
   it("em atraso: remove no Asaas, com a mensalidade vencida, e encerra na hora", async () => {
