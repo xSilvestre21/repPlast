@@ -28,6 +28,9 @@ nextEnv.loadEnvConfig(process.cwd(), true, { info() {}, error: console.error });
 const NOME_WEBHOOK = "RepPlast local";
 const PORTA_LOCAL = "http://127.0.0.1:3000";
 const CAMINHO = "/api/asaas/webhook";
+/** O endereço novo do túnel leva alguns segundos para o Asaas achar (ver `aoLer`). */
+const TENTATIVAS_DA_URL = 12;
+const ESPERA_DA_URL_MS = 10_000;
 /** Os eventos que `lib/asaas-webhook.ts` trata. Outro evento seria só ruído na fila. */
 const EVENTOS = [
   "CHECKOUT_PAID",
@@ -144,12 +147,27 @@ const aoLer = async (pedaco) => {
   apontado = true;
 
   console.log(`Túnel no ar: ${url}`);
-  try {
-    const feito = await apontarWebhook(url);
-    console.log(`\n✔ Webhook "${NOME_WEBHOOK}" ${feito} no sandbox do Asaas → ${url}${CAMINHO}`);
-    console.log("  Pagamentos de teste agora liberam o escritório. Deixe este terminal aberto; Ctrl+C fecha.\n");
-  } catch (erro) {
-    console.error(`\n✖ O túnel abriu, mas o webhook não foi cadastrado:\n  ${erro.message}\n`);
+  /*
+   * O endereço do túnel é novo a cada execução, e o Asaas confere a URL na
+   * hora: nos primeiros segundos, antes de o nome existir para ele, responde
+   * "A url informada é inválida". Isso passa sozinho — tenta-se de novo por
+   * até 2 minutos. Qualquer outro erro para na primeira.
+   */
+  for (let tentativa = 1; ; tentativa++) {
+    try {
+      const feito = await apontarWebhook(url);
+      console.log(`\n✔ Webhook "${NOME_WEBHOOK}" ${feito} no sandbox do Asaas → ${url}${CAMINHO}`);
+      console.log("  Pagamentos de teste agora liberam o escritório. Deixe este terminal aberto; Ctrl+C fecha.\n");
+      return;
+    } catch (erro) {
+      const urlAindaNova = /url informada é inválida/i.test(erro.message);
+      if (!urlAindaNova || tentativa >= TENTATIVAS_DA_URL) {
+        console.error(`\n✖ O túnel abriu, mas o webhook não foi cadastrado:\n  ${erro.message}\n`);
+        return;
+      }
+      console.log(`  O Asaas ainda não acha o endereço novo; tentando de novo em ${ESPERA_DA_URL_MS / 1000} s…`);
+      await new Promise((pronto) => setTimeout(pronto, ESPERA_DA_URL_MS));
+    }
   }
 };
 tunel.stdout.on("data", aoLer);
