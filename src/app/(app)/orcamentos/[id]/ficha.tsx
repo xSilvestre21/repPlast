@@ -8,10 +8,13 @@
  * indústria costuma exigir no rodapé.
  */
 
+import Link from "next/link";
 import {
   Ban,
   Check,
+  CircleCheck,
   FileSignature,
+  Handshake,
   PackagePlus,
   ScrollText,
   ThumbsDown,
@@ -165,17 +168,26 @@ export function FichaProposta({
 }
 
 /**
- * O desfecho.
+ * O desfecho, no alto da proposta.
  *
  * Aceitar, recusar e vencer são as três saídas, e nenhuma acontece sozinha —
  * nem a de vencer. A data de validade é o que foi prometido; se o preço segue
  * de pé depois dela, quem sabe é quem negociou.
+ *
+ * Aceitar é o que faz a proposta virar pedido, e por isso é um clique só:
+ * "Aceitar e gerar pedido" marca a proposta como aceita, cria o pedido com os
+ * mesmos itens e preços e abre ele. Antes eram dois botões no pé da página
+ * ("Cliente aceitou", e só depois "Virar pedido"), e quem não rolava até lá não
+ * sabia que o pedido saía dali.
+ *
+ * Enquanto a proposta espera resposta, o cartão é o marcado da tela — é nele que
+ * o olho pousa primeiro. Fechada, ele vira um registro do que aconteceu.
  */
 export function DesfechoProposta({
   status,
   temItens,
   viraPedido,
-  jaVirouPedido,
+  pedidos,
   motivoRecusa,
   aceitar,
   recusar,
@@ -188,7 +200,8 @@ export function DesfechoProposta({
   temItens: boolean;
   /** Cliente cadastrado e todo item é produto dele. Ver `PendenciasDoPedido`. */
   viraPedido: boolean;
-  jaVirouPedido: boolean;
+  /** Os pedidos que já nasceram desta proposta. */
+  pedidos: { id: string; numero: number }[];
   motivoRecusa: string;
   aceitar: AcaoDeStatus;
   recusar: AcaoDeStatus;
@@ -197,8 +210,6 @@ export function DesfechoProposta({
   virarPedido: AcaoDeStatus;
   salvarMotivo: (formData: FormData) => void | Promise<void>;
 }) {
-  const aberto = status === "ABERTO";
-
   /*
    * Recusar é de dois tempos: o clique abre o campo do motivo, e é o segundo
    * botão que fecha a proposta. O motivo se sabe JUSTO nesse instante — quem
@@ -207,10 +218,28 @@ export function DesfechoProposta({
    */
   const [recusando, setRecusando] = useState(false);
 
-  return (
-    <div className="flex flex-wrap items-start gap-3">
-      {aberto ? (
-        recusando ? (
+  const reabrirProposta = (
+    <AcaoComRecusa acao={reabrir} alinhamento="inicio" className="self-center">
+      <BotaoTexto type="submit">reabrir a proposta</BotaoTexto>
+    </AcaoComRecusa>
+  );
+
+  if (status === "ABERTO") {
+    const descricao = !temItens
+      ? "Quando o cliente aceitar, é daqui que sai o pedido. Lance os itens primeiro: o pedido leva os itens desta proposta."
+      : viraPedido
+        ? "Aceitar gera o pedido na hora, com os mesmos itens e preços desta proposta, e abre ele para você conferir e enviar à indústria."
+        : "Aceitar marca a proposta como aceita. O pedido sai depois de cadastrar o cliente e os produtos dele — veja “Esta proposta não vira pedido”, abaixo.";
+
+    return (
+      <SecaoCartao
+        marcada={temItens}
+        icone={Handshake}
+        tom="menta"
+        titulo="O cliente aceitou?"
+        descricao={descricao}
+      >
+        {recusando ? (
           <AcaoComRecusa acao={recusar} alinhamento="inicio" className="w-full max-w-xl space-y-3">
             <Campo
               name="motivoRecusa"
@@ -230,12 +259,20 @@ export function DesfechoProposta({
             </div>
           </AcaoComRecusa>
         ) : (
-          <>
-            <AcaoComRecusa acao={aceitar} alinhamento="inicio">
-              <Botao type="submit" icone={Check} disabled={!temItens}>
-                Cliente aceitou
-              </Botao>
-            </AcaoComRecusa>
+          <div className="flex flex-wrap items-start gap-3">
+            {viraPedido ? (
+              <AcaoComRecusa acao={virarPedido} alinhamento="inicio">
+                <Botao type="submit" icone={ScrollText} disabled={!temItens}>
+                  Aceitar e gerar pedido
+                </Botao>
+              </AcaoComRecusa>
+            ) : (
+              <AcaoComRecusa acao={aceitar} alinhamento="inicio">
+                <Botao type="submit" icone={Check} disabled={!temItens}>
+                  Cliente aceitou
+                </Botao>
+              </AcaoComRecusa>
+            )}
             <Botao
               type="button"
               variante="secundaria"
@@ -250,47 +287,110 @@ export function DesfechoProposta({
                 marcar como vencida
               </BotaoTexto>
             </AcaoComRecusa>
-          </>
-        )
-      ) : (
-        <AcaoComRecusa acao={reabrir} alinhamento="inicio">
-          <BotaoTexto type="submit">reabrir a proposta</BotaoTexto>
-        </AcaoComRecusa>
-      )}
+          </div>
+        )}
+      </SecaoCartao>
+    );
+  }
 
-      {status === "RECUSADO" && (
-        <form action={salvarMotivo} className="w-full max-w-xl space-y-3">
-          <Campo
-            name="motivoRecusa"
-            rotulo="Por que o cliente recusou?"
-            defaultValue={motivoRecusa}
-            placeholder="Preço acima do concorrente, adiou a compra…"
-            maxLength={LIMITE_DO_MOTIVO}
-            dica="Fica visível na lista de orçamentos."
-          />
-          <Botao type="submit" variante="secundaria" tamanho="compacto">
-            Salvar motivo
-          </Botao>
-        </form>
-      )}
+  if (status === "ACEITO") {
+    // Aceita antes do pedido existir: a de antes desta tela, ou a de quem ainda
+    // não era cliente e acabou de ser cadastrado. O pedido ainda é o próximo passo.
+    if (pedidos.length === 0 && viraPedido) {
+      return (
+        <SecaoCartao
+          marcada
+          icone={CircleCheck}
+          tom="menta"
+          titulo="Aceita. Falta gerar o pedido"
+          descricao="O pedido sai com os mesmos itens e preços desta proposta, e abre para você conferir e enviar à indústria."
+        >
+          <div className="flex flex-wrap items-start gap-3">
+            <AcaoComRecusa acao={virarPedido} alinhamento="inicio">
+              <Botao type="submit" icone={ScrollText} disabled={!temItens}>
+                Gerar pedido
+              </Botao>
+            </AcaoComRecusa>
+            {reabrirProposta}
+          </div>
+        </SecaoCartao>
+      );
+    }
 
-      {status === "ACEITO" &&
-        (viraPedido ? (
-          <AcaoComRecusa acao={virarPedido} alinhamento="inicio">
-            <Botao type="submit" icone={ScrollText} disabled={!temItens}>
-              {jaVirouPedido ? "Gerar outro pedido" : "Virar pedido"}
+    return (
+      <SecaoCartao
+        icone={CircleCheck}
+        tom="menta"
+        titulo={pedidos.length > 0 ? "Aceita e virou pedido" : "Aceita"}
+        descricao={
+          pedidos.length > 0
+            ? undefined
+            : "Ainda não vira pedido: falta cadastrar o cliente e os produtos dele — veja “Esta proposta não vira pedido”, abaixo."
+        }
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          {pedidos.length > 0 && (
+            <p className="text-corpo text-tinta-2 mr-auto">
+              Virou{" "}
+              {pedidos.map((p, i) => (
+                <span key={p.id}>
+                  {i > 0 && ", "}
+                  <Link
+                    href={`/pedidos/${p.id}`}
+                    className="text-carimbo hover:underline numerico font-medium"
+                  >
+                    pedido #{p.numero}
+                  </Link>
+                </span>
+              ))}
+            </p>
+          )}
+          {pedidos.length > 0 && viraPedido && (
+            <AcaoComRecusa acao={virarPedido} alinhamento="inicio">
+              <Botao type="submit" variante="secundaria" icone={ScrollText} disabled={!temItens}>
+                Gerar outro pedido
+              </Botao>
+            </AcaoComRecusa>
+          )}
+          {reabrirProposta}
+        </div>
+      </SecaoCartao>
+    );
+  }
+
+  if (status === "RECUSADO") {
+    return (
+      <SecaoCartao icone={ThumbsDown} tom="pessego" titulo="Recusada">
+        <div className="space-y-3">
+          <form action={salvarMotivo} className="w-full max-w-xl space-y-3">
+            <Campo
+              name="motivoRecusa"
+              rotulo="Por que o cliente recusou?"
+              defaultValue={motivoRecusa}
+              placeholder="Preço acima do concorrente, adiou a compra…"
+              maxLength={LIMITE_DO_MOTIVO}
+              dica="Fica visível na lista de orçamentos."
+            />
+            <Botao type="submit" variante="secundaria" tamanho="compacto">
+              Salvar motivo
             </Botao>
-          </AcaoComRecusa>
-        ) : (
-          <p className="text-corpo text-tinta-2 max-w-sm leading-relaxed">
-            Aceita, mas não vira pedido: falta cadastrar o cliente e os produtos dele — veja
-            “Esta proposta não vira pedido”, acima.
-          </p>
-        ))}
-    </div>
+          </form>
+          {reabrirProposta}
+        </div>
+      </SecaoCartao>
+    );
+  }
+
+  return (
+    <SecaoCartao
+      icone={Timer}
+      titulo="Vencida"
+      descricao="Passou da validade sem resposta do cliente. Se ele voltar a querer, reabra a proposta."
+    >
+      {reabrirProposta}
+    </SecaoCartao>
   );
 }
-
 
 /**
  * O que falta para a proposta poder virar pedido — dito antes, e não na hora.

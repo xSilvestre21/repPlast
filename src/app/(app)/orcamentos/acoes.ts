@@ -984,7 +984,7 @@ async function gerarPedido(orcamentoId: string): Promise<string> {
   if (orcamento.status === "RECUSADO") {
     throw new ErroParaUsuario(
       "Esta proposta está marcada como recusada. Clique em “reabrir a proposta” e depois em " +
-        "“Cliente aceitou” para ela poder virar pedido.",
+        "“Aceitar e gerar pedido”.",
     );
   }
 
@@ -1001,7 +1001,7 @@ async function gerarPedido(orcamentoId: string): Promise<string> {
   if (!orcamento.clienteId) {
     throw new ErroParaUsuario(
       "Proposta para quem ainda não é cliente não vira pedido. Cadastre o cliente e os produtos " +
-        "dela antes — o cartão “Esta proposta não vira pedido”, acima, mostra o caminho.",
+        "dela antes — o cartão “Esta proposta não vira pedido”, nesta página, mostra o caminho.",
     );
   }
 

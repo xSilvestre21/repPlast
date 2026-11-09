@@ -227,16 +227,19 @@ export function SecaoCartao({
   descricao,
   icone,
   tom = "neutro",
+  marcada = false,
   children,
 }: {
   titulo: string;
   descricao?: string;
   icone?: LucideIcon;
   tom?: TomPlaca;
+  /** A seção que pede a próxima ação da tela: ganha o destaque do `Cartao` marcado. */
+  marcada?: boolean;
   children: ReactNode;
 }) {
   return (
-    <Cartao className="p-5 sm:p-6">
+    <Cartao marcada={marcada} className="p-5 sm:p-6">
       <div className="mb-5">
         <div className="titulo-regra">
           {icone && <Placa icone={icone} tom={tom} pequena />}

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Building2, Factory, FileDown, Mail, Pencil, ScrollText } from "lucide-react";
+import { Building2, Factory, FileDown, Mail, Pencil } from "lucide-react";
 
 import { BotaoExcluir } from "@/components/botao-excluir";
 import { type ContatoEnvio, EnvioPorEmail } from "@/components/envio-email";
@@ -307,6 +307,21 @@ export default async function PaginaOrcamento({
       />
 
       <div className="space-y-5 palco">
+        {/* No alto: é a próxima coisa a fazer com a proposta, e é dela que sai o pedido. */}
+        <DesfechoProposta
+          status={orcamento.status}
+          temItens={orcamento.itens.length > 0}
+          viraPedido={viraPedido}
+          pedidos={orcamento.pedidos.map((p) => ({ id: p.id, numero: p.numero }))}
+          motivoRecusa={orcamento.motivoRecusa ?? ""}
+          aceitar={definirStatus.bind(null, orcamento.id, "ACEITO")}
+          recusar={definirStatus.bind(null, orcamento.id, "RECUSADO")}
+          vencer={definirStatus.bind(null, orcamento.id, "EXPIRADO")}
+          reabrir={definirStatus.bind(null, orcamento.id, "ABERTO")}
+          virarPedido={converterEmPedido.bind(null, orcamento.id)}
+          salvarMotivo={salvarMotivoRecusa.bind(null, orcamento.id)}
+        />
+
         <Cartao className="p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="flex items-start gap-3 min-w-0">
@@ -342,23 +357,6 @@ export default async function PaginaOrcamento({
             </div>
           </div>
 
-          {orcamento.pedidos.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-filete text-corpo">
-              <span className="text-tinta-2">Virou </span>
-              {orcamento.pedidos.map((p, i) => (
-                <span key={p.id}>
-                  {i > 0 && ", "}
-                  <Link
-                    href={`/pedidos/${p.id}`}
-                    className="text-carimbo hover:underline numerico font-medium"
-                  >
-                    <ScrollText size={12} className="inline mr-1" aria-hidden="true" />
-                    pedido #{p.numero}
-                  </Link>
-                </span>
-              ))}
-            </div>
-          )}
         </Cartao>
 
         {!viraPedido && (
@@ -500,27 +498,9 @@ export default async function PaginaOrcamento({
         />
 
         <Cartao className="p-5 sm:p-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <div className="rotulo text-tinta-3">Total da proposta</div>
-              <div className="cifra numerico text-forte mt-1 leading-none">
-                {formatarMoeda(orcamento.totalGeral.toString())}
-              </div>
-            </div>
-
-            <DesfechoProposta
-              status={orcamento.status}
-              temItens={orcamento.itens.length > 0}
-              viraPedido={viraPedido}
-              jaVirouPedido={orcamento.pedidos.length > 0}
-              motivoRecusa={orcamento.motivoRecusa ?? ""}
-              aceitar={definirStatus.bind(null, orcamento.id, "ACEITO")}
-              recusar={definirStatus.bind(null, orcamento.id, "RECUSADO")}
-              vencer={definirStatus.bind(null, orcamento.id, "EXPIRADO")}
-              reabrir={definirStatus.bind(null, orcamento.id, "ABERTO")}
-              virarPedido={converterEmPedido.bind(null, orcamento.id)}
-              salvarMotivo={salvarMotivoRecusa.bind(null, orcamento.id)}
-            />
+          <div className="rotulo text-tinta-3">Total da proposta</div>
+          <div className="cifra numerico text-forte mt-1 leading-none">
+            {formatarMoeda(orcamento.totalGeral.toString())}
           </div>
         </Cartao>
 

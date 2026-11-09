@@ -259,9 +259,15 @@ describe("depois de cadastrar o cliente", () => {
     expect(saco.produto?.descricao).toBe(SACO.descricao);
   });
 
-  it("e aí vira pedido", async () => {
+  it("e aí vira pedido, num clique só: aberta, ela sai aceita", async () => {
+    const antes = await admin.orcamento.findUniqueOrThrow({ where: { id: orcamentoId } });
+    expect(antes.status).toBe("ABERTO");
+
     const erro = await pedirPedido();
     expect(erro).toBeInstanceOf(Redirecionou);
+
+    const depois = await admin.orcamento.findUniqueOrThrow({ where: { id: orcamentoId } });
+    expect(depois.status).toBe("ACEITO");
 
     const pedido = await admin.pedido.findFirstOrThrow({
       where: { orcamentoId },
