@@ -10,7 +10,9 @@ import Link from "next/link";
 
 import { AlternadorTema } from "@/components/alternador-tema";
 
+/** Cinco atalhos não cabem ao lado da marca e do botão em 768 px: o menu aparece no `lg`. */
 const SECOES = [
+  { href: "#o-que-vende", rotulo: "Produtos" },
   { href: "#como-funciona", rotulo: "Como funciona" },
   { href: "#recursos", rotulo: "Recursos" },
   { href: "#planos", rotulo: "Planos" },
@@ -29,7 +31,7 @@ export function TopoEntrada({ completo = false }: { completo?: boolean }) {
         </Link>
 
         {completo && (
-          <nav aria-label="Seções" className="hidden md:flex items-center gap-1">
+          <nav aria-label="Seções" className="hidden lg:flex items-center gap-1">
             {SECOES.map((secao) => (
               <a
                 key={secao.href}

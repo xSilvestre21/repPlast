@@ -38,8 +38,8 @@ const COR = {
 };
 
 const FONTE = "'Plus Jakarta Sans', Arial, Helvetica, sans-serif";
-const SUBTITULO = "Representação comercial de embalagens plásticas";
-const RODAPE = "Sistema para representação comercial de embalagens plásticas";
+const SUBTITULO = "Representação comercial de embalagens e plásticos";
+const RODAPE = "Sistema para representação comercial de embalagens e plásticos";
 
 export type EmailDoSistema = {
   /** Vai em negrito no "Olá, Nome!". Sem ele, só "Olá!". */

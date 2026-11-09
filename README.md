@@ -1,8 +1,9 @@
 # RepPlast
 
-SaaS para representantes comerciais de indústrias de embalagens plásticas: cadastro de clientes,
-fornecedores e produtos, montagem de pedidos com preço calculado a partir das medidas, geração do
-PDF para a indústria e controle de comissões.
+SaaS para representantes comerciais de indústrias de embalagens e plásticos (sacos, filmes, fitas,
+frascos, bombonas, tampas e papelão): cadastro de clientes, fornecedores e produtos, montagem de
+pedidos com preço calculado a partir das medidas ou da tabela da indústria, geração do PDF para a
+indústria e controle de comissões.
 
 ## O que é o coração deste sistema
 

@@ -1,4 +1,4 @@
-// Schema do RepPlast — SaaS para representantes comerciais de embalagens plásticas.
+// Schema do RepPlast — SaaS para representantes comerciais de embalagens e plásticos.
 //
 // Regra que atravessa o schema inteiro: TODA tabela de domínio carrega
 // `organizacaoId`. Mesmo havendo hoje um único usuário por escritório, é isso

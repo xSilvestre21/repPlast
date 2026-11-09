@@ -519,6 +519,28 @@ export interface CamposDaEmbalagem {
   acabamentoValorSem: string;
 }
 
+/** Os campos vazios, menos os dados — para montar uma descrição fora do formulário. */
+export function camposDaEmbalagem(parte: Partial<CamposDaEmbalagem> = {}): CamposDaEmbalagem {
+  return {
+    material: "",
+    complemento: "",
+    capacidade: "",
+    capacidadeUnidade: "",
+    comprimentoCm: "",
+    larguraCm: "",
+    alturaCm: "",
+    diametroMm: "",
+    materialTampa: "",
+    complementoTampa: "",
+    fornecedorTampaId: "",
+    fornecedorTampaVariavel: "",
+    acabamento: "",
+    acabamentoValorCom: "",
+    acabamentoValorSem: "",
+    ...parte,
+  };
+}
+
 /** A unidade da capacidade: a escolhida, se o tipo aceita; senão a primeira dele. */
 export function unidadeDaCapacidade(tipo: TipoProduto, unidade: string): string {
   const unidades: readonly string[] = tipo.unidadesCapacidade ?? [];

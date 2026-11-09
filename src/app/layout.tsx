@@ -15,7 +15,7 @@ function enderecoDoSistema(): URL | undefined {
   }
 }
 
-const DESCRICAO = "Pedidos e comissões para representantes de embalagens plásticas";
+const DESCRICAO = "Pedidos e comissões para representantes de embalagens e plásticos";
 
 export const metadata: Metadata = {
   title: "RepPlast",

@@ -30,7 +30,8 @@ const RECURSOS: { icone: LucideIcon; tom: Tom; titulo: string; texto: string; ma
     icone: Package,
     tom: "sol",
     titulo: "Produtos por indústria",
-    texto: "Catálogo de cada representada — saco por milheiro ou quilo, stretch por quilo, fita por caixa ou unidade.",
+    texto:
+      "Catálogo de cada representada — sacos, filmes, fitas, frascos, bombonas, tampas e papelão, cada um na unidade em que a indústria vende.",
   },
   {
     icone: FileSignature,

@@ -15,7 +15,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: "RepPlast",
     short_name: "RepPlast",
-    description: "Pedidos e comissões para representantes de embalagens plásticas",
+    description: "Pedidos e comissões para representantes de embalagens e plásticos",
     lang: "pt-BR",
     start_url: "/",
     scope: "/",

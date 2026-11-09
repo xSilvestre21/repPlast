@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { CartoesPlanos } from "@/components/entrada/cartoes-planos";
 import { ComoFunciona } from "@/components/entrada/como-funciona";
 import { FluxoAnimado } from "@/components/entrada/fluxo-animado";
+import { LinhasDeProduto } from "@/components/entrada/linhas-de-produto";
 import { Movimento } from "@/components/entrada/movimento";
 import { Perguntas } from "@/components/entrada/perguntas";
 import { Recursos } from "@/components/entrada/recursos";
@@ -24,8 +25,9 @@ import { FormularioEntrada } from "../formulario";
  *
  * O login continua no topo, ao lado do argumento, como sempre esteve: quem já
  * é cliente entra sem rolar nada. Para quem chegou por indicação a página
- * continua para baixo: como funciona (com a conta feita de verdade), o que o
- * sistema tem, os planos e as perguntas de quem está decidindo.
+ * continua para baixo: o que dá para vender (do saco à caixa de papelão), como
+ * funciona (com a conta feita de verdade), o que o sistema tem, os planos e as
+ * perguntas de quem está decidindo.
  */
 
 /**
@@ -38,7 +40,7 @@ const ARGUMENTOS = [
   {
     icone: Calculator,
     tom: "sol" as const,
-    texto: "O preço sai das medidas, não da sua calculadora.",
+    texto: "O preço sai das medidas e da tabela da indústria, não da sua calculadora.",
   },
   {
     icone: FileText,
@@ -97,7 +99,7 @@ export default async function PaginaEntrar({ searchParams }: PageProps<"/entrar"
             grid items-center lg:items-stretch gap-10 lg:gap-16 lg:grid-cols-[1.1fr_minmax(0,25rem)]"
         >
           <section className="palco min-w-0">
-            <p className="chip">Para representantes de embalagens plásticas</p>
+            <p className="chip">Para representantes de embalagens e plásticos</p>
 
             {/*
               O marca-texto amarelo, a única vez nesta tela.
@@ -111,9 +113,9 @@ export default async function PaginaEntrar({ searchParams }: PageProps<"/entrar"
             </h1>
 
             <p className="mt-5 text-realce text-tinta-2 leading-relaxed max-w-lg">
-              Pedidos, produtos e comissões para representante de embalagens plásticas — num lugar
-              só. O preço sai das medidas, o pedido vira PDF da indústria e a comissão se calcula
-              sozinha.
+              Pedidos, produtos e comissões para quem representa indústrias de embalagens — sacos,
+              filmes, fitas, frascos, bombonas, tampas e papelão — num lugar só. O preço sai das
+              medidas ou da tabela da indústria, o pedido vira PDF e a comissão se calcula sozinha.
             </p>
 
             <div className="mt-6">
@@ -188,10 +190,19 @@ export default async function PaginaEntrar({ searchParams }: PageProps<"/entrar"
         </div>
 
         <Secao
+          id="o-que-vende"
+          rotulo="O que você vende"
+          titulo="Do saco à caixa de papelão"
+          texto="Cada linha com a medida e a unidade de venda que a indústria usa — e a descrição do pedido se monta sozinha, do jeito que vai para o PDF."
+        >
+          <LinhasDeProduto />
+        </Secao>
+
+        <Secao
           id="como-funciona"
           rotulo="Como funciona"
           titulo="Do produto ao gráfico, sem digitar nada duas vezes"
-          texto="Escolha saco, stretch ou fita, mexa nas medidas e acompanhe: o mesmo número vai do preço da unidade ao pedido, ao e-mail para a indústria, à sua comissão e aos gráficos."
+          texto="Escolha saco, stretch, fita, frasco, bombona ou tampa, mexa nas medidas e acompanhe: o mesmo número vai do preço da unidade ao pedido, ao e-mail para a indústria, à sua comissão e aos gráficos."
         >
           <Revelar>
             <ComoFunciona />
@@ -253,7 +264,7 @@ export default async function PaginaEntrar({ searchParams }: PageProps<"/entrar"
             </div>
           </Revelar>
           <footer className="mt-10 text-center text-mini text-tinta-3">
-            <p>RepPlast · Sistema para representação comercial de embalagens plásticas</p>
+            <p>RepPlast · Sistema para representação comercial de embalagens e plásticos</p>
             <nav aria-label="Termos e contato" className="mt-2 flex flex-wrap justify-center gap-x-4 gap-y-1">
               <Link href="/termos" className="underline underline-offset-2 hover:text-carimbo">
                 Termos de Uso

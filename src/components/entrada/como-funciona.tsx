@@ -12,6 +12,10 @@
  * pela fita, ou mexe numa medida, vê o pedido, o e-mail e a comissão mudarem
  * juntos nas etapas seguintes.
  *
+ * Frasco, bombona e tampa são das famílias por milheiro: o preço é o da tabela
+ * da indústria, e a descrição sai de `descricaoDoTipo` — a mesma do cadastro,
+ * com o "+ Tampa" do conjunto quando a pessoa põe a tampa.
+ *
  * As etapas avançam sozinhas, o tempo todo — é a demonstração rodando. Pausa
  * só enquanto a pessoa está USANDO (clicou numa etapa, mexe numa régua) e
  * retoma sozinha `RETOMAR_MS` depois do último toque. Já pausou com o
@@ -52,7 +56,8 @@ import { descricaoFita, descricaoRolo, descricaoSaco, formatarNumero } from "@/l
 import { textoPadraoDoEnvio } from "@/lib/envio-pedido";
 import { nomeArquivoPedido } from "@/lib/pdf/nome-arquivo";
 import { arredondarDinheiro, DENSIDADE_PADRAO, pesoMilheiroKg } from "@/lib/precificacao";
-import { precoUnitario, type ProdutoPrecificavel, type UnidadeVenda } from "@/lib/produto-preco";
+import { precoUnitario, type Familia, type ProdutoPrecificavel, type UnidadeVenda } from "@/lib/produto-preco";
+import { camposDaEmbalagem as campos, descricaoDoTipo, tipoPorValor } from "@/lib/tipos-produto";
 import { calcularTotaisPedido } from "@/lib/totais";
 
 const SUAVE = [0.22, 1, 0.36, 1] as const;
@@ -94,6 +99,46 @@ const ACRESCIMO_FITA_48 = "0.3";
  * na demonstração é uma régua, e não um número fixo.
  */
 const FITAS_POR_CAIXA = 36;
+
+/*
+ * Frasco, bombona e tampa: o preço do milheiro é a linha da tabela da
+ * indústria, sem conta de medida. O conjunto com tampa é OUTRA linha, com preço
+ * próprio — no cadastro ele é um produto só, com um preço só, e o sistema não
+ * soma frasco + tampa. A vitrine também não.
+ */
+type CapacidadeFrasco = "250" | "500" | "1000";
+type MaterialFrasco = "PEAD" | "PET" | "PP";
+type CapacidadeBombona = "5" | "20" | "50";
+type DiametroTampa = "24" | "28" | "38" | "53";
+type ModeloTampa = "Rosca" | "Flip Top" | "Lacre";
+type SemOuCom = "SEM" | "COM";
+type MilOuUn = "MIL" | "UN";
+
+/** Capacidade como o cadastro grava, e o bocal — o diâmetro da tampa do conjunto. */
+const FRASCO: Record<CapacidadeFrasco, { capacidade: string; unidade: string; rotulo: string; bocalMm: string }> = {
+  "250": { capacidade: "250", unidade: "mL", rotulo: "250 mL", bocalMm: "24" },
+  "500": { capacidade: "500", unidade: "mL", rotulo: "500 mL", bocalMm: "28" },
+  "1000": { capacidade: "1", unidade: "L", rotulo: "1 L", bocalMm: "38" },
+};
+/** Milheiro na tabela de exemplo: o frasco sozinho e o conjunto com tampa. */
+const PRECO_FRASCO: Record<CapacidadeFrasco, { so: string; conjunto: string }> = {
+  "250": { so: "420", conjunto: "560" },
+  "500": { so: "620", conjunto: "790" },
+  "1000": { so: "980", conjunto: "1190" },
+};
+/** O PET sai um pouco mais caro que o PEAD, e o PP fica no meio. */
+const ACRESCIMO_FRASCO: Record<MaterialFrasco, string> = { PEAD: "0", PET: "70", PP: "30" };
+
+const PRECO_BOMBONA: Record<CapacidadeBombona, { so: string; conjunto: string; bocalMm: string }> = {
+  "5": { so: "4200", conjunto: "4900", bocalMm: "38" },
+  "20": { so: "11800", conjunto: "13100", bocalMm: "51" },
+  "50": { so: "24500", conjunto: "26900", bocalMm: "61" },
+};
+
+const PRECO_TAMPA: Record<DiametroTampa, string> = { "24": "95", "28": "120", "38": "190", "53": "310" };
+/** O modelo muda a linha da tabela: o flip top tem mais peça que a de rosca. */
+const ACRESCIMO_TAMPA: Record<ModeloTampa, string> = { Rosca: "0", "Flip Top": "85", Lacre: "30" };
+
 const IPI = "3.25";
 const PERCENTUAL_COMISSAO = "3";
 /** Fatia da preposta, em percentual DA COMISSÃO — como no cadastro do preposto. */
@@ -110,12 +155,16 @@ const NOME_UNIDADE: Record<UnidadeVenda, { plural: string; sufixo: string; preco
   UN: { plural: "unidades", sufixo: "/un", preco: "Preço da unidade" },
 };
 
-type CodigoProduto = "SACO" | "STRETCH" | "FITA";
+type CodigoProduto = "SACO" | "STRETCH" | "FITA" | "FRASCO" | "BOMBONA" | "TAMPA";
 
+/** Na troca, em duas fileiras: os flexíveis em cima, os rígidos embaixo. */
 const PRODUTOS: { codigo: CodigoProduto; nome: string; vende: string }[] = [
   { codigo: "SACO", nome: "Saco", vende: "por milheiro ou por quilo" },
   { codigo: "STRETCH", nome: "Stretch", vende: "por quilo" },
   { codigo: "FITA", nome: "Fita", vende: "por caixa ou por unidade" },
+  { codigo: "FRASCO", nome: "Frasco", vende: "por milheiro ou por unidade" },
+  { codigo: "BOMBONA", nome: "Bombona", vende: "por milheiro ou por unidade" },
+  { codigo: "TAMPA", nome: "Tampa", vende: "por milheiro ou por unidade" },
 ];
 
 interface Estado {
@@ -123,6 +172,9 @@ interface Estado {
   saco: { largura: number; comprimento: number; espessura: number; unidade: "MIL" | "KG" };
   stretch: { largura: "450" | "500"; micragem: number };
   fita: { largura: "45" | "48"; metragem: "50" | "100"; unidade: "CX" | "UN"; porCaixa: number };
+  frasco: { capacidade: CapacidadeFrasco; material: MaterialFrasco; tampa: SemOuCom; unidade: MilOuUn };
+  bombona: { capacidade: CapacidadeBombona; tampa: SemOuCom; unidade: MilOuUn };
+  tampa: { diametro: DiametroTampa; modelo: ModeloTampa; unidade: MilOuUn };
 }
 
 const INICIAL: Estado = {
@@ -130,6 +182,9 @@ const INICIAL: Estado = {
   saco: { largura: 40, comprimento: 60, espessura: 0.1, unidade: "MIL" },
   stretch: { largura: "500", micragem: 25 },
   fita: { largura: "45", metragem: "100", unidade: "CX", porCaixa: FITAS_POR_CAIXA },
+  frasco: { capacidade: "500", material: "PEAD", tampa: "SEM", unidade: "MIL" },
+  bombona: { capacidade: "20", tampa: "COM", unidade: "UN" },
+  tampa: { diametro: "28", modelo: "Flip Top", unidade: "MIL" },
 };
 
 /**
@@ -145,7 +200,24 @@ function completar(estado: Estado): Estado {
     saco: { ...INICIAL.saco, ...estado.saco },
     stretch: { ...INICIAL.stretch, ...estado.stretch },
     fita: { ...INICIAL.fita, ...estado.fita },
+    frasco: { ...INICIAL.frasco, ...estado.frasco },
+    bombona: { ...INICIAL.bombona, ...estado.bombona },
+    tampa: { ...INICIAL.tampa, ...estado.tampa },
   };
+}
+
+/** Produto por milheiro: o preço é o da linha da tabela, como no cadastro. */
+function porMilheiro(familia: Familia, milheiro: Decimal): ProdutoPrecificavel {
+  return { familia, precoAvulso: milheiro, unidadeAvulsa: "MIL" };
+}
+
+/** A conta das famílias por milheiro: a linha da tabela e, na unidade, o milheiro ÷ 1000. */
+function contaDaTabela(linha: string, conjunto: boolean, milheiro: Decimal, unidade: MilOuUn): Linha[] {
+  return [
+    { rotulo: linha, valor: conjunto ? "o conjunto tem linha própria" : "linha da tabela" },
+    { rotulo: "Preço do milheiro na tabela da indústria", valor: reais(milheiro) },
+    ...(unidade === "UN" ? [{ rotulo: "Vendido por unidade", valor: "milheiro ÷ 1.000" }] : []),
+  ];
 }
 
 interface Linha {
@@ -236,6 +308,69 @@ function montarExemplo(estado: Estado) {
       { rotulo: `Bobina de ${largura} mm, ${micragem} micras`, valor: "vendida por quilo" },
       { rotulo: "Preço do kg na tabela da indústria", valor: `${reais(PRECO_STRETCH_KG)}/kg` },
     ];
+  } else if (estado.produto === "FRASCO") {
+    const { capacidade, material } = estado.frasco;
+    const conjunto = estado.frasco.tampa === "COM";
+    const medida = FRASCO[capacidade];
+    const tabela = PRECO_FRASCO[capacidade];
+    const milheiro = new Decimal(conjunto ? tabela.conjunto : tabela.so).plus(ACRESCIMO_FRASCO[material]);
+    unidade = estado.frasco.unidade;
+    produto = porMilheiro(conjunto ? "FRASCO_TAMPA" : "FRASCO", milheiro);
+    descricao = descricaoDoTipo(
+      tipoPorValor(conjunto ? "FRASCO_TAMPA" : "FRASCO"),
+      campos({
+        capacidade: medida.capacidade,
+        capacidadeUnidade: medida.unidade,
+        material,
+        complemento: "Cilíndrico",
+        diametroMm: medida.bocalMm,
+        materialTampa: "PP",
+        complementoTampa: "Rosca",
+      }),
+    );
+    conta = contaDaTabela(
+      conjunto
+        ? `Frasco ${medida.rotulo} em ${material} + tampa ${medida.bocalMm} mm`
+        : `Frasco ${medida.rotulo} em ${material}`,
+      conjunto,
+      milheiro,
+      unidade,
+    );
+  } else if (estado.produto === "BOMBONA") {
+    const { capacidade } = estado.bombona;
+    const conjunto = estado.bombona.tampa === "COM";
+    const tabela = PRECO_BOMBONA[capacidade];
+    const milheiro = new Decimal(conjunto ? tabela.conjunto : tabela.so);
+    unidade = estado.bombona.unidade;
+    produto = porMilheiro(conjunto ? "BOMBONA_TAMPA" : "BOMBONA", milheiro);
+    descricao = descricaoDoTipo(
+      tipoPorValor(conjunto ? "BOMBONA_TAMPA" : "BOMBONA"),
+      campos({
+        capacidade,
+        capacidadeUnidade: "L",
+        material: "PEAD",
+        complemento: "Boca Estreita",
+        diametroMm: tabela.bocalMm,
+        materialTampa: "PP",
+        complementoTampa: "Lacre",
+      }),
+    );
+    conta = contaDaTabela(
+      conjunto ? `Bombona ${capacidade} L + tampa ${tabela.bocalMm} mm` : `Bombona ${capacidade} L`,
+      conjunto,
+      milheiro,
+      unidade,
+    );
+  } else if (estado.produto === "TAMPA") {
+    const { diametro, modelo } = estado.tampa;
+    const milheiro = new Decimal(PRECO_TAMPA[diametro]).plus(ACRESCIMO_TAMPA[modelo]);
+    unidade = estado.tampa.unidade;
+    produto = porMilheiro("TAMPA", milheiro);
+    descricao = descricaoDoTipo(
+      tipoPorValor("TAMPA"),
+      campos({ diametroMm: diametro, material: "PP", complemento: modelo }),
+    );
+    conta = contaDaTabela(`Tampa ${diametro} mm em PP, ${modelo}`, false, milheiro, unidade);
   } else {
     const { largura, metragem, porCaixa } = estado.fita;
     unidade = estado.fita.unidade;
@@ -321,7 +456,8 @@ interface Etapa {
 const ETAPAS: Etapa[] = [
   {
     titulo: "Produto",
-    resumo: "Saco por milheiro ou kg, stretch por kg, fita por caixa ou unidade.",
+    resumo:
+      "Saco pela medida, stretch por kg, fita por caixa; frasco, bombona e tampa pela tabela, por milheiro.",
     icone: Package,
   },
   {
@@ -641,6 +777,9 @@ function QuadroProduto({ estado, exemplo, mudar }: { estado: Estado; exemplo: Ex
               {estado.produto === "SACO" && <ControlesSaco estado={estado} mudar={mudar} />}
               {estado.produto === "STRETCH" && <ControlesStretch estado={estado} mudar={mudar} />}
               {estado.produto === "FITA" && <ControlesFita estado={estado} mudar={mudar} />}
+              {estado.produto === "FRASCO" && <ControlesFrasco estado={estado} mudar={mudar} />}
+              {estado.produto === "BOMBONA" && <ControlesBombona estado={estado} mudar={mudar} />}
+              {estado.produto === "TAMPA" && <ControlesTampa estado={estado} mudar={mudar} />}
             </div>
 
             <div className="flex flex-col items-center gap-3">
@@ -648,6 +787,9 @@ function QuadroProduto({ estado, exemplo, mudar }: { estado: Estado; exemplo: Ex
                 {estado.produto === "SACO" && <DesenhoSaco estado={estado} />}
                 {estado.produto === "STRETCH" && <DesenhoBobina estado={estado} />}
                 {estado.produto === "FITA" && <DesenhoFita estado={estado} />}
+                {estado.produto === "FRASCO" && <DesenhoFrasco estado={estado} />}
+                {estado.produto === "BOMBONA" && <DesenhoBombona estado={estado} />}
+                {estado.produto === "TAMPA" && <DesenhoTampa estado={estado} />}
               </div>
               <p className="text-mini text-tinta-3 text-center max-w-[12rem]">{exemplo.descricao}</p>
               <p className="text-corpo text-tinta-2 text-center">
@@ -659,17 +801,26 @@ function QuadroProduto({ estado, exemplo, mudar }: { estado: Estado; exemplo: Ex
         </AnimatePresence>
       </div>
 
-      {/* A troca de produto: setas e bolinhas com nome, embaixo do quadro. */}
+      {/*
+        A troca de produto: setas e bolinhas com nome, embaixo do quadro. Seis
+        nomes não cabem numa fileira no celular: são duas de três, sempre — os
+        flexíveis em cima, os rígidos embaixo —, e no celular as setas saem,
+        que os próprios nomes já trocam.
+      */}
       <div className="mt-6 pt-4 border-t border-filete flex items-center justify-between gap-2">
         <BotaoSeta direcao="anterior" aoClicar={() => irPara(indice - 1, -1)} />
-        <div className="flex items-center gap-1" role="group" aria-label="Produto do exemplo">
+        <div
+          className="grid grid-cols-3 gap-1 flex-1 sm:flex-none min-w-0"
+          role="group"
+          aria-label="Produto do exemplo"
+        >
           {PRODUTOS.map((p, i) => (
             <button
               key={p.codigo}
               type="button"
               aria-pressed={i === indice}
               onClick={() => irPara(i, i >= indice ? 1 : -1)}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-mini font-semibold cursor-pointer transition-colors ${
+              className={`flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-mini font-semibold cursor-pointer transition-colors ${
                 i === indice ? "bg-tinta text-papel" : "text-tinta-2 hover:text-tinta hover:bg-folha-2"
               }`}
             >
@@ -695,7 +846,7 @@ function BotaoSeta({ direcao, aoClicar }: { direcao: "anterior" | "proximo"; aoC
       type="button"
       onClick={aoClicar}
       aria-label={direcao === "anterior" ? "Produto anterior" : "Próximo produto"}
-      className="grid place-items-center size-9 shrink-0 rounded-full border border-filete-forte text-tinta cursor-pointer transition-all hover:bg-folha-2 active:scale-95"
+      className="hidden sm:grid place-items-center size-9 shrink-0 rounded-full border border-filete-forte text-tinta cursor-pointer transition-all hover:bg-folha-2 active:scale-95"
     >
       <Icone size={17} strokeWidth={2.25} aria-hidden="true" />
     </button>
@@ -932,6 +1083,306 @@ function DesenhoFita({ estado }: { estado: Estado }) {
       </m.div>
       <div className="relative -translate-x-4">{rolo}</div>
     </div>
+  );
+}
+
+/* Frasco, bombona e tampa: escolhas de tabela, e não réguas — a indústria tem
+   as capacidades e os diâmetros dela, não qualquer número. */
+
+const VENDER_POR_MILHEIRO = [
+  { valor: "MIL" as const, rotulo: "Milheiro" },
+  { valor: "UN" as const, rotulo: "Unidade" },
+];
+
+const COM_OU_SEM_TAMPA = [
+  { valor: "SEM" as const, rotulo: "Sem tampa" },
+  { valor: "COM" as const, rotulo: "Com tampa" },
+];
+
+function NotaDaTabela({ children }: { children: ReactNode }) {
+  return (
+    <p className="text-corpo text-tinta-2 leading-relaxed rounded-[var(--radius-suave)] bg-folha-2 px-4 py-3">
+      {children}
+    </p>
+  );
+}
+
+function ControlesFrasco({ estado, mudar }: { estado: Estado; mudar: Mudar }) {
+  const frasco = estado.frasco;
+  const alterar = (parte: Partial<Estado["frasco"]>) =>
+    mudar((atual) => ({ ...atual, frasco: { ...atual.frasco, ...parte } }));
+
+  return (
+    <>
+      <Opcoes
+        rotulo="Vender por"
+        opcoes={VENDER_POR_MILHEIRO}
+        atual={frasco.unidade}
+        aoEscolher={(unidade) => alterar({ unidade })}
+      />
+      <Opcoes
+        rotulo="Capacidade"
+        opcoes={(Object.keys(FRASCO) as CapacidadeFrasco[]).map((valor) => ({
+          valor,
+          rotulo: FRASCO[valor].rotulo,
+        }))}
+        atual={frasco.capacidade}
+        aoEscolher={(capacidade) => alterar({ capacidade })}
+      />
+      <Opcoes
+        rotulo="Material"
+        opcoes={[
+          { valor: "PEAD", rotulo: "PEAD" },
+          { valor: "PET", rotulo: "PET" },
+          { valor: "PP", rotulo: "PP" },
+        ]}
+        atual={frasco.material}
+        aoEscolher={(material) => alterar({ material })}
+      />
+      <Opcoes rotulo="Tampa" opcoes={COM_OU_SEM_TAMPA} atual={frasco.tampa} aoEscolher={(tampa) => alterar({ tampa })} />
+      <NotaDaTabela>
+        Com a tampa, o frasco vira <strong className="text-tinta">conjunto</strong>: a descrição ganha o
+        &ldquo;+ Tampa&rdquo; e o preço é o do conjunto na tabela da indústria.
+      </NotaDaTabela>
+    </>
+  );
+}
+
+function ControlesBombona({ estado, mudar }: { estado: Estado; mudar: Mudar }) {
+  const bombona = estado.bombona;
+  const alterar = (parte: Partial<Estado["bombona"]>) =>
+    mudar((atual) => ({ ...atual, bombona: { ...atual.bombona, ...parte } }));
+
+  return (
+    <>
+      <Opcoes
+        rotulo="Vender por"
+        opcoes={VENDER_POR_MILHEIRO}
+        atual={bombona.unidade}
+        aoEscolher={(unidade) => alterar({ unidade })}
+      />
+      <Opcoes
+        rotulo="Capacidade"
+        opcoes={[
+          { valor: "5", rotulo: "5 L" },
+          { valor: "20", rotulo: "20 L" },
+          { valor: "50", rotulo: "50 L" },
+        ]}
+        atual={bombona.capacidade}
+        aoEscolher={(capacidade) => alterar({ capacidade })}
+      />
+      <Opcoes rotulo="Tampa" opcoes={COM_OU_SEM_TAMPA} atual={bombona.tampa} aoEscolher={(tampa) => alterar({ tampa })} />
+      <NotaDaTabela>
+        Bombona se vende <strong className="text-tinta">pela tabela</strong>, por milheiro — e a unidade é o
+        milheiro dividido por mil, sem arredondar no caminho.
+      </NotaDaTabela>
+    </>
+  );
+}
+
+function ControlesTampa({ estado, mudar }: { estado: Estado; mudar: Mudar }) {
+  const tampa = estado.tampa;
+  const alterar = (parte: Partial<Estado["tampa"]>) =>
+    mudar((atual) => ({ ...atual, tampa: { ...atual.tampa, ...parte } }));
+
+  return (
+    <>
+      <Opcoes
+        rotulo="Vender por"
+        opcoes={VENDER_POR_MILHEIRO}
+        atual={tampa.unidade}
+        aoEscolher={(unidade) => alterar({ unidade })}
+      />
+      <Opcoes
+        rotulo="Diâmetro"
+        opcoes={(Object.keys(PRECO_TAMPA) as DiametroTampa[]).map((valor) => ({ valor, rotulo: `${valor} mm` }))}
+        atual={tampa.diametro}
+        aoEscolher={(diametro) => alterar({ diametro })}
+      />
+      <Opcoes
+        rotulo="Modelo"
+        opcoes={[
+          { valor: "Rosca", rotulo: "Rosca" },
+          { valor: "Flip Top", rotulo: "Flip Top" },
+          { valor: "Lacre", rotulo: "Lacre" },
+        ]}
+        atual={tampa.modelo}
+        aoEscolher={(modelo) => alterar({ modelo })}
+      />
+      <NotaDaTabela>
+        A tampa também se vende <strong className="text-tinta">sozinha</strong>, pelo diâmetro — e pode vir
+        de outra indústria que não a do frasco.
+      </NotaDaTabela>
+    </>
+  );
+}
+
+/** O frasco cresce com a capacidade, e a cor diz o material. */
+const ESCALA_FRASCO: Record<CapacidadeFrasco, number> = { "250": 0.66, "500": 0.83, "1000": 1 };
+const COR_FRASCO: Record<MaterialFrasco, { fundo: string; traco: string }> = {
+  PEAD: { fundo: "var(--placa-menta)", traco: "var(--placa-menta-traco)" },
+  PET: { fundo: "var(--placa-mar)", traco: "var(--placa-mar-traco)" },
+  PP: { fundo: "var(--placa-lilas)", traco: "var(--placa-lilas-traco)" },
+};
+const TAMPA_COR = { fill: "var(--placa-sol)", stroke: "var(--placa-sol-traco)" };
+
+/** A tampa do conjunto: desce de cima e encaixa no bocal. */
+function TampaQueDesce({ x, y, largura, altura }: { x: number; y: number; largura: number; altura: number }) {
+  const estrias = Array.from({ length: Math.floor(largura / 4) - 1 }, (_, i) => x + 4 + i * 4);
+
+  return (
+    <m.g
+      initial={{ y: -24, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      exit={{ y: -24, opacity: 0 }}
+      transition={MOLA}
+    >
+      <rect x={x} y={y} width={largura} height={altura} rx={3} style={{ ...TAMPA_COR, strokeWidth: 1.25 }} />
+      {estrias.map((ex) => (
+        <line
+          key={ex}
+          x1={ex}
+          x2={ex}
+          y1={y + 3}
+          y2={y + altura - 3}
+          style={{ stroke: TAMPA_COR.stroke, strokeWidth: 1, opacity: 0.45 }}
+        />
+      ))}
+    </m.g>
+  );
+}
+
+function DesenhoFrasco({ estado }: { estado: Estado }) {
+  const { capacidade, material, tampa } = estado.frasco;
+  const cor = COR_FRASCO[material];
+
+  return (
+    <m.svg
+      viewBox="0 0 80 150"
+      className="w-[86px] h-[160px] overflow-visible"
+      style={{ originY: 1 }}
+      animate={{ scale: ESCALA_FRASCO[capacidade] }}
+      transition={MOLA}
+    >
+      <path
+        d="M31 40 L31 28 L49 28 L49 40 C49 50 68 52 68 66 L68 136 Q68 146 58 146 L22 146 Q12 146 12 136 L12 66 C12 52 31 50 31 40 Z"
+        style={{ fill: cor.fundo, stroke: cor.traco, strokeWidth: 1.25, transition: "fill .3s, stroke .3s" }}
+      />
+      {/* A rosca do bocal: some embaixo da tampa. */}
+      <line x1={31} x2={49} y1={31.5} y2={31.5} style={{ stroke: cor.traco, strokeWidth: 1, opacity: 0.5 }} />
+      <line x1={31} x2={49} y1={35.5} y2={35.5} style={{ stroke: cor.traco, strokeWidth: 1, opacity: 0.5 }} />
+      {/* O rótulo. */}
+      <rect x={12} y={84} width={56} height={34} style={{ fill: cor.traco, opacity: 0.14 }} />
+      <line x1={20} x2={20} y1={70} y2={132} style={{ stroke: cor.traco, strokeWidth: 2, opacity: 0.18 }} />
+      <AnimatePresence>
+        {tampa === "COM" && <TampaQueDesce key="tampa" x={28} y={16} largura={24} altura={16} />}
+      </AnimatePresence>
+    </m.svg>
+  );
+}
+
+const ESCALA_BOMBONA: Record<CapacidadeBombona, number> = { "5": 0.6, "20": 0.8, "50": 1 };
+
+function DesenhoBombona({ estado }: { estado: Estado }) {
+  const { capacidade, tampa } = estado.bombona;
+  const cor = { fill: "var(--placa-mar)", stroke: "var(--placa-mar-traco)" };
+
+  return (
+    <m.svg
+      viewBox="0 0 130 140"
+      className="w-[150px] h-[160px] overflow-visible"
+      style={{ originY: 1 }}
+      animate={{ scale: ESCALA_BOMBONA[capacidade] }}
+      transition={MOLA}
+    >
+      {/* A alça, vazada no meio. */}
+      <path
+        fillRule="evenodd"
+        d="M22 46 V22 Q22 12 32 12 H72 Q82 12 82 22 V46 Z M33 22 H71 V35 H33 Z"
+        style={{ ...cor, strokeWidth: 1.25 }}
+      />
+      <rect x={8} y={42} width={114} height={94} rx={14} style={{ ...cor, strokeWidth: 1.25 }} />
+      {/* As nervuras do corpo. */}
+      <line x1={8} x2={122} y1={72} y2={72} style={{ stroke: cor.stroke, strokeWidth: 1, opacity: 0.3 }} />
+      <line x1={8} x2={122} y1={106} y2={106} style={{ stroke: cor.stroke, strokeWidth: 1, opacity: 0.3 }} />
+      {/* O bocal, com a rosca. */}
+      <rect x={93} y={28} width={20} height={15} rx={2} style={{ ...cor, strokeWidth: 1.25 }} />
+      <line x1={93} x2={113} y1={33} y2={33} style={{ stroke: cor.stroke, strokeWidth: 1, opacity: 0.5 }} />
+      <line x1={93} x2={113} y1={37.5} y2={37.5} style={{ stroke: cor.stroke, strokeWidth: 1, opacity: 0.5 }} />
+      <AnimatePresence>
+        {tampa === "COM" && <TampaQueDesce key="tampa" x={90} y={17} largura={26} altura={15} />}
+      </AnimatePresence>
+    </m.svg>
+  );
+}
+
+/** A tampa vista de cima: cresce com o diâmetro, e o modelo muda o topo. */
+const ESCALA_TAMPA: Record<DiametroTampa, number> = { "24": 0.52, "28": 0.62, "38": 0.8, "53": 1 };
+
+function DesenhoTampa({ estado }: { estado: Estado }) {
+  const { diametro, modelo } = estado.tampa;
+
+  return (
+    <m.svg
+      viewBox="0 0 120 120"
+      className="w-[150px] h-[150px] overflow-visible"
+      animate={{ scale: ESCALA_TAMPA[diametro] }}
+      transition={MOLA}
+    >
+      {/* O lacre: o anel que se rompe na primeira abertura. */}
+      {modelo === "Lacre" && (
+        <circle
+          cx={60}
+          cy={60}
+          r={58}
+          style={{ fill: "none", stroke: TAMPA_COR.stroke, strokeWidth: 1.5, strokeDasharray: "7 4", opacity: 0.7 }}
+        />
+      )}
+      {/* A borda serrilhada, que a mão segura para girar. */}
+      <circle
+        cx={60}
+        cy={60}
+        r={52}
+        style={{ fill: TAMPA_COR.fill, stroke: TAMPA_COR.stroke, strokeWidth: 5, strokeDasharray: "2 2.4" }}
+      />
+      <circle cx={60} cy={60} r={46} style={{ fill: "none", stroke: TAMPA_COR.stroke, strokeWidth: 1, opacity: 0.4 }} />
+      <AnimatePresence mode="wait" initial={false}>
+        {modelo === "Flip Top" ? (
+          <m.g
+            key="flip"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ duration: 0.2 }}
+            style={{ originX: 0.5, originY: 0.5 }}
+          >
+            {/* A aba que abre, com a dobradiça embaixo e o bico em cima. */}
+            <rect
+              x={36}
+              y={30}
+              width={48}
+              height={50}
+              rx={20}
+              style={{ fill: TAMPA_COR.fill, stroke: TAMPA_COR.stroke, strokeWidth: 1.25 }}
+            />
+            <circle cx={60} cy={44} r={5} style={{ fill: "none", stroke: TAMPA_COR.stroke, strokeWidth: 1.25 }} />
+            <line x1={42} x2={78} y1={86} y2={86} style={{ stroke: TAMPA_COR.stroke, strokeWidth: 2, opacity: 0.6 }} />
+          </m.g>
+        ) : (
+          <m.circle
+            key="lisa"
+            cx={60}
+            cy={60}
+            r={30}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 0.35 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            style={{ fill: "none", stroke: TAMPA_COR.stroke, strokeWidth: 1 }}
+          />
+        )}
+      </AnimatePresence>
+    </m.svg>
   );
 }
 

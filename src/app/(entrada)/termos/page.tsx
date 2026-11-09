@@ -15,8 +15,8 @@ export default function PaginaTermos() {
     >
       <Clausula numero={1} titulo="O serviço">
         <p>
-          O RepPlast é um sistema on-line para representantes comerciais de embalagens plásticas:
-          cadastro de clientes, indústrias e produtos, cálculo de preço, pedidos e orçamentos em PDF,
+          O RepPlast é um sistema on-line para representantes comerciais de embalagens e plásticos
+          (sacos, filmes, fitas, frascos, bombonas, tampas e papelão): cadastro de clientes, indústrias e produtos, cálculo de preço, pedidos e orçamentos em PDF,
           envio por e-mail e acompanhamento de comissões. É mantido por {CONTROLADOR.nome} (&quot;nós&quot;).
         </p>
         <p>

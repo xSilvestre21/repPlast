@@ -20,6 +20,14 @@ const MOEDA = new Intl.NumberFormat("pt-BR", {
 
 const PERGUNTAS: { pergunta: string; resposta: string }[] = [
   {
+    pergunta: "Que produtos dá para cadastrar?",
+    resposta:
+      "Sacos (pelo preço da medida), filmes stretch, shrink e bobina (por quilo), fitas (por caixa " +
+      "ou rolo), frascos, bombonas, tampas e papelão (pela tabela da indústria, por milheiro ou " +
+      "unidade). Frasco e bombona podem ir em conjunto com a tampa, que pode ser de outra indústria. " +
+      "O que não se encaixa em nenhuma linha entra como avulso, com o preço digitado.",
+  },
+  {
     pergunta: "O que é um preposto?",
     resposta:
       "É o vendedor que trabalha para o seu escritório de representação. No plano Max cada " +

@@ -2,8 +2,9 @@
 
 # Project: RepPlast
 
-SaaS para representantes comerciais de embalagens plásticas — pedidos, PDF para a indústria e
-comissões. Porta o sistema legado SICOV (dados reais em `referencia/`, nunca versionado).
+SaaS para representantes comerciais de embalagens e plásticos (sacos, filmes, fitas, frascos,
+bombonas, tampas e papelão) — pedidos, PDF para a indústria e comissões. Porta o sistema legado
+SICOV (dados reais em `referencia/`, nunca versionado).
 
 ## Tech Stack
 
