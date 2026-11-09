@@ -138,14 +138,31 @@ export function FormularioSenhaNova({ acao }: { acao: Acao }) {
   );
 }
 
+/** As datas e o valor do teste de quem começa agora (`datasDoTeste`). */
+export interface DatasDoCadastro {
+  hoje: string;
+  ultimoDia: string;
+  cobranca: string;
+  valor: string;
+}
+
 export function FormularioCadastro({
   acao,
   plano,
+  teste,
 }: {
   acao: Acao;
   plano: "solo" | "max";
+  teste: DatasDoCadastro;
 }) {
   const [estado, enviar, enviando] = useActionState(acao, {});
+  /*
+   * O CPF/CNPJ que já usou o teste em outro escritório: o servidor recusa
+   * apontando `pagarHoje`, e daí em diante o formulário pede o aceite de pagar
+   * hoje no lugar do aceite do teste — inclusive depois de outra recusa, pelo
+   * valor que volta marcado.
+   */
+  const pagarHoje = estado.campo === "pagarHoje" || estado.valores?.pagarHoje === "sim";
 
   return (
     <Formulario estado={estado} action={enviar} className="space-y-4">
@@ -223,13 +240,85 @@ export function FormularioCadastro({
 
       <ComoUsamosSeusDados />
       <AceiteDosTermos />
+      {pagarHoje ? <AceiteDePagarHoje valor={teste.valor} /> : <AceiteDoTeste {...teste} />}
 
       <ErroGeral />
 
       <Botao type="submit" carregando={enviando} className="w-full">
-        {enviando ? "Abrindo o pagamento…" : "Continuar para o pagamento"}
+        {pagarHoje
+          ? enviando
+            ? "Abrindo o pagamento…"
+            : "Continuar para o pagamento"
+          : enviando
+            ? "Abrindo o cadastro do cartão…"
+            : "Cadastrar o cartão e começar o teste"}
       </Botao>
     </Formulario>
+  );
+}
+
+/**
+ * O aviso forte dos 7 dias grátis, onde não dá para não ler: é uma caixa a
+ * marcar, com a data e o valor da primeira cobrança. Repete o quadro "Como
+ * funciona o teste" de propósito — quem rola direto até o botão passa por aqui.
+ */
+function AceiteDoTeste({ ultimoDia, cobranca, valor }: DatasDoCadastro) {
+  const { erro, valorDigitado } = useCampoDoFormulario("teste");
+
+  return (
+    <div className="rounded-suave border border-verde/25 bg-verde-fraco px-4 py-3.5">
+      <label className="flex items-start gap-2.5 text-corpo text-tinta leading-snug cursor-pointer">
+        <input
+          type="checkbox"
+          name="teste"
+          value="entendi"
+          required
+          defaultChecked={valorDigitado === "entendi"}
+          aria-invalid={erro ? true : undefined}
+          className="size-4 mt-0.5 shrink-0 accent-carimbo"
+        />
+        <span>
+          <strong className="font-semibold">Entendi: nada é cobrado hoje.</strong> Se eu não cancelar
+          até <span className="numerico font-semibold">{ultimoDia}</span>, a primeira mensalidade,
+          de <span className="numerico font-semibold">{valor}</span>, é cobrada no cartão em{" "}
+          <span className="numerico font-semibold">{cobranca}</span> — e depois todo mês.
+        </span>
+      </label>
+      {/* O botão do checkout é do Asaas e diz "Pagar R$ 79,00" mesmo no teste. */}
+      <p className="mt-2 pl-[1.625rem] text-rotulo text-tinta-2 leading-relaxed">
+        No Asaas, o botão diz “Pagar {valor}”: é o valor da mensalidade, não uma cobrança agora. A
+        data aparece lá mesmo, em “Primeira cobrança”: <span className="numerico">{cobranca}</span>.
+      </p>
+      <RodapeCampo erro={erro} />
+    </div>
+  );
+}
+
+/** O CPF/CNPJ que já testou: segue só quem marcar que sabe que paga hoje. */
+function AceiteDePagarHoje({ valor }: { valor: string }) {
+  const { erro, valorDigitado } = useCampoDoFormulario("pagarHoje");
+
+  return (
+    <div className="rounded-suave border border-filete-forte bg-folha-2 px-4 py-3.5">
+      <label className="flex items-start gap-2.5 text-corpo text-tinta leading-snug cursor-pointer">
+        <input
+          type="checkbox"
+          name="pagarHoje"
+          value="sim"
+          required
+          defaultChecked={valorDigitado === "sim"}
+          aria-invalid={erro ? true : undefined}
+          className="size-4 mt-0.5 shrink-0 accent-carimbo"
+        />
+        <span>
+          <strong className="font-semibold">Pagar a primeira mensalidade hoje.</strong> Este CPF/CNPJ
+          já usou os 7 dias grátis: a mensalidade de{" "}
+          <span className="numerico font-semibold">{valor}</span> é cobrada no cartão hoje, e depois
+          todo mês.
+        </span>
+      </label>
+      <RodapeCampo erro={erro} />
+    </div>
   );
 }
 
@@ -255,7 +344,13 @@ function ComoUsamosSeusDados() {
             Celular, CPF/CNPJ e endereço:
           </strong>{" "}
           só para a cobrança, repassados ao Asaas. O cartão é digitado no Asaas
-          e nunca passa pelo RepPlast.
+          e nunca passa pelo RepPlast. O CPF/CNPJ também confere se o documento
+          já usou os 7 dias grátis.
+        </li>
+        <li>
+          <strong className="font-semibold text-tinta">Aviso do teste:</strong>{" "}
+          dois dias antes da primeira cobrança, mandamos um e-mail lembrando a
+          data e o valor.
         </li>
         <li>
           <strong className="font-semibold text-tinta">Protegidos:</strong> os

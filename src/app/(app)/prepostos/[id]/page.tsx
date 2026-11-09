@@ -40,6 +40,7 @@ import {
 import { escreverNumeroBr } from "@/lib/numero-br";
 import { valorMensal } from "@/lib/planos";
 import { escopoAtual } from "@/lib/sessao";
+import { emTesteGratis, escreverDia } from "@/lib/teste-gratis";
 
 import { alternarAtivoPreposto, atualizarPreposto } from "../acoes";
 import { AvatarPreposto } from "../avatar-preposto";
@@ -97,8 +98,14 @@ export default async function PaginaPreposto({
    */
   const [ativos, assinatura] = await Promise.all([
     db.usuario.count({ where: { organizacaoId, papel: "REPRESENTANTE", ativo: true } }),
-    db.organizacao.findUnique({ where: { id: organizacaoId }, select: { asaasAssinaturaId: true } }),
+    db.organizacao.findUnique({
+      where: { id: organizacaoId },
+      select: { asaasAssinaturaId: true, assinatura: true, testeAte: true },
+    }),
   ]);
+  // Nos 7 dias grátis nenhum mês foi usado: tirar e devolver mudam a primeira cobrança.
+  const primeiraCobranca =
+    assinatura?.testeAte && emTesteGratis(assinatura) ? escreverDia(assinatura.testeAte) : null;
   const mensalidadeAgora = valorMensal(plano, ativos);
   const mensalidadeDepois = valorMensal(plano, ativos + (preposto.ativo ? -1 : 1));
   const agora = formatarMoeda(mensalidadeAgora.toString());
@@ -106,11 +113,17 @@ export default async function PaginaPreposto({
   const mudaMensalidade =
     !assinatura?.asaasAssinaturaId || mensalidadeAgora.equals(mensalidadeDepois)
       ? ""
-      : preposto.ativo
-        ? ` A mensalidade do escritório cai de ${agora} para ${depois} a partir da fatura seguinte à ` +
-          `que está em aberto — essa continua com ${agora}, porque o mês já foi usado com ele.`
-        : ` Com ele, o escritório passa dos prepostos inclusos no plano: a mensalidade sobe de ${agora} ` +
-          `para ${depois}, já na fatura em aberto, sem cobrança proporcional.`;
+      : primeiraCobranca
+        ? preposto.ativo
+          ? ` A mensalidade do escritório cai de ${agora} para ${depois} já na primeira cobrança, em ` +
+            `${primeiraCobranca} — no teste grátis nenhum mês foi usado.`
+          : ` Com ele, o escritório passa dos prepostos inclusos no plano: a mensalidade sobe de ${agora} ` +
+            `para ${depois} já na primeira cobrança, em ${primeiraCobranca}.`
+        : preposto.ativo
+          ? ` A mensalidade do escritório cai de ${agora} para ${depois} a partir da fatura seguinte à ` +
+            `que está em aberto — essa continua com ${agora}, porque o mês já foi usado com ele.`
+          : ` Com ele, o escritório passa dos prepostos inclusos no plano: a mensalidade sobe de ${agora} ` +
+            `para ${depois}, já na fatura em aberto, sem cobrança proporcional.`;
   const perguntaAcesso = preposto.ativo
     ? {
         titulo: `Tirar o acesso de ${preposto.nomeCompleto}?`,

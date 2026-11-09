@@ -132,4 +132,21 @@ describe("tirar e devolver o acesso", () => {
     expect(estado.erro).toMatch(/não conseguimos acertar a mensalidade/);
     expect(await ativo(prepostos[3])).toBe(false);
   });
+
+  it("nos 7 dias grátis, tirar o acesso do quarto já baixa a primeira cobrança", async () => {
+    // De volta aos quatro, com a fatura em 238.
+    await alternarAtivoPreposto(prepostos[3], {}, new FormData());
+    asaas.chamadas = [];
+    await admin.organizacao.update({
+      where: { id: org },
+      data: { testeAte: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000) },
+    });
+
+    const estado = await alternarAtivoPreposto(prepostos[3], {}, new FormData());
+
+    expect(estado.erro).toBeUndefined();
+    expect(await ativo(prepostos[3])).toBe(false);
+    expect(asaas.chamadas).toHaveLength(1);
+    expect((asaas.chamadas[0] as unknown[])[1]?.toString()).toBe("189");
+  });
 });

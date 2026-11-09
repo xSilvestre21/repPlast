@@ -11,7 +11,7 @@ export default function PaginaTermos() {
   return (
     <PaginaLegal
       titulo="Termos de Uso"
-      resumo="As regras para usar o RepPlast: o que o sistema entrega, o que cabe a você, como funciona a assinatura e como encerrar."
+      resumo="As regras para usar o RepPlast: o que o sistema entrega, o que cabe a você, como funcionam os 7 dias grátis e a assinatura, e como encerrar."
     >
       <Clausula numero={1} titulo="O serviço">
         <p>
@@ -42,11 +42,34 @@ export default function PaginaTermos() {
         </Itens>
       </Clausula>
 
-      <Clausula numero={3} titulo="Assinatura e pagamento">
+      <Clausula numero={3} titulo="Teste grátis, assinatura e pagamento">
         <Itens>
           <li>
-            A assinatura é mensal, no cartão de crédito, cobrada pelo Asaas. A primeira cobrança é no
-            dia do cadastro, e o sistema abre assim que ela é confirmada.
+            A assinatura é mensal, no cartão de crédito, cobrada pelo Asaas.
+          </li>
+          <li>
+            <strong>7 dias grátis.</strong> O primeiro escritório de cada CPF ou CNPJ tem 7 dias
+            grátis para testar o sistema. Ao criar o escritório, você cadastra o cartão de crédito na
+            página do Asaas: o cartão é validado, mas nada é cobrado nesses dias, e o sistema abre na
+            hora.
+          </li>
+          <li>
+            <strong>A primeira cobrança é no 7º dia depois do cadastro.</strong> A data exata e o
+            valor aparecem na tela do cadastro, antes de você confirmar; depois, numa faixa dentro do
+            sistema, todos os dias do teste; e num e-mail enviado dois dias antes. Se você não cancelar
+            até a véspera, a primeira mensalidade é cobrada no cartão nessa data, e daí em diante todo
+            mês, na mesma data.
+          </li>
+          <li>
+            Cancelando durante o teste, pelo botão “Cancelar a assinatura” (cláusula 8), nada é
+            cobrado. Trocar de plano ou de número de prepostos durante o teste muda o valor da primeira
+            cobrança.
+          </li>
+          <li>
+            Quem já usou o teste — outro escritório com o mesmo CPF ou CNPJ — e quem assina de novo
+            depois de cancelar não têm outro teste: a primeira mensalidade é cobrada no dia, e o
+            sistema abre assim que ela é confirmada. O cadastro avisa disso e pede a sua confirmação
+            antes de abrir o pagamento.
           </li>
           <li>Sem taxa de implantação e sem fidelidade.</li>
           <li>
@@ -106,8 +129,10 @@ export default function PaginaTermos() {
           <a href={`mailto:${CONTROLADOR.email}`} className="text-carimbo underline underline-offset-4">
             {CONTROLADOR.email}
           </a>
-          . A cobrança para na hora: em dia, o acesso continua até o fim do mês já pago; em atraso, a
-          mensalidade vencida deixa de ser cobrada e o acesso se encerra. Não há reembolso de mês em curso —
+          . A cobrança para na hora: nos 7 dias grátis, nada é cobrado — a primeira cobrança é
+          apagada — e o acesso continua até o último dia do teste; em dia, o acesso continua até o
+          fim do mês já pago; em atraso, a mensalidade vencida deixa de ser cobrada e o acesso se
+          encerra. Não há reembolso de mês em curso —
           ressalvado o direito de arrependimento de 7 dias após a contratação, quando o Código de
           Defesa do Consumidor se aplicar (art. 49). Antes de
           encerrar, você pode pedir uma cópia dos seus dados; depois, eles são apagados como diz a

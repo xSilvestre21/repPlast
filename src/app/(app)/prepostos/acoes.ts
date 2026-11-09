@@ -22,7 +22,7 @@ import {
 } from "@/lib/erro-formulario";
 import { normalizarTelefone } from "@/lib/mascara";
 import { exigirNumero } from "@/lib/numero-br";
-import { subirMensalidade } from "@/lib/mensalidade";
+import { reduzirNoTeste, subirMensalidade } from "@/lib/mensalidade";
 import { PLANOS, valorMensal } from "@/lib/planos";
 import { gerarHashSenha } from "@/lib/senha";
 import { TAMANHO_MINIMO_SENHA } from "@/lib/senha-regras";
@@ -310,6 +310,15 @@ async function gravarAlternarAtivoPreposto(id: string, _formData: FormData): Pro
     where: { id, organizacaoId, papel: "REPRESENTANTE" },
     data: { ativo: !preposto.ativo },
   });
+
+  // Nos 7 dias grátis, tirar o acesso já baixa a primeira cobrança. Melhor
+  // esforço: o acesso já mudou, e se o Asaas falhar a fatura paga acerta as
+  // seguintes (`acertarDepoisDoPagamento`); o erro vai para o log e o Sentry.
+  if (preposto.ativo) {
+    await reduzirNoTeste(organizacaoId).catch((erro) => {
+      console.error(`[asaas] não deu para baixar a mensalidade no teste de ${organizacaoId}:`, erro);
+    });
+  }
 
   revalidarPreposto(id);
 }

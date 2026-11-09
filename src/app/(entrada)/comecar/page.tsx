@@ -3,12 +3,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { CartoesPlanos } from "@/components/entrada/cartoes-planos";
+import { LinhaDoTeste } from "@/components/entrada/linha-do-teste";
 import { Movimento } from "@/components/entrada/movimento";
 import { SemScriptRevela } from "@/components/entrada/revelar";
 import { TopoEntrada } from "@/components/entrada/topo-entrada";
 import { Cartao } from "@/components/ui";
 import { planoDaUrl, type Plano } from "@/lib/planos";
 import { inicioDa, sessaoAtual } from "@/lib/sessao";
+import { datasDoTeste, DIAS_DE_TESTE } from "@/lib/teste-gratis";
 
 import { cadastrar } from "../acoes";
 import { FormularioCadastro } from "../formulario";
@@ -59,7 +61,8 @@ function PassoPlanos() {
           Escolha o plano do seu escritório
         </h1>
         <p className="mt-4 text-realce text-tinta-2">
-          Sem taxa de implantação e sem fidelidade. Dá para trocar de plano depois.
+          {DIAS_DE_TESTE} dias grátis para testar, sem taxa de implantação e sem fidelidade. Dá
+          para trocar de plano depois.
         </p>
       </div>
 
@@ -72,6 +75,11 @@ function PassoPlanos() {
 const MOEDA = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
 function PassoCadastro({ plano }: { plano: Plano }) {
+  // As datas de quem começa agora: a página é dinâmica (lê a sessão), então
+  // saem do dia de hoje a cada visita, e não do dia do build.
+  const datas = datasDoTeste();
+  const valor = MOEDA.format(plano.precoMensal.toNumber());
+
   return (
     <div
       className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-10 sm:py-14
@@ -84,21 +92,24 @@ function PassoCadastro({ plano }: { plano: Plano }) {
           Criar meu escritório
         </h1>
         <p className="mt-4 text-realce text-tinta-2 leading-relaxed max-w-md">
-          Preencha os dados e siga para o pagamento. Assim que ele for confirmado, o sistema abre
-          pronto para o primeiro pedido.
+          Preencha os dados e cadastre o cartão. O sistema abre na hora, e a primeira cobrança só
+          vem em {datas.cobranca}.
         </p>
 
-        <div className="folha mt-8 p-5 sm:p-6 max-w-md">
+        <LinhaDoTeste {...datas} valor={valor} className="mt-8 max-w-md" />
+
+        <div className="folha mt-5 p-5 sm:p-6 max-w-md">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-mini text-tinta-3">Plano escolhido</p>
               <p className="text-forte font-bold text-tinta">{plano.nome}</p>
             </div>
             <p className="text-right">
-              <span className="text-medio font-bold text-tinta numerico">
-                {MOEDA.format(plano.precoMensal.toNumber())}
-              </span>
+              <span className="text-medio font-bold text-tinta numerico">{valor}</span>
               <span className="text-mini text-tinta-2">/mês</span>
+              <span className="block text-mini text-tinta-2">
+                a partir de {datas.cobranca}
+              </span>
             </p>
           </div>
           <ul className="mt-4 space-y-2">
@@ -120,7 +131,7 @@ function PassoCadastro({ plano }: { plano: Plano }) {
         <ul className="mt-6 space-y-2.5 max-w-md">
           <li className="flex items-center gap-2.5 text-rotulo text-tinta-2">
             <CreditCard size={15} strokeWidth={2} className="text-tinta-3" aria-hidden="true" />
-            Cartão de crédito, cobrado todo mês pelo Asaas.
+            Cartão de crédito: nada é cobrado hoje; depois, todo mês pelo Asaas.
           </li>
           <li className="flex items-center gap-2.5 text-rotulo text-tinta-2">
             <Lock size={15} strokeWidth={2} className="text-tinta-3" aria-hidden="true" />
@@ -135,7 +146,7 @@ function PassoCadastro({ plano }: { plano: Plano }) {
           <p className="text-corpo text-tinta-2 mt-2.5 mb-7 leading-relaxed">
             Leva menos de um minuto. Você entra como administrador do escritório.
           </p>
-          <FormularioCadastro acao={cadastrar} plano={plano.slug} />
+          <FormularioCadastro acao={cadastrar} plano={plano.slug} teste={{ ...datas, valor }} />
           <LinkEntrar />
         </Cartao>
       </div>

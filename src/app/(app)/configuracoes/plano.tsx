@@ -11,6 +11,10 @@
  * Embaixo, discreto, o cancelamento da assinatura (`cancelarAssinatura`).
  * Cancelada, o cartão só diz até quando vai o acesso: não há mais fatura para
  * levar uma troca de plano.
+ *
+ * Nos 7 dias grátis (`teste`), o cartão abre dizendo até quando é grátis e
+ * quando vem a primeira cobrança; trocar de plano muda a primeira cobrança,
+ * nos dois sentidos, e cancelar diz com todas as letras que nada é cobrado.
  */
 
 import { Check, Gem } from "lucide-react";
@@ -25,6 +29,8 @@ export function CartaoPlano({
   prepostosAtivos,
   temCobranca,
   ultimoDiaDeAcesso,
+  teste,
+  canceladaNoTeste,
   trocar,
   cancelar,
 }: {
@@ -34,6 +40,10 @@ export function CartaoPlano({
   temCobranca: boolean;
   /** "02/12/2026" quando a assinatura foi cancelada e o mês pago ainda corre. */
   ultimoDiaDeAcesso: string | null;
+  /** Nos 7 dias grátis: o último dia grátis e o dia da primeira cobrança. */
+  teste: { ultimoDia: string; cobranca: string } | null;
+  /** Cancelada durante o teste: nada foi cobrado, e o acesso vai até o fim dele. */
+  canceladaNoTeste: boolean;
   trocar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
   cancelar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
 }) {
@@ -58,15 +68,20 @@ export function CartaoPlano({
   const depois = formatarMoeda(mensalidadeDepois.toString());
   const quando = !temCobranca
     ? "O plano muda na hora."
-    : sobe
-      ? "O plano muda na hora, e o valor novo já vale para a fatura em aberto, sem cobrança proporcional."
-      : "O plano muda na hora. A fatura em aberto continua com o valor do Max; o do Solo vale a partir da seguinte.";
+    : teste
+      ? `O plano muda na hora, e a primeira cobrança, em ${teste.cobranca}, já sai com o valor do ${outro.nome}.`
+      : sobe
+        ? "O plano muda na hora, e o valor novo já vale para a fatura em aberto, sem cobrança proporcional."
+        : "O plano muda na hora. A fatura em aberto continua com o valor do Max; o do Solo vale a partir da seguinte.";
   const valores = !temCobranca
     ? ""
-    : sobe
-      ? `A mensalidade sobe de ${agora} para ${depois}, já na fatura em aberto, sem cobrança proporcional.`
-      : `A mensalidade cai de ${agora} para ${depois} a partir da fatura seguinte à que está em aberto — ` +
-        `essa continua com ${agora}, porque o mês já foi usado no Max.`;
+    : teste
+      ? `A mensalidade ${sobe ? "sobe" : "cai"} de ${agora} para ${depois} já na primeira cobrança, em ` +
+        `${teste.cobranca} — no teste grátis nenhum mês foi usado.`
+      : sobe
+        ? `A mensalidade sobe de ${agora} para ${depois}, já na fatura em aberto, sem cobrança proporcional.`
+        : `A mensalidade cai de ${agora} para ${depois} a partir da fatura seguinte à que está em aberto — ` +
+          `essa continua com ${agora}, porque o mês já foi usado no Max.`;
 
   return (
     <SecaoCartao
@@ -74,6 +89,14 @@ export function CartaoPlano({
       titulo="Plano e mensalidade"
       descricao={`O escritório está no plano ${atual.nome}. ${atual.publico}`}
     >
+      {teste && (
+        <div className="mb-5 rounded-suave border border-verde/25 bg-verde-fraco px-4 py-3 text-corpo text-tinta">
+          <strong className="font-semibold">Teste grátis até {teste.ultimoDia}.</strong> A primeira mensalidade, de{" "}
+          <span className="numerico font-semibold">{agora}</span>, é cobrada no cartão em{" "}
+          <span className="numerico font-semibold">{teste.cobranca}</span>. Cancelando até {teste.ultimoDia}, nada é
+          cobrado.
+        </div>
+      )}
       <div className="grid gap-4 sm:grid-cols-2 sm:items-start">
         <div className="rounded-suave border border-filete p-4">
           <div className="flex items-center justify-between gap-3">
@@ -113,9 +136,12 @@ export function CartaoPlano({
       {ultimoDiaDeAcesso ? (
         <div className="mt-5">
           <Mensagem tom="verde">
-            Assinatura cancelada. O escritório continua usando o sistema até {ultimoDiaDeAcesso}, o fim do mês
-            já pago, e nada mais é cobrado. Depois disso, para voltar, é só assinar de novo — os dados continuam
-            guardados.
+            {canceladaNoTeste
+              ? `Teste cancelado — nada foi cobrado. O escritório continua usando o sistema até ${ultimoDiaDeAcesso}, ` +
+                "o último dia do teste. Depois disso, para voltar, é só assinar de novo — os dados continuam guardados."
+              : `Assinatura cancelada. O escritório continua usando o sistema até ${ultimoDiaDeAcesso}, o fim do mês ` +
+                "já pago, e nada mais é cobrado. Depois disso, para voltar, é só assinar de novo — os dados " +
+                "continuam guardados."}
           </Mensagem>
         </div>
       ) : (
@@ -144,15 +170,27 @@ export function CartaoPlano({
             <div className="mt-5 flex justify-end border-t border-filete pt-4">
               <AcaoComRecusa
                 acao={cancelar}
-                confirmar={{
-                  titulo: "Cancelar a assinatura?",
-                  texto:
-                    "A cobrança para agora: a próxima mensalidade não é cobrada. O escritório continua usando o " +
-                    "sistema até o fim do mês já pago; depois disso, para voltar, é só assinar de novo — os dados " +
-                    "continuam guardados.",
-                  rotulo: "Cancelar a assinatura",
-                  desistir: "Manter a assinatura",
-                }}
+                confirmar={
+                  teste
+                    ? {
+                        titulo: "Cancelar no teste grátis?",
+                        texto:
+                          `Nada é cobrado: a cobrança de ${teste.cobranca} é apagada. O escritório continua usando o ` +
+                          `sistema até ${teste.ultimoDia}, o último dia do teste; depois disso, para voltar, é só ` +
+                          "assinar de novo — os dados continuam guardados.",
+                        rotulo: "Cancelar a assinatura",
+                        desistir: "Continuar o teste",
+                      }
+                    : {
+                        titulo: "Cancelar a assinatura?",
+                        texto:
+                          "A cobrança para agora: a próxima mensalidade não é cobrada. O escritório continua usando o " +
+                          "sistema até o fim do mês já pago; depois disso, para voltar, é só assinar de novo — os dados " +
+                          "continuam guardados.",
+                        rotulo: "Cancelar a assinatura",
+                        desistir: "Manter a assinatura",
+                      }
+                }
               >
                 <BotaoTexto type="submit" perigoso>
                   Cancelar a assinatura

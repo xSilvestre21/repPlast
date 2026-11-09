@@ -15,6 +15,12 @@
  *     cliente fica de reserva.
  *   - Os eventos de cobrança (`PAYMENT_*`) trazem a assinatura e o cliente.
  *
+ * Nos 7 dias grátis (`teste-gratis.ts`) o checkout não cobra nada: a primeira
+ * cobrança vence uma semana depois. Quem libera o escritório, então, é o
+ * `SUBSCRIPTION_CREATED` do checkout — o cartão foi validado e a assinatura
+ * existe —, sem depender de o `CHECKOUT_PAID` chegar para um checkout sem
+ * pagamento. Ele também grava o fim do teste pela data da assinatura de verdade.
+ *
  * E o que um evento NÃO pode fazer (ver `mudancaRecusada`): mexer na situação
  * por uma assinatura que não é mais a do escritório — a de antes de um
  * cancelamento, por exemplo —, nem reabrir um escritório cancelado por um
@@ -27,9 +33,11 @@ import { timingSafeEqual } from "node:crypto";
 
 import { Prisma } from "@/generated/prisma/client";
 
+import { fimDoPeriodoPago } from "./acesso-assinatura";
 import { assinaturaDoCliente } from "./asaas";
 import { dbAdministrativo } from "./db";
 import { acertarDepoisDoPagamento } from "./mensalidade";
+import { hojeEmBrasilia } from "./teste-gratis";
 
 /** Quanto o corpo do evento fica guardado — o bastante para investigar uma cobrança. */
 const GUARDA_DO_CORPO_MS = 90 * 24 * 60 * 60 * 1000;
@@ -40,7 +48,13 @@ interface EventoAsaas {
   id?: string;
   event?: string;
   checkout?: { id?: string; customer?: string | null };
-  subscription?: { id?: string; customer?: string; checkoutSession?: string | null };
+  subscription?: {
+    id?: string;
+    customer?: string;
+    checkoutSession?: string | null;
+    /** "2026-11-16": a primeira cobrança, na assinatura recém-criada. */
+    nextDueDate?: string;
+  };
   payment?: { subscription?: string | null; customer?: string };
 }
 
@@ -142,10 +156,9 @@ export async function processarEventoAsaas(corpo: unknown): Promise<void> {
     assinatura?: Situacao;
     asaasClienteId?: string;
     asaasAssinaturaId?: string;
+    testeAte?: Date;
   } = {};
   if (situacao) dados.assinatura = situacao;
-  // Pago de novo: o prazo de quem tinha cancelado deixa de valer.
-  const limparAcesso = situacao === "ATIVA";
 
   let onde: { asaasCheckoutId: string } | { asaasAssinaturaId: string } | { asaasClienteId: string } | null =
     null;
@@ -193,9 +206,30 @@ export async function processarEventoAsaas(corpo: unknown): Promise<void> {
   const alvo = onde
     ? await db.organizacao.findFirst({
         where: onde,
-        select: { id: true, asaasAssinaturaId: true, assinatura: true },
+        select: { id: true, asaasAssinaturaId: true, assinatura: true, testeAte: true },
       })
     : null;
+
+  /*
+   * O checkout dos 7 dias grátis: o escritório ganhou o teste no cadastro
+   * (`testeAte` preenchido) e a assinatura que ele criou só cobra no futuro.
+   * Sem os dois, é um checkout que cobra hoje — o de quem já usou o teste, ou
+   * o de quem assina de novo —, e quem libera é o pagamento, como sempre.
+   */
+  const primeiraCobranca = evento.subscription?.nextDueDate?.slice(0, 10) ?? "";
+  if (
+    evento.event === "SUBSCRIPTION_CREATED" &&
+    onde &&
+    "asaasCheckoutId" in onde &&
+    alvo?.testeAte &&
+    /^\d{4}-\d{2}-\d{2}$/.test(primeiraCobranca) &&
+    primeiraCobranca > hojeEmBrasilia()
+  ) {
+    dados.testeAte = fimDoPeriodoPago(primeiraCobranca);
+    if (alvo.assinatura === "AGUARDANDO_PAGAMENTO") dados.assinatura = "ATIVA";
+  }
+  // Liberado de novo: o prazo de quem tinha cancelado deixa de valer.
+  const limparAcesso = dados.assinatura === "ATIVA";
 
   // O registro do evento é a trava: a chave primária faz a segunda entrega —
   // mesmo simultânea — falhar aqui, antes de mexer no escritório.

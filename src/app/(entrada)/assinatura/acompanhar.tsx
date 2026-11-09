@@ -28,7 +28,14 @@ const LIMITE_MS = 60_000;
  * "Confirmando o pagamento…", um "Ir para o pagamento" convidava quem acabou
  * de pagar a pagar outra vez.
  */
-export function AguardarConfirmacao({ seDesistir }: { seDesistir?: ReactNode }) {
+export function AguardarConfirmacao({
+  seDesistir,
+  doCartao = false,
+}: {
+  seDesistir?: ReactNode;
+  /** Nos 7 dias grátis o checkout só cadastra o cartão: não há pagamento a confirmar. */
+  doCartao?: boolean;
+}) {
   const router = useRouter();
   const [desistiu, setDesistiu] = useState(false);
 
@@ -50,8 +57,9 @@ export function AguardarConfirmacao({ seDesistir }: { seDesistir?: ReactNode }) 
     return (
       <>
         <p className="text-corpo text-tinta-2" role="status">
-          A confirmação está demorando mais que o normal. Se o cartão foi recusado, abra o pagamento
-          de novo abaixo; se já foi aprovado, recarregue esta página em alguns minutos.
+          A confirmação está demorando mais que o normal. Se o cartão foi recusado, abra{" "}
+          {doCartao ? "o cadastro do cartão" : "o pagamento"} de novo abaixo; se já foi aprovado,
+          recarregue esta página em alguns minutos.
         </p>
         {seDesistir && <div className="mt-6">{seDesistir}</div>}
       </>
@@ -61,7 +69,7 @@ export function AguardarConfirmacao({ seDesistir }: { seDesistir?: ReactNode }) 
   return (
     <p className="flex items-center gap-2.5 text-corpo text-tinta-2" role="status">
       <span className="pulso inline-block size-2.5 rounded-full bg-verde" aria-hidden="true" />
-      Confirmando o pagamento com o Asaas…
+      {doCartao ? "Confirmando o cartão com o Asaas…" : "Confirmando o pagamento com o Asaas…"}
     </p>
   );
 }

@@ -14,6 +14,7 @@ import { TopoEntrada } from "@/components/entrada/topo-entrada";
 import { Cartao, Mensagem, Placa } from "@/components/ui";
 import { CONTROLADOR } from "@/lib/lgpd";
 import { inicioDa, sessaoAtual } from "@/lib/sessao";
+import { DIAS_DE_TESTE } from "@/lib/teste-gratis";
 
 import { entrar } from "../acoes";
 import { FormularioEntrada } from "../formulario";
@@ -210,7 +211,7 @@ export default async function PaginaEntrar({ searchParams }: PageProps<"/entrar"
           id="planos"
           rotulo="Planos"
           titulo="Um preço justo para o tamanho do seu escritório"
-          texto="Sem taxa de implantação e sem fidelidade. Comece sozinho no Solo ou traga seus prepostos no Max."
+          texto={`Teste ${DIAS_DE_TESTE} dias grátis: o cartão é cadastrado, mas a primeira cobrança só vem no ${DIAS_DE_TESTE}º dia — e cancelando antes, não paga nada. Sem taxa de implantação e sem fidelidade.`}
         >
           <CartoesPlanos />
         </Secao>
@@ -234,7 +235,8 @@ export default async function PaginaEntrar({ searchParams }: PageProps<"/entrar"
                 Seu próximo pedido já pode sair daqui.
               </h2>
               <p className="mt-4 text-realce text-tinta-2 max-w-xl mx-auto">
-                Crie o escritório, cadastre a primeira indústria e emita o pedido no mesmo dia.
+                Crie o escritório, cadastre a primeira indústria e emita o pedido no mesmo dia —
+                com {DIAS_DE_TESTE} dias grátis para testar antes da primeira cobrança.
               </p>
               <Link
                 href="/comecar"

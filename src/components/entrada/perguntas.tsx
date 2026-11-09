@@ -8,6 +8,7 @@
 import { Plus } from "lucide-react";
 
 import { PLANOS } from "@/lib/planos";
+import { DIAS_DE_TESTE } from "@/lib/teste-gratis";
 
 import { Revelar } from "./revelar";
 
@@ -26,10 +27,20 @@ const PERGUNTAS: { pergunta: string; resposta: string }[] = [
       "comissão dos pedidos dele é rateada automaticamente.",
   },
   {
+    pergunta: `Como funcionam os ${DIAS_DE_TESTE} dias grátis?`,
+    resposta:
+      "Ao criar o escritório, você cadastra o cartão na página do Asaas, e nada é cobrado. Durante " +
+      `${DIAS_DE_TESTE} dias você usa tudo; a primeira mensalidade só é cobrada no ${DIAS_DE_TESTE}º dia ` +
+      "depois do cadastro — a data aparece na tela antes de você assinar, numa faixa dentro do " +
+      "sistema e num e-mail dois dias antes. Cancelou antes disso, em Configurações → Plano e " +
+      "mensalidade, não paga nada. O teste vale uma vez por CPF/CNPJ.",
+  },
+  {
     pergunta: "Como funciona o pagamento?",
     resposta:
-      "A assinatura é mensal, no cartão de crédito, cobrada pelo Asaas. Você paga a primeira " +
-      "mensalidade ao criar o escritório e a cobrança se repete todo mês, sem fidelidade.",
+      "A assinatura é mensal, no cartão de crédito, cobrada pelo Asaas. Depois dos " +
+      `${DIAS_DE_TESTE} dias grátis, a cobrança se repete todo mês na mesma data, sem fidelidade. ` +
+      "Quem já usou o teste com o mesmo CPF/CNPJ paga a primeira mensalidade no dia do cadastro.",
   },
   {
     pergunta: "E se eu tiver mais de três prepostos?",
@@ -48,7 +59,8 @@ const PERGUNTAS: { pergunta: string; resposta: string }[] = [
     pergunta: "Como cancelo?",
     resposta:
       "Pelo botão “Cancelar a assinatura”, em Configurações, quando quiser. A cobrança para na " +
-      "hora, o acesso continua até o fim do mês já pago, e não há multa.",
+      "hora, o acesso continua até o fim do mês já pago, e não há multa. Nos " +
+      `${DIAS_DE_TESTE} dias grátis, nada é cobrado, e você usa até o último dia do teste.`,
   },
   {
     pergunta: "Meus dados ficam seguros?",

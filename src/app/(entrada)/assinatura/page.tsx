@@ -6,6 +6,7 @@ import { BotaoTexto, Cartao } from "@/components/ui";
 import { assinaturaLiberada } from "@/lib/acesso-assinatura";
 import { PLANOS } from "@/lib/planos";
 import { sessaoAtual } from "@/lib/sessao";
+import { datasDoTeste, DIAS_DE_TESTE } from "@/lib/teste-gratis";
 
 import { cancelarAssinaturaEmAtraso, reabrirPagamento, sair } from "../acoes";
 import { AguardarConfirmacao, ReabrirPagamento } from "./acompanhar";
@@ -19,6 +20,10 @@ import { AguardarConfirmacao, ReabrirPagamento } from "./acompanhar";
  *
  * Também é a volta do checkout do Asaas (`successUrl`, `cancelUrl`,
  * `expiredUrl`): com `?status=pago` a tela espera o webhook confirmar.
+ *
+ * O escritório que ganhou os 7 dias grátis e ainda não pôs o cartão
+ * (`testeAte` preenchido, aguardando) lê outra coisa: não há pagamento a
+ * fazer, só o cartão a cadastrar — e a data em que a cobrança viria.
  */
 
 const TEXTOS = {
@@ -58,8 +63,20 @@ export default async function PaginaAssinatura({ searchParams }: PageProps<"/ass
   // antes do aviso do Asaas via "A assinatura foi cancelada" com o botão de
   // assinar — um convite a pagar duas vezes.
   const voltouPago = status === "pago";
-  const texto = TEXTOS[sessao.assinatura];
   const plano = PLANOS[sessao.plano];
+  const doTeste = sessao.assinatura === "AGUARDANDO_PAGAMENTO" && sessao.testeAte !== null;
+  // Reaberto agora, o checkout conta os 7 dias de hoje (`reabrirPagamento`).
+  const texto = doTeste
+    ? {
+        titulo: "Falta cadastrar o cartão",
+        texto:
+          `Seu escritório já está criado. Cadastre o cartão para começar os ${DIAS_DE_TESTE} dias ` +
+          `grátis — nada é cobrado até ${datasDoTeste().cobranca}, e cancelando antes, não paga nada. ` +
+          "O botão do Asaas diz “Pagar”, com o valor da mensalidade; a data da cobrança aparece ao " +
+          "lado, em “Primeira cobrança”.",
+        botao: "Cadastrar o cartão",
+      }
+    : TEXTOS[sessao.assinatura];
 
   return (
     <>
@@ -70,20 +87,24 @@ export default async function PaginaAssinatura({ searchParams }: PageProps<"/ass
             {sessao.organizacaoNome} · Plano {plano.nome}
           </p>
           <h1 className="mt-3 text-forte font-bold text-tinta text-balance">
-            {voltouPago ? "Pagamento recebido — quase lá" : texto.titulo}
+            {voltouPago ? (doTeste ? "Cartão cadastrado — quase lá" : "Pagamento recebido — quase lá") : texto.titulo}
           </h1>
           <p className="mt-3 text-corpo text-tinta-2 leading-relaxed">
             {voltouPago
-              ? "Estamos esperando o Asaas confirmar o pagamento. Leva poucos segundos; a página abre o sistema sozinha."
+              ? `Estamos esperando o Asaas confirmar ${doTeste ? "o cartão" : "o pagamento"}. Leva poucos segundos; a página abre o sistema sozinha.`
               : texto.texto}
           </p>
 
           {voltouPago ? (
             <div className="mt-6">
               <AguardarConfirmacao
+                doCartao={doTeste}
                 seDesistir={
                   sessao.papel === "ADMIN" && (
-                    <ReabrirPagamento acao={reabrirPagamento} rotulo="Abrir o pagamento de novo" />
+                    <ReabrirPagamento
+                      acao={reabrirPagamento}
+                      rotulo={doTeste ? "Cadastrar o cartão de novo" : "Abrir o pagamento de novo"}
+                    />
                   )
                 }
               />

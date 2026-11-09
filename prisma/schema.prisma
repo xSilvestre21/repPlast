@@ -176,6 +176,15 @@ model Organizacao {
   /// "Sala 3, bloco B". Opcional: nulo também quando o endereço não tem.
   cobrancaComplemento String?
 
+  /// Fim dos 7 dias grátis: a meia-noite (de Brasília) do dia da primeira
+  /// cobrança (`lib/teste-gratis.ts`). Preenchido só no escritório que ganhou o
+  /// teste — o primeiro de cada CPF/CNPJ; nulo em quem pagou no dia e nos de
+  /// antes do teste. Passada a data, fica como registro de que o teste foi usado.
+  testeAte        DateTime?
+  /// Quando saiu o e-mail avisando que o teste está acabando — é o que impede
+  /// a rotina diária de mandar duas vezes (`api/rotinas/lembrete-do-teste`).
+  lembreteTesteEm DateTime?
+
   /// Contador do número do orçamento. É POR ESCRITÓRIO, e não por indústria
   /// como o do pedido: o orçamento é documento do representante para o cliente,
   /// e a indústria nem fica sabendo dele.
@@ -194,6 +203,8 @@ model Organizacao {
   compromissos     Compromisso[]
   trocasDeNome     TrocaNomeEscritorio[]
 
+  /// O cadastro pergunta se o CPF/CNPJ já usou o teste grátis em outro escritório.
+  @@index([cobrancaDocumento])
   @@map("organizacao")
 }
 

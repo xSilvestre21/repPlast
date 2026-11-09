@@ -23,7 +23,7 @@ export const CONTROLADOR = {
  * A versão dos textos aceitos, gravada junto com o aceite de cada pessoa.
  * Mudou o que os textos dizem? Suba a data: é ela que prova o que foi aceito.
  */
-export const VERSAO_TERMOS = "2026-11-03";
+export const VERSAO_TERMOS = "2026-11-09";
 
 /** "16 de outubro de 2026" — a data de vigência que as páginas mostram. */
 export const VIGENCIA_TERMOS = new Intl.DateTimeFormat("pt-BR", {

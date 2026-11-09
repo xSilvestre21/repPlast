@@ -8,7 +8,7 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 
-import { ErroAsaas } from "@/lib/asaas";
+import { atualizarValorAssinatura, ErroAsaas } from "@/lib/asaas";
 import { limparAssinatura } from "@/lib/assinatura-email";
 import { cancelarAssinaturaDoEscritorio } from "@/lib/cancelamento";
 import { contaParaEnvio } from "@/lib/conta-email";
@@ -43,6 +43,7 @@ import {
 } from "@/lib/escritorio-regras";
 import { ehConflitoDeNome, erroNomeEmUso, nomeEmUso, situacaoDoNome } from "@/lib/nome-escritorio";
 import { escopoAtual, exigirAdmin } from "@/lib/sessao";
+import { emTesteGratis } from "@/lib/teste-gratis";
 
 export type { EstadoFormulario };
 
@@ -250,7 +251,7 @@ export async function trocarPlano(
     const [organizacao, ativos] = await Promise.all([
       db.organizacao.findUniqueOrThrow({
         where: { id: organizacaoId },
-        select: { plano: true, asaasAssinaturaId: true, assinatura: true },
+        select: { plano: true, asaasAssinaturaId: true, assinatura: true, testeAte: true },
       }),
       db.usuario.count({ where: { organizacaoId, papel: "REPRESENTANTE", ativo: true } }),
     ]);
@@ -274,9 +275,16 @@ export async function trocarPlano(
       );
     }
 
-    if (planoNovo === "PLUS" && organizacao.asaasAssinaturaId) {
+    // Sobe sempre na hora. Desce na hora só nos 7 dias grátis: nenhum mês foi
+    // usado no Max, e a primeira cobrança tem de sair com o valor do Solo.
+    const desceNoTeste = planoNovo === "PADRAO" && emTesteGratis(organizacao);
+    if ((planoNovo === "PLUS" || desceNoTeste) && organizacao.asaasAssinaturaId) {
       try {
-        await subirMensalidade(organizacao.asaasAssinaturaId, valorMensal(planoNovo, ativos), planoNovo);
+        if (planoNovo === "PLUS") {
+          await subirMensalidade(organizacao.asaasAssinaturaId, valorMensal(planoNovo, ativos), planoNovo);
+        } else {
+          await atualizarValorAssinatura(organizacao.asaasAssinaturaId, valorMensal(planoNovo, ativos), planoNovo);
+        }
       } catch (erro) {
         if (!(erro instanceof ErroAsaas)) throw erro;
         throw new ErroParaUsuario(

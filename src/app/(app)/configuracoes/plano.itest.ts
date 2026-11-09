@@ -175,6 +175,40 @@ describe("trocarPlano", () => {
       dbParaOrganizacao(org, ator).organizacao.update({ where: { id: org }, data: { plano: "PADRAO" } }),
     ).rejects.toThrow();
   });
+
+  it("nos 7 dias grátis, voltar ao Solo já baixa a primeira cobrança — nenhum mês foi usado no Max", async () => {
+    await admin.organizacao.update({
+      where: { id: org },
+      data: { testeAte: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000) },
+    });
+
+    const estado = await trocarPlano("PADRAO", {}, new FormData());
+
+    expect(estado.erro).toBeUndefined();
+    expect(await planoAgora()).toBe("PADRAO");
+    expect(asaas.chamadas).toHaveLength(1);
+    const [, valor, plano] = asaas.chamadas[0] as [string, { toString(): string }, string];
+    expect(valor.toString()).toBe("79");
+    expect(plano).toBe("PADRAO");
+
+    await admin.organizacao.update({ where: { id: org }, data: { testeAte: null } });
+  });
+
+  it("nos 7 dias grátis, o Asaas recusando a redução deixa o plano como estava", async () => {
+    await trocarPlano("PLUS", {}, new FormData());
+    await admin.organizacao.update({
+      where: { id: org },
+      data: { testeAte: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000) },
+    });
+    asaas.falhar = true;
+
+    const estado = await trocarPlano("PADRAO", {}, new FormData());
+
+    expect(estado.erro).toMatch(/Não conseguimos acertar a mensalidade/);
+    expect(await planoAgora()).toBe("PLUS");
+
+    await admin.organizacao.update({ where: { id: org }, data: { testeAte: null } });
+  });
 });
 
 describe("salvarPerfil", () => {

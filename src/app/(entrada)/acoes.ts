@@ -6,10 +6,12 @@ import { after } from "next/server";
 
 import type Decimal from "decimal.js";
 
-import { assinaturaLiberada } from "@/lib/acesso-assinatura";
+import { assinaturaLiberada, fimDoPeriodoPago } from "@/lib/acesso-assinatura";
 import { criarCheckout, ErroAsaas, faturaEmAtraso, pagamentoConfigurado } from "@/lib/asaas";
 import { cancelarAssinaturaDoEscritorio } from "@/lib/cancelamento";
 import { dbAdministrativo } from "@/lib/db";
+import { documentoJaTestou } from "@/lib/direito-ao-teste";
+import { DIAS_DE_TESTE, primeiraCobranca } from "@/lib/teste-gratis";
 import {
   ErroDeCampo,
   ErroParaUsuario,
@@ -374,6 +376,8 @@ async function abrirPagamento(organizacao: {
   bairro?: string;
   /** A mensalidade, quando não é a do plano puro (o Max com prepostos a mais). */
   valor?: Decimal;
+  /** Com os 7 dias grátis: o dia da primeira cobrança ("2026-11-16"). */
+  primeiraCobranca?: string;
 }): Promise<string> {
   const checkout = await criarCheckout(
     organizacao.plano,
@@ -389,11 +393,16 @@ async function abrirPagamento(organizacao: {
       bairro: organizacao.bairro,
     },
     organizacao.valor,
+    organizacao.primeiraCobranca,
   );
 
   await dbAdministrativo().organizacao.update({
     where: { id: organizacao.id },
-    data: { asaasCheckoutId: checkout.id },
+    data: {
+      asaasCheckoutId: checkout.id,
+      // O checkout novo do teste começa os 7 dias de hoje — o anterior venceu sem cartão.
+      ...(organizacao.primeiraCobranca && { testeAte: fimDoPeriodoPago(organizacao.primeiraCobranca) }),
+    },
   });
 
   return checkout.url;
@@ -417,12 +426,19 @@ async function abrirPagamentoOu(
 }
 
 /**
- * Cria um escritório novo com o seu primeiro usuário, e manda pagar.
+ * Cria um escritório novo com o seu primeiro usuário, e manda cadastrar o cartão.
  *
  * É o onboarding do SaaS: cada cadastro nasce como um tenant isolado, e a
  * partir daí nada mais atravessa a fronteira entre escritórios. Nasce
  * AGUARDANDO_PAGAMENTO e com a sessão aberta — quem fechar o checkout sem
- * pagar cai em `/assinatura` ao entrar, e de lá retoma.
+ * terminar cai em `/assinatura` ao entrar, e de lá retoma.
+ *
+ * O primeiro escritório de cada CPF/CNPJ ganha os 7 dias grátis
+ * (`lib/teste-gratis.ts`): o checkout só cadastra o cartão, e a primeira
+ * cobrança vence uma semana depois. Quem marca o aceite "Entendi" viu a data e
+ * o valor. O documento que já testou paga no dia — e só segue depois de marcar
+ * que sabe disso: o formulário prometia o teste, e mandar ao checkout cobrando
+ * hoje, calado, seria a cobrança que ninguém esperava.
  */
 export async function cadastrar(
   _estado: EstadoFormulario,
@@ -503,6 +519,13 @@ export async function cadastrar(
         "Para criar o escritório, leia e marque o aceite dos Termos de Uso e da Política de Privacidade.",
       );
     }
+    const pagarHoje = formData.get("pagarHoje") === "sim";
+    if (!pagarHoje && formData.get("teste") !== "entendi") {
+      throw new ErroDeCampo(
+        "teste",
+        `Para começar os ${DIAS_DE_TESTE} dias grátis, marque que entendeu quando vem a primeira cobrança.`,
+      );
+    }
 
     // Daqui em diante cada tentativa custa caro — o CEP, o domínio do e-mail e
     // o checkout do Asaas —, e por isso conta no limite (`tentativas-cadastro.ts`).
@@ -552,6 +575,18 @@ export async function cadastrar(
       );
     }
 
+    // Depois do limite de tentativas, como o e-mail repetido: a resposta diz
+    // que o documento já tem escritório, e não pode virar consulta à vontade.
+    const jaTestou = await documentoJaTestou(documento);
+    if (jaTestou && !pagarHoje) {
+      throw new ErroDeCampo(
+        "pagarHoje",
+        `Este CPF/CNPJ já usou os ${DIAS_DE_TESTE} dias grátis em outro escritório, e por isso a primeira ` +
+          "mensalidade é cobrada hoje. Para seguir, marque “Pagar a primeira mensalidade hoje” e envie de novo.",
+      );
+    }
+    const cobranca = jaTestou ? undefined : primeiraCobranca();
+
     /*
      * O checkout ANTES da conta. Era depois, e quando o Asaas recusava um dado
      * (nome sem sobrenome, telefone) a conta já existia, presa em "aguardando
@@ -561,17 +596,22 @@ export async function cadastrar(
      */
     let checkout: { id: string; url: string };
     try {
-      checkout = await criarCheckout(plano.codigo, {
-        nome,
-        email,
-        cpfCnpj: documento,
-        cep: somenteDigitos(cep),
-        telefone,
-        endereco,
-        numero,
-        complemento,
-        bairro,
-      });
+      checkout = await criarCheckout(
+        plano.codigo,
+        {
+          nome,
+          email,
+          cpfCnpj: documento,
+          cep: somenteDigitos(cep),
+          telefone,
+          endereco,
+          numero,
+          complemento,
+          bairro,
+        },
+        undefined,
+        cobranca,
+      );
     } catch (erro) {
       if (erro instanceof ErroAsaas) throw recusaDoAsaas(erro);
       throw erro;
@@ -589,6 +629,8 @@ export async function cadastrar(
         plano: plano.codigo,
         assinatura: "AGUARDANDO_PAGAMENTO",
         asaasCheckoutId: checkout.id,
+        // A data esperada; o webhook grava a da assinatura que o checkout criar.
+        testeAte: cobranca ? fimDoPeriodoPago(cobranca) : null,
         cobrancaDocumento: documento,
         cobrancaCep: somenteDigitos(cep),
         cobrancaEndereco: endereco,
@@ -692,6 +734,7 @@ export async function reabrirPagamento(
         cobrancaNumero: true,
         cobrancaComplemento: true,
         cobrancaBairro: true,
+        testeAte: true,
       },
     });
 
@@ -714,6 +757,29 @@ export async function reabrirPagamento(
         );
       }
 
+      /*
+       * Os 7 dias grátis seguem valendo para quem os ganhou no cadastro e
+       * deixou o checkout vencer sem pôr o cartão: o checkout novo conta os 7
+       * dias a partir de hoje. Quem assina de novo depois de cancelar
+       * (CANCELADA) já usou o teste, e paga no dia.
+       */
+      let cobranca: string | undefined;
+      if (sessao.assinatura === "AGUARDANDO_PAGAMENTO" && organizacao.testeAte) {
+        // Outro escritório do mesmo documento começou o teste nesse meio-tempo.
+        if (await documentoJaTestou(organizacao.cobrancaDocumento, sessao.organizacaoId)) {
+          await dbAdministrativo().organizacao.update({
+            where: { id: sessao.organizacaoId },
+            data: { testeAte: null },
+          });
+          revalidatePath("/assinatura");
+          throw new ErroParaUsuario(
+            `Este CPF/CNPJ começou os ${DIAS_DE_TESTE} dias grátis em outro escritório, e por isso este ` +
+              "paga a primeira mensalidade hoje. Para seguir, clique em “Ir para o pagamento” de novo.",
+          );
+        }
+        cobranca = primeiraCobranca();
+      }
+
       pagamento = await abrirPagamentoOu(
         "Não conseguimos abrir a página de pagamento agora. Tente de novo em alguns minutos.",
         {
@@ -729,6 +795,7 @@ export async function reabrirPagamento(
           bairro: organizacao.cobrancaBairro ?? undefined,
           telefone: pagador.telefone ? somenteDigitos(pagador.telefone) : undefined,
           valor: valorMensal(organizacao.plano, prepostosAtivos),
+          primeiraCobranca: cobranca,
         },
       );
     }

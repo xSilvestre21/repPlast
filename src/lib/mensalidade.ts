@@ -20,6 +20,10 @@
  *
  * O mesmo que o GitHub faz com cadeiras: a que entra cobra já, a que sai só
  * deixa de cobrar na renovação.
+ *
+ * Nos 7 dias grátis (`teste-gratis.ts`) não há mês usado: a redução também vai
+ * ao Asaas na hora (`reduzirNoTeste`), e a primeira cobrança sai com o que o
+ * escritório tem no fim do teste.
  */
 
 import "server-only";
@@ -29,6 +33,7 @@ import type Decimal from "decimal.js";
 import { atualizarValorAssinatura, valorDaAssinatura } from "./asaas";
 import { dbAdministrativo } from "./db";
 import { type CodigoPlano, valorMensal } from "./planos";
+import { emTesteGratis } from "./teste-gratis";
 
 /**
  * Leva a mensalidade a `valor` quando o Asaas cobra menos que isso — e não faz
@@ -63,4 +68,19 @@ export async function acertarDepoisDoPagamento(organizacaoId: string): Promise<v
   if (devido.equals(cobrado)) return;
 
   await atualizarValorAssinatura(organizacao.asaasAssinaturaId, devido, organizacao.plano);
+}
+
+/**
+ * A redução nos 7 dias grátis: a primeira cobrança passa já a cobrar o que o
+ * escritório tem agora. Fora do teste não faz nada — lá a redução espera a
+ * fatura em aberto ser paga. Lança `ErroAsaas`.
+ */
+export async function reduzirNoTeste(organizacaoId: string): Promise<void> {
+  const organizacao = await dbAdministrativo().organizacao.findUnique({
+    where: { id: organizacaoId },
+    select: { assinatura: true, testeAte: true },
+  });
+  if (!organizacao || !emTesteGratis(organizacao)) return;
+
+  await acertarDepoisDoPagamento(organizacaoId);
 }

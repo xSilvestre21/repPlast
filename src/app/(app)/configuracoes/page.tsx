@@ -15,6 +15,7 @@ import { CONTROLADOR } from "@/lib/lgpd";
 import { situacaoDoNome } from "@/lib/nome-escritorio";
 import { nomeCompleto } from "@/lib/nome-usuario";
 import { trocaPendente } from "@/lib/troca-email";
+import { emTesteGratis, escreverDia, ultimoDiaGratis } from "@/lib/teste-gratis";
 
 import {
   alternarReduzirAnimacoes,
@@ -83,7 +84,7 @@ export default async function PaginaConfiguracoes({ searchParams }: PageProps<"/
     ehAdmin
       ? db.organizacao.findUnique({
           where: { id: organizacaoId },
-          select: { plano: true, asaasAssinaturaId: true, assinatura: true, acessoAte: true },
+          select: { plano: true, asaasAssinaturaId: true, assinatura: true, acessoAte: true, testeAte: true },
         })
       : null,
     ehAdmin ? db.usuario.count({ where: { organizacaoId, papel: "REPRESENTANTE", ativo: true } }) : 0,
@@ -160,6 +161,20 @@ export default async function PaginaConfiguracoes({ searchParams }: PageProps<"/
                   organizacao.assinatura === "CANCELADA" && organizacao.acessoAte
                     ? ultimoDiaDeAcesso(organizacao.acessoAte)
                     : null
+                }
+                teste={
+                  organizacao.testeAte && emTesteGratis(organizacao)
+                    ? {
+                        ultimoDia: ultimoDiaGratis(organizacao.testeAte),
+                        cobranca: escreverDia(organizacao.testeAte),
+                      }
+                    : null
+                }
+                canceladaNoTeste={
+                  organizacao.assinatura === "CANCELADA" &&
+                  organizacao.acessoAte !== null &&
+                  organizacao.testeAte !== null &&
+                  organizacao.acessoAte.getTime() <= organizacao.testeAte.getTime()
                 }
                 trocar={trocarPlano.bind(null, organizacao.plano === "PLUS" ? "PADRAO" : "PLUS")}
                 cancelar={cancelarAssinatura}

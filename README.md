@@ -347,6 +347,7 @@ com o Asaas sandbox.
 | `deploy/Caddyfile` | HTTPS, `www` → domínio principal, limite de 26 MB por envio |
 | `deploy/publicar.sh` | Põe uma versão no ar — ou volta uma: migrations, troca, espera o `/api/saude` |
 | `deploy/backup.sh` | `pg_dump` semanal para o S3 (o Lightsail guarda só 7 dias) |
+| `api/rotinas/lembrete-do-teste` | A rotina diária do e-mail "o teste grátis está acabando", chamada pelo cron do host |
 | `.github/workflows/ci.yml` | As quatro baterias num Postgres com dono sem superusuário, como o da AWS |
 | `.github/workflows/deploy.yml` | Depois do CI verde na `main`: imagens no ECR e `publicar.sh` por SSH |
 
@@ -391,6 +392,7 @@ com o Asaas sandbox.
 | `ASAAS_API_KEY` | a chave de produção **sem a barra** que o `.env` exige antes do `$` |
 | `ASAAS_WEBHOOK_TOKEN` | inventado no painel ao cadastrar o webhook — nunca a chave de API |
 | `SISTEMA_SMTP_*`, `SISTEMA_EMAIL_REMETENTE` | o SES, e um remetente do domínio (`nao-responda@…`) |
+| `ROTINA_TOKEN` | novo, só dela (`openssl rand -hex 32`) — autoriza o cron a chamar a rotina diária |
 | `SENTRY_ENVIRONMENT` | `producao` |
 
 Um `NOME=valor` por linha, **sem aspas e sem barra antes do `$`**: o compose lê o arquivo como está
@@ -404,7 +406,22 @@ servidor **não sobe** e diz qual (`src/lib/ambiente.ts`) — e o deploy volta p
 Painel do Asaas → Integrações → Webhooks: URL `https://<domínio>/api/asaas/webhook`, o token de
 `ASAAS_WEBHOOK_TOKEN` e os eventos de `scripts/tunel-webhook.mjs` (`CHECKOUT_PAID`,
 `SUBSCRIPTION_CREATED`, `PAYMENT_*`, `SUBSCRIPTION_DELETED`/`INACTIVATED`…). Sem o
-`SUBSCRIPTION_CREATED`, a assinatura não se liga ao escritório.
+`SUBSCRIPTION_CREATED`, a assinatura não se liga ao escritório — e o escritório nos 7 dias grátis,
+que não paga nada no checkout, nem abre (`lib/asaas-webhook.ts`).
+
+### A rotina diária (lembrete do teste grátis)
+
+Dois dias antes da primeira cobrança, o administrador em teste recebe um e-mail com a data, o
+valor e como cancelar (`lib/lembrete-do-teste.ts`) — os Termos prometem. Quem dispara é o cron do
+host, uma vez por dia, às 9h de Brasília (12h UTC), de dentro do container: o `ROTINA_TOKEN` sai
+do próprio `app.env`, e o segredo nem passa pelo host.
+
+```
+0 12 * * *  cd /opt/repplast && docker compose exec -T app node -e "fetch('http://127.0.0.1:3000/api/rotinas/lembrete-do-teste',{method:'POST',headers:{authorization:'Bearer '+process.env.ROTINA_TOKEN}}).then(async r=>console.log(new Date().toISOString(),r.status,await r.text()))" >> $HOME/repplast-rotina.log 2>&1
+```
+
+Cada escritório recebe uma vez só: chamar duas vezes no mesmo dia não repete o e-mail. Faltou um
+dia (o servidor fora do ar), o do dia seguinte ainda chega antes da cobrança.
 
 ### Publicar e voltar
 

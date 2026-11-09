@@ -78,9 +78,12 @@ O erro aparece **embaixo do campo que o causou**, em português, dizendo o que f
 - Cobrança (Asaas): `ASAAS_URL` (sandbox `https://api-sandbox.asaas.com`), `ASAAS_API_KEY`,
   `ASAAS_WEBHOOK_TOKEN` (o token do webhook no painel do Asaas — nunca a API key) e `APP_URL`
   (base das URLs de volta do checkout)
-- Remetente do sistema (só o "Esqueceu sua senha?"): `SISTEMA_SMTP_HOST`, `SISTEMA_SMTP_PORTA`,
-  `SISTEMA_SMTP_USUARIO`, `SISTEMA_SMTP_SENHA`, `SISTEMA_EMAIL_REMETENTE`; o link usa `APP_URL`
-  (obrigatória em produção — nunca o `Host` da requisição). Ver README, "Esqueceu sua senha?"
+- Remetente do sistema ("Esqueceu sua senha?" e o lembrete do teste grátis): `SISTEMA_SMTP_HOST`,
+  `SISTEMA_SMTP_PORTA`, `SISTEMA_SMTP_USUARIO`, `SISTEMA_SMTP_SENHA`, `SISTEMA_EMAIL_REMETENTE`; o
+  link usa `APP_URL` (obrigatória em produção — nunca o `Host` da requisição). Ver README,
+  "Esqueceu sua senha?"
+- Rotina diária: `ROTINA_TOKEN` (o cron do host chama `api/rotinas/lembrete-do-teste` com ele). Ver
+  README, "A rotina diária"
 - Monitoramento (Sentry, só em produção): `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`,
   `SENTRY_AUTH_TOKEN` (segredo do build — Vercel ou GitHub Actions; source maps),
   `SENTRY_ENVIRONMENT`/`NEXT_PUBLIC_SENTRY_ENVIRONMENT` (o nome do ambiente) e `SENTRY_RELEASE` (o

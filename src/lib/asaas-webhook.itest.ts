@@ -28,8 +28,10 @@ vi.mock("./asaas", () => ({
   },
 }));
 
+import { fimDoPeriodoPago } from "./acesso-assinatura";
 import { processarEventoAsaas, tokenDoWebhookConfere } from "./asaas-webhook";
 import { dbAdministrativo, dbParaOrganizacao } from "./db";
+import { hojeEmBrasilia, primeiraCobranca } from "./teste-gratis";
 
 const admin = dbAdministrativo();
 const sufixo = randomUUID().slice(0, 8);
@@ -318,6 +320,97 @@ describe("CHECKOUT_PAID sem cliente", () => {
       assinatura: "ATIVA",
       asaasClienteId: `cus2_${sufixo}`,
       asaasAssinaturaId: `sub2_${sufixo}`,
+    });
+  });
+});
+
+describe("os 7 dias grátis", () => {
+  // O checkout do teste não cobra nada: quem libera é a assinatura criada por
+  // ele, com a primeira cobrança no futuro (`teste-gratis.ts`).
+  const criados: string[] = [];
+
+  async function escritorio(rotulo: string, testeAte: Date | null) {
+    const checkout = `chkt_${rotulo}_${sufixo}`;
+    const organizacao = await admin.organizacao.create({
+      data: {
+        nome: `WEBHOOK TESTE ${rotulo} ${sufixo}`,
+        assinatura: "AGUARDANDO_PAGAMENTO",
+        asaasCheckoutId: checkout,
+        testeAte,
+        usuarios: { create: { nome: "Dona", email: `teste-${rotulo}-${sufixo}@teste.local`, senhaHash: "x" } },
+      },
+      select: { id: true },
+    });
+    criados.push(organizacao.id);
+    return { id: organizacao.id, checkout };
+  }
+
+  function criada(checkout: string, rotulo: string, nextDueDate: string) {
+    return evento("SUBSCRIPTION_CREATED", {
+      subscription: { id: `subt_${rotulo}_${sufixo}`, customer: `cust_${rotulo}_${sufixo}`, checkoutSession: checkout, nextDueDate },
+    });
+  }
+
+  async function ler(id: string) {
+    return admin.organizacao.findUniqueOrThrow({
+      where: { id },
+      select: { assinatura: true, testeAte: true, asaasAssinaturaId: true },
+    });
+  }
+
+  afterAll(async () => {
+    await admin.usuario.deleteMany({ where: { organizacaoId: { in: criados } } });
+    await admin.organizacao.deleteMany({ where: { id: { in: criados } } });
+  });
+
+  it("a assinatura do checkout do teste libera o escritório, sem pagamento, e grava o fim real do teste", async () => {
+    const cobrancaEsperada = primeiraCobranca();
+    const { id, checkout } = await escritorio("libera", fimDoPeriodoPago(cobrancaEsperada));
+    // O checkout foi concluído um dia depois de aberto: vale a data da assinatura.
+    const daAssinatura = primeiraCobranca(new Date(Date.now() + 24 * 60 * 60 * 1000));
+
+    await processarEventoAsaas(criada(checkout, "libera", daAssinatura));
+
+    expect(await ler(id)).toEqual({
+      assinatura: "ATIVA",
+      testeAte: fimDoPeriodoPago(daAssinatura),
+      asaasAssinaturaId: `subt_libera_${sufixo}`,
+    });
+  });
+
+  it("depois do teste, a primeira cobrança recusada suspende como qualquer outra", async () => {
+    const { id, checkout } = await escritorio("recusa", fimDoPeriodoPago(primeiraCobranca()));
+    await processarEventoAsaas(criada(checkout, "recusa", primeiraCobranca()));
+
+    await processarEventoAsaas(
+      evento("PAYMENT_OVERDUE", { payment: { subscription: `subt_recusa_${sufixo}`, customer: `cust_recusa_${sufixo}` } }),
+    );
+
+    expect((await ler(id)).assinatura).toBe("ATRASADA");
+  });
+
+  it("sem o teste no cadastro, a assinatura só liga — quem libera é o pagamento, como sempre", async () => {
+    const { id, checkout } = await escritorio("sem", null);
+
+    await processarEventoAsaas(criada(checkout, "sem", primeiraCobranca()));
+
+    expect(await ler(id)).toEqual({
+      assinatura: "AGUARDANDO_PAGAMENTO",
+      testeAte: null,
+      asaasAssinaturaId: `subt_sem_${sufixo}`,
+    });
+  });
+
+  it("assinatura que cobra hoje não é teste, mesmo em escritório que o ganhou", async () => {
+    const testeAte = fimDoPeriodoPago(primeiraCobranca());
+    const { id, checkout } = await escritorio("hoje", testeAte);
+
+    await processarEventoAsaas(criada(checkout, "hoje", hojeEmBrasilia()));
+
+    expect(await ler(id)).toEqual({
+      assinatura: "AGUARDANDO_PAGAMENTO",
+      testeAte,
+      asaasAssinaturaId: `subt_hoje_${sufixo}`,
     });
   });
 });

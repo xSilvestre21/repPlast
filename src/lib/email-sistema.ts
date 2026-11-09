@@ -54,7 +54,8 @@ async function anexoDoLogo(): Promise<Anexo[]> {
 /**
  * Envia, ou registra no log por que não enviou. Não lança: quem chama já
  * respondeu à pessoa (o envio roda em `after`), e não há tela para mostrar
- * erro. O log é o que sobra para o suporte.
+ * erro. O log é o que sobra para o suporte. Devolve se saiu — a rotina do
+ * lembrete do teste só marca como avisado quem recebeu.
  */
 export async function enviarDoSistema(mensagem: {
   para: string;
@@ -62,14 +63,14 @@ export async function enviarDoSistema(mensagem: {
   /** Os dois de `montarEmailSistema`: o HTML com a marca e a alternativa em texto puro. */
   html: string;
   texto: string;
-}): Promise<void> {
+}): Promise<boolean> {
   const conta = contaDoSistema();
   if (!conta) {
     console.error(
       "[email-sistema] SISTEMA_SMTP_HOST ou SISTEMA_EMAIL_REMETENTE ausente no .env — " +
         `o e-mail "${mensagem.assunto}" não foi enviado.`,
     );
-    return;
+    return false;
   }
 
   const resultado = await enviarEmail({
@@ -83,6 +84,7 @@ export async function enviarDoSistema(mensagem: {
   if (!resultado.enviado) {
     console.error(`[email-sistema] "${mensagem.assunto}" não saiu: ${resultado.motivo}`);
   }
+  return resultado.enviado;
 }
 
 /**

@@ -11,7 +11,9 @@
  *   - a chave do Asaas copiada do `.env` com a barra (`\$aact_…`) dá 401 em
  *     toda chamada, e só aparece quando alguém tenta pagar;
  *   - sem o SMTP do sistema, o "Esqueceu sua senha?" responde que mandou o
- *     e-mail, e não manda.
+ *     e-mail, e não manda;
+ *   - sem `ROTINA_TOKEN`, a rotina diária recusa o cron, e o e-mail de "o teste
+ *     grátis está acabando" nunca sai.
  *
  * Fora do Vercel (a hospedagem de verdade), a falta impede o servidor de
  * subir, e o deploy volta para a versão anterior. No Vercel, que é só a
@@ -78,6 +80,10 @@ const ESQUEMA = z.object({
     .trim()
     .regex(/^\d*$/, "precisa ser um número (587 ou 465)")
     .optional(),
+  ROTINA_TOKEN: z
+    .string({ error: "ausente — autoriza o cron a chamar a rotina diária (o lembrete do teste grátis)" })
+    .trim()
+    .min(32, "curto demais — use pelo menos 32 caracteres aleatórios"),
 });
 
 /** O que está errado, uma frase por variável — vazio quando está tudo certo. */
@@ -90,6 +96,11 @@ export function problemasDoAmbiente(ambiente: Record<string, string | undefined>
   // A chave de API no lugar do token: o webhook passaria a aceitar quem tivesse a chave.
   if (ambiente.ASAAS_WEBHOOK_TOKEN?.trim() && ambiente.ASAAS_WEBHOOK_TOKEN.trim() === ambiente.ASAAS_API_KEY?.trim()) {
     problemas.push("ASAAS_WEBHOOK_TOKEN: igual à ASAAS_API_KEY — o token do webhook é outro, inventado no painel");
+  }
+  // Um segredo para cada porta: vazado um, o outro continua fechado.
+  const rotina = ambiente.ROTINA_TOKEN?.trim();
+  if (rotina && [ambiente.ASAAS_WEBHOOK_TOKEN, ambiente.ASAAS_API_KEY, ambiente.SESSAO_SECRET].some((v) => v?.trim() === rotina)) {
+    problemas.push("ROTINA_TOKEN: igual a outro segredo — gere um só para a rotina (openssl rand -hex 32)");
   }
   return problemas;
 }

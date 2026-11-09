@@ -14,6 +14,7 @@ const COMPLETO = {
   SISTEMA_SMTP_HOST: "email-smtp.sa-east-1.amazonaws.com",
   SISTEMA_SMTP_PORTA: "587",
   SISTEMA_EMAIL_REMETENTE: "nao-responda@repplast.com.br",
+  ROTINA_TOKEN: "r".repeat(64),
 };
 
 describe("problemasDoAmbiente", () => {
@@ -66,6 +67,16 @@ describe("problemasDoAmbiente", () => {
       "ASAAS_WEBHOOK_TOKEN",
       "SISTEMA_SMTP_HOST",
       "SISTEMA_EMAIL_REMETENTE",
+      "ROTINA_TOKEN",
+    ]);
+  });
+
+  it("o token da rotina curto, ou repetindo outro segredo", () => {
+    expect(problemasDoAmbiente({ ...COMPLETO, ROTINA_TOKEN: "curto" })).toEqual([
+      expect.stringMatching(/^ROTINA_TOKEN: curto demais/),
+    ]);
+    expect(problemasDoAmbiente({ ...COMPLETO, ROTINA_TOKEN: COMPLETO.SESSAO_SECRET })).toEqual([
+      expect.stringMatching(/^ROTINA_TOKEN: igual a outro segredo/),
     ]);
   });
 });

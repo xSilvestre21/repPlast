@@ -15,6 +15,7 @@ import "server-only";
 import Decimal from "decimal.js";
 
 import { PLANOS, type CodigoPlano } from "./planos";
+import { DIAS_DE_TESTE, escreverDia, hojeEmBrasilia } from "./teste-gratis";
 
 export class ErroAsaas extends Error {
   constructor(
@@ -92,18 +93,6 @@ async function chamar<T>(caminho: string, init: { method: "GET" | "POST" | "DELE
   return (await resposta.json()) as T;
 }
 
-/** "2026-10-14 00:00:00" no fuso de Brasília — o formato que o checkout pede. */
-function hojeNoBrasil(): string {
-  const data = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Sao_Paulo",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date());
-
-  return `${data} 00:00:00`;
-}
-
 export interface ClienteCobranca {
   nome: string;
   email: string;
@@ -124,18 +113,30 @@ export interface ClienteCobranca {
 /**
  * Abre a página de pagamento da assinatura mensal.
  *
- * A primeira cobrança vence hoje: a pessoa paga antes de usar, e o Asaas segue
- * cobrando o cartão todo mês a partir daí. O checkout vence em 1 hora — quem
- * demorar mais pede outro em `/assinatura`.
+ * Sem teste, a primeira cobrança vence hoje: a pessoa paga antes de usar. Com
+ * os 7 dias grátis (`lib/teste-gratis.ts`), vence em `primeiraCobranca`: o
+ * cartão é cadastrado e validado agora, e nada é cobrado até lá — a própria
+ * página do Asaas diz isso, no item. Daí em diante o Asaas cobra o cartão todo
+ * mês. O checkout vence em 1 hora — quem demorar mais pede outro em `/assinatura`.
  */
 export async function criarCheckout(
   plano: CodigoPlano,
   cliente: ClienteCobranca,
   /** A mensalidade, quando não é a do plano puro: o Max com prepostos além dos inclusos. */
   valor: Decimal = PLANOS[plano].precoMensal,
+  /** "2026-11-16": com os 7 dias grátis, o dia da primeira cobrança. Ausente, é hoje. */
+  primeiraCobranca?: string,
 ) {
   const { app } = configuracao();
   const dados = PLANOS[plano];
+  const item = primeiraCobranca
+    ? {
+        name: `RepPlast ${dados.nome} — ${DIAS_DE_TESTE} dias grátis`,
+        description:
+          `Nada é cobrado hoje. A primeira mensalidade é em ${escreverDia(primeiraCobranca)}; ` +
+          "cancele antes e não paga nada.",
+      }
+    : { name: `RepPlast ${dados.nome}`, description: dados.publico };
 
   // `/v3/checkouts`, no plural: o singular de antes passou a responder 404.
   const checkout = await chamar<{ id: string; url?: string; link?: string }>("/v3/checkouts", {
@@ -151,8 +152,7 @@ export async function criarCheckout(
       },
       items: [
         {
-          name: `RepPlast ${dados.nome}`,
-          description: dados.publico,
+          ...item,
           quantity: 1,
           value: valor.toNumber(),
         },
@@ -170,7 +170,8 @@ export async function criarCheckout(
       },
       subscription: {
         cycle: "MONTHLY",
-        nextDueDate: hojeNoBrasil(),
+        // "2026-10-14 00:00:00", no calendário de Brasília — o formato que o checkout pede.
+        nextDueDate: `${primeiraCobranca ?? hojeEmBrasilia()} 00:00:00`,
       },
     },
   });

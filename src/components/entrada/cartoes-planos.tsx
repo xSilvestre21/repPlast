@@ -19,6 +19,7 @@ import * as m from "motion/react-m";
 import Link from "next/link";
 
 import { LISTA_PLANOS } from "@/lib/planos";
+import { DIAS_DE_TESTE } from "@/lib/teste-gratis";
 
 const SUAVE = [0.22, 1, 0.36, 1] as const;
 
@@ -57,11 +58,17 @@ export function CartoesPlanos({ animarAoRolar = true }: { animarAoRolar?: boolea
             <h3 className="text-forte font-bold text-tinta">{plano.nome}</h3>
             <p className="text-corpo text-tinta-2 mt-1">{plano.publico}</p>
 
-            <p className="mt-6 flex items-baseline gap-1.5">
+            <p className="mt-6">
+              <span className="carimbo">{DIAS_DE_TESTE} dias grátis</span>
+            </p>
+            <p className="mt-3 flex items-baseline gap-1.5">
               <span className="text-titulo font-extrabold text-tinta numerico">
                 {MOEDA.format(plano.precoMensal.toNumber())}
               </span>
               <span className="text-corpo text-tinta-2">/mês</span>
+            </p>
+            <p className="text-mini text-tinta-2 mt-1">
+              depois do teste — a primeira cobrança é no {DIAS_DE_TESTE}º dia
             </p>
             <p className="text-mini text-tinta-3 mt-1 min-h-[1.1rem]">
               {plano.precoPrepostoExtra
@@ -92,7 +99,7 @@ export function CartoesPlanos({ animarAoRolar = true }: { animarAoRolar?: boolea
                     : "bg-folha text-tinta border border-filete-forte hover:bg-folha-2"
                 }`}
             >
-              Começar com o {plano.nome}
+              Testar o {plano.nome} {DIAS_DE_TESTE} dias grátis
               <ArrowRight
                 size={16}
                 strokeWidth={2.25}

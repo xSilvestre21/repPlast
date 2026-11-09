@@ -53,6 +53,8 @@ export interface Sessao {
   assinatura: SituacaoAssinatura;
   /// Até quando o escritório que cancelou ainda entra; `null` fora disso.
   acessoAte: Date | null;
+  /// Fim dos 7 dias grátis, no escritório que ganhou o teste (`lib/teste-gratis.ts`).
+  testeAte: Date | null;
   /// Nome do escritório, para exibir no lugar do nome do produto na barra.
   organizacaoNome: string;
   /// Preferência de conta que substitui `prefers-reduced-motion` do sistema.
@@ -119,7 +121,9 @@ export const sessaoAtual = cache(async (): Promise<Sessao | null> => {
       sessaoVersao: true,
       reduzirAnimacoes: true,
       ocultarValores: true,
-      organizacao: { select: { nome: true, ativa: true, plano: true, assinatura: true, acessoAte: true } },
+      organizacao: {
+        select: { nome: true, ativa: true, plano: true, assinatura: true, acessoAte: true, testeAte: true },
+      },
     },
   });
 
@@ -139,6 +143,7 @@ export const sessaoAtual = cache(async (): Promise<Sessao | null> => {
     plano: usuario.organizacao.plano,
     assinatura: usuario.organizacao.assinatura,
     acessoAte: usuario.organizacao.acessoAte,
+    testeAte: usuario.organizacao.testeAte,
     organizacaoNome: usuario.organizacao.nome,
     reduzirAnimacoes: usuario.reduzirAnimacoes,
     ocultarValores: usuario.ocultarValores,

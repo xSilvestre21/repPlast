@@ -25,6 +25,7 @@ vi.mock("./asaas", () => {
   };
 });
 
+import { assinaturaLiberada, fimDoPeriodoPago } from "./acesso-assinatura";
 import { cancelarAssinaturaDoEscritorio } from "./cancelamento";
 import { dbAdministrativo } from "./db";
 
@@ -73,6 +74,25 @@ describe("cancelarAssinaturaDoEscritorio", () => {
       // A meia-noite de Brasília do vencimento de 03/12.
       acessoAte: new Date("2026-12-03T03:00:00.000Z"),
     });
+  });
+
+  it("nos 7 dias grátis: remove a cobrança agendada e deixa usar até o último dia do teste", async () => {
+    const id = await escritorio("ATIVA", `sub_teste_${sufixo}`);
+    // O teste acaba no dia da primeira cobrança — o próximo vencimento do Asaas.
+    const testeAte = fimDoPeriodoPago("2026-12-03");
+    await admin.organizacao.update({ where: { id }, data: { testeAte } });
+
+    await cancelarAssinaturaDoEscritorio(id);
+
+    expect(asaas.removidas).toEqual([`sub_teste_${sufixo}`]);
+    const depois = await admin.organizacao.findUniqueOrThrow({
+      where: { id },
+      select: { assinatura: true, acessoAte: true, testeAte: true },
+    });
+    // Usa até a véspera da cobrança que não vai acontecer, e o teste fica registrado como usado.
+    expect(depois).toEqual({ assinatura: "CANCELADA", acessoAte: testeAte, testeAte });
+    expect(assinaturaLiberada(depois, new Date("2026-12-02T23:00:00-03:00"))).toBe(true);
+    expect(assinaturaLiberada(depois, new Date("2026-12-03T00:00:00-03:00"))).toBe(false);
   });
 
   it("em atraso: remove no Asaas, com a mensalidade vencida, e encerra na hora", async () => {

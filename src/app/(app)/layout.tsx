@@ -1,11 +1,15 @@
 import { redirect } from "next/navigation";
 
 import { EsquecerBuscas } from "@/components/esquecer-buscas";
+import { FaixaDoTeste } from "@/components/faixa-do-teste";
 import { GuardaDaAba } from "@/components/guarda-da-aba";
 import { Navegacao } from "@/components/navegacao";
+import { formatarMoeda } from "@/components/ui";
 import { SCRIPT_ABA } from "@/lib/aba";
 import { assinaturaLiberada } from "@/lib/acesso-assinatura";
-import { sessaoAtual } from "@/lib/sessao";
+import { valorMensal } from "@/lib/planos";
+import { escopoAtual, sessaoAtual, type Sessao } from "@/lib/sessao";
+import { diasDeTesteRestantes, emTesteGratis, escreverDia, ultimoDiaGratis } from "@/lib/teste-gratis";
 
 /**
  * Tudo que está sob este layout exige login.
@@ -24,6 +28,8 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
   // rotas de arquivo têm a mesma barreira em `sessao.ts`, para quem chegar sem
   // passar por aqui.
   if (!assinaturaLiberada(sessao)) redirect("/assinatura");
+
+  const teste = await faixaDoTeste(sessao);
 
   return (
     <>
@@ -47,8 +53,28 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
         mostrarPrepostos={sessao.papel === "ADMIN" && sessao.plano === "PLUS"}
       />
       <main className="flex-1 w-full max-w-6xl mx-auto px-4 py-6 sm:px-6 sm:py-8">
+        {teste && <FaixaDoTeste {...teste} />}
         {children}
       </main>
     </>
   );
+}
+
+/**
+ * Os dados da faixa dos 7 dias grátis, para o administrador em teste — `null`
+ * para todo o resto. O valor é o que o escritório tem hoje (plano e prepostos
+ * ativos), que é o que a primeira cobrança leva (`lib/mensalidade.ts`).
+ */
+async function faixaDoTeste(sessao: Sessao) {
+  if (sessao.papel !== "ADMIN" || !sessao.testeAte || !emTesteGratis(sessao)) return null;
+
+  const { db, organizacaoId } = await escopoAtual();
+  const ativos = await db.usuario.count({ where: { organizacaoId, papel: "REPRESENTANTE", ativo: true } });
+
+  return {
+    dias: diasDeTesteRestantes(sessao.testeAte),
+    ultimoDia: ultimoDiaGratis(sessao.testeAte, { curto: true }),
+    cobranca: escreverDia(sessao.testeAte, { curto: true }),
+    valor: formatarMoeda(valorMensal(sessao.plano, ativos).toString()),
+  };
 }

@@ -58,6 +58,8 @@ export default function PaginaPrivacidade() {
             CEP, endereço, número, bairro e complemento de quem paga a
             assinatura. Os dados do cartão são digitados na página do Asaas e{" "}
             <strong className="text-tinta">nunca passam pelo RepPlast</strong>.
+            Nos 7 dias grátis, também a data em que o teste termina e a data em
+            que saiu o e-mail avisando disso.
           </li>
           <li>
             <strong className="text-tinta">Do aceite:</strong> a data e a versão
@@ -90,8 +92,15 @@ export default function PaginaPrivacidade() {
             Cobrar a assinatura mensal — execução do contrato (art. 7º, V).
           </li>
           <li>
-            Mandar os e-mails do próprio sistema, como o link de nova senha e o
-            aviso de senha trocada — execução do contrato (art. 7º, V).
+            Mandar os e-mails do próprio sistema, como o link de nova senha, o
+            aviso de senha trocada e o aviso, dois dias antes da primeira
+            cobrança, de que o teste grátis está acabando — execução do contrato
+            (art. 7º, V).
+          </li>
+          <li>
+            Conferir, no cadastro, se o CPF ou CNPJ já usou os 7 dias grátis em
+            outro escritório, para o teste ser um por documento — legítimo
+            interesse (art. 7º, IX), limitado a essa conferência.
           </li>
           <li>
             Proteger as contas contra acesso indevido — legítimo interesse (art.
