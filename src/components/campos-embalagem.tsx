@@ -43,7 +43,7 @@ function CampoMedida({
       name={name}
       rotulo={rotulo}
       sufixo={sufixo}
-      inputMode="decimal"
+      numero="decimal"
       required={required}
       placeholder={placeholder}
       value={valores[name]}

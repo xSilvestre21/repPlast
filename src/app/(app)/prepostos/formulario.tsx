@@ -125,7 +125,7 @@ export function FormularioPreposto({
             <Campo
               name="comissaoPercentualPadrao"
               rotulo="% da comissão"
-              inputMode="decimal"
+              numero="decimal"
               placeholder="50"
               sufixo="%"
               defaultValue={atuais.comissaoPercentual}

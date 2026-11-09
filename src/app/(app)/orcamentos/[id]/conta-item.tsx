@@ -539,6 +539,7 @@ export function ContaItem({
               <Campo
                 name="sanfona"
                 rotulo="Sanfona"
+                numero="decimal"
                 placeholder="13,50"
                 value={conta.sanfona}
                 onChange={(e) => alterar("sanfona")(e.target.value)}
@@ -707,7 +708,7 @@ export function ContaItem({
             <Campo
               name="quantidade"
               rotulo="Quantidade"
-              inputMode="decimal"
+              numero="decimal"
               required
               value={quantidade}
               onChange={(e) => setQuantidade(e.target.value)}
@@ -716,7 +717,7 @@ export function ContaItem({
             <Campo
               name="precoUnitario"
               rotulo="Preço"
-              inputMode="decimal"
+              numero="decimal"
               value={preco}
               onChange={(e) => setPrecoManual(e.target.value)}
               dica={precoCalculado ? "Calculado — dá para ajustar." : undefined}
@@ -779,7 +780,7 @@ function CampoNumero({
       name={nome}
       rotulo={rotulo}
       sufixo={sufixo}
-      inputMode="decimal"
+      numero="decimal"
       required={obrigatorio}
       placeholder={placeholder}
       value={conta[nome]}

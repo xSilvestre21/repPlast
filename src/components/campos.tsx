@@ -5,6 +5,8 @@ import { useId, useState, type ComponentProps, type ReactNode } from "react";
 
 import { CLASSE_CONTROLE, CLASSE_ERRO } from "./controle";
 import { useCampoDoFormulario } from "./contexto-formulario";
+import { filtrarNumero } from "./so-numeros";
+import type { TipoNumero } from "@/lib/numero-br";
 
 /*
  * Campo com caixa preenchida.
@@ -101,6 +103,7 @@ export function Campo({
   erro: erroExplicito,
   sufixo,
   adorno,
+  numero,
   className = "",
   ...props
 }: ComponentProps<"input"> & {
@@ -110,6 +113,14 @@ export function Campo({
   sufixo?: string;
   /** Botão dentro da caixa, à direita — o olho do `CampoSenha`. */
   adorno?: ReactNode;
+  /**
+   * Campo de medida ou de valor: só aceita número. Letra digitada ou colada não
+   * entra (`filtrarNumero`), e o celular abre o teclado de números. "decimal"
+   * aceita vírgula e ponto; "inteiro", só dígitos.
+   *
+   * O texto continua `text`, e não `number`: é o que deixa digitar "13,50".
+   */
+  numero?: TipoNumero;
 }) {
   const { erro, idRodape, defaultValue } = useControle(props, erroExplicito, dica);
 
@@ -126,7 +137,16 @@ export function Campo({
         <input
           autoCorrect="off"
           spellCheck={false}
+          inputMode={numero === "inteiro" ? "numeric" : numero === "decimal" ? "decimal" : undefined}
           {...props}
+          onChange={
+            numero
+              ? (evento) => {
+                  filtrarNumero(evento.currentTarget, numero);
+                  props.onChange?.(evento);
+                }
+              : props.onChange
+          }
           defaultValue={defaultValue as ComponentProps<"input">["defaultValue"]}
           aria-invalid={erro ? true : undefined}
           aria-describedby={idRodape}

@@ -188,3 +188,27 @@ export function escreverNumeroBr(
     maximumFractionDigits: Math.max(minCasas, maxCasas),
   });
 }
+
+/** O que um campo de número aceita: com casas decimais, ou só inteiro. */
+export type TipoNumero = "decimal" | "inteiro";
+
+/**
+ * O texto de um campo de número, só com o que um número tem.
+ *
+ * Medida e valor aceitam dígitos, a vírgula decimal (uma só) e o ponto de
+ * milhar — "1.250,50", "0,08", "13.5". Inteiro, só dígitos. Nenhum campo do
+ * sistema aceita número negativo, por isso o sinal de menos também sai.
+ *
+ * É o que impede "20L" na capacidade: a letra não entra, e o "20" fica. Antes
+ * a caixa aceitava, a descrição não mostrava nada (não era número) e só o
+ * servidor recusava, ao salvar.
+ */
+export function limparNumeroDigitado(texto: string, tipo: TipoNumero): string {
+  if (tipo === "inteiro") return texto.replace(/\D/g, "");
+
+  const permitido = texto.replace(/[^\d.,]/g, "");
+  const virgula = permitido.indexOf(",");
+  return virgula === -1
+    ? permitido
+    : permitido.slice(0, virgula + 1) + permitido.slice(virgula + 1).replace(/,/g, "");
+}

@@ -23,6 +23,7 @@ import { AcaoComRecusa } from "@/components/acao-com-recusa";
 import { AcabamentoDoItem } from "@/components/campo-acabamento";
 import { ErroGeral, Formulario } from "@/components/formulario";
 import { type OpcaoBuscavel, SelecaoBuscavel } from "@/components/selecao-buscavel";
+import { filtrarNumero } from "@/components/so-numeros";
 import type { EstadoFormulario } from "@/lib/erro-formulario";
 import { CAMPO_IPI, CAMPO_IPI_DEFINIDO } from "@/lib/ipi-do-formulario";
 import { escreverNumeroBr, lerNumeroBr } from "@/lib/numero-br";
@@ -492,6 +493,7 @@ function LinhaItem({
               <input
                 name="quantidade"
                 inputMode="decimal"
+                onChange={(evento) => filtrarNumero(evento.currentTarget, "decimal")}
                 defaultValue={digitado("quantidade", escreverNumeroBr(item.quantidade, 0))}
                 {...gravaSozinho}
                 aria-label="Quantidade"
@@ -512,6 +514,7 @@ function LinhaItem({
               form={`item-${item.id}`}
               name="precoUnitario"
               inputMode="decimal"
+              onChange={(evento) => filtrarNumero(evento.currentTarget, "decimal")}
               // Até 6 casas: é a precisão que o banco guarda, e cortá-la aqui
               // faria o total errar centavos ao salvar a linha.
               defaultValue={digitado("precoUnitario", escreverNumeroBr(item.precoUnitario, 2, 6))}
@@ -845,7 +848,7 @@ function FormularioAdicao({
         <Campo
           name="quantidade"
           rotulo="Quantidade"
-          inputMode="decimal"
+          numero="decimal"
           required
           value={quantidade}
           onChange={(e) => setQuantidade(e.target.value)}
@@ -857,7 +860,7 @@ function FormularioAdicao({
         <Campo
           name="precoUnitario"
           rotulo="Preço"
-          inputMode="decimal"
+          numero="decimal"
           value={preco}
           onChange={(e) => setPrecoManual(e.target.value)}
           dica={

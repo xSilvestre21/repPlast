@@ -9,7 +9,7 @@
  */
 
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 import { render } from "vitest-browser-react";
 
 import { type ItemPedido, type ProdutoOpcao, SecaoItens } from "./itens-documento";
@@ -86,6 +86,28 @@ function abrir({
     />,
   );
 }
+
+describe("a linha só aceita número", () => {
+  // Um campo por teste: sair de um grava a linha, e ela volta redesenhada.
+  test("letra na quantidade da linha não entra", async () => {
+    const tela = await abrir({ itens: [LINHA] });
+
+    const linha = tela.getByRole("row", { name: /F-1/ });
+    const quantidade = linha.getByRole("textbox", { name: "Quantidade", exact: true });
+    await userEvent.clear(quantidade);
+    await userEvent.type(quantidade, "3 cx");
+    await expect.element(quantidade).toHaveValue("3");
+  });
+
+  test("letra no preço da linha não entra", async () => {
+    const tela = await abrir({ itens: [LINHA] });
+
+    const preco = tela.getByRole("row", { name: /F-1/ }).getByRole("textbox", { name: "Preço unitário" });
+    await userEvent.clear(preco);
+    await userEvent.type(preco, "R$12,5");
+    await expect.element(preco).toHaveValue("12,5");
+  });
+});
 
 describe("lançar conjunto", () => {
   test("com fornecedor variável, pergunta ao lado do produto", async () => {

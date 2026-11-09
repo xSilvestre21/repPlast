@@ -91,7 +91,7 @@ export function CampoAcabamento({
               name={campo}
               rotulo={rotulo}
               sufixo="R$"
-              inputMode="decimal"
+              numero="decimal"
               placeholder={exemplo}
               value={valores[campo]}
               onChange={(e) => aoMudar(campo, e.target.value)}

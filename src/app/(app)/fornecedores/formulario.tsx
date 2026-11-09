@@ -87,7 +87,7 @@ export function FormularioFornecedor({
             <Campo
               name="ipiPercentual"
               rotulo="IPI"
-              inputMode="decimal"
+              numero="decimal"
               sufixo="%"
               dica="Aplicado sobre o subtotal dos produtos."
               defaultValue={valores.ipiPercentual}
@@ -96,7 +96,7 @@ export function FormularioFornecedor({
             <Campo
               name="comissaoPercentual"
               rotulo="Comissão"
-              inputMode="decimal"
+              numero="decimal"
               sufixo="%"
               dica="Cada pedido nasce com ele e pode ser ajustado enquanto estiver aberto."
               defaultValue={valores.comissaoPercentual}
@@ -105,7 +105,7 @@ export function FormularioFornecedor({
             <Campo
               name="fatorKgPadrao"
               rotulo="Fator kg padrão"
-              inputMode="decimal"
+              numero="decimal"
               dica="Apenas sugestão ao cadastrar produto. O valor que vale é o do produto."
               defaultValue={valores.fatorKgPadrao}
               placeholder="13,50"
@@ -113,7 +113,7 @@ export function FormularioFornecedor({
             <Campo
               name="diaFechamentoComissao"
               rotulo="Só paga a comissão após faturar até o dia"
-              inputMode="numeric"
+              numero="inteiro"
               dica="Os pedidos novos já nascem com esse dia: o que vence ou é entregue até ele conta na comissão do mês seguinte. Em branco, conta no próprio mês. A exceção se troca no acerto do pedido."
               defaultValue={valores.diaFechamentoComissao}
               placeholder="30"
@@ -130,7 +130,7 @@ export function FormularioFornecedor({
             <Campo
               name="ultimoNumeroPedido"
               rotulo="Último pedido emitido"
-              inputMode="numeric"
+              numero="inteiro"
               dica={
                 valores.ultimoNumeroPedido === ""
                   ? "Vindo de outro sistema, informe o último pedido de lá. Em branco, o primeiro sai com o nº 1."

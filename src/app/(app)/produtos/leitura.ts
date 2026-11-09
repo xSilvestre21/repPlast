@@ -61,6 +61,17 @@ function lerMedida(formData: FormData, campo: Medida, inteiro = false): string |
   return numero === null ? null : String(numero);
 }
 
+/**
+ * A sanfona: um número, guardado como foi digitado — o "09" sai com o zero na
+ * descrição, e por isso ela não passa por `lerMedida`, que a regravaria como 9.
+ * Mas texto que não é número ("12cm", "abc") é recusado, como nas medidas.
+ */
+function lerSanfona(formData: FormData): string | null {
+  const texto = lerTexto(formData.get("sanfona"));
+  if (texto !== null) exigirNumero(formData, "sanfona", "a sanfona", { min: 0, exemplo: "13,50" });
+  return texto;
+}
+
 /** Lê uma medida obrigatória e maior que zero. */
 function lerMedidaObrigatoria(formData: FormData, campo: Medida): string {
   const { rotulo, exemplo } = MEDIDAS[campo];
@@ -240,7 +251,7 @@ export function dadosDoFormulario(formData: FormData) {
       // Opcional: vazia, o motor usa DENSIDADE_PADRAO — que é o divisor 10 de
       // antes, e o que mantém produto antigo valendo o mesmo.
       densidade: lerMedida(formData, "densidade"),
-      sanfona: lerTexto(formData.get("sanfona")),
+      sanfona: lerSanfona(formData),
       // Campos das outras famílias ficam nulos.
       larguraMm: null,
       metragemM: null,

@@ -287,7 +287,7 @@ export function LinhaComissao({
           <Campo
             name="comissaoPercentualRecebido"
             rotulo="%"
-            inputMode="decimal"
+            numero="decimal"
             /*
               Nasce com o percentual do pedido, como o usuário pediu: no caso
               comum a indústria paga o combinado, e quem precisa mudar muda.

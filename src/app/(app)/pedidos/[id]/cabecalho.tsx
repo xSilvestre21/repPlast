@@ -131,7 +131,7 @@ export function SecaoCabecalho({
             name="ipiPercentual"
             rotulo="IPI"
             sufixo="%"
-            inputMode="decimal"
+            numero="decimal"
             dica="Veio da indústria e ficou congelado aqui. Quem tem IPI é decidido item a item."
             defaultValue={valores.ipiPercentual}
           />
@@ -140,7 +140,7 @@ export function SecaoCabecalho({
             name="comissaoPercentual"
             rotulo="Comissão"
             sufixo="%"
-            inputMode="decimal"
+            numero="decimal"
             dica="Não sai no PDF. Vazio usa o percentual da indústria."
             defaultValue={valores.comissaoPercentual}
           />

@@ -705,7 +705,7 @@ export function FormularioProduto({
                 name="larguraCm"
                 rotulo="Largura"
                 sufixo="cm"
-                inputMode="decimal"
+                numero="decimal"
                 required
                 placeholder="99"
                 value={campos.larguraCm}
@@ -715,7 +715,7 @@ export function FormularioProduto({
                 name="comprimentoCm"
                 rotulo="Comprimento"
                 sufixo="cm"
-                inputMode="decimal"
+                numero="decimal"
                 required
                 placeholder="166"
                 value={campos.comprimentoCm}
@@ -725,7 +725,7 @@ export function FormularioProduto({
                 name="espessuraMm"
                 rotulo="Espessura"
                 sufixo="mm"
-                inputMode="decimal"
+                numero="decimal"
                 required
                 placeholder="0,08"
                 value={campos.espessuraMm}
@@ -734,7 +734,8 @@ export function FormularioProduto({
               <Campo
                 name="sanfona"
                 rotulo="Sanfona"
-                dica="Texto livre — o 09 sai com o zero."
+                numero="decimal"
+                dica="Só números. O 09 sai com o zero."
                 placeholder="13,50"
                 value={campos.sanfona}
                 onChange={(e) => alterar("sanfona")(e.target.value)}
@@ -743,7 +744,7 @@ export function FormularioProduto({
                 name="fatorKg"
                 rotulo={sacoPorKg ? "Preço do quilo" : "Fator kg"}
                 sufixo={sacoPorKg ? "R$" : undefined}
-                inputMode="decimal"
+                numero="decimal"
                 required
                 /*
                   O valor da tabela entra como placeholder, não preenchido: ele
@@ -774,7 +775,7 @@ export function FormularioProduto({
               <Campo
                 name="densidade"
                 rotulo="Densidade"
-                inputMode="decimal"
+                numero="decimal"
                 placeholder="0,1"
                 dica="Entra na conta do peso. Vazia, vale 0,1."
                 value={campos.densidade}
@@ -796,7 +797,7 @@ export function FormularioProduto({
                 name="precoAvulso"
                 rotulo="Preço do milheiro"
                 sufixo="R$"
-                inputMode="decimal"
+                numero="decimal"
                 required
                 value={campos.precoAvulso}
                 onChange={(e) => alterar("precoAvulso")(e.target.value)}
@@ -878,7 +879,7 @@ export function FormularioProduto({
                     name="precoCaixa"
                     rotulo="Preço da caixa"
                     sufixo="R$"
-                    inputMode="decimal"
+                    numero="decimal"
                     required
                     value={campos.precoCaixa}
                     onChange={(e) => alterar("precoCaixa")(e.target.value)}
@@ -889,7 +890,7 @@ export function FormularioProduto({
                     name="precoUnidade"
                     rotulo="Preço por unidade"
                     sufixo="R$"
-                    inputMode="decimal"
+                    numero="decimal"
                     required
                     value={campos.precoUnidade}
                     onChange={(e) => alterar("precoUnidade")(e.target.value)}
@@ -899,7 +900,7 @@ export function FormularioProduto({
                   <Campo
                     name="unidadesPorCaixa"
                     rotulo="Unidades por caixa"
-                    inputMode="numeric"
+                    numero="inteiro"
                     // Na conta pela unidade é ela que faz o preço da caixa; com
                     // preços próprios, é só informação.
                     required={modoFita.valor === "CAIXA_POR_UNIDADE"}
@@ -914,7 +915,7 @@ export function FormularioProduto({
                   name="larguraMm"
                   rotulo="Largura"
                   sufixo="mm"
-                  inputMode="decimal"
+                  numero="decimal"
                   value={campos.larguraMm}
                   onChange={(e) => alterar("larguraMm")(e.target.value)}
                 />
@@ -922,7 +923,7 @@ export function FormularioProduto({
                   name="metragemM"
                   rotulo="Metragem"
                   sufixo="m"
-                  inputMode="decimal"
+                  numero="decimal"
                   value={campos.metragemM}
                   onChange={(e) => alterar("metragemM")(e.target.value)}
                 />
@@ -955,7 +956,7 @@ export function FormularioProduto({
                 name="precoAvulso"
                 rotulo="Preço"
                 sufixo="R$"
-                inputMode="decimal"
+                numero="decimal"
                 required
                 dica="Por unidade de venda escolhida ao lado."
                 value={campos.precoAvulso}
@@ -966,7 +967,7 @@ export function FormularioProduto({
                 name="larguraMm"
                 rotulo="Largura"
                 sufixo="mm"
-                inputMode="decimal"
+                numero="decimal"
                 dica="Opcional. Entra só na descrição."
                 value={campos.larguraMm}
                 onChange={(e) => alterar("larguraMm")(e.target.value)}
@@ -986,7 +987,7 @@ export function FormularioProduto({
                 name="precoKg"
                 rotulo="Preço por quilo"
                 sufixo="R$"
-                inputMode="decimal"
+                numero="decimal"
                 required
                 value={campos.precoKg}
                 onChange={(e) => alterar("precoKg")(e.target.value)}
@@ -1001,7 +1002,7 @@ export function FormularioProduto({
                 name="larguraMm"
                 rotulo="Largura"
                 sufixo={ehShrink ? undefined : "mm"}
-                inputMode="decimal"
+                numero="decimal"
                 placeholder={ehShrink ? "42" : "500"}
                 value={campos.larguraMm}
                 onChange={(e) => alterar("larguraMm")(e.target.value)}
@@ -1009,7 +1010,7 @@ export function FormularioProduto({
               <Campo
                 name="micragem"
                 rotulo="Micragem"
-                inputMode="decimal"
+                numero="decimal"
                 placeholder={ehShrink ? "0,07" : "25"}
                 value={campos.micragem}
                 onChange={(e) => alterar("micragem")(e.target.value)}

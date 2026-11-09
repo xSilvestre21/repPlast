@@ -236,6 +236,16 @@ describe("tipos vendidos por milheiro", () => {
     await userEvent.keyboard("{Enter}");
   }
 
+  test("a capacidade só aceita número: 20L fica 20, e a descrição mostra", async () => {
+    const { tela, descricao, campo } = await novoProduto();
+
+    await escolherTipo(tela, "bombona");
+    await userEvent.type(campo("capacidade"), "20L");
+
+    await expect.element(campo("capacidade")).toHaveValue("20");
+    await expect.element(descricao).toHaveValue("Bombona 20L");
+  });
+
   test("escolher o tipo digitando abre as medidas dele", async () => {
     const { tela, descricao, campo } = await novoProduto();
 

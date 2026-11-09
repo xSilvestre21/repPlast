@@ -111,7 +111,7 @@ export function SecaoAditivos({
             <Campo
               name="valor"
               rotulo="Valor somado"
-              inputMode="decimal"
+              numero="decimal"
               required
               placeholder="2,10"
             />

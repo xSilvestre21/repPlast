@@ -649,7 +649,7 @@ function FormConta({
           <Campo
             name="porta"
             rotulo="Porta"
-            inputMode="numeric"
+            numero="inteiro"
             value={porta}
             onChange={(e) => setPorta(e.target.value)}
           />

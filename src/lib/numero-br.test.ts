@@ -8,7 +8,13 @@
 import { describe, expect, it } from "vitest";
 
 import { ErroDeCampo } from "./erro-formulario";
-import { escreverNumeroBr, exigirNumero, exigirNumeroDe, lerNumeroBr } from "./numero-br";
+import {
+  escreverNumeroBr,
+  exigirNumero,
+  exigirNumeroDe,
+  lerNumeroBr,
+  limparNumeroDigitado,
+} from "./numero-br";
 
 describe("lerNumeroBr", () => {
   it("lê vírgula como separador decimal", () => {
@@ -132,5 +138,42 @@ describe("exigirNumero", () => {
 
   it("inteiro recusa vírgula", () => {
     expect(recusa("10,5", { inteiro: true }).message).toMatch(/número inteiro/);
+  });
+});
+
+describe("limparNumeroDigitado", () => {
+  it("tira a letra e deixa o número: 20L vira 20", () => {
+    expect(limparNumeroDigitado("20L", "decimal")).toBe("20");
+    expect(limparNumeroDigitado("abc", "decimal")).toBe("");
+  });
+
+  it("guarda vírgula decimal e ponto de milhar", () => {
+    expect(limparNumeroDigitado("1.250,50", "decimal")).toBe("1.250,50");
+    expect(limparNumeroDigitado("0,08", "decimal")).toBe("0,08");
+    expect(limparNumeroDigitado("13.5", "decimal")).toBe("13.5");
+  });
+
+  it("guarda o zero da frente: a sanfona 09 continua 09", () => {
+    expect(limparNumeroDigitado("09", "decimal")).toBe("09");
+  });
+
+  it("fica só com a primeira vírgula", () => {
+    expect(limparNumeroDigitado("1,2,3", "decimal")).toBe("1,23");
+  });
+
+  it("tira moeda, espaço e sinal: nenhum campo aceita negativo", () => {
+    expect(limparNumeroDigitado("R$ 1.250,00", "decimal")).toBe("1.250,00");
+    expect(limparNumeroDigitado("-5", "decimal")).toBe("5");
+  });
+
+  it("no inteiro, só dígitos", () => {
+    expect(limparNumeroDigitado("12,5", "inteiro")).toBe("125");
+    expect(limparNumeroDigitado("587x", "inteiro")).toBe("587");
+  });
+
+  it("o que a limpeza deixa, a leitura entende", () => {
+    for (const texto of ["20L", "1.250,50kg", "0,08mm", "R$ 13,50"]) {
+      expect(lerNumeroBr(limparNumeroDigitado(texto, "decimal"))).not.toBeNull();
+    }
   });
 });

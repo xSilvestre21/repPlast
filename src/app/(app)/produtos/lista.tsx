@@ -36,6 +36,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useDefinirContagem } from "@/components/contagem-lista";
+import { filtrarNumero } from "@/components/so-numeros";
 import {
   Botao,
   CLASSE_CONTROLE,
@@ -306,7 +307,10 @@ export function ListaProdutos({
                     aria-label={`${medida.rotulo} (${medida.unidade})`}
                     title={medida.rotulo}
                     value={filtros[medida.campo]}
-                    onChange={(evento) => mudar(medida.campo, evento.target.value)}
+                    onChange={(evento) => {
+                      filtrarNumero(evento.currentTarget, "decimal");
+                      mudar(medida.campo, evento.target.value);
+                    }}
                     onFocus={() => setComFoco(medida.campo)}
                     onBlur={() => setComFoco(null)}
                     placeholder={medida.exemplo}

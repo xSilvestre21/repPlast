@@ -75,7 +75,7 @@ export function usePagamentoComissao(inicial: string) {
           rotulo="Fatura até o dia"
           value={dia}
           onChange={(e) => setDia(e.currentTarget.value)}
-          inputMode="numeric"
+          numero="inteiro"
           autoComplete="off"
           placeholder="30"
           className="w-36"

@@ -53,6 +53,9 @@ O erro aparece **embaixo do campo que o causou**, em português, dizendo o que f
   Prisma/RLS/SMTP); `falhou` também devolve o que foi digitado (senha nunca)
 - Número de formulário: `exigirNumero`/`exigirNumeroDe` (`numero-br.ts`), nunca
   `lerNumeroBr(...) ?? 0` — "abc" tem de ser recusado, não gravado como zero
+- Campo de medida ou valor: `<Campo numero="decimal">` (ou `"inteiro"`), nunca só `inputMode` —
+  a letra não entra nem colada; caixa solta (célula de tabela) chama `filtrarNumero`
+  (`components/so-numeros.ts`) no `onChange`
 - Tela: `<Formulario estado={estado} action={enviar}>` e `<ErroGeral />` logo acima do botão de
   enviar. `Campo`/`Selecao`/`AreaTexto`/`CampoData`/`SelecaoBuscavel` acham o erro pelo `name`;
   linha de tabela usa `campoDaLinha("email", i)` no servidor e `data-campo` no input

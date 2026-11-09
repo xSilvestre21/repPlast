@@ -19,6 +19,7 @@ import {
   lerConta,
   lerMaoDeObra,
 } from "./leitura";
+import { ErroDeCampo } from "@/lib/erro-formulario";
 
 function formulario(campos: Record<string, string>, aditivos: string[] = []): FormData {
   const formData = new FormData();
@@ -453,5 +454,28 @@ describe("tipos vendidos por milheiro", () => {
     const conta = lerConta({ familia: "SACO", larguraCm: "30" });
     expect(conta?.capacidade).toBe("");
     expect(conta?.materialTampa).toBe("");
+  });
+});
+
+describe("sanfona", () => {
+  const comSanfona = (sanfona: string) =>
+    dadosDoFormulario(formulario({ ...SACO, sanfona, fornecedorId: "f", descricao: "x" }));
+
+  it("guarda como foi digitada, com o zero da frente", () => {
+    expect(comSanfona("09").sanfona).toBe("09");
+    expect(comSanfona("13,50").sanfona).toBe("13,50");
+  });
+
+  it("vazia continua vazia", () => {
+    expect(comSanfona("").sanfona).toBeNull();
+  });
+
+  it("texto que não é número é recusado, embaixo da sanfona", () => {
+    expect(() => comSanfona("12cm")).toThrow(ErroDeCampo);
+    try {
+      comSanfona("12cm");
+    } catch (erro) {
+      expect((erro as ErroDeCampo).campo).toBe("sanfona");
+    }
   });
 });

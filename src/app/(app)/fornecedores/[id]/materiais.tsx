@@ -20,6 +20,7 @@ import { Fragment, useActionState, useEffect, useId, useRef, useState } from "re
 
 import { AcaoComRecusa } from "@/components/acao-com-recusa";
 import { ErroGeral, Formulario } from "@/components/formulario";
+import { filtrarNumero } from "@/components/so-numeros";
 import {
   Botao,
   BotaoTexto,
@@ -178,6 +179,8 @@ function LinhaMaterial({
   const gravaSozinho = {
     form: idFormulario,
     inputMode: "decimal" as const,
+    onChange: (evento: React.ChangeEvent<HTMLInputElement>) =>
+      filtrarNumero(evento.currentTarget, "decimal"),
     "aria-describedby": linha.estado.erro ? idErro : undefined,
     onFocus: (evento: React.FocusEvent<HTMLInputElement>) => {
       valorAoEntrar.current = evento.currentTarget.value;
@@ -483,6 +486,7 @@ function PainelFaixas({
                             name={nome}
                             data-campo={campoDaLinha(nome, i)}
                             inputMode="decimal"
+                            onChange={(evento) => filtrarNumero(evento.currentTarget, "decimal")}
                             placeholder={placeholder}
                             aria-label={rotulo}
                             className={`${celula} ${classeErro}`}
@@ -606,7 +610,7 @@ export function SecaoMateriais({
             <Campo
               name="precoKg"
               rotulo="Valor"
-              inputMode="decimal"
+              numero="decimal"
               required
               placeholder="14,00"
               sufixo="R$"
@@ -615,7 +619,7 @@ export function SecaoMateriais({
             <Campo
               name="precoMinimoKg"
               rotulo="Valor mínimo"
-              inputMode="decimal"
+              numero="decimal"
               placeholder="12,00"
               sufixo="R$"
               dica="Opcional. Abaixo dele o produto avisa, mas salva."
@@ -623,7 +627,7 @@ export function SecaoMateriais({
             <Campo
               name="densidade"
               rotulo="Densidade"
-              inputMode="decimal"
+              numero="decimal"
               placeholder="0,1"
               dica="Entra na conta do peso. Vazia, o produto usa 0,1."
             />
