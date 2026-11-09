@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
-import { BuscaEtiquetas, LIMITE_SEM_BUSCA } from "./busca-etiquetas";
 import { useCampoDoFormulario } from "./contexto-formulario";
+import { SelecaoEtiquetas } from "./selecao-etiquetas";
 import { Campo, RodapeCampo, formatarMoeda } from "./ui";
 import { achatar } from "@/lib/busca";
-import { type GrupoComplemento, gruposVisiveis } from "@/lib/complemento";
+import type { GrupoComplemento } from "@/lib/complemento";
 import type { MarcaMaoDeObra, opcoesDeMaoDeObra } from "@/lib/produto-preco";
 import type { CamposDaEmbalagem } from "@/lib/tipos-produto";
 
@@ -18,112 +18,73 @@ const VALORES = [
 ] as const;
 
 /**
- * O acabamento de frasco e bombona, nas etiquetas dos aditivos, com uma diferença:
- * marca-se um só, porque o que é rotulado não é serigrafado.
+ * O acabamento de frasco e bombona, no mesmo seletor dos complementos e aditivos,
+ * com uma diferença: marca-se um só, porque o que é rotulado não é serigrafado.
+ * Marcar outro troca o anterior, em qualquer grupo.
  *
  * O cadastro diz qual é o acabamento e guarda os dois valores. Com ou sem mão de
  * obra se decide ao lançar cada item (`AcabamentoDoItem`).
  *
  * A lista não prende ninguém: a busca que não acha nada oferece usar o que foi
- * digitado, e o nome que veio assim continua na tela ao reabrir o produto.
+ * digitado, e o nome que veio assim continua na caixa ao reabrir o produto.
  */
 export function CampoAcabamento({
   grupos,
   valores,
   aoMudar,
+  ocultarRotulo = false,
 }: {
   grupos: readonly GrupoComplemento[];
   valores: CamposDaEmbalagem;
   aoMudar: AoMudar;
+  /** Dentro do cartão "Acabamento", o rótulo só repetiria. */
+  ocultarRotulo?: boolean;
 }) {
-  const [busca, setBusca] = useState("");
   const { acabamento } = valores;
 
-  const todos = useMemo(() => {
-    const naLista = grupos.some((g) => g.opcoes.includes(acabamento));
-    return acabamento && !naLista
-      ? [...grupos, { titulo: "Outro", opcoes: [acabamento] }]
-      : grupos;
-  }, [grupos, acabamento]);
-
-  const visiveis = useMemo(
-    () => gruposVisiveis(todos, busca, new Set([acabamento])),
-    [todos, busca, acabamento],
+  // Todos de uma opção só: marcar já fecha o grupo, como na cor.
+  const etiquetas = useMemo(
+    () =>
+      grupos.map((g) => ({
+        titulo: g.titulo,
+        umaSo: true,
+        opcoes: g.opcoes.map((opcao) => ({ id: opcao, rotulo: opcao })),
+      })),
+    [grupos],
   );
 
-  const total = grupos.reduce((soma, grupo) => soma + grupo.opcoes.length, 0);
-  const digitado = busca.trim();
-  const semOutraOpcao = visiveis.every((g) => g.opcoes.every((o) => o === acabamento));
-  const podeUsarDigitado =
-    digitado !== "" && semOutraOpcao && achatar(digitado) !== achatar(acabamento);
+  const naLista = grupos.some((g) => g.opcoes.includes(acabamento));
+  const marcadas = useMemo(
+    () => new Set(naLista && acabamento ? [acabamento] : []),
+    [naLista, acabamento],
+  );
 
   /** O valor de um acabamento não serve para outro: trocar recomeça os dois. */
-  function escolher(nome: string) {
-    aoMudar("acabamento", nome === acabamento ? "" : nome);
+  function definir(nome: string) {
+    if (achatar(nome) === achatar(acabamento)) return;
+    aoMudar("acabamento", nome);
     aoMudar("acabamentoValorCom", "");
     aoMudar("acabamentoValorSem", "");
-    setBusca("");
   }
 
   return (
-    <div className="space-y-2.5">
-      {total > LIMITE_SEM_BUSCA && (
-        <BuscaEtiquetas
-          rotulo="Buscar acabamento"
-          placeholder="Buscar acabamento, como “rótulo” ou “sleeve”"
-          value={busca}
-          onChange={setBusca}
-        />
-      )}
+    <div className="space-y-3">
+      <input type="hidden" name="acabamento" value={acabamento} />
 
-      {podeUsarDigitado && (
-        <button
-          type="button"
-          onClick={() => escolher(digitado)}
-          className="text-corpo text-carimbo hover:underline cursor-pointer"
-        >
-          Usar &ldquo;{digitado}&rdquo; como acabamento
-        </button>
-      )}
-
-      {visiveis.map((grupo) => (
-        <div
-          key={grupo.titulo}
-          role="group"
-          aria-label={grupo.titulo}
-          className="flex flex-wrap items-center gap-2"
-        >
-          <span className="w-full sm:w-24 shrink-0 text-mini text-tinta-3">{grupo.titulo}</span>
-
-          {grupo.opcoes.map((opcao) => {
-            const marcada = opcao === acabamento;
-
-            return (
-              <label
-                key={opcao}
-                className={`flex items-center gap-2 rounded-suave border px-3 py-2 text-corpo cursor-pointer transition-colors ${
-                  marcada
-                    ? "border-carimbo bg-carimbo-fraco text-tinta"
-                    : "border-filete hover:border-filete-forte text-tinta-2"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  name="acabamento"
-                  value={opcao}
-                  checked={marcada}
-                  onChange={() => escolher(opcao)}
-                  className="accent-carimbo"
-                />
-                {opcao}
-              </label>
-            );
-          })}
-        </div>
-      ))}
+      <SelecaoEtiquetas
+        rotulo="Acabamento"
+        ocultarRotulo={ocultarRotulo}
+        grupos={etiquetas}
+        marcadas={marcadas}
+        aoAlternar={(opcao) => definir(opcao === acabamento ? "" : opcao)}
+        escolhaUnica
+        digitado={naLista ? "" : acabamento}
+        aoDigitar={definir}
+        placeholder="Buscar ou digitar outro…"
+      />
 
       {acabamento && (
-        <div className="grid gap-3 sm:grid-cols-2 max-w-xl pt-1">
+        <div className="grid gap-3 sm:grid-cols-2 max-w-xl">
           {VALORES.map(({ campo, rotulo, exemplo }) => (
             <Campo
               key={campo}

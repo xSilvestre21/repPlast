@@ -179,7 +179,8 @@ export function dadosDoFormulario(formData: FormData) {
   const familiaBruta = String(formData.get("familia") ?? "");
   const familia = FAMILIAS.find((f) => f === familiaBruta);
   if (!familia) {
-    throw new ErroDeCampo("familia", "Escolha o tipo do produto na lista do campo Tipo.");
+    // O erro vai para "tipo", a caixa que se vê: "familia" é o campo escondido.
+    throw new ErroDeCampo("tipo", "Escolha o tipo do produto na lista do campo Tipo.");
   }
 
   const fornecedorId = lerTexto(formData.get("fornecedorId"));

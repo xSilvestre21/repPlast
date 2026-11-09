@@ -48,7 +48,6 @@ import {
 } from "@/lib/produto-preco";
 import {
   OPCOES_TIPO,
-  TIPOS,
   type CamposDaEmbalagem,
   type TipoProduto,
   camposAoTrocarDeTipo,
@@ -86,8 +85,9 @@ const MODOS_FITA = [
 
 type ModoFita = (typeof MODOS_FITA)[number];
 
+/** A conta começa sem tipo, como o cadastro de produto: nem sempre é saco. */
 const CONTA_VAZIA: Conta = {
-  familia: "SACO",
+  familia: "",
   material: "",
   complemento: "",
   unidadeRotulo: "",
@@ -139,7 +139,8 @@ export function ContaItem({
   adicionar: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
 }) {
   const [conta, setConta] = useState<Conta>(CONTA_VAZIA);
-  const [tipo, setTipo] = useState<TipoProduto>(TIPOS[0]);
+  /** Sem tipo, a tela mostra só a escolha dele: o resto da conta depende do tipo. */
+  const [tipo, setTipo] = useState<TipoProduto | null>(null);
   const [modoFita, setModoFita] = useState<ModoFita>(MODOS_FITA[0]);
   const [descricaoManual, setDescricaoManual] = useState<string | null>(null);
   const [unidadeEscolhida, setUnidadeEscolhida] = useState<UnidadeVenda | "">("");
@@ -160,7 +161,7 @@ export function ContaItem({
       const resultado = await adicionar(anterior, formData);
       if (!resultado.erro) {
         setConta(CONTA_VAZIA);
-        setTipo(TIPOS[0]);
+        setTipo(null);
         setModoFita(MODOS_FITA[0]);
         setDescricaoManual(null);
         setUnidadeEscolhida("");
@@ -184,12 +185,12 @@ export function ContaItem({
   const ehSaco = familia === "SACO";
   const ehFita = familia === "FITA";
   const ehAvulso = familia === "AVULSO";
-  const ehShrink = tipo.valor === "SHRINK";
+  const ehShrink = tipo?.valor === "SHRINK";
   const ehEmbalagem = ehPorMilheiro(familia);
 
   /** As sugestões do campo Material fora do saco, conforme o tipo. */
   const sugestoesMaterial = useMemo(
-    () => tipo.materiais.map((m) => ({ id: m, rotulo: m })),
+    () => (tipo?.materiais ?? []).map((m) => ({ id: m, rotulo: m })),
     [tipo],
   );
 
@@ -204,7 +205,7 @@ export function ContaItem({
 
     setConta((atual) => camposAoTrocarDeTipo(tipo, novo, atual, CONTA_VAZIA));
 
-    if (novo.familia !== tipo.familia) {
+    if (novo.familia !== tipo?.familia) {
       setModoFita(MODOS_FITA[0]);
       setDescricaoManual(null);
       setUnidadeEscolhida("");
@@ -288,15 +289,17 @@ export function ContaItem({
    * escolhido lá em cima; nas outras, as da família. Escolha que deixou de
    * valer (trocou de família) cai na primeira.
    */
-  const unidades: UnidadeVenda[] = ehAvulso
-    ? [conta.unidadeAvulsa as UnidadeVenda]
-    : ehFita
-      ? [modoFita.unidade]
-      : unidadesDaFamilia(familia);
+  const unidades: UnidadeVenda[] = !tipo
+    ? []
+    : ehAvulso
+      ? [conta.unidadeAvulsa as UnidadeVenda]
+      : ehFita
+        ? [modoFita.unidade]
+        : unidadesDaFamilia(familia);
   const unidade =
     unidadeEscolhida && unidades.includes(unidadeEscolhida) ? unidadeEscolhida : unidades[0];
 
-  const precoCalculado = precoUnitario(precificavel, unidade);
+  const precoCalculado = tipo ? precoUnitario(precificavel, unidade) : null;
 
   // Precisão cheia no campo, como no catálogo: cortar em centavos faria o
   // total errar o centavo que a indústria não erra.
@@ -306,6 +309,7 @@ export function ContaItem({
   const sufixos = aditivosEscolhidos.map((a) => a.sufixoDescricao);
 
   const descricaoGerada = (() => {
+    if (!tipo) return "";
     if (ehEmbalagem) return descricaoDoTipo(tipo, conta, sufixos);
 
     if (ehSaco) {
@@ -403,334 +407,349 @@ export function ContaItem({
           rotulo="Tipo"
           required
           opcoes={OPCOES_TIPO}
-          value={tipo.valor}
+          value={tipo?.valor ?? ""}
           aoEscolher={escolherTipo}
           placeholder="Digite para achar…"
           dica={
-            ehShrink
-              ? "Vendido por kg; entra no cadastro como stretch."
-              : ehEmbalagem
-                ? "Vendido por milheiro, com preço digitado."
-                : undefined
+            !tipo
+              ? "Escolha primeiro: a conta do item depende do tipo."
+              : ehShrink
+                ? "Vendido por kg; entra no cadastro como stretch."
+                : ehEmbalagem
+                  ? "Vendido por milheiro, com preço digitado."
+                  : undefined
           }
         />
         <input type="hidden" name="familia" value={conta.familia} />
 
-        {/*
-          No saco, material é a tabela de preço da indústria: escolhe-se dela,
-          digitando. Nos outros tipos a lista só sugere, e o que se digita vale.
-        */}
-        {ehSaco ? (
-          <SelecaoBuscavel
-            name="material"
-            rotulo="Material"
-            opcoes={opcoesMaterial}
-            value={conta.material}
-            aoEscolher={escolherMaterial}
-            placeholder="Digite para achar…"
-            vazio="Nenhum material da tabela desta indústria com esse nome."
-            dica={
-              materialDaTabela
-                ? `Tabela desta indústria: ${formatarMoeda(materialDaTabela.precoKg)} / kg.`
-                : conta.material
-                  ? "Fora da tabela desta indústria."
-                  : undefined
-            }
-          />
-        ) : (
-          <SelecaoBuscavel
-            livre
-            name="material"
-            rotulo={tipo.rotuloMaterial ?? "Nome na descrição"}
-            opcoes={sugestoesMaterial}
-            value={conta.material}
-            aoEscolher={escolherMaterial}
-            placeholder={tipo.materialAbre ? tipo.nome || "Nome do item" : undefined}
-          />
-        )}
+        {/* `contents`: os dois seguem na grade, e entram em cascata ao aparecer. */}
+        {tipo && (
+          <div className="contents palco">
+            {/*
+              No saco, material é a tabela de preço da indústria: escolhe-se dela,
+              digitando. Nos outros tipos a lista só sugere, e o que se digita vale.
+            */}
+            {ehSaco ? (
+              <SelecaoBuscavel
+                name="material"
+                rotulo="Material"
+                opcoes={opcoesMaterial}
+                value={conta.material}
+                aoEscolher={escolherMaterial}
+                placeholder="Digite para achar…"
+                vazio="Nenhum material da tabela desta indústria com esse nome."
+                dica={
+                  materialDaTabela
+                    ? `Tabela desta indústria: ${formatarMoeda(materialDaTabela.precoKg)} / kg.`
+                    : conta.material
+                      ? "Fora da tabela desta indústria."
+                      : undefined
+                }
+              />
+            ) : (
+              <SelecaoBuscavel
+                livre
+                name="material"
+                rotulo={tipo.rotuloMaterial ?? "Nome na descrição"}
+                opcoes={sugestoesMaterial}
+                value={conta.material}
+                aoEscolher={escolherMaterial}
+                placeholder={tipo.materialAbre ? tipo.nome || "Nome do item" : undefined}
+              />
+            )}
 
-        {/* Com etiquetas, ocupa a linha inteira: elas não cabem numa coluna. */}
-        <CampoComplemento
-          key={tipo.valor}
-          rotulo={tipo.rotuloComplemento}
-          grupos={tipo.complementos}
-          value={conta.complemento}
-          aoMudar={alterar("complemento")}
-          placeholder={
-            ehSaco
-              ? "AZUL"
-              : ehFita
-                ? "transparente"
-                : ehAvulso || ehEmbalagem
-                  ? ""
-                  : ehShrink
-                    ? "BOBINA COM 20 KG"
-                    : "BOBINA 4KG PESO LÍQUIDO"
-          }
-          className={tipo.complementos.length > 0 ? "sm:col-span-2 lg:col-span-3" : ""}
-        />
+            {/* Com etiquetas, ocupa a linha inteira: elas não cabem numa coluna. */}
+            <CampoComplemento
+              key={tipo.valor}
+              rotulo={tipo.rotuloComplemento}
+              grupos={tipo.complementos}
+              value={conta.complemento}
+              aoMudar={alterar("complemento")}
+              placeholder={
+                ehSaco
+                  ? "AZUL"
+                  : ehFita
+                    ? "transparente"
+                    : ehAvulso || ehEmbalagem
+                      ? ""
+                      : ehShrink
+                        ? "BOBINA COM 20 KG"
+                        : "BOBINA 4KG PESO LÍQUIDO"
+              }
+              className={tipo.complementos.length > 0 ? "sm:col-span-2 lg:col-span-3" : ""}
+            />
+          </div>
+        )}
       </div>
 
-      {ehEmbalagem && (
-        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 lg:items-start">
-          <MedidasEmbalagem tipo={tipo} valores={conta} aoMudar={alterarEmbalagem} />
-          <CampoNumero rotulo="Preço do milheiro" sufixo="R$" nome="precoAvulso" conta={conta} alterar={alterar} obrigatorio />
-        </div>
-      )}
+      {/*
+        O resto da conta entra em cascata ao escolher o tipo, e cada bloco que
+        aparece depois também. Só aqui dentro: a proposta já tem o `palco` dela,
+        e este cartão inteiro animaria duas vezes ao abrir a página.
+      */}
+      {tipo && (
+        <div className="space-y-4 palco">
+          {ehEmbalagem && (
+            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 lg:items-start">
+              <MedidasEmbalagem tipo={tipo} valores={conta} aoMudar={alterarEmbalagem} />
+              <CampoNumero rotulo="Preço do milheiro" sufixo="R$" nome="precoAvulso" conta={conta} alterar={alterar} obrigatorio />
+            </div>
+          )}
 
-      {tipo.comTampa && (
-        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 lg:items-start">
-          <CamposDaTampa valores={conta} aoMudar={alterarEmbalagem} />
-          <CampoFornecedorDaTampa
-            naConta
-            industrias={industrias}
-            valores={conta}
-            aoMudar={alterarEmbalagem}
-          />
-        </div>
-      )}
-
-      {tipo.acabamentos && (
-        <div>
-          <span className="rotulo block mb-1.5">Acabamento</span>
-          <CampoAcabamento
-            grupos={tipo.acabamentos}
-            valores={conta}
-            aoMudar={alterarEmbalagem}
-          />
-          {opcoesMaoDeObra.length > 0 && (
-            <div className="mt-3">
-              <EscolhaMaoDeObra
-                acabamento={conta.acabamento}
-                opcoes={opcoesMaoDeObra}
-                value={marcaCobrada ?? ""}
-                aoMudar={(marca) => {
-                  setMaoDeObra(marca);
-                  setPrecoManual(null);
-                }}
+          {tipo.comTampa && (
+            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 lg:items-start">
+              <CamposDaTampa valores={conta} aoMudar={alterarEmbalagem} />
+              <CampoFornecedorDaTampa
+                naConta
+                industrias={industrias}
+                valores={conta}
+                aoMudar={alterarEmbalagem}
               />
             </div>
           )}
-        </div>
-      )}
 
-      {ehSaco && (
-        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 lg:items-start">
-          <CampoNumero rotulo="Largura" sufixo="cm" nome="larguraCm" conta={conta} alterar={alterar} obrigatorio />
-          <CampoNumero rotulo="Comprimento" sufixo="cm" nome="comprimentoCm" conta={conta} alterar={alterar} obrigatorio />
-          <CampoNumero rotulo="Espessura" sufixo="mm" nome="espessuraMm" conta={conta} alterar={alterar} obrigatorio placeholder="0,08" />
-          <Campo
-            name="sanfona"
-            rotulo="Sanfona"
-            placeholder="13,50"
-            value={conta.sanfona}
-            onChange={(e) => alterar("sanfona")(e.target.value)}
-          />
-          <CampoNumero
-            rotulo="Fator kg"
-            nome="fatorKg"
-            conta={conta}
-            alterar={alterar}
-            obrigatorio
-            placeholder={
-              materialDaTabela ? formatarNumero(materialDaTabela.precoKg, 2) : "13,50"
-            }
-          />
-          <CampoNumero rotulo="Densidade" nome="densidade" conta={conta} alterar={alterar} placeholder="0,1" />
-        </div>
-      )}
-
-      {ehFita && (
-        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 lg:items-start">
-          <Selecao
-            name="modoFita"
-            rotulo="Vendida por"
-            value={modoFita.valor}
-            onChange={(e) => {
-              setModoFita(MODOS_FITA.find((m) => m.valor === e.target.value) ?? MODOS_FITA[0]);
-              setPrecoManual(null);
-            }}
-          >
-            {MODOS_FITA.map((m) => (
-              <option key={m.valor} value={m.valor}>
-                {m.rotulo}
-              </option>
-            ))}
-          </Selecao>
-          {usaNaFita("precoCaixa") && (
-            <CampoNumero rotulo="Preço da caixa" sufixo="R$" nome="precoCaixa" conta={conta} alterar={alterar} obrigatorio />
+          {tipo.acabamentos && (
+            <div>
+              <CampoAcabamento
+                grupos={tipo.acabamentos}
+                valores={conta}
+                aoMudar={alterarEmbalagem}
+              />
+              {opcoesMaoDeObra.length > 0 && (
+                <div className="mt-3">
+                  <EscolhaMaoDeObra
+                    acabamento={conta.acabamento}
+                    opcoes={opcoesMaoDeObra}
+                    value={marcaCobrada ?? ""}
+                    aoMudar={(marca) => {
+                      setMaoDeObra(marca);
+                      setPrecoManual(null);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           )}
-          {usaNaFita("precoUnidade") && (
-            <CampoNumero rotulo="Preço por unidade" sufixo="R$" nome="precoUnidade" conta={conta} alterar={alterar} obrigatorio />
+
+          {ehSaco && (
+            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 lg:items-start">
+              <CampoNumero rotulo="Largura" sufixo="cm" nome="larguraCm" conta={conta} alterar={alterar} obrigatorio />
+              <CampoNumero rotulo="Comprimento" sufixo="cm" nome="comprimentoCm" conta={conta} alterar={alterar} obrigatorio />
+              <CampoNumero rotulo="Espessura" sufixo="mm" nome="espessuraMm" conta={conta} alterar={alterar} obrigatorio placeholder="0,08" />
+              <Campo
+                name="sanfona"
+                rotulo="Sanfona"
+                placeholder="13,50"
+                value={conta.sanfona}
+                onChange={(e) => alterar("sanfona")(e.target.value)}
+              />
+              <CampoNumero
+                rotulo="Fator kg"
+                nome="fatorKg"
+                conta={conta}
+                alterar={alterar}
+                obrigatorio
+                placeholder={
+                  materialDaTabela ? formatarNumero(materialDaTabela.precoKg, 2) : "13,50"
+                }
+              />
+              <CampoNumero rotulo="Densidade" nome="densidade" conta={conta} alterar={alterar} placeholder="0,1" />
+            </div>
           )}
-          {usaNaFita("unidadesPorCaixa") && (
-            <CampoNumero rotulo="Unidades por caixa" nome="unidadesPorCaixa" conta={conta} alterar={alterar} obrigatorio />
+
+          {ehFita && (
+            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 lg:items-start">
+              <Selecao
+                name="modoFita"
+                rotulo="Vendida por"
+                value={modoFita.valor}
+                onChange={(e) => {
+                  setModoFita(MODOS_FITA.find((m) => m.valor === e.target.value) ?? MODOS_FITA[0]);
+                  setPrecoManual(null);
+                }}
+              >
+                {MODOS_FITA.map((m) => (
+                  <option key={m.valor} value={m.valor}>
+                    {m.rotulo}
+                  </option>
+                ))}
+              </Selecao>
+              {usaNaFita("precoCaixa") && (
+                <CampoNumero rotulo="Preço da caixa" sufixo="R$" nome="precoCaixa" conta={conta} alterar={alterar} obrigatorio />
+              )}
+              {usaNaFita("precoUnidade") && (
+                <CampoNumero rotulo="Preço por unidade" sufixo="R$" nome="precoUnidade" conta={conta} alterar={alterar} obrigatorio />
+              )}
+              {usaNaFita("unidadesPorCaixa") && (
+                <CampoNumero rotulo="Unidades por caixa" nome="unidadesPorCaixa" conta={conta} alterar={alterar} obrigatorio />
+              )}
+              <CampoNumero rotulo="Largura" sufixo="mm" nome="larguraMm" conta={conta} alterar={alterar} />
+              <CampoNumero rotulo="Metragem" sufixo="m" nome="metragemM" conta={conta} alterar={alterar} />
+            </div>
           )}
-          <CampoNumero rotulo="Largura" sufixo="mm" nome="larguraMm" conta={conta} alterar={alterar} />
-          <CampoNumero rotulo="Metragem" sufixo="m" nome="metragemM" conta={conta} alterar={alterar} />
+
+          {/*
+            Stretch e bobina se medem em largura (mm) × micragem — "500X25". O
+            shrink, em largura × espessura (mm) — "42X0,07". É o mesmo par de
+            campos, só com o nome que cada um usa; a descrição junta os dois do
+            mesmo jeito.
+          */}
+          {(familia === "STRETCH" || familia === "BOBINA") && (
+            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:items-start">
+              <CampoNumero rotulo="Preço por quilo" sufixo="R$" nome="precoKg" conta={conta} alterar={alterar} obrigatorio />
+              <CampoNumero
+                rotulo="Largura"
+                sufixo={ehShrink ? undefined : "mm"}
+                nome="larguraMm"
+                conta={conta}
+                alterar={alterar}
+                placeholder={ehShrink ? "42" : "500"}
+              />
+              <CampoNumero
+                rotulo={ehShrink ? "Espessura" : "Micragem"}
+                sufixo={ehShrink ? "mm" : undefined}
+                nome="micragem"
+                conta={conta}
+                alterar={alterar}
+                placeholder={ehShrink ? "0,07" : "25"}
+              />
+            </div>
+          )}
+
+          {ehAvulso && (
+            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:items-start">
+              <Selecao
+                name="unidadeAvulsa"
+                rotulo="Vendido por"
+                value={conta.unidadeAvulsa}
+                onChange={(e) => alterar("unidadeAvulsa")(e.target.value)}
+              >
+                <option value="UN">Unidade</option>
+                <option value="KG">Quilo</option>
+                <option value="CX">Caixa</option>
+                <option value="MIL">Milheiro</option>
+              </Selecao>
+              <CampoNumero rotulo="Preço" sufixo="R$" nome="precoAvulso" conta={conta} alterar={alterar} obrigatorio />
+              <CampoNumero rotulo="Largura" sufixo="mm" nome="larguraMm" conta={conta} alterar={alterar} />
+            </div>
+          )}
+
+          {aditivos.length > 0 && (
+            <CampoAditivos
+              aditivos={aditivos}
+              marcados={conta.aditivos}
+              aoAlternar={(id) => {
+                setConta((atual) => ({
+                  ...atual,
+                  aditivos: atual.aditivos.includes(id)
+                    ? atual.aditivos.filter((a) => a !== id)
+                    : [...atual.aditivos, id],
+                }));
+                setPrecoManual(null);
+              }}
+            />
+          )}
+
+          <div>
+            <Campo
+              name="descricao"
+              rotulo="Descrição impressa"
+              required
+              value={descricao}
+              onChange={(e) => setDescricaoManual(e.target.value)}
+              className="font-mono"
+            />
+            {descricaoManual !== null && descricaoGerada !== "" && descricaoManual !== descricaoGerada && (
+              <BotaoTexto type="button" onClick={() => setDescricaoManual(null)} className="mt-2">
+                Voltar para a gerada: <span className="font-mono">{descricaoGerada}</span>
+              </BotaoTexto>
+            )}
+          </div>
+
+          {pesoMilheiro && precoCalculado && (
+            <p className="text-mini text-tinta-3 font-mono numerico leading-relaxed">
+              {formatarNumero(precificavel.larguraCm!)} × {formatarNumero(precificavel.comprimentoCm!)} ×{" "}
+              {formatarNumero(precificavel.espessuraMm!, 2)} ×{" "}
+              {formatarNumero(precificavel.densidade ?? DENSIDADE_PADRAO)} ={" "}
+              {formatarNumero(pesoMilheiro.toDecimalPlaces(3), 2)} kg · milheiro{" "}
+              {formatarMoeda(precoCalculado.toNumber())}
+            </p>
+          )}
+
+          {/* Por quilo o saco não passa pelas medidas: o preço do kg é o fator. */}
+          {ehSaco && unidade === "KG" && precoCalculado && (
+            <p className="text-mini text-tinta-3 font-mono numerico leading-relaxed">
+              fator {formatarNumero(precificavel.fatorKg!, 2)}
+              {aditivosEscolhidos.some((a) => a.tipo === "POR_KG") && " + aditivos por kg"} ={" "}
+              {formatarMoeda(precoCalculado.toNumber())} / kg · a quantidade é em quilos
+            </p>
+          )}
+
+          {/* Mesma régua do lançamento de catálogo: rótulo em cima, caixas alinhadas pelo topo. */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[7rem_8rem_9.5rem_auto_auto] lg:items-start pt-3 border-t border-filete">
+            <Selecao
+              name="unidade"
+              rotulo="Unidade"
+              required
+              value={unidade}
+              onChange={(e) => {
+                setUnidadeEscolhida(e.target.value as UnidadeVenda);
+                setPrecoManual(null);
+              }}
+            >
+              {unidades.map((u) => (
+                <option key={u} value={u}>
+                  {ROTULO_UNIDADE[u]}
+                </option>
+              ))}
+            </Selecao>
+
+            <Campo
+              name="quantidade"
+              rotulo="Quantidade"
+              inputMode="decimal"
+              required
+              value={quantidade}
+              onChange={(e) => setQuantidade(e.target.value)}
+            />
+
+            <Campo
+              name="precoUnitario"
+              rotulo="Preço"
+              inputMode="decimal"
+              value={preco}
+              onChange={(e) => setPrecoManual(e.target.value)}
+              dica={precoCalculado ? "Calculado — dá para ajustar." : undefined}
+            />
+
+            <label className="block">
+              <span className="rotulo block mb-1.5">IPI</span>
+              <span className="flex items-center gap-2 px-3.5 py-2.5 rounded-suave bg-folha-2 border border-transparent">
+                <input type="hidden" name={CAMPO_IPI_DEFINIDO} value="1" />
+                <input type="checkbox" name={CAMPO_IPI} defaultChecked className="accent-carimbo" />
+                <span className="text-corpo text-tinta-2 whitespace-nowrap">Cobrar</span>
+              </span>
+            </label>
+
+            <div className="block">
+              <EspacoDoRotulo />
+              <Botao
+                type="submit"
+                variante="secundaria"
+                className="w-full lg:w-auto"
+                disabled={enviando || !descricao || !preco}
+              >
+                {enviando ? "Adicionando…" : "Adicionar"}
+              </Botao>
+            </div>
+          </div>
+
+          {totalPrevisto !== null && (
+            <p className="text-mini text-tinta-3 numerico">
+              Este item entra por {formatarMoeda(totalPrevisto)} antes do IPI.
+            </p>
+          )}
         </div>
-      )}
-
-      {/*
-        Stretch e bobina se medem em largura (mm) × micragem — "500X25". O
-        shrink, em largura × espessura (mm) — "42X0,07". É o mesmo par de
-        campos, só com o nome que cada um usa; a descrição junta os dois do
-        mesmo jeito.
-      */}
-      {(familia === "STRETCH" || familia === "BOBINA") && (
-        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:items-start">
-          <CampoNumero rotulo="Preço por quilo" sufixo="R$" nome="precoKg" conta={conta} alterar={alterar} obrigatorio />
-          <CampoNumero
-            rotulo="Largura"
-            sufixo={ehShrink ? undefined : "mm"}
-            nome="larguraMm"
-            conta={conta}
-            alterar={alterar}
-            placeholder={ehShrink ? "42" : "500"}
-          />
-          <CampoNumero
-            rotulo={ehShrink ? "Espessura" : "Micragem"}
-            sufixo={ehShrink ? "mm" : undefined}
-            nome="micragem"
-            conta={conta}
-            alterar={alterar}
-            placeholder={ehShrink ? "0,07" : "25"}
-          />
-        </div>
-      )}
-
-      {ehAvulso && (
-        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:items-start">
-          <Selecao
-            name="unidadeAvulsa"
-            rotulo="Vendido por"
-            value={conta.unidadeAvulsa}
-            onChange={(e) => alterar("unidadeAvulsa")(e.target.value)}
-          >
-            <option value="UN">Unidade</option>
-            <option value="KG">Quilo</option>
-            <option value="CX">Caixa</option>
-            <option value="MIL">Milheiro</option>
-          </Selecao>
-          <CampoNumero rotulo="Preço" sufixo="R$" nome="precoAvulso" conta={conta} alterar={alterar} obrigatorio />
-          <CampoNumero rotulo="Largura" sufixo="mm" nome="larguraMm" conta={conta} alterar={alterar} />
-        </div>
-      )}
-
-      {aditivos.length > 0 && (
-        <CampoAditivos
-          aditivos={aditivos}
-          marcados={conta.aditivos}
-          aoAlternar={(id) => {
-            setConta((atual) => ({
-              ...atual,
-              aditivos: atual.aditivos.includes(id)
-                ? atual.aditivos.filter((a) => a !== id)
-                : [...atual.aditivos, id],
-            }));
-            setPrecoManual(null);
-          }}
-        />
-      )}
-
-      <div>
-        <Campo
-          name="descricao"
-          rotulo="Descrição impressa"
-          required
-          value={descricao}
-          onChange={(e) => setDescricaoManual(e.target.value)}
-          className="font-mono"
-        />
-        {descricaoManual !== null && descricaoGerada !== "" && descricaoManual !== descricaoGerada && (
-          <BotaoTexto type="button" onClick={() => setDescricaoManual(null)} className="mt-2">
-            Voltar para a gerada: <span className="font-mono">{descricaoGerada}</span>
-          </BotaoTexto>
-        )}
-      </div>
-
-      {pesoMilheiro && precoCalculado && (
-        <p className="text-mini text-tinta-3 font-mono numerico leading-relaxed">
-          {formatarNumero(precificavel.larguraCm!)} × {formatarNumero(precificavel.comprimentoCm!)} ×{" "}
-          {formatarNumero(precificavel.espessuraMm!, 2)} ×{" "}
-          {formatarNumero(precificavel.densidade ?? DENSIDADE_PADRAO)} ={" "}
-          {formatarNumero(pesoMilheiro.toDecimalPlaces(3), 2)} kg · milheiro{" "}
-          {formatarMoeda(precoCalculado.toNumber())}
-        </p>
-      )}
-
-      {/* Por quilo o saco não passa pelas medidas: o preço do kg é o fator. */}
-      {ehSaco && unidade === "KG" && precoCalculado && (
-        <p className="text-mini text-tinta-3 font-mono numerico leading-relaxed">
-          fator {formatarNumero(precificavel.fatorKg!, 2)}
-          {aditivosEscolhidos.some((a) => a.tipo === "POR_KG") && " + aditivos por kg"} ={" "}
-          {formatarMoeda(precoCalculado.toNumber())} / kg · a quantidade é em quilos
-        </p>
-      )}
-
-      {/* Mesma régua do lançamento de catálogo: rótulo em cima, caixas alinhadas pelo topo. */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[7rem_8rem_9.5rem_auto_auto] lg:items-start pt-3 border-t border-filete">
-        <Selecao
-          name="unidade"
-          rotulo="Unidade"
-          required
-          value={unidade}
-          onChange={(e) => {
-            setUnidadeEscolhida(e.target.value as UnidadeVenda);
-            setPrecoManual(null);
-          }}
-        >
-          {unidades.map((u) => (
-            <option key={u} value={u}>
-              {ROTULO_UNIDADE[u]}
-            </option>
-          ))}
-        </Selecao>
-
-        <Campo
-          name="quantidade"
-          rotulo="Quantidade"
-          inputMode="decimal"
-          required
-          value={quantidade}
-          onChange={(e) => setQuantidade(e.target.value)}
-        />
-
-        <Campo
-          name="precoUnitario"
-          rotulo="Preço"
-          inputMode="decimal"
-          value={preco}
-          onChange={(e) => setPrecoManual(e.target.value)}
-          dica={precoCalculado ? "Calculado — dá para ajustar." : undefined}
-        />
-
-        <label className="block">
-          <span className="rotulo block mb-1.5">IPI</span>
-          <span className="flex items-center gap-2 px-3.5 py-2.5 rounded-suave bg-folha-2 border border-transparent">
-            <input type="hidden" name={CAMPO_IPI_DEFINIDO} value="1" />
-            <input type="checkbox" name={CAMPO_IPI} defaultChecked className="accent-carimbo" />
-            <span className="text-corpo text-tinta-2 whitespace-nowrap">Cobrar</span>
-          </span>
-        </label>
-
-        <div className="block">
-          <EspacoDoRotulo />
-          <Botao
-            type="submit"
-            variante="secundaria"
-            className="w-full lg:w-auto"
-            disabled={enviando || !descricao || !preco}
-          >
-            {enviando ? "Adicionando…" : "Adicionar"}
-          </Botao>
-        </div>
-      </div>
-
-      {totalPrevisto !== null && (
-        <p className="text-mini text-tinta-3 numerico">
-          Este item entra por {formatarMoeda(totalPrevisto)} antes do IPI.
-        </p>
       )}
 
       <ErroGeral />

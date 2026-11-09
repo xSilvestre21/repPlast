@@ -163,8 +163,9 @@ export function CartaoGrafico({
 
   // A tela cheia vai para o `<body>`. No lugar, o `z-50` ficava preso no
   // contexto de empilhamento de um ancestral — a linha do grid dentro do
-  // `.palco`, cuja animação de entrada (`fill: both`) cria um — e os cartões
-  // das linhas de baixo pintavam por cima. O gráfico remonta na troca, mas o
+  // `.palco`, cuja animação de entrada cria um enquanto roda (antes, com
+  // `fill: both`, para sempre) — e os cartões das linhas de baixo pintavam por
+  // cima. O gráfico remonta na troca, mas o
   // estado (visão, período, busca) mora no cartão que o chama.
   return cheia ? createPortal(cartao, document.body) : cartao;
 }

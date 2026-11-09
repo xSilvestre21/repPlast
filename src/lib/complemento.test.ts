@@ -11,7 +11,6 @@ import {
   type GrupoComplemento,
   alternarOpcao,
   comTextoDigitado,
-  gruposVisiveis,
   opcoesMarcadas,
   textoDigitado,
 } from "./complemento";
@@ -93,40 +92,6 @@ describe("o que foi digitado à mão", () => {
   it("troca o digitado sem mexer nas opções", () => {
     expect(comTextoDigitado("Azul marinho", GRUPOS, "fosco")).toBe("Azul fosco");
     expect(comTextoDigitado("Azul marinho", GRUPOS, "")).toBe("Azul");
-  });
-});
-
-describe("buscar", () => {
-  const nada = new Set<string>();
-  const opcoes = (grupos: GrupoComplemento[]) => grupos.flatMap((g) => g.opcoes);
-
-  it("sem busca, mostra tudo", () => {
-    expect(gruposVisiveis(GRUPOS, "  ", nada)).toEqual(GRUPOS);
-  });
-
-  it("acha pela opção, sem acento e sem caixa", () => {
-    expect(opcoes(gruposVisiveis(GRUPOS, "removivel", nada))).toEqual(["Tampa Removível"]);
-  });
-
-  it("acha pelo nome do grupo", () => {
-    expect(opcoes(gruposVisiveis(GRUPOS, "cor", nada))).toEqual(["Natural", "Azul"]);
-  });
-
-  it("aceita os pedaços em qualquer ordem", () => {
-    expect(opcoes(gruposVisiveis(GRUPOS, "lacre c/", nada))).toEqual(["C/ Lacre"]);
-  });
-
-  it("a marcada continua na tela, mesmo fora da busca", () => {
-    const marcadas = new Set(["Azul"]);
-    expect(opcoes(gruposVisiveis(GRUPOS, "lacre", marcadas))).toEqual(["C/ Lacre", "Azul"]);
-  });
-
-  it("some o grupo que ficou sem opção", () => {
-    expect(gruposVisiveis(GRUPOS, "lacre", nada).map((g) => g.titulo)).toEqual(["Segurança"]);
-  });
-
-  it("devolve vazio quando nada casa", () => {
-    expect(gruposVisiveis(GRUPOS, "zzz", nada)).toEqual([]);
   });
 });
 

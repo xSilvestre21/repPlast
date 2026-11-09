@@ -197,13 +197,20 @@ export function FormularioProduto({
   const usaNaFita = (campo: ModoFita["campos"][number]) =>
     (modoFita.campos as readonly string[]).includes(campo);
 
-  const [tipo, setTipo] = useState<TipoProduto>(() => tipoDoProduto(valores));
+  /**
+   * O tipo escolhido. O produto novo começa sem nenhum: nem sempre é saco o que se
+   * vende, e um saco já marcado passava sem ninguém escolher. Até a escolha, a tela
+   * mostra só o que não depende dele.
+   */
+  const [tipo, setTipo] = useState<TipoProduto | null>(() =>
+    valores.familia ? tipoDoProduto(valores) : null,
+  );
 
   const ehEmbalagem = ehPorMilheiro(campos.familia);
 
   /** As sugestões do campo Material fora do saco, conforme o tipo. */
   const sugestoesMaterial = useMemo(
-    () => tipo.materiais.map((m) => ({ id: m, rotulo: m })),
+    () => (tipo?.materiais ?? []).map((m) => ({ id: m, rotulo: m })),
     [tipo],
   );
 
@@ -224,7 +231,7 @@ export function FormularioProduto({
         : campos;
     });
 
-    if (novo.familia !== tipo.familia) {
+    if (novo.familia !== tipo?.familia) {
       setModoFita(MODOS_FITA[0]);
       setDescricaoManual(null);
       setDensidadeSugerida("");
@@ -315,6 +322,7 @@ export function FormularioProduto({
   const sufixos = aditivosEscolhidos.map((a) => a.sufixoDescricao);
 
   const descricaoGerada = useMemo(() => {
+    if (!tipo) return "";
     if (ehEmbalagem) return descricaoDoTipo(tipo, campos, sufixos);
 
     if (campos.familia === "SACO") {
@@ -442,7 +450,7 @@ export function FormularioProduto({
   const ehSaco = campos.familia === "SACO";
   const ehFita = campos.familia === "FITA";
   const ehAvulso = campos.familia === "AVULSO";
-  const ehShrink = tipo.valor === "SHRINK";
+  const ehShrink = tipo?.valor === "SHRINK";
 
   /*
    * Como o saco é vendido. Mora no rótulo de unidade do produto — o mesmo
@@ -497,8 +505,12 @@ export function FormularioProduto({
       {/*
         Em leitura, o formulário inteiro trava de uma vez — mesmo recurso do
         cabeçalho do pedido. Mexer exige clicar em Editar no alto da página.
+
+        `palco`: as seções entram em cascata ao abrir, como nas fichas de cliente
+        e de indústria, e de novo cada uma que aparece depois — escolher o tipo
+        monta as dele, e elas descem na ordem em vez de surgirem secas.
       */}
-      <fieldset disabled={!editavel} className="space-y-5 min-w-0">
+      <fieldset disabled={!editavel} className="space-y-5 min-w-0 palco">
         <SecaoCartao icone={Factory} titulo="Origem">
           <div className="grid gap-4 sm:grid-cols-2">
             <SelecaoBuscavel
@@ -546,19 +558,21 @@ export function FormularioProduto({
               rotulo="Tipo"
               required
               opcoes={OPCOES_TIPO}
-              value={tipo.valor}
+              value={tipo?.valor ?? ""}
               aoEscolher={escolherTipo}
               placeholder="Digite para achar…"
               dica={
-                ehSaco
-                  ? "Só o saco tem preço calculado por fórmula."
-                  : ehAvulso
-                    ? "Para o que não está nesta lista."
-                    : ehShrink
-                      ? "Vendido por kg; entra no cadastro como stretch."
-                      : ehEmbalagem
-                        ? "Vendido por milheiro, com preço digitado."
-                        : "Preço de tabela."
+                !tipo
+                  ? "Escolha primeiro: os outros campos do produto dependem do tipo."
+                  : ehSaco
+                    ? "Só o saco tem preço calculado por fórmula."
+                    : ehAvulso
+                      ? "Para o que não está nesta lista."
+                      : ehShrink
+                        ? "Vendido por kg; entra no cadastro como stretch."
+                        : ehEmbalagem
+                          ? "Vendido por milheiro, com preço digitado."
+                          : "Preço de tabela."
               }
             />
             <input type="hidden" name="familia" value={campos.familia} />
@@ -591,66 +605,71 @@ export function FormularioProduto({
               dela, digitando. Nos outros tipos a lista só sugere, e o que se
               digita vale: é texto, sem preço por trás.
             */}
-            {ehSaco ? (
-              <SelecaoBuscavel
-                name="material"
-                rotulo="Material"
-                opcoes={opcoesMaterial}
-                value={campos.material}
-                aoEscolher={escolherMaterial}
-                placeholder={campos.fornecedorId ? "Digite para achar…" : "Escolha a indústria antes"}
-                vazio={
-                  campos.fornecedorId
-                    ? "Nenhum material da tabela desta indústria com esse nome."
-                    : "Escolha a indústria: o material vem da tabela dela."
-                }
-                dica={
-                  materialDaTabela
-                    ? `Tabela desta indústria: ${formatarMoeda(materialDaTabela.precoKg)} / kg.`
-                    : campos.material
-                      ? "Fora da tabela desta indústria — o fator kg fica sem sugestão."
-                      : "Sai depois das medidas, como PEAD no pedido 2253."
-                }
-              />
-            ) : (
-              <SelecaoBuscavel
-                livre
-                name="material"
-                rotulo={tipo.rotuloMaterial ?? "Tipo do produto"}
-                opcoes={sugestoesMaterial}
-                value={campos.material}
-                aoEscolher={escolherMaterial}
-                placeholder={tipo.materialAbre ? tipo.nome || "Nome do item" : undefined}
-                dica={
-                  tipo.materialAbre
-                    ? `Abre a descrição, como “${tipo.nome || "Fita adesiva"}”.`
-                    : `Escolha da lista ou digite outro. Sai depois da medida, como em “${tipo.nome} PEAD”.`
-                }
-              />
-            )}
+            {/* `contents`: os dois seguem na grade, e entram em cascata ao aparecer. */}
+            {tipo && (
+              <div className="contents palco">
+                {ehSaco ? (
+                  <SelecaoBuscavel
+                    name="material"
+                    rotulo="Material"
+                    opcoes={opcoesMaterial}
+                    value={campos.material}
+                    aoEscolher={escolherMaterial}
+                    placeholder={campos.fornecedorId ? "Digite para achar…" : "Escolha a indústria antes"}
+                    vazio={
+                      campos.fornecedorId
+                        ? "Nenhum material da tabela desta indústria com esse nome."
+                        : "Escolha a indústria: o material vem da tabela dela."
+                    }
+                    dica={
+                      materialDaTabela
+                        ? `Tabela desta indústria: ${formatarMoeda(materialDaTabela.precoKg)} / kg.`
+                        : campos.material
+                          ? "Fora da tabela desta indústria — o fator kg fica sem sugestão."
+                          : "Sai depois das medidas, como PEAD no pedido 2253."
+                    }
+                  />
+                ) : (
+                  <SelecaoBuscavel
+                    livre
+                    name="material"
+                    rotulo={tipo.rotuloMaterial ?? "Tipo do produto"}
+                    opcoes={sugestoesMaterial}
+                    value={campos.material}
+                    aoEscolher={escolherMaterial}
+                    placeholder={tipo.materialAbre ? tipo.nome || "Nome do item" : undefined}
+                    dica={
+                      tipo.materialAbre
+                        ? `Abre a descrição, como “${tipo.nome || "Fita adesiva"}”.`
+                        : `Escolha da lista ou digite outro. Sai depois da medida, como em “${tipo.nome} PEAD”.`
+                    }
+                  />
+                )}
 
-            <CampoComplemento
-              key={tipo.valor}
-              rotulo={tipo.rotuloComplemento}
-              grupos={tipo.complementos}
-              value={campos.complemento}
-              aoMudar={alterar("complemento")}
-              dica={
-                tipo.complementos.length > 0
-                  ? "Fecha a descrição. Abra um grupo ou digite: o que não estiver na lista entra como escrito."
-                  : "Fecha a descrição: cor, acabamento, peso da bobina."
-              }
-              placeholder={
-                ehSaco || ehAvulso || ehEmbalagem
-                  ? ""
-                  : ehFita
-                    ? "transparente"
-                    : ehShrink
-                      ? "BOBINA COM 20 KG"
-                      : "BOBINA 4KG PESO LÍQUIDO"
-              }
-              className="sm:col-span-2"
-            />
+                <CampoComplemento
+                  key={tipo.valor}
+                  rotulo={tipo.rotuloComplemento}
+                  grupos={tipo.complementos}
+                  value={campos.complemento}
+                  aoMudar={alterar("complemento")}
+                  dica={
+                    tipo.complementos.length > 0
+                      ? "Fecha a descrição. Abra um grupo ou digite: o que não estiver na lista entra como escrito."
+                      : "Fecha a descrição: cor, acabamento, peso da bobina."
+                  }
+                  placeholder={
+                    ehSaco || ehAvulso || ehEmbalagem
+                      ? ""
+                      : ehFita
+                        ? "transparente"
+                        : ehShrink
+                          ? "BOBINA COM 20 KG"
+                          : "BOBINA 4KG PESO LÍQUIDO"
+                  }
+                  className="sm:col-span-2"
+                />
+              </div>
+            )}
           </div>
         </SecaoCartao>
 
@@ -765,7 +784,7 @@ export function FormularioProduto({
           </SecaoCartao>
         )}
 
-        {ehEmbalagem && (
+        {tipo && ehEmbalagem && (
           <SecaoCartao
             icone={Ruler}
             titulo="Medidas"
@@ -786,7 +805,7 @@ export function FormularioProduto({
           </SecaoCartao>
         )}
 
-        {tipo.comTampa && (
+        {tipo?.comTampa && (
           <SecaoCartao
             icone={CircleDot}
             titulo="Tampa"
@@ -811,13 +830,14 @@ export function FormularioProduto({
           </SecaoCartao>
         )}
 
-        {tipo.acabamentos && (
+        {tipo?.acabamentos && (
           <SecaoCartao
             icone={Paintbrush}
             titulo="Acabamento"
             descricao="Um só por peça. Sai na descrição. Com ou sem mão de obra se escolhe ao lançar o item, e o valor soma ao milheiro."
           >
             <CampoAcabamento
+              ocultarRotulo
               grupos={tipo.acabamentos}
               valores={campos}
               aoMudar={alterarEmbalagem}
@@ -955,7 +975,7 @@ export function FormularioProduto({
           </SecaoCartao>
         )}
 
-        {!ehSaco && !ehFita && !ehAvulso && !ehEmbalagem && (
+        {tipo && !ehSaco && !ehFita && !ehAvulso && !ehEmbalagem && (
           <SecaoCartao
             icone={campos.familia === "BOBINA" ? Disc3 : Layers}
             titulo={tipo.rotulo}
@@ -998,7 +1018,7 @@ export function FormularioProduto({
           </SecaoCartao>
         )}
 
-        {campos.fornecedorId && (
+        {tipo && campos.fornecedorId && (
           <SecaoCartao
             icone={FlaskConical}
             titulo="Aditivos"
@@ -1028,125 +1048,127 @@ export function FormularioProduto({
           </SecaoCartao>
         )}
 
-        <SecaoCartao
-          icone={FileText}
-          titulo="Como sai no pedido"
-          descricao="A descrição é montada a partir das especificações, e acompanha qualquer mudança nelas. Dá para ajustar o texto depois."
-        >
-          <Campo
-            name="descricao"
-            rotulo="Descrição impressa"
-            required
-            value={descricao}
-            onChange={(e) => setDescricaoManual(e.target.value)}
-            className="font-mono"
-          />
+        {tipo && (
+          <SecaoCartao
+            icone={FileText}
+            titulo="Como sai no pedido"
+            descricao="A descrição é montada a partir das especificações, e acompanha qualquer mudança nelas. Dá para ajustar o texto depois."
+          >
+            <Campo
+              name="descricao"
+              rotulo="Descrição impressa"
+              required
+              value={descricao}
+              onChange={(e) => setDescricaoManual(e.target.value)}
+              className="font-mono"
+            />
 
-          {descricaoDivergente && (
-            <BotaoTexto
-              type="button"
-              onClick={() => setDescricaoManual(null)}
-              className="mt-2"
-            >
-              Voltar para a gerada: <span className="font-mono">{descricaoGerada}</span>
-            </BotaoTexto>
-          )}
+            {descricaoDivergente && (
+              <BotaoTexto
+                type="button"
+                onClick={() => setDescricaoManual(null)}
+                className="mt-2"
+              >
+                Voltar para a gerada: <span className="font-mono">{descricaoGerada}</span>
+              </BotaoTexto>
+            )}
 
-          {/*
-            Saco por quilo: o preço é o fator (com os aditivos por kg), a mesma
-            conta de `precoUnitario` no pedido. Os aditivos por milheiro não
-            têm milheiro onde entrar e ficam de fora — dito aqui, e não
-            descoberto no pedido.
-          */}
-          {sacoPorKg && precoDoKg && (
-            <Cartao className="mt-4 p-4 bg-folha-2">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-                <div className="text-corpo text-tinta-2">Preço do quilo</div>
-                <div className="text-forte font-semibold cifra numerico">
-                  {formatarMoeda(precoDoKg.toNumber())}
+            {/*
+              Saco por quilo: o preço é o fator (com os aditivos por kg), a mesma
+              conta de `precoUnitario` no pedido. Os aditivos por milheiro não
+              têm milheiro onde entrar e ficam de fora — dito aqui, e não
+              descoberto no pedido.
+            */}
+            {sacoPorKg && precoDoKg && (
+              <Cartao className="mt-4 p-4 bg-folha-2">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+                  <div className="text-corpo text-tinta-2">Preço do quilo</div>
+                  <div className="text-forte font-semibold cifra numerico">
+                    {formatarMoeda(precoDoKg.toNumber())}
+                  </div>
                 </div>
-              </div>
 
-              {aditivosEscolhidos.length > 0 && (
+                {aditivosEscolhidos.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-filete text-mini text-tinta-3 font-mono numerico leading-relaxed">
+                    preço {formatarNumero(lerNumeroBr(campos.fatorKg) ?? 0, 2)} + aditivos por kg ={" "}
+                    {formatarNumero(precoDoKg.toNumber(), 2)}
+                    {aditivosEscolhidos.some((a) => a.tipo !== "POR_KG") && (
+                      <div className="mt-1 font-sans">
+                        Aditivo cobrado por milheiro não entra no preço do quilo.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {faltaNoKg !== null && materialDaTabela && (
+                  <p className="mt-3 pt-3 border-t border-filete text-mini text-perigo leading-relaxed">
+                    Abaixo do mínimo do {materialDaTabela.nome} (
+                    {formatarNumero(minimoDoMaterial ?? 0, 2)}):{" "}
+                    <span className="numerico">{formatarMoeda(faltaNoKg)}</span> a menos por quilo.
+                  </p>
+                )}
+              </Cartao>
+            )}
+
+            {calculo && !sacoPorKg && (
+              <Cartao className="mt-4 p-4 bg-folha-2">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+                  <div className="text-corpo text-tinta-2">Preço do milheiro</div>
+                  <div className="text-forte font-semibold cifra numerico">
+                    {formatarMoeda(calculo.precoMilheiro.toNumber())}
+                  </div>
+                </div>
+
                 <div className="mt-3 pt-3 border-t border-filete text-mini text-tinta-3 font-mono numerico leading-relaxed">
-                  preço {formatarNumero(lerNumeroBr(campos.fatorKg) ?? 0, 2)} + aditivos por kg ={" "}
-                  {formatarNumero(precoDoKg.toNumber(), 2)}
-                  {aditivosEscolhidos.some((a) => a.tipo !== "POR_KG") && (
-                    <div className="mt-1 font-sans">
-                      Aditivo cobrado por milheiro não entra no preço do quilo.
+                  {formatarNumero(calculo.largura)} × {formatarNumero(calculo.comprimento)} ×{" "}
+                  {formatarNumero(calculo.espessura, 2)} × {formatarNumero(calculo.densidade)} ={" "}
+                  {formatarNumero(calculo.pesoMilheiro.toNumber(), 2)} kg
+                  <div className="mt-1">
+                    × fator {formatarNumero(calculo.fatorEfetivo.toNumber(), 2)} ={" "}
+                    {formatarNumero(calculo.precoMilheiro.toNumber(), 2)}
+                  </div>
+                  {aditivosEscolhidos.length > 0 && (
+                    <div className="mt-1">
+                      fator {formatarNumero(calculo.fator, 2)} + aditivos ={" "}
+                      {formatarNumero(calculo.fatorEfetivo.toNumber(), 2)}
                     </div>
                   )}
                 </div>
-              )}
 
-              {faltaNoKg !== null && materialDaTabela && (
-                <p className="mt-3 pt-3 border-t border-filete text-mini text-perigo leading-relaxed">
-                  Abaixo do mínimo do {materialDaTabela.nome} (
-                  {formatarNumero(minimoDoMaterial ?? 0, 2)}):{" "}
-                  <span className="numerico">{formatarMoeda(faltaNoKg)}</span> a menos por quilo.
-                </p>
-              )}
-            </Cartao>
-          )}
+                {/*
+                  Aviso, não impedimento: vender abaixo do piso é decisão de quem
+                  negocia. O que o sistema faz é mostrar o tamanho da conta — e o
+                  que encolhe não é só o faturamento, é a comissão em cima dele.
 
-          {calculo && !sacoPorKg && (
-            <Cartao className="mt-4 p-4 bg-folha-2">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-                <div className="text-corpo text-tinta-2">Preço do milheiro</div>
-                <div className="text-forte font-semibold cifra numerico">
-                  {formatarMoeda(calculo.precoMilheiro.toNumber())}
-                </div>
-              </div>
-
-              <div className="mt-3 pt-3 border-t border-filete text-mini text-tinta-3 font-mono numerico leading-relaxed">
-                {formatarNumero(calculo.largura)} × {formatarNumero(calculo.comprimento)} ×{" "}
-                {formatarNumero(calculo.espessura, 2)} × {formatarNumero(calculo.densidade)} ={" "}
-                {formatarNumero(calculo.pesoMilheiro.toNumber(), 2)} kg
-                <div className="mt-1">
-                  × fator {formatarNumero(calculo.fatorEfetivo.toNumber(), 2)} ={" "}
-                  {formatarNumero(calculo.precoMilheiro.toNumber(), 2)}
-                </div>
-                {aditivosEscolhidos.length > 0 && (
-                  <div className="mt-1">
-                    fator {formatarNumero(calculo.fator, 2)} + aditivos ={" "}
-                    {formatarNumero(calculo.fatorEfetivo.toNumber(), 2)}
-                  </div>
+                  Fica aqui no painel, e não no campo, justamente para não parecer
+                  o erro vermelho que barra o salvar.
+                */}
+                {calculo.falta && materialDaTabela && (
+                  <p className="mt-3 pt-3 border-t border-filete text-mini text-perigo leading-relaxed">
+                    Abaixo do mínimo do {materialDaTabela.nome} (
+                    {formatarNumero(minimoDoMaterial ?? 0, 2)}):{" "}
+                    <span className="numerico">
+                      {formatarMoeda(calculo.falta.toNumber())}
+                    </span>{" "}
+                    a menos por milheiro
+                    {comissaoDaIndustria !== null && (
+                      <>
+                        , ≈{" "}
+                        <span className="numerico">
+                          {formatarMoeda(
+                            calculo.falta.times(comissaoDaIndustria).dividedBy(100).toNumber(),
+                          )}
+                        </span>{" "}
+                        de comissão a {formatarNumero(comissaoDaIndustria, 2)}%
+                      </>
+                    )}
+                    .
+                  </p>
                 )}
-              </div>
-
-              {/*
-                Aviso, não impedimento: vender abaixo do piso é decisão de quem
-                negocia. O que o sistema faz é mostrar o tamanho da conta — e o
-                que encolhe não é só o faturamento, é a comissão em cima dele.
-
-                Fica aqui no painel, e não no campo, justamente para não parecer
-                o erro vermelho que barra o salvar.
-              */}
-              {calculo.falta && materialDaTabela && (
-                <p className="mt-3 pt-3 border-t border-filete text-mini text-perigo leading-relaxed">
-                  Abaixo do mínimo do {materialDaTabela.nome} (
-                  {formatarNumero(minimoDoMaterial ?? 0, 2)}):{" "}
-                  <span className="numerico">
-                    {formatarMoeda(calculo.falta.toNumber())}
-                  </span>{" "}
-                  a menos por milheiro
-                  {comissaoDaIndustria !== null && (
-                    <>
-                      , ≈{" "}
-                      <span className="numerico">
-                        {formatarMoeda(
-                          calculo.falta.times(comissaoDaIndustria).dividedBy(100).toNumber(),
-                        )}
-                      </span>{" "}
-                      de comissão a {formatarNumero(comissaoDaIndustria, 2)}%
-                    </>
-                  )}
-                  .
-                </p>
-              )}
-            </Cartao>
-          )}
-        </SecaoCartao>
+              </Cartao>
+            )}
+          </SecaoCartao>
+        )}
       </fieldset>
 
       {editavel && (

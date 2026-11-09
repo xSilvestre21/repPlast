@@ -8,10 +8,10 @@ import { CLASSE_CONTROLE } from "./ui";
 export const LIMITE_SEM_BUSCA = 6;
 
 /**
- * A caixa que filtra uma lista de etiquetas, nos aditivos e nos complementos.
+ * A caixa que filtra a lista de dentro da folha, no celular (`SelecaoEtiquetas`,
+ * nos aditivos).
  *
- * Só digita: quem filtra é a tela, porque a etiqueta escolhida precisa continuar
- * visível, e isso cada lista resolve do seu jeito.
+ * Só digita: quem filtra é a tela.
  */
 export function BuscaEtiquetas({
   rotulo,

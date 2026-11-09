@@ -207,6 +207,18 @@ describe("poucas opções", () => {
   });
 });
 
+/** Os aditivos de uma indústria grande: um grupo só, sem texto livre. */
+const LONGA: GrupoEtiquetas[] = [
+  {
+    titulo: "Ver todos (30)",
+    opcoes: Array.from({ length: 30 }, (_, i) => ({
+      id: `a${i}`,
+      rotulo: i === 17 ? "Deslizante" : `Aditivo ${i}`,
+      busca: i === 23 ? "C/ ANTIESTATICO" : undefined,
+    })),
+  },
+];
+
 describe("no celular", () => {
   afterEach(async () => {
     await page.viewport(1280, 720);
@@ -250,7 +262,7 @@ describe("no celular", () => {
     await expect.element(tela.getByRole("button", { name: "Tirar Oval" })).toBeVisible();
   });
 
-  test("no grupo de várias, a folha fica até o Pronto", async () => {
+  test("no grupo de várias, a folha fica aberta e fecha no X, como as outras", async () => {
     const tela = await abrirNoCelular();
 
     await tela.getByRole("button", { name: "Extras" }).click();
@@ -262,46 +274,43 @@ describe("no celular", () => {
       .element(folha.getByRole("button", { name: "Hotfill" }))
       .toHaveAttribute("aria-pressed", "true");
 
-    await folha.getByRole("button", { name: "Pronto" }).click();
+    await folha.getByRole("button", { name: "Fechar" }).click();
 
     await expect.element(tela.getByRole("dialog")).not.toBeInTheDocument();
     await expect.element(tela.getByRole("button", { name: "Tirar Hotfill" })).toBeVisible();
   });
 
-  test("com um grupo só, a folha leva o nome do campo", async () => {
-    await page.viewport(390, 844);
-    const MUITAS = [
-      {
-        titulo: "Ver todos (8)",
-        opcoes: Array.from({ length: 8 }, (_, i) => ({ id: `a${i}`, rotulo: `Aditivo ${i}` })),
-      },
-    ];
-    const tela = await render(<Exemplo grupos={MUITAS} livre={false} />);
+  test("nenhuma folha tem Pronto, nem a de marcar várias", async () => {
+    const tela = await abrirNoCelular();
 
-    await tela.getByRole("button", { name: "Ver todos (8)" }).click();
-
-    await expect.element(tela.getByRole("dialog", { name: "Complemento" })).toBeVisible();
+    for (const grupo of ["Formato", "Extras", "Cor"]) {
+      await tela.getByRole("button", { name: grupo, exact: true }).click();
+      const folha = tela.getByRole("dialog", { name: grupo });
+      await expect.element(folha).toBeVisible();
+      await expect.element(folha.getByRole("button", { name: "Pronto" })).not.toBeInTheDocument();
+      await folha.getByRole("button", { name: "Fechar" }).click();
+      await expect.element(tela.getByRole("dialog")).not.toBeInTheDocument();
+    }
   });
 
-  test("numa lista longa, o Pronto continua na tela", async () => {
+  test("com vários grupos, a folha não tem busca: a caixa já busca em todos", async () => {
+    const tela = await abrirNoCelular();
+
+    await expect.element(tela.getByRole("searchbox")).toBeVisible();
+    await tela.getByRole("button", { name: "Formato" }).click();
+
+    const folha = tela.getByRole("dialog", { name: "Formato" });
+    await expect.element(folha).toBeVisible();
+    await expect.element(folha.getByRole("searchbox")).not.toBeInTheDocument();
+  });
+
+  test("com um grupo só, a folha leva o nome do campo", async () => {
     await page.viewport(390, 844);
-    const LONGA = [
-      {
-        titulo: "Ver todos (30)",
-        opcoes: Array.from({ length: 30 }, (_, i) => ({ id: `a${i}`, rotulo: `Aditivo ${i}` })),
-      },
-    ];
     const tela = await render(<Exemplo grupos={LONGA} livre={false} />);
 
     await tela.getByRole("button", { name: "Ver todos (30)" }).click();
 
-    const pronto = tela.getByRole("dialog", { name: "Complemento" }).getByRole("button", {
-      name: "Pronto",
-    });
-    await expect.element(pronto).toBeVisible();
-    await expect
-      .poll(() => (pronto.element() as HTMLElement).getBoundingClientRect().bottom)
-      .toBeLessThanOrEqual(844);
+    await expect.element(tela.getByRole("dialog", { name: "Complemento" })).toBeVisible();
   });
 
   test("marcar na folha não envia o formulário", async () => {
@@ -313,5 +322,145 @@ describe("no celular", () => {
     await tela.getByRole("dialog", { name: "Extras" }).getByRole("button", { name: "Hotfill" }).click();
 
     expect(aoEnviar).not.toHaveBeenCalled();
+  });
+});
+
+describe("no celular, a lista de um grupo só mora na folha", () => {
+  afterEach(async () => {
+    await page.viewport(1280, 720);
+  });
+
+  const abrirAditivos = async (aoEnviar?: () => void) => {
+    await page.viewport(390, 844);
+    const tela = await render(<Exemplo grupos={LONGA} livre={false} aoEnviar={aoEnviar} />);
+    await tela.getByRole("button", { name: "Ver todos (30)" }).click();
+    return { tela, folha: tela.getByRole("dialog", { name: "Complemento" }) };
+  };
+
+  test("a caixa não busca: a busca está na folha", async () => {
+    await page.viewport(390, 844);
+    const tela = await render(<Exemplo grupos={LONGA} livre={false} />);
+
+    await expect.element(tela.getByRole("button", { name: "Ver todos (30)" })).toBeVisible();
+    await expect.element(tela.getByRole("searchbox")).not.toBeInTheDocument();
+
+    await tela.getByRole("button", { name: "Ver todos (30)" }).click();
+
+    const folha = tela.getByRole("dialog", { name: "Complemento" });
+    await expect.element(folha.getByRole("searchbox")).toBeVisible();
+    await expect.element(folha.getByRole("button", { name: "Pronto" })).not.toBeInTheDocument();
+  });
+
+  test("abrir a folha não sobe o teclado", async () => {
+    const { folha } = await abrirAditivos();
+
+    await expect.element(folha.getByRole("searchbox")).toBeVisible();
+    expect(document.activeElement).not.toBe(folha.getByRole("searchbox").element());
+  });
+
+  test("digitar filtra a lista, pelo nome e pelo sufixo", async () => {
+    const { folha } = await abrirAditivos();
+
+    await userEvent.type(folha.getByRole("searchbox"), "desliz");
+
+    await expect.element(folha.getByRole("button", { name: "Deslizante" })).toBeVisible();
+    await expect
+      .element(folha.getByRole("button", { name: "Aditivo 1", exact: true }))
+      .not.toBeInTheDocument();
+
+    await userEvent.clear(folha.getByRole("searchbox"));
+    await userEvent.type(folha.getByRole("searchbox"), "antiestat");
+
+    await expect.element(folha.getByRole("button", { name: "Aditivo 23" })).toBeVisible();
+    await expect.element(folha.getByRole("button", { name: "Deslizante" })).not.toBeInTheDocument();
+  });
+
+  test("marcar o que achou deixa a folha aberta e a busca como estava", async () => {
+    const { tela, folha } = await abrirAditivos();
+
+    await userEvent.type(folha.getByRole("searchbox"), "desliz");
+    await folha.getByRole("button", { name: "Deslizante" }).click();
+
+    await expect
+      .element(folha.getByRole("button", { name: "Deslizante" }))
+      .toHaveAttribute("aria-pressed", "true");
+    await expect.element(folha.getByRole("searchbox")).toHaveValue("desliz");
+
+    await folha.getByRole("button", { name: "Fechar" }).click();
+
+    await expect.element(tela.getByRole("button", { name: "Tirar Deslizante" })).toBeVisible();
+  });
+
+  test("sem resultado, diz que não achou", async () => {
+    const { folha } = await abrirAditivos();
+
+    await userEvent.type(folha.getByRole("searchbox"), "xyz");
+
+    await expect.element(folha.getByText(/Nada com .xyz./)).toBeVisible();
+  });
+
+  test("Enter na busca da folha não envia o formulário", async () => {
+    const aoEnviar = vi.fn();
+    const { folha } = await abrirAditivos(aoEnviar);
+
+    await userEvent.type(folha.getByRole("searchbox"), "desliz{Enter}");
+
+    expect(aoEnviar).not.toHaveBeenCalled();
+  });
+
+  test("reabrir a folha começa sem busca", async () => {
+    const { tela, folha } = await abrirAditivos();
+
+    await userEvent.type(folha.getByRole("searchbox"), "desliz");
+    await folha.getByRole("button", { name: "Fechar" }).click();
+    await expect.element(tela.getByRole("dialog")).not.toBeInTheDocument();
+
+    await tela.getByRole("button", { name: "Ver todos (30)" }).click();
+
+    await expect.element(folha.getByRole("searchbox")).toHaveValue("");
+    await expect
+      .element(folha.getByRole("button", { name: "Aditivo 1", exact: true }))
+      .toBeVisible();
+  });
+
+  test("rolando a lista até o fim, a busca continua na tela", async () => {
+    const { folha } = await abrirAditivos();
+
+    const caixa = folha.getByRole("searchbox");
+    await expect.element(caixa).toBeVisible();
+    const dialogo = folha.element() as HTMLElement;
+    dialogo.scrollTop = dialogo.scrollHeight;
+
+    await expect.poll(() => dialogo.scrollTop).toBeGreaterThan(0);
+    const topoDaFolha = dialogo.getBoundingClientRect().top;
+    const topoDaCaixa = (caixa.element() as HTMLElement).getBoundingClientRect().top;
+    expect(topoDaCaixa).toBeGreaterThanOrEqual(topoDaFolha);
+    expect(topoDaCaixa).toBeLessThan(topoDaFolha + 40);
+  });
+
+  test("com algo marcado, tocar na caixa abre a folha", async () => {
+    const { tela, folha } = await abrirAditivos();
+
+    await folha.getByRole("button", { name: "Deslizante" }).click();
+    await folha.getByRole("button", { name: "Fechar" }).click();
+    await expect.element(tela.getByRole("dialog")).not.toBeInTheDocument();
+
+    const ficha = tela.getByRole("button", { name: "Tirar Deslizante" }).element();
+    (ficha.closest("span")!.parentElement as HTMLElement).click();
+
+    await expect.element(tela.getByRole("dialog", { name: "Complemento" })).toBeVisible();
+  });
+});
+
+describe("no computador, a lista de um grupo só continua como era", () => {
+  test("a caixa busca, e a lista abre ali mesmo, sem folha", async () => {
+    const tela = await render(<Exemplo grupos={LONGA} livre={false} />);
+
+    await expect.element(tela.getByRole("searchbox")).toBeVisible();
+
+    await tela.getByRole("button", { name: "Ver todos (30)" }).click();
+
+    await expect.element(tela.getByRole("button", { name: "Deslizante" })).toBeVisible();
+    await expect.element(tela.getByRole("dialog")).not.toBeInTheDocument();
   });
 });

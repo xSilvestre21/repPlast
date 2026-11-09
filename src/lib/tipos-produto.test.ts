@@ -280,6 +280,26 @@ describe("trocar de tipo limpa o que era da outra peça", () => {
   it("escolher de novo o mesmo tipo não muda nada", () => {
     expect(trocar("BOMBONA_TAMPA", "BOMBONA_TAMPA", CONJUNTO)).toEqual(CONJUNTO);
   });
+
+  describe("partindo de nenhum tipo, o começo das duas telas", () => {
+    const SEM_TIPO = { ...VAZIOS, familia: "", fornecedorId: "f1" };
+    const escolher = (para: string) =>
+      camposAoTrocarDeTipo(null, tipoPorValor(para), SEM_TIPO, VAZIOS, ["fornecedorId"]);
+
+    it("assume a família escolhida e guarda o que foi pedido para manter", () => {
+      expect(escolher("FRASCO")).toEqual({
+        ...VAZIOS,
+        familia: "FRASCO",
+        fornecedorId: "f1",
+        capacidadeUnidade: "mL",
+      });
+    });
+
+    it("o tipo de nome livre já abre com o nome dele", () => {
+      expect(escolher("STRETCH").material).toBe("FILME STRETCH");
+      expect(escolher("SACO").material).toBe("");
+    });
+  });
 });
 
 describe("catálogo de frascos e bombonas", () => {

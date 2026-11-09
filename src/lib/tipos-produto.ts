@@ -450,10 +450,11 @@ export function tipoDoProduto(produto: {
  * descrição de uma fita, e "Chapa de papelão" não é material de tampa.
  */
 export function materialAoTrocarDeTipo(
-  anterior: TipoProduto,
+  anterior: TipoProduto | null,
   novo: TipoProduto,
   material: string,
 ): string {
+  if (!anterior) return novo.materialAbre ? novo.nome : "";
   if (anterior.valor === novo.valor) return material;
 
   const entreNomesLivres =
@@ -473,18 +474,19 @@ export function materialAoTrocarDeTipo(
  * `manter`, que é o que não depende do tipo.
  *
  * Dentro da mesma família (stretch ↔ shrink) é o mesmo produto, e tudo fica.
+ * Sem tipo ainda (`null`, o começo das duas telas), é como trocar de família.
  */
 export function camposAoTrocarDeTipo<
   C extends { familia: string; material: string; capacidadeUnidade: string },
 >(
-  anterior: TipoProduto,
+  anterior: TipoProduto | null,
   novo: TipoProduto,
   atuais: C,
   vazios: C,
   manter: readonly (keyof C)[] = [],
 ): C {
   const base =
-    anterior.familia === novo.familia
+    anterior?.familia === novo.familia
       ? atuais
       : ({ ...vazios, ...Object.fromEntries(manter.map((c) => [c, atuais[c]])) } as C);
 

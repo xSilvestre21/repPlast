@@ -3,10 +3,10 @@
 import { Check, ChevronDown, X } from "lucide-react";
 import { useId, useMemo, useRef, useState } from "react";
 
-import { LIMITE_SEM_BUSCA } from "./busca-etiquetas";
+import { BuscaEtiquetas, LIMITE_SEM_BUSCA } from "./busca-etiquetas";
 import { FolhaDeBaixo } from "./folha-de-baixo";
 import { useTelaEstreita } from "./tela-estreita";
-import { Botao, RodapeCampo, Rotulo } from "./ui";
+import { RodapeCampo, Rotulo } from "./ui";
 import { casaComTermos, termosDaBusca } from "@/lib/busca";
 
 export type OpcaoEtiqueta = {
@@ -40,6 +40,11 @@ const CLASSE_ETIQUETA =
  * No computador o grupo abre ali mesmo, embaixo dos nomes. No celular os nomes
  * quebram em várias linhas, e abrir ali jogava as opções para longe de onde se
  * tocou: lá ele sobe numa folha, perto do polegar, em linhas que o dedo acerta.
+ * A folha fecha como todas: no X, arrastando para baixo ou tocando fora. Nenhuma
+ * tem botão próprio de "Pronto", nem a de marcar várias.
+ *
+ * Com um grupo só e nada a digitar fora da lista, como os aditivos, no celular a
+ * lista inteira mora na folha, e a busca vai junto: é lá que se procura.
  *
  * Com poucas opções e um grupo só, a lista cabe na tela e fica aberta.
  *
@@ -53,6 +58,7 @@ export function SelecaoEtiquetas({
   aoAlternar,
   digitado = "",
   aoDigitar,
+  escolhaUnica = false,
   placeholder = "Buscar",
   dica,
   className = "",
@@ -67,6 +73,12 @@ export function SelecaoEtiquetas({
   digitado?: string;
   /** Presente, o que a lista não tem pode ser usado como foi digitado. */
   aoDigitar?: (texto: string) => void;
+  /**
+   * Uma escolha só no campo inteiro, como o acabamento: o digitado chega sozinho,
+   * para trocar o anterior, e não somado a ele como no complemento. Trocar a opção
+   * marcada é com quem chama, no `aoAlternar`.
+   */
+  escolhaUnica?: boolean;
   placeholder?: string;
   dica?: string;
   className?: string;
@@ -75,9 +87,11 @@ export function SelecaoEtiquetas({
   const [grupoAberto, setGrupoAberto] = useState<string | null>(null);
   /** O grupo que a folha mostra: fica depois de fechar, enquanto ela desce. */
   const [grupoNaFolha, setGrupoNaFolha] = useState<string | null>(null);
+  const [buscaNaFolha, setBuscaNaFolha] = useState("");
   const estreita = useTelaEstreita();
 
   const campoRef = useRef<HTMLInputElement>(null);
+  const listaDaFolhaRef = useRef<HTMLDivElement>(null);
   const idCampo = useId();
   const idPainel = useId();
 
@@ -103,13 +117,37 @@ export function SelecaoEtiquetas({
   /** Com um grupo só, o nome dele é um "ver todos": o título da folha é o do campo. */
   const umGrupoSo = grupos.length === 1;
 
+  /**
+   * A lista toda numa folha só, sem texto livre: os aditivos. No celular a caixa
+   * deixa de buscar, e a busca vai para dentro da folha (ver `BuscaEtiquetas`).
+   * Aqui a lista já passou do `LIMITE_SEM_BUSCA`, ou estaria aberta na tela.
+   */
+  const listaNaFolha = umGrupoSo && !aoDigitar;
+
+  const naFolhaFiltradas = useMemo(() => {
+    const termos = termosDaBusca(buscaNaFolha);
+    return (naFolha?.opcoes ?? []).filter((o) =>
+      casaComTermos(`${o.rotulo} ${o.busca ?? ""}`, termos),
+    );
+  }, [naFolha, buscaNaFolha]);
+
   function abrirGrupo(titulo: string) {
     setGrupoAberto(titulo === grupoAberto ? null : titulo);
     setGrupoNaFolha(titulo);
+    setBuscaNaFolha("");
+  }
+
+  /**
+   * Buscar na folha volta a lista ao topo: rolada até o meio, o que a busca
+   * achou ficaria escondido acima, embaixo da caixa de busca.
+   */
+  function buscarNaFolha(texto: string) {
+    setBuscaNaFolha(texto);
+    listaDaFolhaRef.current?.closest("dialog")?.scrollTo({ top: 0 });
   }
 
   function usarDigitado() {
-    aoDigitar?.([digitado, texto].filter(Boolean).join(" "));
+    aoDigitar?.(escolhaUnica ? texto : [digitado, texto].filter(Boolean).join(" "));
     setBusca("");
   }
 
@@ -230,15 +268,22 @@ export function SelecaoEtiquetas({
         </label>
       )}
 
-      {/* A caixa é o campo inteiro: o que está marcado e o lugar de digitar, juntos. */}
+      {/*
+        A caixa é o campo inteiro: o que está marcado e o lugar de digitar, juntos.
+        No celular, com a lista na folha, ela só mostra o que foi marcado — e, sem
+        nada marcado, nem aparece: o "Ver todos" embaixo é o caminho.
+      */}
       <div
         onClick={(evento) => {
-          if (evento.target === evento.currentTarget) campoRef.current?.focus();
+          if (evento.target !== evento.currentTarget) return;
+          if (estreita && listaNaFolha) abrirGrupo(grupos[0].titulo);
+          else campoRef.current?.focus();
         }}
-        className="flex flex-wrap items-center gap-1.5 px-1.5 py-1.5 rounded-suave bg-folha-2
+        className={`${listaNaFolha && fichas.length === 0 ? "max-sm:hidden" : ""}
+          flex flex-wrap items-center gap-1.5 px-1.5 py-1.5 rounded-suave bg-folha-2
           border border-transparent cursor-text transition-[background-color,border-color,box-shadow]
           duration-150 hover:border-filete focus-within:bg-folha focus-within:border-carimbo
-          focus-within:ring-4 focus-within:ring-carimbo-fraco"
+          focus-within:ring-4 focus-within:ring-carimbo-fraco`}
       >
         {fichas.map((ficha) => (
           <span
@@ -274,8 +319,8 @@ export function SelecaoEtiquetas({
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
           onKeyDown={aoTeclar}
-          className="flex-1 min-w-44 px-2 py-1 bg-transparent text-corpo text-tinta outline-none
-            placeholder:text-tinta-3"
+          className={`${listaNaFolha ? "max-sm:hidden" : ""} flex-1 min-w-44 px-2 py-1
+            bg-transparent text-corpo text-tinta outline-none placeholder:text-tinta-3`}
         />
       </div>
 
@@ -360,29 +405,37 @@ export function SelecaoEtiquetas({
           titulo={umGrupoSo ? rotulo : (naFolha?.titulo ?? rotulo)}
           descricao={umGrupoSo ? undefined : rotulo}
         >
-          {naFolha && (
-            <div role="group" aria-label={umGrupoSo ? rotulo : naFolha.titulo} className="space-y-0.5">
-              {naFolha.opcoes.map((o) => linha(o, naFolha))}
+          {naFolha && listaNaFolha && (
+            <div ref={listaDaFolhaRef}>
+              {/* Presa no alto: rolando a lista, a busca continua à mão. */}
+              <div className="sticky top-0 z-10 -mx-4 -mt-3 px-4 pt-3 pb-3 bg-folha">
+                <BuscaEtiquetas
+                  rotulo={`Buscar em ${rotulo}`}
+                  placeholder={placeholder}
+                  value={buscaNaFolha}
+                  onChange={buscarNaFolha}
+                />
+              </div>
+
+              {/*
+                A altura mínima segura a folha parada enquanto a lista encolhe: sem
+                ela, a folha baixava a cada letra, e a caixa de busca junto.
+              */}
+              <div role="group" aria-label={rotulo} className="space-y-0.5 min-h-[60dvh]">
+                {naFolhaFiltradas.map((o) => linha(o, naFolha))}
+
+                {naFolhaFiltradas.length === 0 && (
+                  <p className="px-3 py-2.5 text-corpo text-tinta-3">
+                    Nada com &ldquo;{buscaNaFolha.trim()}&rdquo;.
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
-          {/*
-            Com uma opção só, marcar já fecha; com várias, quem decide é a pessoa. Fica
-            preso ao pé da folha: numa lista longa, ele não pode depender de rolar até o fim.
-          */}
-          {!naFolha?.umaSo && (
-            <div
-              className="sticky bottom-0 -mx-4 -mb-5 mt-3 px-4 pt-3
-                pb-[max(1.25rem,env(safe-area-inset-bottom))] bg-folha border-t border-filete"
-            >
-              <Botao
-                type="button"
-                variante="secundaria"
-                className="w-full"
-                onClick={() => setGrupoAberto(null)}
-              >
-                Pronto
-              </Botao>
+          {naFolha && !listaNaFolha && (
+            <div role="group" aria-label={umGrupoSo ? rotulo : naFolha.titulo} className="space-y-0.5">
+              {naFolha.opcoes.map((o) => linha(o, naFolha))}
             </div>
           )}
         </FolhaDeBaixo>

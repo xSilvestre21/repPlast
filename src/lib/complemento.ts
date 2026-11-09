@@ -9,8 +9,6 @@
  * Módulo puro: roda igual em teste, sem navegador.
  */
 
-import { casaComTermos, termosDaBusca } from "./busca";
-
 export interface GrupoComplemento {
   titulo: string;
   /** Aceita uma opção só: marcar outra troca a anterior. É o caso da cor. */
@@ -100,29 +98,4 @@ export function alternarOpcao(
   }
 
   return escrever(marcadas, resto, grupos);
-}
-
-/**
- * O que a busca deixa na tela.
- *
- * Olha a opção e o nome do grupo: "cor" traz as cores, "azul" traz o azul.
- * A marcada fica de qualquer jeito, pelo mesmo motivo dos aditivos: etiqueta
- * que some não pode ser desmarcada, e ninguém acharia o que está na descrição.
- */
-export function gruposVisiveis(
-  grupos: readonly GrupoComplemento[],
-  busca: string,
-  marcadas: ReadonlySet<string>,
-): GrupoComplemento[] {
-  const termos = termosDaBusca(busca);
-  if (termos.length === 0) return [...grupos];
-
-  return grupos
-    .map((grupo) => ({
-      ...grupo,
-      opcoes: grupo.opcoes.filter(
-        (opcao) => marcadas.has(opcao) || casaComTermos(`${grupo.titulo} ${opcao}`, termos),
-      ),
-    }))
-    .filter((grupo) => grupo.opcoes.length > 0);
 }

@@ -52,7 +52,8 @@ export type ValoresProduto = {
 export const VALORES_VAZIOS: ValoresProduto = {
   fornecedorId: "",
   clienteId: "",
-  familia: "SACO",
+  // Sem tipo: o produto novo não é saco até alguém dizer. Ver `FormularioProduto`.
+  familia: "",
   codigoFornecedor: "",
   codigoCliente: "",
   descricao: "",

@@ -9,7 +9,7 @@
  * Rode com:  npm run test:navegador
  */
 
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { render } from "vitest-browser-react";
 
@@ -76,6 +76,137 @@ describe("descrição do produto", () => {
   });
 });
 
+describe("o produto novo começa sem tipo", () => {
+  async function abrirNovo(acao = vi.fn(async () => ({}))) {
+    const tela = await render(
+      <FormularioProduto
+        fornecedores={FORNECEDORES}
+        clientes={[]}
+        valores={{ ...VALORES_VAZIOS, fornecedorId: "f1" }}
+        acao={acao}
+        rotuloEnvio="Salvar"
+      />,
+    );
+    return { tela, acao };
+  }
+
+  test("nenhum tipo marcado, e só os campos que não dependem dele", async () => {
+    const { tela } = await abrirNovo();
+
+    await expect.element(tela.getByRole("combobox", { name: "Tipo" })).toHaveValue("");
+    await expect.element(tela.getByRole("combobox", { name: "Indústria" })).toBeVisible();
+    await expect.element(tela.getByRole("textbox", { name: /^Código na indústria/ })).toBeVisible();
+
+    await expect.element(tela.getByRole("combobox", { name: "Material" })).not.toBeInTheDocument();
+    await expect.element(tela.getByRole("heading", { name: "Medidas" })).not.toBeInTheDocument();
+    await expect
+      .element(tela.getByRole("heading", { name: "Como sai no pedido" }))
+      .not.toBeInTheDocument();
+  });
+
+  test("salvar sem tipo pede o tipo embaixo do campo, e não envia", async () => {
+    const { tela, acao } = await abrirNovo();
+
+    await tela.getByRole("button", { name: "Salvar" }).click();
+
+    await expect.element(tela.getByText(/Escolha uma opção da lista/)).toBeVisible();
+    expect(acao).not.toHaveBeenCalled();
+  });
+
+  test("escolher o tipo mostra os campos dele", async () => {
+    const { tela } = await abrirNovo();
+
+    await userEvent.type(tela.getByRole("combobox", { name: "Tipo" }), "saco");
+    await userEvent.keyboard("{Enter}");
+
+    await expect.element(tela.getByRole("combobox", { name: "Tipo" })).toHaveValue("Saco plástico");
+    await expect.element(tela.getByRole("combobox", { name: "Material" })).toBeVisible();
+    await expect.element(tela.getByRole("heading", { name: "Medidas" })).toBeVisible();
+    await expect.element(tela.getByRole("heading", { name: "Como sai no pedido" })).toBeVisible();
+  });
+
+  test("o que aparece com o tipo entra em cascata, na ordem da tela", async () => {
+    const { tela } = await abrirNovo();
+
+    await userEvent.type(tela.getByRole("combobox", { name: "Tipo" }), "saco");
+    await userEvent.keyboard("{Enter}");
+
+    /** O atraso da entrada do bloco (a seção, ou o campo dentro da grade). */
+    const atraso = (elemento: Element) => {
+      const entrada = elemento
+        .getAnimations()
+        .find((a) => (a as CSSAnimation).animationName === "surgir");
+      return entrada ? Number(entrada.effect!.getTiming().delay) : null;
+    };
+    const secao = (titulo: string) =>
+      tela.getByRole("heading", { name: titulo }).element().closest("fieldset > *")!;
+    const campoNaGrade = (nome: string) =>
+      tela.getByRole("combobox", { name: nome }).element().closest(".palco > *")!;
+
+    const medidas = atraso(secao("Medidas"));
+    const descricao = atraso(secao("Como sai no pedido"));
+    expect(medidas).not.toBeNull();
+    expect(descricao).not.toBeNull();
+    expect(descricao!).toBeGreaterThan(medidas!);
+    expect(atraso(campoNaGrade("Material"))).not.toBeNull();
+  });
+
+  test("os códigos digitados antes do tipo continuam depois dele", async () => {
+    const { tela } = await abrirNovo();
+
+    await userEvent.type(tela.getByRole("textbox", { name: /^Código na indústria/ }), "BB-20");
+    await userEvent.type(tela.getByRole("combobox", { name: "Tipo" }), "bombona");
+    await userEvent.keyboard("{Enter}");
+
+    await expect
+      .element(tela.getByRole("textbox", { name: /^Código na indústria/ }))
+      .toHaveValue("BB-20");
+  });
+});
+
+describe("lista aberta fica por cima do resto do formulário", () => {
+  const COM_MATERIAIS = [
+    {
+      ...FORNECEDORES[0],
+      materiais: ["PEAD", "PEBD", "PP", "PEAD RECICLADO", "PEBD LINEAR", "BOPP"].map((nome) => ({
+        nome,
+        precoKg: "14",
+        precoMinimoKg: null,
+        densidade: "0.95",
+      })),
+    },
+  ];
+
+  /**
+   * A cascata das seções não pode deixar um contexto de empilhamento em cada uma:
+   * com ele, o cartão de baixo pintava por cima da lista aberta no de cima.
+   */
+  test("a última opção do Material não fica atrás do Complemento nem das Medidas", async () => {
+    const tela = await render(
+      <FormularioProduto
+        fornecedores={COM_MATERIAIS}
+        clientes={[]}
+        valores={{ ...VALORES_VAZIOS, fornecedorId: "f1" }}
+        acao={async () => ({})}
+        rotuloEnvio="Salvar"
+      />,
+    );
+
+    await userEvent.type(tela.getByRole("combobox", { name: "Tipo" }), "saco");
+    await userEvent.keyboard("{Enter}");
+    // Depois da entrada: é aí que o bloco ficava com a camada própria para sempre.
+    await Promise.all(document.getAnimations().map((a) => a.finished));
+
+    await tela.getByRole("combobox", { name: "Material" }).click();
+    const ultima = tela.getByRole("option", { name: /^BOPP/ });
+    await expect.element(ultima).toBeVisible();
+
+    const caixa = ultima.element().getBoundingClientRect();
+    const noTopo = document.elementFromPoint(caixa.left + 10, caixa.top + caixa.height / 2);
+    expect(ultima.element().contains(noTopo)).toBe(true);
+  });
+});
+
 describe("tipos vendidos por milheiro", () => {
   async function novoProduto() {
     const tela = await render(
@@ -90,7 +221,9 @@ describe("tipos vendidos por milheiro", () => {
 
     return {
       tela,
-      descricao: page.elementLocator(document.querySelector('[name="descricao"]')!),
+      // Procurada na hora: o produto novo começa sem tipo, e a descrição só
+      // aparece depois que ele é escolhido.
+      descricao: tela.getByRole("textbox", { name: /^Descrição impressa/ }),
       campo: (nome: string) => page.elementLocator(document.querySelector(`[name="${nome}"]`)!),
     };
   }
@@ -244,44 +377,91 @@ describe("acabamento e tampa", () => {
     };
   }
 
-  const marcados = () =>
-    [...document.querySelectorAll<HTMLInputElement>('input[name="acabamento"]:checked')].map(
-      (i) => i.value,
-    );
+  /** O que vai no formulário: o seletor escreve num campo escondido. */
+  const acabamento = () =>
+    document.querySelector<HTMLInputElement>('input[name="acabamento"]')?.value ?? null;
 
-  test("só um acabamento fica marcado", async () => {
+  type Tela = Awaited<ReturnType<typeof render>>;
+
+  /** Abre o grupo e marca a opção, como no complemento. */
+  async function marcar(tela: Tela, grupo: string, opcao: string) {
+    await tela.getByRole("button", { name: grupo, exact: true }).click();
+    await tela
+      .getByRole("group", { name: grupo, exact: true })
+      .getByRole("button", { name: opcao, exact: true })
+      .click();
+  }
+
+  afterEach(async () => {
+    await page.viewport(1280, 720);
+  });
+
+  test("é o mesmo seletor do complemento: grupos fechados, nenhuma caixa de marcar", async () => {
     const { tela } = await abrirEm("bombona");
 
-    await tela.getByRole("checkbox", { name: "Serigrafado" }).click();
-    await tela.getByRole("checkbox", { name: "Rotulado Adesivo" }).click();
+    for (const grupo of ["Impressão", "Rotulado", "Sleeve"]) {
+      await expect.element(tela.getByRole("button", { name: grupo, exact: true })).toBeVisible();
+    }
+    await expect.element(tela.getByRole("button", { name: "Serigrafado" })).not.toBeInTheDocument();
+    await expect.element(tela.getByRole("checkbox", { name: "Serigrafado" })).not.toBeInTheDocument();
+  });
 
-    await expect.poll(marcados).toEqual(["Rotulado Adesivo"]);
+  test("só um acabamento fica marcado, mesmo em grupos diferentes", async () => {
+    const { tela } = await abrirEm("bombona");
+
+    await marcar(tela, "Impressão", "Serigrafado");
+    await marcar(tela, "Rotulado", "Rotulado Adesivo");
+
+    await expect.poll(acabamento).toBe("Rotulado Adesivo");
+    await expect.element(tela.getByRole("button", { name: "Tirar Rotulado Adesivo" })).toBeVisible();
+    await expect
+      .element(tela.getByRole("button", { name: "Tirar Serigrafado" }))
+      .not.toBeInTheDocument();
+  });
+
+  test("marcar fecha o grupo", async () => {
+    const { tela } = await abrirEm("bombona");
+
+    await marcar(tela, "Impressão", "Serigrafado");
+
+    await expect
+      .element(tela.getByRole("button", { name: "Impressão", exact: true }))
+      .toHaveAttribute("aria-expanded", "false");
   });
 
   test("clicar de novo desmarca, e os valores somem", async () => {
     const { tela } = await abrirEm("bombona");
 
-    await tela.getByRole("checkbox", { name: "Sleeve", exact: true }).click();
+    await marcar(tela, "Sleeve", "Sleeve");
     await expect
       .element(tela.getByRole("textbox", { name: /^Valor com mão de obra/ }))
       .toBeVisible();
 
-    await tela.getByRole("checkbox", { name: "Sleeve", exact: true }).click();
+    await marcar(tela, "Sleeve", "Sleeve");
 
-    await expect.poll(marcados).toEqual([]);
+    await expect.poll(acabamento).toBe("");
     await expect
       .element(tela.getByRole("textbox", { name: /^Valor com mão de obra/ }))
       .not.toBeInTheDocument();
   });
 
+  test("o X da ficha também tira o acabamento", async () => {
+    const { tela } = await abrirEm("bombona");
+
+    await marcar(tela, "Sleeve", "Stretch Sleeve");
+    await tela.getByRole("button", { name: "Tirar Stretch Sleeve" }).click();
+
+    await expect.poll(acabamento).toBe("");
+  });
+
   test("trocar de acabamento limpa os dois valores", async () => {
     const { tela, campo } = await abrirEm("frasco");
 
-    await tela.getByRole("checkbox", { name: "Serigrafado" }).click();
+    await marcar(tela, "Impressão", "Serigrafado");
     await userEvent.type(campo("acabamentoValorCom"), "150,00");
     await userEvent.type(campo("acabamentoValorSem"), "90,00");
 
-    await tela.getByRole("checkbox", { name: "Hot Stamping" }).click();
+    await marcar(tela, "Impressão", "Hot Stamping");
 
     await expect.element(campo("acabamentoValorCom")).toHaveValue("");
     await expect.element(campo("acabamentoValorSem")).toHaveValue("");
@@ -290,31 +470,63 @@ describe("acabamento e tampa", () => {
   test("o cadastro guarda só os valores: com ou sem mão de obra fica para o item", async () => {
     const { tela, campo } = await abrirEm("frasco");
 
-    await tela.getByRole("checkbox", { name: "Serigrafado" }).click();
+    await marcar(tela, "Impressão", "Serigrafado");
 
     await expect.element(campo("acabamentoValorCom")).toBeVisible();
     await expect.element(campo("acabamentoValorSem")).toBeVisible();
     await expect.element(tela.getByRole("radio")).not.toBeInTheDocument();
   });
 
-  test("a busca filtra, e o que não está na lista pode ser usado", async () => {
+  test("a busca acha em todos os grupos, e o que não está na lista pode ser usado", async () => {
     const { tela, campo } = await abrirEm("frasco");
-    const busca = tela.getByRole("searchbox", { name: "Buscar acabamento" });
+    const busca = tela.getByRole("searchbox", { name: "Acabamento" });
 
     await userEvent.type(busca, "rotulado");
-    await expect.element(tela.getByRole("checkbox", { name: "Rotulado Manga" })).toBeVisible();
-    await expect.element(tela.getByRole("checkbox", { name: "Serigrafado" })).not.toBeInTheDocument();
+    await expect.element(tela.getByRole("button", { name: "Rotulado Manga" })).toBeVisible();
+    await expect.element(tela.getByRole("button", { name: "Serigrafado" })).not.toBeInTheDocument();
 
     await userEvent.clear(busca);
     await userEvent.type(busca, "Flexografia");
-    await tela.getByRole("button", { name: /Usar .Flexografia. como acabamento/ }).click();
+    await tela.getByRole("button", { name: /Usar .Flexografia./ }).click();
 
-    await expect.poll(marcados).toEqual(["Flexografia"]);
+    await expect.poll(acabamento).toBe("Flexografia");
     await expect.element(campo("descricao")).toHaveValue("Frasco Flexografia");
   });
 
+  test("digitar outro troca o anterior, em vez de somar", async () => {
+    const { tela } = await abrirEm("frasco");
+    const busca = tela.getByRole("searchbox", { name: "Acabamento" });
+
+    await userEvent.type(busca, "Flexografia");
+    await tela.getByRole("button", { name: /Usar .Flexografia./ }).click();
+    await userEvent.type(busca, "Verniz UV");
+    await tela.getByRole("button", { name: /Usar .Verniz UV./ }).click();
+
+    await expect.poll(acabamento).toBe("Verniz UV");
+
+    await marcar(tela, "Impressão", "Transfer");
+
+    await expect.poll(acabamento).toBe("Transfer");
+    await expect.element(tela.getByRole("button", { name: "Tirar Verniz UV" })).not.toBeInTheDocument();
+  });
+
+  test("no celular, o grupo sobe na folha, sem Pronto, e marcar fecha", async () => {
+    await page.viewport(390, 844);
+    const { tela } = await abrirEm("bombona");
+
+    await tela.getByRole("button", { name: "Rotulado", exact: true }).click();
+    const folha = tela.getByRole("dialog", { name: "Rotulado" });
+    await expect.element(folha).toBeVisible();
+    await expect.element(folha.getByRole("button", { name: "Pronto" })).not.toBeInTheDocument();
+
+    await folha.getByRole("button", { name: "Rotulado Manga" }).click();
+
+    await expect.element(tela.getByRole("dialog")).not.toBeInTheDocument();
+    await expect.poll(acabamento).toBe("Rotulado Manga");
+  });
+
   test("ao reabrir, o acabamento digitado continua marcado", async () => {
-    await render(
+    const tela = await render(
       <FormularioProduto
         fornecedores={INDUSTRIAS}
         clientes={[]}
@@ -330,7 +542,8 @@ describe("acabamento e tampa", () => {
       />,
     );
 
-    await expect.poll(marcados).toEqual(["Flexografia"]);
+    await expect.poll(acabamento).toBe("Flexografia");
+    await expect.element(tela.getByRole("button", { name: "Tirar Flexografia" })).toBeVisible();
   });
 
   test("papelão não tem acabamento", async () => {
@@ -367,13 +580,14 @@ describe("acabamento e tampa", () => {
     const { tela, campo } = await abrirEm("frasco + tampa");
 
     await tela.getByRole("checkbox", { name: "Fornecedor variável Escolher em cada pedido" }).click();
-    await tela.getByRole("checkbox", { name: "Serigrafado" }).click();
+    await marcar(tela, "Impressão", "Serigrafado");
+    await expect.poll(acabamento).toBe("Serigrafado");
 
     const tipo = tela.getByRole("combobox", { name: "Tipo" });
     await userEvent.fill(tipo, "bombona + tampa");
     await userEvent.keyboard("{Enter}");
 
-    await expect.poll(marcados).toEqual([]);
+    await expect.poll(acabamento).toBe("");
     await expect
       .element(tela.getByRole("checkbox", { name: "Fornecedor variável Escolher em cada pedido" }))
       .not.toBeChecked();
