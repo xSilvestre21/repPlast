@@ -8,7 +8,7 @@ import { Movimento } from "@/components/entrada/movimento";
 import { SemScriptRevela } from "@/components/entrada/revelar";
 import { TopoEntrada } from "@/components/entrada/topo-entrada";
 import { Cartao } from "@/components/ui";
-import { planoDaUrl, type Plano } from "@/lib/planos";
+import { DESTAQUE_SUPORTE, planoDaUrl, type Plano } from "@/lib/planos";
 import { inicioDa, sessaoAtual } from "@/lib/sessao";
 import { datasDoTeste, DIAS_DE_TESTE } from "@/lib/teste-gratis";
 
@@ -113,7 +113,7 @@ function PassoCadastro({ plano }: { plano: Plano }) {
             </p>
           </div>
           <ul className="mt-4 space-y-2">
-            {plano.destaques.slice(0, 4).map((destaque) => (
+            {[...plano.destaques.slice(0, 4), DESTAQUE_SUPORTE].map((destaque) => (
               <li key={destaque} className="flex items-start gap-2 text-corpo text-tinta-2">
                 <Check size={15} strokeWidth={2.5} className="shrink-0 mt-0.5 text-verde" aria-hidden="true" />
                 {destaque}

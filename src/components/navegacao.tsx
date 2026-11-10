@@ -154,7 +154,7 @@ type Grupo = "dia" | "inicio" | "cadastros";
  * abre falam a mesma língua.
  *
  * Só os itens que ficam na BARRA principal entram aqui — Comissões, Gráficos
- * e Prepostos moram no menu do avatar (`ITENS_MENU`/`ITEM_PREPOSTOS`) e não
+ * e Prepostos moram no menu do avatar (`itensDoMenu`) e não
  * participam desse deslize.
  */
 const ITENS_PRINCIPAIS: { href: string; rotulo: string; grupo: Grupo; icone: LucideIcon }[] = [
@@ -167,20 +167,24 @@ const ITENS_PRINCIPAIS: { href: string; rotulo: string; grupo: Grupo; icone: Luc
   { href: "/fornecedores", rotulo: "Fornecedores", grupo: "cadastros", icone: Factory },
 ];
 
-/** Itens escondidos atrás do menu do avatar — não afetam o deslize das abas. */
-const ITENS_MENU = [
-  { href: "/comissoes", rotulo: "Comissões" },
-  { href: "/graficos", rotulo: "Gráficos" },
-  { href: "/configuracoes", rotulo: "Configurações" },
-];
-
 /**
- * Entra no fim do menu, e só para o administrador de um escritório Plus.
+ * Itens escondidos atrás do menu do avatar — não afetam o deslize das abas.
  *
- * No fim porque, como nas abas principais, a ordem aqui é a do dia de
- * trabalho: administrar a equipe é a última coisa que se abre.
+ * Na ordem do uso: o dinheiro e os números primeiro, a equipe, o que se ajusta
+ * de vez em quando e, por último, a ajuda — onde se procura quando o resto não
+ * respondeu.
+ *
+ * Prepostos só aparece para o administrador de um escritório Plus.
  */
-const ITEM_PREPOSTOS = { href: "/prepostos", rotulo: "Prepostos" };
+function itensDoMenu(mostrarPrepostos: boolean): { href: string; rotulo: string }[] {
+  return [
+    { href: "/comissoes", rotulo: "Comissões" },
+    { href: "/graficos", rotulo: "Gráficos" },
+    ...(mostrarPrepostos ? [{ href: "/prepostos", rotulo: "Prepostos" }] : []),
+    { href: "/configuracoes", rotulo: "Configurações" },
+    { href: "/ajuda", rotulo: "Ajuda" },
+  ];
+}
 
 function estaAtivo(href: string, caminho: string) {
   // A raiz precisa de comparação exata: `startsWith("/")` casaria com todas as
@@ -544,7 +548,7 @@ export function Navegacao({
   const itens = ITENS_PRINCIPAIS;
   const indiceAtual = itens.findIndex((item) => estaAtivo(item.href, caminho));
   const indicePainel = itens.findIndex((item) => item.grupo === "inicio");
-  const itensMenu = mostrarPrepostos ? [...ITENS_MENU, ITEM_PREPOSTOS] : ITENS_MENU;
+  const itensMenu = itensDoMenu(mostrarPrepostos);
 
   return (
     <header className="sticky top-0 z-40 barra-topo">

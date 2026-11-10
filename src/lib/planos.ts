@@ -33,6 +33,13 @@ export interface Plano {
   recomendado: boolean;
 }
 
+/**
+ * O suporte vale para os dois planos, e tem nome próprio porque o resumo do
+ * cadastro (`/comecar`) mostra só os primeiros destaques — e este não pode
+ * ficar de fora do corte.
+ */
+export const DESTAQUE_SUPORTE = "Suporte por WhatsApp e e-mail";
+
 export const PLANOS: Record<CodigoPlano, Plano> = {
   PADRAO: {
     codigo: "PADRAO",
@@ -49,6 +56,7 @@ export const PLANOS: Record<CodigoPlano, Plano> = {
       "Comissões, parcelas e metas",
       "Agenda, painel e gráficos",
       "Envio por e-mail direto do sistema",
+      DESTAQUE_SUPORTE,
     ],
     recomendado: true,
   },
@@ -67,6 +75,7 @@ export const PLANOS: Record<CodigoPlano, Plano> = {
       "Rateio da comissão e repasse ao preposto",
       "Gráficos por preposto",
       "Indústrias liberadas preposto a preposto",
+      DESTAQUE_SUPORTE,
     ],
     recomendado: false,
   },

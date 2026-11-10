@@ -12,6 +12,7 @@
  */
 
 import { AtSign, Check, Mail, Pencil, PenLine, PlugZap, Plus, Star, X } from "lucide-react";
+import Link from "next/link";
 import { type ReactNode, startTransition, useActionState, useEffect, useRef, useState } from "react";
 
 import {
@@ -602,6 +603,13 @@ function FormConta({
               )}
             </div>
           )}
+          {/* Para quem travou: o mesmo caminho, com a verificação em duas etapas explicada. */}
+          <p>
+            Ficou com dúvida?{" "}
+            <Link href="/ajuda#senha-de-app" className="text-carimbo font-medium hover:underline">
+              Ver o passo a passo completo
+            </Link>
+          </p>
         </div>
       </Passo>
 
