@@ -19,7 +19,7 @@ export const SUPORTE = {
    * número não existe — o botão do WhatsApp some (`temWhatsapp`) em vez de
    * abrir uma conversa com ninguém.
    */
-  whatsapp: "",
+  whatsapp: "5519998682321",
 } as const;
 
 /** A primeira frase da conversa, para o suporte saber de onde a pessoa vem. */

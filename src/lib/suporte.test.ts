@@ -27,7 +27,8 @@ describe("suporte", () => {
     expect(linkEmail()).toBe(`mailto:${SUPORTE.email}?subject=Ajuda%20com%20o%20RepPlast`);
   });
 
-  test("o número configurado, quando existe, é válido", () => {
-    expect(SUPORTE.whatsapp === "" || temWhatsapp()).toBe(true);
+  test("o número configurado é válido, e sai escrito para ler", () => {
+    expect(temWhatsapp()).toBe(true);
+    expect(whatsappEscrito()).toBe("(19) 99868-2321");
   });
 });
