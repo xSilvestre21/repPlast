@@ -12,6 +12,7 @@ import {
   LinhaDado,
   Painel,
   Placa,
+  Segmentado,
   Tabela,
   Total,
   ValorLinha,
@@ -55,20 +56,27 @@ import {
   salvarParcelas,
 } from "./acoes";
 import { LinhaComissao, type LinhaPedido } from "./acerto";
+import { chaveDaLinha } from "./busca";
+import { BuscaComissao, GrupoDaBusca, LinhaDoTotal } from "./busca-comissao";
 import { colunasDaComissao } from "./colunas";
 import { FiltroIndustria } from "./filtro-industria";
+import { ordemDoParametro, ordenarPorNumero, type OrdemComissao } from "./ordem";
 import { PainelMeta } from "./painel-meta";
 import { LinhaRepasse, ResumoRepasse, ValoresDaLinha, type DadosRepasse } from "./repasse";
 import { Pagina } from "@/components/pagina";
 import { NavegadorMes, nomeDoMes } from "@/components/navegador-mes";
 
 /**
- * O endereço da tela num mês, com a indústria escolhida — ou sem, em "Todas".
- * Trocar de mês leva a indústria junto: conferir o extrato da mesma indústria
- * mês a mês não pede escolher de novo.
+ * O endereço da tela num mês, com a indústria escolhida — ou sem, em "Todas" —
+ * e a ordem das linhas. Trocar de mês leva a indústria e a ordem junto:
+ * conferir o extrato da mesma indústria mês a mês não pede escolher de novo.
+ * A ordem de sempre, pela entrega, fica fora do endereço.
  */
-function endereco(mes: string, fornecedor: string | null): string {
-  return fornecedor ? `/comissoes?mes=${mes}&fornecedor=${encodeURIComponent(fornecedor)}` : `/comissoes?mes=${mes}`;
+function endereco(mes: string, fornecedor: string | null, ordem: OrdemComissao): string {
+  const parametros = new URLSearchParams({ mes });
+  if (fornecedor) parametros.set("fornecedor", fornecedor);
+  if (ordem !== "entrega") parametros.set("ordem", ordem);
+  return `/comissoes?${parametros}`;
 }
 
 /** "1 pedido", "8 pedidos" — no lugar do "pedido(s)" de formulário. */
@@ -86,6 +94,10 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
   // A indústria das tabelas (`filtro-industria.tsx`). Só filtra o que se vê:
   // as contas do mês continuam de todas.
   const pedida = typeof parametros.fornecedor === "string" ? parametros.fornecedor : null;
+
+  // A ordem das linhas de cada indústria (`ordem.ts`): pela entrega, como
+  // sempre, ou pelo número do pedido, para conferir o extrato.
+  const ordem = ordemDoParametro(parametros.ordem);
 
   const { organizacaoId, db, ehAdmin, usuarioId } = await escopoAtual();
 
@@ -151,13 +163,16 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
    * O cancelado entra na LISTA do grupo e fica de fora do `resumo`: é o mesmo
    * corte do total geral, um nível abaixo. Sem isso, a soma da indústria não
    * bateria com a soma das linhas que ela mostra.
+   *
+   * Na ordem por número, o cancelado entra no lugar do número dele; na de
+   * sempre, as linhas seguem como vieram — pela entrega, cancelados no fim.
    */
   const porFornecedor = [
     ...Map.groupBy([...pedidos, ...cancelados], (p) => p.fornecedor.id).entries(),
   ]
     .map(([, doFornecedor]) => ({
       fornecedor: doFornecedor[0].fornecedor,
-      pedidos: doFornecedor,
+      pedidos: ordem === "numero" ? ordenarPorNumero(doFornecedor) : doFornecedor,
       resumo: resumirComissao(doFornecedor.filter((p) => p.status === "ENVIADO")),
     }))
     .sort((a, b) => a.fornecedor.nome.localeCompare(b.fornecedor.nome, "pt-BR"));
@@ -250,6 +265,26 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
 
   const colunas = colunasDaComissao(ehAdmin);
 
+  /*
+   * Cada linha das tabelas, montada uma vez — e é dela que sai também o índice
+   * da busca: o que a busca acha é exatamente o que a linha mostra (o preposto
+   * só entra na tela do administrador, porque só lá `paraLinha` o põe).
+   */
+  const grupos = visiveis.map((grupo) => ({
+    ...grupo,
+    linhas: grupo.pedidos.map((pedido) => ({ pedido, linha: paraLinha(pedido, ehAdmin, cores) })),
+  }));
+  const indiceDaBusca = grupos.flatMap(({ fornecedor, linhas }) =>
+    linhas.map(({ linha }) => ({
+      chave: chaveDaLinha(linha.id, linha.parcela?.numero ?? null),
+      pedidoId: linha.id,
+      fornecedorId: fornecedor.id,
+      numero: linha.numero,
+      cliente: linha.apelidoCliente,
+      preposto: linha.preposto,
+    })),
+  );
+
   return (
     <Pagina>
       <Cabecalho
@@ -265,7 +300,7 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
       */}
       <NavegadorMes
         competencia={competencia}
-        href={(mes) => endereco(mes, escolhida)}
+        href={(mes) => endereco(mes, escolhida, ordem)}
         destaques={batidos}
         rotuloDestaque="meta batida"
         className="mb-7"
@@ -409,7 +444,7 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
             pedidos: contarPedidos(g.pedidos),
           }))}
           escolhida={escolhida}
-          endereco={(fornecedor) => endereco(competencia, fornecedor)}
+          endereco={(fornecedor) => endereco(competencia, fornecedor, ordem)}
         />
       )}
 
@@ -418,7 +453,7 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
           icone={Factory}
           titulo={`Nenhum pedido da ${ausente.nome} em ${nomeDoMes(competencia).toLowerCase()}`}
           acao={
-            <BotaoLink href={endereco(competencia, null)} variante="secundaria" tamanho="compacto">
+            <BotaoLink href={endereco(competencia, null, ordem)} variante="secundaria" tamanho="compacto">
               Ver todas as indústrias
             </BotaoLink>
           }
@@ -431,66 +466,96 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
           <br />A comissão passa a contar quando você marca o pedido como enviado.
         </EstadoVazio>
       ) : (
-        <div className="space-y-5 palco">
-          {visiveis.map(({ fornecedor, pedidos: doFornecedor, resumo }) => (
-            <Cartao key={fornecedor.id} className="p-5 sm:p-6">
-              <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
-                <div className="flex items-start gap-3 min-w-0">
-                  <Emblema icone={Factory} tom="fraco" className="size-4" />
-                  <div className="min-w-0">
-                    <Link
-                      href={`/fornecedores/${fornecedor.id}`}
-                      className="font-semibold hover:text-carimbo transition-colors"
-                    >
-                      {fornecedor.nome}
-                    </Link>
-                    <div className="text-corpo text-tinta-2 mt-0.5 numerico">
-                      {formatarMoeda(resumo.base.toString())} vendidos ·{" "}
-                      {plural(contarPedidos(doFornecedor), "pedido")}
-                      {ehAdmin &&
-                        ` · ${formatarPercentual(resumo.percentualMedio.toString())} médio`}
+        <BuscaComissao
+          linhas={indiceDaBusca}
+          placeholder={ehAdmin ? "Nº do pedido, cliente ou preposto" : "Nº do pedido ou cliente"}
+          onde={
+            escolhida && noMes
+              ? `da ${noMes.fornecedor.nome} em ${nomeDoMes(competencia).toLowerCase()}`
+              : `de ${nomeDoMes(competencia).toLowerCase()}`
+          }
+          ordem={
+            <div>
+              <span className="rotulo block mb-1.5 text-tinta-2">Ordem</span>
+              {/* A altura da caixa de busca, para as duas peças alinharem. */}
+              <div className="flex items-center h-11">
+                <Segmentado
+                  nome="Ordem das linhas"
+                  atual={ordem}
+                  opcoes={[
+                    { valor: "entrega", rotulo: "Entrega", href: endereco(competencia, escolhida, "entrega") },
+                    { valor: "numero", rotulo: "Nº do pedido", href: endereco(competencia, escolhida, "numero") },
+                  ]}
+                />
+              </div>
+            </div>
+          }
+        >
+          {/* `gap`, e não `space-y`: o cartão que a busca esconde não deixa a
+              margem dele sobrando embaixo do último que ficou. */}
+          <div className="flex flex-col gap-5 palco">
+            {grupos.map(({ fornecedor, pedidos: doFornecedor, resumo, linhas }) => (
+              <GrupoDaBusca key={fornecedor.id} fornecedorId={fornecedor.id}>
+                <Cartao className="p-5 sm:p-6">
+                  <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <Emblema icone={Factory} tom="fraco" className="size-4" />
+                      <div className="min-w-0">
+                        <Link
+                          href={`/fornecedores/${fornecedor.id}`}
+                          className="font-semibold hover:text-carimbo transition-colors"
+                        >
+                          {fornecedor.nome}
+                        </Link>
+                        <div className="text-corpo text-tinta-2 mt-0.5 numerico">
+                          {formatarMoeda(resumo.base.toString())} vendidos ·{" "}
+                          {plural(contarPedidos(doFornecedor), "pedido")}
+                          {ehAdmin &&
+                            ` · ${formatarPercentual(resumo.percentualMedio.toString())} médio`}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="cifra text-forte numerico">
+                        {formatarMoeda(
+                          (ehAdmin ? resumo.valor : resumo.previstoDoPreposto).toString(),
+                        )}
+                      </div>
+                      <div className="text-mini text-tinta-3 mt-1">
+                        {ehAdmin ? "comissão prevista" : "sua fatia"}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="text-right">
-                  <div className="cifra text-forte numerico">
-                    {formatarMoeda(
-                      (ehAdmin ? resumo.valor : resumo.previstoDoPreposto).toString(),
-                    )}
-                  </div>
-                  <div className="text-mini text-tinta-3 mt-1">
-                    {ehAdmin ? "comissão prevista" : "sua fatia"}
-                  </div>
-                </div>
-              </div>
-
-              {/* No celular em pé, cada pedido vira cartão (`.tabela-cartoes`). */}
-              <Tabela
-                colunas={colunas}
-                larguraMinima="min-w-200"
-                className="tabela-cartoes"
-                rodape={<TotalDaIndustria resumo={resumo} ehAdmin={ehAdmin} />}
-              >
-                {doFornecedor.map((pedido) => (
-                  <LinhaComissao
-                    key={`${pedido.id}:${pedido.parcela?.id ?? ""}`}
-                    pedido={paraLinha(pedido, ehAdmin, cores)}
-                    comPercentual={ehAdmin}
-                    // Na parcela, o acerto é DELA; no pedido inteiro, dele.
-                    salvar={
-                      pedido.parcela
-                        ? salvarAcertoParcela.bind(null, pedido.parcela.id)
-                        : salvarAcerto.bind(null, pedido.id)
-                    }
-                    salvarParcelas={salvarParcelas.bind(null, pedido.id)}
-                    desfazerParcelas={desfazerParcelas.bind(null, pedido.id)}
-                  />
-                ))}
-              </Tabela>
-            </Cartao>
-          ))}
-        </div>
+                  {/* No celular em pé, cada pedido vira cartão (`.tabela-cartoes`). */}
+                  <Tabela
+                    colunas={colunas}
+                    larguraMinima="min-w-200"
+                    className="tabela-cartoes"
+                    rodape={<TotalDaIndustria resumo={resumo} ehAdmin={ehAdmin} />}
+                  >
+                    {linhas.map(({ pedido, linha }) => (
+                      <LinhaComissao
+                        key={`${pedido.id}:${pedido.parcela?.id ?? ""}`}
+                        pedido={linha}
+                        comPercentual={ehAdmin}
+                        // Na parcela, o acerto é DELA; no pedido inteiro, dele.
+                        salvar={
+                          pedido.parcela
+                            ? salvarAcertoParcela.bind(null, pedido.parcela.id)
+                            : salvarAcerto.bind(null, pedido.id)
+                        }
+                        salvarParcelas={salvarParcelas.bind(null, pedido.id)}
+                        desfazerParcelas={desfazerParcelas.bind(null, pedido.id)}
+                      />
+                    ))}
+                  </Tabela>
+                </Cartao>
+              </GrupoDaBusca>
+            ))}
+          </div>
+        </BuscaComissao>
       )}
     </Pagina>
   );
@@ -515,7 +580,9 @@ function TotalDaIndustria({
   const algumAcerto = resumo.acertados > 0;
 
   return (
-    <tr className="font-semibold">
+    // Escondida durante a busca (`LinhaDoTotal`): o total é da indústria
+    // inteira, e não das linhas que ficaram à vista.
+    <LinhaDoTotal className="font-semibold">
       {/* Pedido, Cliente, Prazo, Entregue — e o %, quando a coluna existe. */}
       <Celula colSpan={ehAdmin ? 5 : 4} data-area="total">
         Total
@@ -545,7 +612,7 @@ function TotalDaIndustria({
         )}
       </Celula>
       <Celula />
-    </tr>
+    </LinhaDoTotal>
   );
 }
 

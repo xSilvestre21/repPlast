@@ -51,6 +51,8 @@ import { mesDoRecebimento } from "@/lib/parcelas";
 
 import type { EstadoFormulario } from "./acoes";
 import { BolinhaPreposto } from "@/components/bolinha-preposto";
+import { chaveDaLinha } from "./busca";
+import { useLinhaVisivel } from "./busca-comissao";
 import { colunasDaComissao } from "./colunas";
 import { usePagamentoComissao } from "./pagamento-comissao";
 import { EditorParcelas } from "./parcelas";
@@ -205,6 +207,9 @@ export function LinhaComissao({
   const [parcelando, setParcelando] = useState(false);
   const painel = useId();
   const estreita = useTelaEstreita();
+  // A busca da tela (`busca-comissao.tsx`) esconde a linha, sem desmontá-la:
+  // o acerto aberto continua com o que foi digitado quando ela volta.
+  const visivel = useLinhaVisivel(chaveDaLinha(pedido.id, pedido.parcela?.numero ?? null));
 
   /*
    * Salvou sem erro, fecha o acerto — na mesma renderização em que a linha
@@ -404,7 +409,7 @@ export function LinhaComissao({
 
   return (
     <>
-      <tr>
+      <tr hidden={!visivel}>
         <Celula data-area="pedido">
           <Link
             href={`/pedidos/${pedido.id}`}
@@ -610,7 +615,7 @@ export function LinhaComissao({
         de baixo, montada na célula da ação.
       */}
       {!estreita && (
-        <tr id={painel} hidden={!aberto || !pedido.podeAcertar}>
+        <tr id={painel} hidden={!aberto || !pedido.podeAcertar || !visivel}>
           <td colSpan={colunas} className="px-3 pb-4 pt-1">
             <div className="rounded-suave border border-filete bg-folha-2 p-4">{conteudoDoPainel}</div>
           </td>
