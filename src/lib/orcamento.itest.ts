@@ -150,9 +150,9 @@ describe("busca da lista", () => {
     expect(await procurar("#7")).toContain(7);
   });
 
-  it("não traz o número que apenas contém os dígitos", async () => {
-    // A comparação é exata: quem digita "7" quer o 7, não o 70.
-    expect(await procurar("7")).not.toContain(70);
+  it("um pedaço do número também acha, com o exato na frente", async () => {
+    // Quem digita "7" vê o 7 no topo e o 70 logo depois (`numero-procurado.ts`).
+    expect(await procurar("7")).toEqual([7, 70]);
   });
 
   it("continua achando pelo nome de quem pediu o preço", async () => {

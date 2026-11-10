@@ -229,7 +229,7 @@ describe("busca da lista de pedidos", () => {
 
     await admin.pedido.createMany({
       data: [
-        // 7 e 70 formam o par que se confundiria numa busca por "contém".
+        // 7 e 70: "7" acha os dois, e o exato vem primeiro.
         { ...comum, numero: 7, status: "ABERTO", pedidoDoCliente: "PC 228156" },
         { ...comum, numero: 70, status: "ENVIADO", enviadoEm: new Date() },
         /*
@@ -250,9 +250,10 @@ describe("busca da lista de pedidos", () => {
     expect(await procurar("#7")).toContain(7);
   });
 
-  it("não traz o número que apenas contém os dígitos", async () => {
-    // A comparação é exata: quem digita "7" quer o 7, não o 70.
-    expect(await procurar("7")).not.toContain(70);
+  it("um pedaço do número também acha, com o exato na frente", async () => {
+    // Os dois nasceram juntos: sem a camada do exato (`numero-procurado.ts`), a
+    // data empataria e o 70 viria antes, pelo número maior.
+    expect(await procurar("7")).toEqual([7, 70]);
   });
 
   it("acha pelo apelido do cliente", async () => {

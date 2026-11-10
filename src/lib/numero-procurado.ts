@@ -5,32 +5,54 @@
  * porque valor com dois donos se desencontra: nesta mesma base já houve um nome
  * de campo lido de um jeito num lado e escrito de outro no outro, e o resultado
  * foi IPI sumindo sem erro nenhum na tela (ver `ipi-do-formulario.ts`).
- */
-
-/** O maior valor que cabe no `int` do Postgres, onde os dois `numero` moram. */
-const MAIOR_INT = 2_147_483_647;
-
-/**
- * O `#` entra na conta porque é assim que a tela escreve o número — "Orçamento
- * #180", "Pedido #2253" — e quem copia de lá copia com ele.
  *
- * A comparação que sai daqui é exata, e não "contém": `numero` é inteiro no
- * banco, onde `contains` nem se aplica, e o número existe justamente para o
- * documento ser citável ao telefone. Quem diz "o 7" quer o 7, não os dezoito
- * que têm 7 no meio.
+ * O número casa por PEDAÇO, como todo o resto da busca: "22" acha o #2224 e o
+ * #1220, e quem digita vai vendo a lista estreitar sem precisar do número
+ * inteiro. Mas ele vem ANTES de tudo — dígitos na busca quase sempre são o
+ * número —, e o exato antes do pedaço: quem diz "o 22" vê o #22 no topo, e não
+ * perdido entre os que só têm 22 no meio. A ordem das camadas está nas
+ * consultas (`fatiaEmCamadas`).
  *
  * No PEDIDO um número pode casar com mais de uma linha, e isso é correto: a
  * numeração dele é por indústria (`@@unique([fornecedorId, numero])`), então o
  * 133 da BETAPACK e o 133 de outra convivem. A lista mostra a indústria ao lado
  * justamente para desempatar.
  */
-export function numeroProcurado(texto: string): number | null {
+
+/** O maior valor que cabe no `int` do Postgres, onde os dois `numero` moram. */
+const MAIOR_INT = 2_147_483_647;
+
+/**
+ * Os dígitos digitados, quando a busca é só um número; senão `null`.
+ *
+ * O `#` entra na conta porque é assim que a tela escreve o número — "Orçamento
+ * #180", "Pedido #2253" — e quem copia de lá copia com ele.
+ */
+export function digitosProcurados(texto: string): string | null {
   const digitos = texto.trim().replace(/^#\s*/, "");
-  if (!/^\d+$/.test(digitos)) return null;
+  return /^\d+$/.test(digitos) ? digitos : null;
+}
+
+/** O número exato que a busca nomeia, para pô-lo no topo; `null` se não for número. */
+export function numeroProcurado(texto: string): number | null {
+  const digitos = digitosProcurados(texto);
+  if (digitos === null) return null;
 
   const numero = Number(digitos);
 
   // Fora do alcance do `int` a consulta estouraria — e ali não há documento
   // nenhum para achar de qualquer forma.
   return numero >= 1 && numero <= MAIOR_INT ? numero : null;
+}
+
+/**
+ * Dos números que existem, os que têm `digitos` em algum ponto.
+ *
+ * Feito aqui, sobre a lista dos números do escritório, porque `numero` é
+ * inteiro no banco e o `contains` do Prisma não se aplica a ele. A lista é
+ * pequena — um número por documento, e o do pedido ainda se repete entre as
+ * indústrias.
+ */
+export function numerosQueContem(numeros: Iterable<number>, digitos: string): number[] {
+  return [...numeros].filter((numero) => String(numero).includes(digitos));
 }
