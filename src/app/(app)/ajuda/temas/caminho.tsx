@@ -121,8 +121,14 @@ export function Caminho() {
 
   return (
     <div className="space-y-5">
-      {/* A trilha rola de lado no celular, em vez de espremer sete paradas. */}
-      <div className="overflow-x-auto [scrollbar-width:none] -mx-1 px-1 pb-1">
+      {/*
+        A trilha rola de lado no celular, em vez de espremer sete paradas.
+
+        O respiro em cima e dos lados é do círculo ativo: ele cresce 15%, e quem
+        rola de lado também corta o que passa da borda de cima — sem a folga, o
+        círculo ficava com o topo reto.
+      */}
+      <div className="overflow-x-auto [scrollbar-width:none] -mx-2 px-2 pt-2 pb-1">
         <div className="relative min-w-[36rem]">
           {/* O fio, e a parte dele já percorrida. */}
           <div className="absolute left-[7%] right-[7%] top-5 h-0.5 bg-filete-forte" aria-hidden="true">
