@@ -25,7 +25,7 @@
 
 import { Plus, Scissors, X } from "lucide-react";
 import Decimal from "decimal.js";
-import { useActionState, useId, useState } from "react";
+import { useActionState, useId, useRef, useState } from "react";
 
 import { CampoData } from "@/components/campo-data";
 import { CampoMoeda } from "@/components/campo-mascarado";
@@ -136,10 +136,22 @@ export function EditorParcelas({
   );
 
   const sugeridos = lerPrazoEmDias(prazoSugerido);
-  const [dias, setDias] = useState(atuais.length > 0 ? "" : (sugeridos?.join("/") ?? ""));
+  /**
+   * O prazo do pedido, quando é ele que abre o campo: só no parcelamento novo.
+   * É o ponto de partida, e não a regra — quem diz em quantas vezes e em que
+   * dias a indústria paga é o representante.
+   */
+  const sugerido = atuais.length === 0 && sugeridos ? sugeridos.join("/") : null;
+  const [dias, setDias] = useState(sugerido ?? "");
   const [linhas, setLinhas] = useState<Linha[]>(() =>
     atuais.length > 0 ? atuais : sugeridos && sugeridos.length > 1 ? gerar(sugeridos) : [],
   );
+  /** Os dias que montaram as parcelas da tela: diferentes do campo, falta dividir. */
+  const [divididoCom, setDivididoCom] = useState(
+    sugerido && sugeridos && sugeridos.length > 1 ? sugerido : "",
+  );
+  /** O primeiro toque no campo ainda com o prazo do pedido seleciona tudo: digitar já troca. */
+  const selecionouAoTocar = useRef(false);
   // Remonta os campos de valor quando as linhas são geradas de novo: eles são
   // não controlados (a máscara escreve direto no nó), e guardariam o valor velho.
   const [geracao, setGeracao] = useState(0);
@@ -176,7 +188,31 @@ export function EditorParcelas({
     setErroDias(null);
     setLinhas(gerar(lidos));
     setGeracao((g) => g + 1);
+    setDivididoCom(dias);
   }
+
+  /** Volta ao prazo do pedido, e às parcelas dele. */
+  function voltarAoPedido() {
+    if (!sugerido || !sugeridos) return;
+    setDias(sugerido);
+    setErroDias(null);
+    if (sugeridos.length > 1) {
+      setLinhas(gerar(sugeridos));
+      setGeracao((g) => g + 1);
+      setDivididoCom(sugerido);
+    }
+  }
+
+  /** Em que pé estão os dias do campo, para a nota embaixo dele. */
+  const situacaoDosDias = !sugerido
+    ? null
+    : dias === sugerido
+      ? "do-pedido"
+      : dias.trim() === ""
+        ? "vazio"
+        : dias === divididoCom
+          ? "divididos"
+          : "falta-dividir";
 
   const anteriores = linhas.slice(0, -1);
   const restante = restanteDaBase(
@@ -234,6 +270,17 @@ export function EditorParcelas({
             setDias(e.currentTarget.value);
             setErroDias(null);
           }}
+          onFocus={() => {
+            selecionouAoTocar.current = false;
+          }}
+          onClick={(e) => {
+            // Ainda com o prazo do pedido, o primeiro toque seleciona tudo: o que
+            // se digita substitui. O segundo já põe o cursor onde se tocou.
+            if (situacaoDosDias !== "do-pedido" || selecionouAoTocar.current) return;
+            selecionouAoTocar.current = true;
+            // `setSelectionRange`, e não `select()`: no Safari do iPhone, só ele seleciona.
+            e.currentTarget.setSelectionRange(0, e.currentTarget.value.length);
+          }}
           onKeyDown={(e) => {
             // Enter aqui divide, em vez de enviar o formulário de parcelas.
             if (e.key === "Enter") {
@@ -246,7 +293,7 @@ export function EditorParcelas({
           // barra. Com este vem a vírgula, e "28,35,42" lê igual
           // (`lerPrazoEmDias` aceita qualquer separador).
           inputMode="decimal"
-          dica="No celular, a vírgula separa também: 28,35,42."
+          dica="Um número por parcela, quantos quiser: 30/60/90/120. No celular, separe com vírgula: 30,60,90,120."
           autoComplete="off"
           className="basis-48 grow"
         />
@@ -265,6 +312,46 @@ export function EditorParcelas({
           </div>
         </div>
       </div>
+
+      {/*
+        De onde vêm os dias, embaixo do campo — em cima, a nota que muda de
+        tamanho ao digitar empurraria a caixa para baixo no meio da digitação.
+        O prazo do pedido abre o campo só para começar: o pagamento quem decide
+        é o representante, com o que combinou com a indústria.
+      */}
+      {situacaoDosDias && (
+        <p
+          role="note"
+          aria-live="polite"
+          className="rounded-suave bg-folha-2 px-4 py-3 text-corpo text-tinta-2 leading-relaxed"
+        >
+          {situacaoDosDias === "do-pedido" ? (
+            <>
+              <strong className="text-tinta numerico">{sugerido}</strong> é o prazo de pagamento do pedido, e
+              vem preenchido só para começar. Quem decide as parcelas é você: apague e escreva os dias em que a
+              indústria vai pagar.
+            </>
+          ) : (
+            <>
+              {situacaoDosDias === "vazio"
+                ? "Escreva os dias em que a indústria vai pagar, um por parcela. "
+                : situacaoDosDias === "falta-dividir"
+                  ? "Para as parcelas seguirem estes dias, toque em “Dividir em partes iguais”. "
+                  : "As parcelas seguem os seus dias. "}
+              O prazo do pedido era <strong className="text-tinta numerico">{sugerido}</strong> —{" "}
+              <button
+                type="button"
+                onClick={voltarAoPedido}
+                className="relative alvo-toque font-medium text-carimbo underline underline-offset-2
+                  decoration-carimbo/35 hover:decoration-carimbo cursor-pointer"
+              >
+                voltar a ele
+              </button>
+              .
+            </>
+          )}
+        </p>
+      )}
 
       {linhas.length > 0 && (
         <Formulario estado={estado} action={enviar} className="space-y-3">
