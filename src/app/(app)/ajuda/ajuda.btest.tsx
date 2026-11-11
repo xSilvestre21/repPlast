@@ -69,6 +69,27 @@ describe("página de Ajuda", () => {
     await expect.poll(() => texto(parcelas.nth(1))).toMatch(/50,01/);
   });
 
+  test("parcelamento: o prazo do pedido é só o começo, e dá para voltar a ele", async () => {
+    await abrir();
+    const parcelamento = tema("Parcelamento");
+    const nota = parcelamento.getByRole("note");
+    const dias = parcelamento.getByLabelText(/Dias a partir da entrega/);
+    const parcelas = parcelamento.getByRole("list", { name: "Parcelas" }).getByRole("listitem");
+
+    await expect
+      .poll(() => texto(nota))
+      .toMatch(/28\/35\/42 é o prazo de pagamento do pedido.*Quem decide as parcelas é você/);
+
+    // Com vírgula, como no teclado do celular.
+    await userEvent.fill(dias, "30,60");
+    await expect.poll(() => texto(nota)).toMatch(/Parcelas pelos seus dias/);
+    await expect.poll(() => parcelas.elements().length).toBe(2);
+
+    await parcelamento.getByRole("button", { name: "voltar a ele" }).click();
+    await expect.element(dias).toHaveValue("28/35/42");
+    await expect.poll(() => parcelas.elements().length).toBe(3);
+  });
+
   test("faturamento: vence dia 25 com fechamento 20 e a comissão entra em dezembro", async () => {
     await abrir();
     const faturamento = tema("Dia de faturamento");

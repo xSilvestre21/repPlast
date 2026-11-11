@@ -22,12 +22,18 @@ import { Onde, Quadro, Regua, SUAVE, Texto } from "../pecas";
 /** A entrega do exemplo. Fixa: a demonstração não depende do dia em que é aberta. */
 const ENTREGA = "2026-10-05";
 
+/**
+ * O prazo de pagamento do pedido do exemplo. No acerto, o campo de dias abre
+ * com ele — só para começar: quem decide as parcelas é a pessoa.
+ */
+const PRAZO_DO_PEDIDO = "28/35/42";
+
 const DATA = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" });
 const dia = (iso: string) => DATA.format(new Date(`${iso}T00:00:00Z`));
 
 export function Parcelamento() {
   const [vendaDigitada, setVendaDigitada] = useState("3.000,00");
-  const [prazo, setPrazo] = useState("28/35/42");
+  const [prazo, setPrazo] = useState(PRAZO_DO_PEDIDO);
   /** Quanto a pessoa tirou da primeira parcela — vai para a última. */
   const [tirado, setTirado] = useState(0);
 
@@ -67,13 +73,48 @@ export function Parcelamento() {
           />
           <Campo
             rotulo="Dias a partir da entrega"
-            dica="Como no prazo do cliente: 28/35/42. “À vista” é uma parcela no dia."
-            defaultValue={prazo}
+            dica="Um número por parcela, quantos quiser: 30/60/90/120. No celular, separe com vírgula: 30,60,90,120."
+            // O mesmo teclado do acerto: no iPhone, o numérico não tem barra, e a vírgula separa igual.
+            inputMode="decimal"
+            autoComplete="off"
+            value={prazo}
             onChange={(evento) => {
               setPrazo(evento.currentTarget.value);
               setTirado(0);
             }}
           />
+          {/* A mesma nota do acerto: de onde vêm os dias, e quem decide. */}
+          <p
+            role="note"
+            aria-live="polite"
+            // Claro e com borda: o quadro da Ajuda já é cinza, e a nota sumiria nele.
+            className="rounded-suave bg-folha border border-filete px-3 py-2.5 text-mini text-tinta-2 leading-relaxed"
+          >
+            {prazo === PRAZO_DO_PEDIDO ? (
+              <>
+                <strong className="text-tinta numerico">{PRAZO_DO_PEDIDO}</strong> é o prazo de pagamento do
+                pedido: no acerto, o campo já abre com ele, só para começar. Quem decide as parcelas é você —
+                troque pelos dias em que a indústria vai pagar.
+              </>
+            ) : (
+              <>
+                Parcelas pelos seus dias. O prazo do pedido era{" "}
+                <strong className="text-tinta numerico">{PRAZO_DO_PEDIDO}</strong> —{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPrazo(PRAZO_DO_PEDIDO);
+                    setTirado(0);
+                  }}
+                  className="relative alvo-toque font-medium text-carimbo underline underline-offset-2
+                    decoration-carimbo/35 hover:decoration-carimbo cursor-pointer"
+                >
+                  voltar a ele
+                </button>
+                .
+              </>
+            )}
+          </p>
           <p className="text-mini text-tinta-2">Entrega do exemplo: {dia(ENTREGA)}.</p>
         </Quadro>
 
@@ -82,7 +123,7 @@ export function Parcelamento() {
             <p className="text-corpo text-tinta-2">
               {venda === null || venda <= 0
                 ? "Informe o valor da venda, como 3.000,00."
-                : "Não deu para ler os dias. Escreva os prazos em ordem, separados por barra — como 28/35/42."}
+                : "Não deu para ler os dias. Escreva um número por parcela, separados por barra ou vírgula — como 28/35/42 ou 28,35,42."}
             </p>
           ) : (
             <>
@@ -138,6 +179,12 @@ export function Parcelamento() {
 
       <ul className="space-y-1.5 text-corpo text-tinta-2 list-disc pl-5 max-w-2xl">
         <li>
+          O campo de dias abre com o <strong className="text-tinta">prazo de pagamento do pedido</strong>, só
+          como ponto de partida. Quem decide as parcelas é você: apague e escreva os dias que combinou com a
+          indústria, quantos quiser — com barra (30/60/90) ou, no celular, com vírgula (30,60,90). Um toque no
+          campo já seleciona tudo, e o que você digita substitui.
+        </li>
+        <li>
           Os dias contam a partir da <strong className="text-tinta">entrega</strong>, e o valor é o da venda
           sem IPI. O que não divide exato (R$ 100,00 em 3) vai para a última: 33,33 + 33,33 + 33,34.
         </li>
@@ -150,7 +197,7 @@ export function Parcelamento() {
 
       <Onde>
         <Link href="/comissoes" className="text-carimbo hover:underline">Comissões</Link> → a linha do pedido →
-        “Parcelar o recebimento” → “Dividir em partes iguais” → “Salvar parcelas”
+        “Parcelar o recebimento” → os seus dias → “Dividir em partes iguais” → “Salvar parcelas”
       </Onde>
     </div>
   );

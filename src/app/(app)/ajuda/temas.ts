@@ -56,7 +56,8 @@ export const TEMAS: readonly Tema[] = [
     id: "parcelamento",
     titulo: "Parcelamento",
     resumo: "Dividir o recebimento de um pedido em parcelas, como 28/35/42.",
-    busca: "parcela parcelar prazo pagamento dias vencimento dividir boleto cheque desfazer",
+    busca:
+      "parcela parcelar prazo pagamento dias vencimento dividir boleto cheque desfazer outros dias trocar barra vírgula celular",
   },
   {
     id: "faturamento",
