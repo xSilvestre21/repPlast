@@ -11,12 +11,19 @@
 import {
   Barrel,
   CircleDot,
+  CupSoda,
   Cylinder,
   Disc3,
+  Droplet,
   Milk,
   Package,
+  PackageOpen,
+  PaintBucket,
+  Ribbon,
   Shapes,
   ShoppingBag,
+  SprayCan,
+  TestTube,
   type LucideIcon,
 } from "lucide-react";
 
@@ -36,6 +43,8 @@ const LINHAS: {
   texto: string;
   /** A descrição como sai no pedido. Sem ela, o cartão diz o que entra. */
   exemplo?: string;
+  /** Ocupa duas colunas: é o que fecha a grade. */
+  largo?: boolean;
 }[] = [
   {
     icone: ShoppingBag,
@@ -114,8 +123,66 @@ const LINHAS: {
     ),
   },
   {
-    icone: Package,
+    icone: PaintBucket,
+    tom: "menta",
+    titulo: "Potes e baldes",
+    vende: "Milheiro ou unidade",
+    texto:
+      "Capacidade, boca e alça; sozinhos ou em conjunto com a tampa. Rótulo IML e serigrafia somam no milheiro.",
+    exemplo: descricaoDoTipo(
+      tipoPorValor("BALDE_TAMPA"),
+      camposDaEmbalagem({
+        capacidade: "20",
+        capacidadeUnidade: "L",
+        material: "PP",
+        complemento: "Alça Metálica",
+        diametroMm: "290",
+        materialTampa: "PP",
+        complementoTampa: "Lacre",
+      }),
+    ),
+  },
+  {
+    icone: TestTube,
+    tom: "mar",
+    titulo: "Pré-formas",
+    vende: "Milheiro",
+    texto: "Pelo peso em gramas e pelo gargalo da garrafa que ela vai virar.",
+    exemplo: descricaoDoTipo(
+      tipoPorValor("PREFORMA"),
+      camposDaEmbalagem({
+        capacidade: "18",
+        capacidadeUnidade: "g",
+        material: "PET",
+        complemento: "PCO 1881 Cristal",
+      }),
+    ),
+  },
+  {
+    icone: SprayCan,
     tom: "pessego",
+    titulo: "Gatilhos e válvulas",
+    vende: "Milheiro ou unidade",
+    texto: "Pelo gargalo em que entram — 28/410, 24/410 —, com o jato ou a dosagem.",
+    exemplo: descricaoDoTipo(
+      tipoPorValor("GATILHO"),
+      camposDaEmbalagem({ diametroMm: "28", material: "PP", complemento: "28/410 Spray e Jato" }),
+    ),
+  },
+  {
+    icone: Droplet,
+    tom: "lilas",
+    titulo: "Batoques e alças",
+    vende: "Milheiro ou unidade",
+    texto: "Também pelo gargalo: batoque cego, com furo ou conta-gotas, e a alça do galão.",
+    exemplo: descricaoDoTipo(
+      tipoPorValor("BATOQUE"),
+      camposDaEmbalagem({ diametroMm: "18", material: "PE", complemento: "Conta-Gotas P/ Tampa Lacre" }),
+    ),
+  },
+  {
+    icone: Package,
+    tom: "sol",
     titulo: "Papelão",
     vende: "Milheiro ou unidade",
     texto: "Caixa, chapa, bandeja e divisória: comprimento × largura × altura, onda e parede.",
@@ -131,12 +198,57 @@ const LINHAS: {
     ),
   },
   {
-    icone: Shapes,
+    icone: PackageOpen,
+    tom: "menta",
+    titulo: "Ráfia e big bag",
+    vende: "Unidade ou milheiro",
+    texto: "A ráfia pela medida, gramatura e carga; o big bag pela base e altura, cobrado por unidade.",
+    exemplo: descricaoDoTipo(
+      tipoPorValor("BIG_BAG"),
+      camposDaEmbalagem({
+        comprimentoCm: "90",
+        larguraCm: "90",
+        alturaCm: "120",
+        material: "PP",
+        complemento: "1000 kg 4 Alças",
+      }),
+    ),
+  },
+  {
+    icone: Ribbon,
     tom: "mar",
+    titulo: "Fechamento de carga",
+    vende: "Quilo, rolo ou unidade",
+    texto: "Fita de arquear por quilo, com o selo; plástico bolha por rolo; cantoneira por peça.",
+    exemplo: descricaoDoTipo(
+      tipoPorValor("FITA_ARQUEAR"),
+      camposDaEmbalagem({ larguraMm: "12", espessuraMm: "0,6", material: "PP", complemento: "Preta" }),
+    ),
+  },
+  {
+    icone: CupSoda,
+    tom: "pessego",
+    titulo: "Descartáveis",
+    vende: "Caixa ou milheiro",
+    texto: "Copo, pote, bandeja e embalagem articulada, pelo modelo e pela capacidade.",
+    exemplo: descricaoDoTipo(
+      tipoPorValor("DESCARTAVEL"),
+      camposDaEmbalagem({
+        material: "Copo descartável",
+        capacidade: "200",
+        capacidadeUnidade: "mL",
+        complemento: "PP Transparente Caixa C/ 2500",
+      }),
+    ),
+  },
+  {
+    icone: Shapes,
+    tom: "lilas",
     titulo: "Avulsos",
     vende: "A unidade que você escolher",
     texto:
       "O que não se encaixa em nenhuma linha — palete, etiqueta, o que a indústria vender — entra com o preço digitado.",
+    largo: true,
   },
 ];
 
@@ -144,7 +256,12 @@ export function LinhasDeProduto() {
   return (
     <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {LINHAS.map((linha, i) => (
-        <Revelar key={linha.titulo} como="li" atraso={(i % 4) * 0.06}>
+        <Revelar
+          key={linha.titulo}
+          como="li"
+          atraso={(i % 4) * 0.06}
+          className={linha.largo ? "sm:col-span-2" : ""}
+        >
           <div className="folha elevavel h-full p-5 flex flex-col">
             <div className="flex items-center justify-between gap-3">
               <Placa icone={linha.icone} tom={linha.tom} />

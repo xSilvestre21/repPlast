@@ -34,23 +34,35 @@
 import Decimal from "decimal.js";
 import {
   BadgePercent,
+  Barrel,
   BarChart3,
+  Bubbles,
   Calculator,
   ChevronLeft,
   ChevronRight,
+  CircleDot,
   ClipboardList,
+  Cylinder,
+  Disc3,
   FileText,
   Mail,
+  Milk,
   Package,
+  PackageOpen,
+  PaintBucket,
   Paperclip,
+  Ribbon,
   Send,
+  ShoppingBag,
+  Soup,
+  TestTube,
   type LucideIcon,
 } from "lucide-react";
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { Segmentado } from "@/components/ui";
+import { Placa, Segmentado } from "@/components/ui";
 import { comissaoDoPedido, ratearComissao } from "@/lib/comissao";
 import { descricaoFita, descricaoRolo, descricaoSaco, formatarNumero } from "@/lib/descricao";
 import { textoPadraoDoEnvio } from "@/lib/envio-pedido";
@@ -139,6 +151,64 @@ const PRECO_TAMPA: Record<DiametroTampa, string> = { "24": "95", "28": "120", "3
 /** O modelo muda a linha da tabela: o flip top tem mais peça que a de rosca. */
 const ACRESCIMO_TAMPA: Record<ModeloTampa, string> = { Rosca: "0", "Flip Top": "85", Lacre: "30" };
 
+/*
+ * Pote e balde vão pela tabela, como o frasco e a bombona, com o conjunto em
+ * linha própria. A boca do pote é a das tampas de pote que a indústria faz
+ * (80, 90 e 100 mm).
+ */
+type CapacidadePote = "250" | "500" | "1000";
+type CapacidadeBalde = "5" | "10" | "20";
+type AlcaBalde = "Plástica" | "Metálica";
+type PesoPreforma = "18" | "21" | "28";
+type GargaloPreforma = "PCO 1881" | "PCO 1810";
+type AlturaBigBag = "90" | "120" | "150";
+type LarguraArquear = "12" | "16" | "19";
+type LarguraBolha = "100" | "130" | "150";
+type TamanhoBolha = "Pequena" | "Grande";
+
+const POTE: Record<CapacidadePote, { capacidade: string; unidade: string; rotulo: string; bocaMm: string }> = {
+  "250": { capacidade: "250", unidade: "mL", rotulo: "250 mL", bocaMm: "80" },
+  "500": { capacidade: "500", unidade: "mL", rotulo: "500 mL", bocaMm: "90" },
+  "1000": { capacidade: "1", unidade: "L", rotulo: "1 L", bocaMm: "100" },
+};
+const PRECO_POTE: Record<CapacidadePote, { so: string; conjunto: string }> = {
+  "250": { so: "380", conjunto: "520" },
+  "500": { so: "560", conjunto: "740" },
+  "1000": { so: "890", conjunto: "1150" },
+};
+
+const PRECO_BALDE: Record<CapacidadeBalde, { so: string; conjunto: string; tampaMm: string }> = {
+  "5": { so: "2900", conjunto: "3700", tampaMm: "200" },
+  "10": { so: "4300", conjunto: "5400", tampaMm: "250" },
+  "20": { so: "6900", conjunto: "8600", tampaMm: "290" },
+};
+/** A alça de metal é outra linha da tabela, mais cara que a de plástico. */
+const ACRESCIMO_ALCA_METALICA = "900";
+
+/** Pré-forma: o milheiro pelo peso; o gargalo alto (PCO 1810) leva mais resina. */
+const PRECO_PREFORMA: Record<PesoPreforma, string> = { "18": "210", "21": "240", "28": "310" };
+const ACRESCIMO_PCO_1810 = "12";
+
+/*
+ * Big bag, fita de arquear e plástico bolha não se cotam por milheiro: o
+ * cadastro escolhe a unidade do preço, e a vitrine mostra a que o mercado usa.
+ */
+const PRECO_BIG_BAG: Record<AlturaBigBag, string> = { "90": "34.9", "120": "39.9", "150": "45.9" };
+const ACRESCIMO_VALVULA = "6";
+/** A espessura vem com a largura, como nos catálogos: 12 × 0,6, 16 × 0,8, 19 × 1. */
+const ARQUEAR: Record<LarguraArquear, { espessura: string; kg: string }> = {
+  "12": { espessura: "0,6", kg: "15.4" },
+  "16": { espessura: "0,8", kg: "14.9" },
+  "19": { espessura: "1", kg: "14.6" },
+};
+/** O rolo de 100 m, pela largura em metros. */
+const BOLHA: Record<LarguraBolha, { metros: string; rotulo: string; rolo: string }> = {
+  "100": { metros: "1", rotulo: "1,00 m", rolo: "72" },
+  "130": { metros: "1,3", rotulo: "1,30 m", rolo: "94" },
+  "150": { metros: "1,5", rotulo: "1,50 m", rolo: "108" },
+};
+const ACRESCIMO_BOLHA_GRANDE = "12";
+
 const IPI = "3.25";
 const PERCENTUAL_COMISSAO = "3";
 /** Fatia da preposta, em percentual DA COMISSÃO — como no cadastro do preposto. */
@@ -155,16 +225,40 @@ const NOME_UNIDADE: Record<UnidadeVenda, { plural: string; sufixo: string; preco
   UN: { plural: "unidades", sufixo: "/un", preco: "Preço da unidade" },
 };
 
-type CodigoProduto = "SACO" | "STRETCH" | "FITA" | "FRASCO" | "BOMBONA" | "TAMPA";
+type CodigoProduto =
+  | "SACO"
+  | "STRETCH"
+  | "FITA"
+  | "FRASCO"
+  | "BOMBONA"
+  | "TAMPA"
+  | "POTE"
+  | "BALDE"
+  | "PREFORMA"
+  | "BIG_BAG"
+  | "ARQUEAR"
+  | "BOLHA";
 
-/** Na troca, em duas fileiras: os flexíveis em cima, os rígidos embaixo. */
-const PRODUTOS: { codigo: CodigoProduto; nome: string; vende: string }[] = [
-  { codigo: "SACO", nome: "Saco", vende: "por milheiro ou por quilo" },
-  { codigo: "STRETCH", nome: "Stretch", vende: "por quilo" },
-  { codigo: "FITA", nome: "Fita", vende: "por caixa ou por unidade" },
-  { codigo: "FRASCO", nome: "Frasco", vende: "por milheiro ou por unidade" },
-  { codigo: "BOMBONA", nome: "Bombona", vende: "por milheiro ou por unidade" },
-  { codigo: "TAMPA", nome: "Tampa", vende: "por milheiro ou por unidade" },
+type TomProduto = "sol" | "mar" | "menta" | "pessego" | "lilas";
+
+/**
+ * Na ordem da trilha: os flexíveis, os rígidos, os rígidos que vieram depois e
+ * o que fecha a carga. O ícone e o tom marcam o produto da vez no meio da troca
+ * — os mesmos dos cartões de "O que você vende".
+ */
+const PRODUTOS: { codigo: CodigoProduto; nome: string; vende: string; icone: LucideIcon; tom: TomProduto }[] = [
+  { codigo: "SACO", nome: "Saco", vende: "por milheiro ou por quilo", icone: ShoppingBag, tom: "sol" },
+  { codigo: "STRETCH", nome: "Stretch", vende: "por quilo", icone: Cylinder, tom: "mar" },
+  { codigo: "FITA", nome: "Fita", vende: "por caixa ou por unidade", icone: Disc3, tom: "pessego" },
+  { codigo: "FRASCO", nome: "Frasco", vende: "por milheiro ou por unidade", icone: Milk, tom: "menta" },
+  { codigo: "BOMBONA", nome: "Bombona", vende: "por milheiro ou por unidade", icone: Barrel, tom: "lilas" },
+  { codigo: "TAMPA", nome: "Tampa", vende: "por milheiro ou por unidade", icone: CircleDot, tom: "sol" },
+  { codigo: "POTE", nome: "Pote", vende: "por milheiro ou por unidade", icone: Soup, tom: "lilas" },
+  { codigo: "BALDE", nome: "Balde", vende: "por milheiro ou por unidade", icone: PaintBucket, tom: "mar" },
+  { codigo: "PREFORMA", nome: "Pré-forma", vende: "por milheiro ou por unidade", icone: TestTube, tom: "menta" },
+  { codigo: "BIG_BAG", nome: "Big bag", vende: "por unidade", icone: PackageOpen, tom: "pessego" },
+  { codigo: "ARQUEAR", nome: "Fita de arquear", vende: "por quilo", icone: Ribbon, tom: "sol" },
+  { codigo: "BOLHA", nome: "Plástico bolha", vende: "por rolo", icone: Bubbles, tom: "menta" },
 ];
 
 interface Estado {
@@ -175,6 +269,12 @@ interface Estado {
   frasco: { capacidade: CapacidadeFrasco; material: MaterialFrasco; tampa: SemOuCom; unidade: MilOuUn };
   bombona: { capacidade: CapacidadeBombona; tampa: SemOuCom; unidade: MilOuUn };
   tampa: { diametro: DiametroTampa; modelo: ModeloTampa; unidade: MilOuUn };
+  pote: { capacidade: CapacidadePote; tampa: SemOuCom; unidade: MilOuUn };
+  balde: { capacidade: CapacidadeBalde; alca: AlcaBalde; tampa: SemOuCom; unidade: MilOuUn };
+  preforma: { peso: PesoPreforma; gargalo: GargaloPreforma; unidade: MilOuUn };
+  bigbag: { altura: AlturaBigBag; valvula: SemOuCom };
+  arquear: { largura: LarguraArquear };
+  bolha: { largura: LarguraBolha; bolha: TamanhoBolha };
 }
 
 const INICIAL: Estado = {
@@ -185,6 +285,12 @@ const INICIAL: Estado = {
   frasco: { capacidade: "500", material: "PEAD", tampa: "SEM", unidade: "MIL" },
   bombona: { capacidade: "20", tampa: "COM", unidade: "UN" },
   tampa: { diametro: "28", modelo: "Flip Top", unidade: "MIL" },
+  pote: { capacidade: "500", tampa: "COM", unidade: "MIL" },
+  balde: { capacidade: "20", alca: "Metálica", tampa: "COM", unidade: "UN" },
+  preforma: { peso: "18", gargalo: "PCO 1881", unidade: "MIL" },
+  bigbag: { altura: "120", valvula: "SEM" },
+  arquear: { largura: "12" },
+  bolha: { largura: "130", bolha: "Pequena" },
 };
 
 /**
@@ -203,12 +309,26 @@ function completar(estado: Estado): Estado {
     frasco: { ...INICIAL.frasco, ...estado.frasco },
     bombona: { ...INICIAL.bombona, ...estado.bombona },
     tampa: { ...INICIAL.tampa, ...estado.tampa },
+    pote: { ...INICIAL.pote, ...estado.pote },
+    balde: { ...INICIAL.balde, ...estado.balde },
+    preforma: { ...INICIAL.preforma, ...estado.preforma },
+    bigbag: { ...INICIAL.bigbag, ...estado.bigbag },
+    arquear: { ...INICIAL.arquear, ...estado.arquear },
+    bolha: { ...INICIAL.bolha, ...estado.bolha },
   };
 }
 
 /** Produto por milheiro: o preço é o da linha da tabela, como no cadastro. */
 function porMilheiro(familia: Familia, milheiro: Decimal): ProdutoPrecificavel {
   return { familia, precoAvulso: milheiro, unidadeAvulsa: "MIL" };
+}
+
+/**
+ * Produto que escolhe a unidade do preço no cadastro — big bag por unidade, fita
+ * de arquear por quilo, plástico bolha por rolo. O preço vale só nela.
+ */
+function porUnidadeDeVenda(familia: Familia, preco: Decimal, unidade: UnidadeVenda): ProdutoPrecificavel {
+  return { familia, precoAvulso: preco, unidadeAvulsa: unidade };
 }
 
 /** A conta das famílias por milheiro: a linha da tabela e, na unidade, o milheiro ÷ 1000. */
@@ -371,6 +491,122 @@ function montarExemplo(estado: Estado) {
       campos({ diametroMm: diametro, material: "PP", complemento: modelo }),
     );
     conta = contaDaTabela(`Tampa ${diametro} mm em PP, ${modelo}`, false, milheiro, unidade);
+  } else if (estado.produto === "POTE") {
+    const { capacidade } = estado.pote;
+    const conjunto = estado.pote.tampa === "COM";
+    const medida = POTE[capacidade];
+    const tabela = PRECO_POTE[capacidade];
+    const milheiro = new Decimal(conjunto ? tabela.conjunto : tabela.so);
+    unidade = estado.pote.unidade;
+    produto = porMilheiro(conjunto ? "POTE_TAMPA" : "POTE", milheiro);
+    descricao = descricaoDoTipo(
+      tipoPorValor(conjunto ? "POTE_TAMPA" : "POTE"),
+      campos({
+        capacidade: medida.capacidade,
+        capacidadeUnidade: medida.unidade,
+        material: "PP",
+        complemento: `Redondo Boca ${medida.bocaMm}mm`,
+        diametroMm: medida.bocaMm,
+        materialTampa: "PP",
+        complementoTampa: "Rosca",
+      }),
+    );
+    conta = contaDaTabela(
+      conjunto ? `Pote ${medida.rotulo} em PP + tampa ${medida.bocaMm} mm` : `Pote ${medida.rotulo} em PP`,
+      conjunto,
+      milheiro,
+      unidade,
+    );
+  } else if (estado.produto === "BALDE") {
+    const { capacidade, alca } = estado.balde;
+    const conjunto = estado.balde.tampa === "COM";
+    const tabela = PRECO_BALDE[capacidade];
+    const milheiro = new Decimal(conjunto ? tabela.conjunto : tabela.so).plus(
+      alca === "Metálica" ? ACRESCIMO_ALCA_METALICA : 0,
+    );
+    unidade = estado.balde.unidade;
+    produto = porMilheiro(conjunto ? "BALDE_TAMPA" : "BALDE", milheiro);
+    descricao = descricaoDoTipo(
+      tipoPorValor(conjunto ? "BALDE_TAMPA" : "BALDE"),
+      campos({
+        capacidade,
+        capacidadeUnidade: "L",
+        material: "PP",
+        complemento: `Alça ${alca}`,
+        diametroMm: tabela.tampaMm,
+        materialTampa: "PP",
+        complementoTampa: "Lacre",
+      }),
+    );
+    const balde = `Balde ${capacidade} L, alça ${alca.toLowerCase()}`;
+    conta = contaDaTabela(
+      conjunto ? `${balde} + tampa ${tabela.tampaMm} mm` : balde,
+      conjunto,
+      milheiro,
+      unidade,
+    );
+  } else if (estado.produto === "PREFORMA") {
+    const { peso, gargalo } = estado.preforma;
+    const milheiro = new Decimal(PRECO_PREFORMA[peso]).plus(gargalo === "PCO 1810" ? ACRESCIMO_PCO_1810 : 0);
+    unidade = estado.preforma.unidade;
+    produto = porMilheiro("PREFORMA", milheiro);
+    descricao = descricaoDoTipo(
+      tipoPorValor("PREFORMA"),
+      campos({ capacidade: peso, capacidadeUnidade: "g", material: "PET", complemento: `${gargalo} Cristal` }),
+    );
+    conta = contaDaTabela(`Pré-forma de ${peso} g, gargalo ${gargalo}`, false, milheiro, unidade);
+  } else if (estado.produto === "BIG_BAG") {
+    const { altura } = estado.bigbag;
+    const comValvula = estado.bigbag.valvula === "COM";
+    const preco = new Decimal(PRECO_BIG_BAG[altura]).plus(comValvula ? ACRESCIMO_VALVULA : 0);
+    unidade = "UN";
+    produto = porUnidadeDeVenda("BIG_BAG", preco, "UN");
+    descricao = descricaoDoTipo(
+      tipoPorValor("BIG_BAG"),
+      campos({
+        comprimentoCm: "90",
+        larguraCm: "90",
+        alturaCm: altura,
+        material: "PP",
+        complemento: `1000 kg 4 Alças ${comValvula ? "Fundo C/ Válvula" : "Fundo Plano"}`,
+      }),
+    );
+    conta = [
+      {
+        rotulo: `Big bag 90 × 90 × ${altura} cm, ${comValvula ? "com válvula de descarga" : "fundo plano"}`,
+        valor: "linha da tabela",
+      },
+      { rotulo: "Preço da unidade na tabela da indústria", valor: reais(preco) },
+      { rotulo: "Vendido por unidade", valor: "o cadastro escolhe" },
+    ];
+  } else if (estado.produto === "ARQUEAR") {
+    const { largura } = estado.arquear;
+    const linha = ARQUEAR[largura];
+    const kg = new Decimal(linha.kg);
+    unidade = "KG";
+    produto = porUnidadeDeVenda("FITA_ARQUEAR", kg, "KG");
+    descricao = descricaoDoTipo(
+      tipoPorValor("FITA_ARQUEAR"),
+      campos({ larguraMm: largura, espessuraMm: linha.espessura, material: "PP", complemento: "Preta" }),
+    );
+    conta = [
+      { rotulo: `Fita de arquear ${largura} × ${linha.espessura} mm`, valor: "vendida por quilo" },
+      { rotulo: "Preço do kg na tabela da indústria", valor: `${reais(kg)}/kg` },
+    ];
+  } else if (estado.produto === "BOLHA") {
+    const { largura, bolha } = estado.bolha;
+    const linha = BOLHA[largura];
+    const rolo = new Decimal(linha.rolo).plus(bolha === "Grande" ? ACRESCIMO_BOLHA_GRANDE : 0);
+    unidade = "UN";
+    produto = porUnidadeDeVenda("BOLHA", rolo, "UN");
+    descricao = descricaoDoTipo(
+      tipoPorValor("BOLHA"),
+      campos({ larguraM: linha.metros, metragemM: "100", material: "PEBD", complemento: `Bolha ${bolha}` }),
+    );
+    conta = [
+      { rotulo: `Rolo de ${linha.rotulo} × 100 m, bolha ${bolha.toLowerCase()}`, valor: "vendido por rolo" },
+      { rotulo: "Preço do rolo na tabela da indústria", valor: reais(rolo) },
+    ];
   } else {
     const { largura, metragem, porCaixa } = estado.fita;
     unidade = estado.fita.unidade;
@@ -457,7 +693,7 @@ const ETAPAS: Etapa[] = [
   {
     titulo: "Produto",
     resumo:
-      "Saco pela medida, stretch por kg, fita por caixa; frasco, bombona e tampa pela tabela, por milheiro.",
+      "Saco pela medida; stretch e arquear por kg; big bag e bolha pela unidade; o resto pela tabela, por milheiro.",
     icone: Package,
   },
   {
@@ -628,7 +864,9 @@ export function ComoFunciona() {
         id={`${base}-quadro`}
         role="tabpanel"
         aria-labelledby={`${base}-aba-${ativa}`}
-        className="folha folha-marcada p-5 sm:p-7 min-h-[27rem] relative overflow-hidden"
+        // No computador, a altura do quadro de Produto mais alto (a fita, com a
+        // régua de rolos por caixa): a etapa que passa sozinha não faz a página pular.
+        className="folha folha-marcada p-5 sm:p-7 min-h-[27rem] lg:min-h-[34rem] relative overflow-hidden flex flex-col"
       >
         <p className="lg:hidden text-corpo text-tinta-2 mb-4">{ETAPAS[ativa].resumo}</p>
 
@@ -642,6 +880,7 @@ export function ComoFunciona() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0, transition: { duration: 0.25, ease: SUAVE } }}
             exit={{ opacity: 0, y: -6, transition: { duration: 0.12, ease: "easeIn" } }}
+            className="flex-1 flex flex-col"
           >
             {ativa === 0 && <QuadroProduto estado={completo} exemplo={exemplo} mudar={mudar} />}
             {ativa === 1 && <QuadroPreco exemplo={exemplo} />}
@@ -749,7 +988,7 @@ function QuadroProduto({ estado, exemplo, mudar }: { estado: Estado; exemplo: Ex
   const produto = PRODUTOS[indice];
 
   return (
-    <div className="flex flex-col min-h-[23rem]">
+    <div className="flex-1 flex flex-col min-h-[23rem]">
       <div className="flex items-baseline justify-between gap-3 mb-4 flex-wrap">
         <p className="rotulo">Medidas de exemplo — mexa à vontade</p>
         <p className="text-mini text-tinta-3">
@@ -757,7 +996,8 @@ function QuadroProduto({ estado, exemplo, mudar }: { estado: Estado; exemplo: Ex
         </p>
       </div>
 
-      <div className="relative flex-1">
+      {/* A sobra de altura fica em volta do exemplo, e não embaixo da troca. */}
+      <div className="relative flex-1 flex flex-col justify-center">
         <AnimatePresence mode="wait" initial={false} custom={direcao}>
           <m.div
             key={estado.produto}
@@ -780,6 +1020,12 @@ function QuadroProduto({ estado, exemplo, mudar }: { estado: Estado; exemplo: Ex
               {estado.produto === "FRASCO" && <ControlesFrasco estado={estado} mudar={mudar} />}
               {estado.produto === "BOMBONA" && <ControlesBombona estado={estado} mudar={mudar} />}
               {estado.produto === "TAMPA" && <ControlesTampa estado={estado} mudar={mudar} />}
+              {estado.produto === "POTE" && <ControlesPote estado={estado} mudar={mudar} />}
+              {estado.produto === "BALDE" && <ControlesBalde estado={estado} mudar={mudar} />}
+              {estado.produto === "PREFORMA" && <ControlesPreforma estado={estado} mudar={mudar} />}
+              {estado.produto === "BIG_BAG" && <ControlesBigBag estado={estado} mudar={mudar} />}
+              {estado.produto === "ARQUEAR" && <ControlesArquear estado={estado} mudar={mudar} />}
+              {estado.produto === "BOLHA" && <ControlesBolha estado={estado} mudar={mudar} />}
             </div>
 
             <div className="flex flex-col items-center gap-3">
@@ -790,6 +1036,12 @@ function QuadroProduto({ estado, exemplo, mudar }: { estado: Estado; exemplo: Ex
                 {estado.produto === "FRASCO" && <DesenhoFrasco estado={estado} />}
                 {estado.produto === "BOMBONA" && <DesenhoBombona estado={estado} />}
                 {estado.produto === "TAMPA" && <DesenhoTampa estado={estado} />}
+                {estado.produto === "POTE" && <DesenhoPote estado={estado} />}
+                {estado.produto === "BALDE" && <DesenhoBalde estado={estado} />}
+                {estado.produto === "PREFORMA" && <DesenhoPreforma estado={estado} />}
+                {estado.produto === "BIG_BAG" && <DesenhoBigBag estado={estado} />}
+                {estado.produto === "ARQUEAR" && <DesenhoArquear estado={estado} />}
+                {estado.produto === "BOLHA" && <DesenhoBolha estado={estado} />}
               </div>
               <p className="text-mini text-tinta-3 text-center max-w-[12rem]">{exemplo.descricao}</p>
               <p className="text-corpo text-tinta-2 text-center">
@@ -802,37 +1054,71 @@ function QuadroProduto({ estado, exemplo, mudar }: { estado: Estado; exemplo: Ex
       </div>
 
       {/*
-        A troca de produto: setas e bolinhas com nome, embaixo do quadro. Seis
-        nomes não cabem numa fileira no celular: são duas de três, sempre — os
-        flexíveis em cima, os rígidos embaixo —, e no celular as setas saem,
-        que os próprios nomes já trocam.
+        A troca de produto. As setas trocam, e no meio fica só o produto da vez:
+        o ícone, o nome e quantos são — doze nomes de uma vez ocupavam mais que o
+        próprio exemplo. Embaixo, a trilha: um tracinho por produto, o da vez
+        aceso e mais comprido. Cada um diz o nome ao passar o mouse e leva direto
+        a ele, para ninguém precisar de seis cliques na seta.
       */}
-      <div className="mt-6 pt-4 border-t border-filete flex items-center justify-between gap-2">
-        <BotaoSeta direcao="anterior" aoClicar={() => irPara(indice - 1, -1)} />
-        <div
-          className="grid grid-cols-3 gap-1 flex-1 sm:flex-none min-w-0"
-          role="group"
-          aria-label="Produto do exemplo"
-        >
+      <div className="mt-6 pt-4 border-t border-filete">
+        <div className="flex items-center justify-between gap-3">
+          <BotaoSeta direcao="anterior" aoClicar={() => irPara(indice - 1, -1)} />
+          <div className="relative flex-1 min-w-0 h-11 overflow-hidden" aria-live="polite">
+            <AnimatePresence initial={false} custom={direcao}>
+              <m.div
+                key={produto.codigo}
+                custom={direcao}
+                variants={{
+                  entra: (d: number) => ({ opacity: 0, x: 28 * d }),
+                  fica: { opacity: 1, x: 0 },
+                  sai: (d: number) => ({ opacity: 0, x: -28 * d }),
+                }}
+                initial="entra"
+                animate="fica"
+                exit="sai"
+                transition={{ duration: 0.28, ease: SUAVE }}
+                className="absolute inset-0 flex items-center justify-center gap-2.5"
+              >
+                <Placa icone={produto.icone} tom={produto.tom} pequena />
+                <span className="min-w-0 text-left leading-tight">
+                  <span className="block truncate text-realce font-semibold text-tinta">{produto.nome}</span>
+                  <span className="block text-mini text-tinta-3 numerico">
+                    {indice + 1} de {PRODUTOS.length}
+                  </span>
+                </span>
+              </m.div>
+            </AnimatePresence>
+          </div>
+          <BotaoSeta direcao="proximo" aoClicar={() => irPara(indice + 1, 1)} />
+        </div>
+
+        <div role="group" aria-label="Produto do exemplo" className="mt-2 flex items-center justify-center">
           {PRODUTOS.map((p, i) => (
             <button
               key={p.codigo}
               type="button"
+              aria-label={p.nome}
               aria-pressed={i === indice}
               onClick={() => irPara(i, i >= indice ? 1 : -1)}
-              className={`flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-mini font-semibold cursor-pointer transition-colors ${
-                i === indice ? "bg-tinta text-papel" : "text-tinta-2 hover:text-tinta hover:bg-folha-2"
-              }`}
+              className="group relative grid place-items-center h-7 px-[3px] cursor-pointer"
             >
               <span
-                className={`size-1.5 rounded-full ${i === indice ? "bg-papel" : "bg-tinta-3"}`}
                 aria-hidden="true"
+                className={`block h-1.5 rounded-full transition-all duration-300 ${
+                  i === indice ? "w-7 bg-carimbo" : "w-3 bg-filete-forte group-hover:bg-tinta-3"
+                }`}
               />
-              {p.nome}
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute top-full left-1/2 -translate-x-1/2 whitespace-nowrap
+                  rounded-[var(--radius-miudo)] bg-tinta px-2 py-0.5 text-micro font-semibold text-papel
+                  opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100"
+              >
+                {p.nome}
+              </span>
             </button>
           ))}
         </div>
-        <BotaoSeta direcao="proximo" aoClicar={() => irPara(indice + 1, 1)} />
       </div>
     </div>
   );
@@ -846,7 +1132,7 @@ function BotaoSeta({ direcao, aoClicar }: { direcao: "anterior" | "proximo"; aoC
       type="button"
       onClick={aoClicar}
       aria-label={direcao === "anterior" ? "Produto anterior" : "Próximo produto"}
-      className="hidden sm:grid place-items-center size-9 shrink-0 rounded-full border border-filete-forte text-tinta cursor-pointer transition-all hover:bg-folha-2 active:scale-95"
+      className="alvo-toque relative grid place-items-center size-9 shrink-0 rounded-full border border-filete-forte text-tinta cursor-pointer transition-all hover:bg-folha-2 active:scale-95"
     >
       <Icone size={17} strokeWidth={2.25} aria-hidden="true" />
     </button>
@@ -1383,6 +1669,461 @@ function DesenhoTampa({ estado }: { estado: Estado }) {
         )}
       </AnimatePresence>
     </m.svg>
+  );
+}
+
+/*
+ * Pote, balde e pré-forma: escolhas de tabela, como o frasco. Big bag, fita de
+ * arquear e plástico bolha: o preço na unidade em que o mercado cota — e o
+ * desenho mostra o que a escolha muda na peça.
+ */
+
+const ALCAS = [
+  { valor: "Plástica" as const, rotulo: "Plástica" },
+  { valor: "Metálica" as const, rotulo: "Metálica" },
+];
+
+function ControlesPote({ estado, mudar }: { estado: Estado; mudar: Mudar }) {
+  const pote = estado.pote;
+  const alterar = (parte: Partial<Estado["pote"]>) =>
+    mudar((atual) => ({ ...atual, pote: { ...atual.pote, ...parte } }));
+
+  return (
+    <>
+      <Opcoes
+        rotulo="Vender por"
+        opcoes={VENDER_POR_MILHEIRO}
+        atual={pote.unidade}
+        aoEscolher={(unidade) => alterar({ unidade })}
+      />
+      <Opcoes
+        rotulo="Capacidade"
+        opcoes={(Object.keys(POTE) as CapacidadePote[]).map((valor) => ({ valor, rotulo: POTE[valor].rotulo }))}
+        atual={pote.capacidade}
+        aoEscolher={(capacidade) => alterar({ capacidade })}
+      />
+      <Opcoes rotulo="Tampa" opcoes={COM_OU_SEM_TAMPA} atual={pote.tampa} aoEscolher={(tampa) => alterar({ tampa })} />
+      <NotaDaTabela>
+        A boca do pote é o diâmetro da tampa — <strong className="text-tinta">{POTE[pote.capacidade].bocaMm} mm</strong>.
+        Com ela, o pote vira conjunto, com linha própria na tabela.
+      </NotaDaTabela>
+    </>
+  );
+}
+
+function ControlesBalde({ estado, mudar }: { estado: Estado; mudar: Mudar }) {
+  const balde = estado.balde;
+  const alterar = (parte: Partial<Estado["balde"]>) =>
+    mudar((atual) => ({ ...atual, balde: { ...atual.balde, ...parte } }));
+
+  return (
+    <>
+      <Opcoes
+        rotulo="Vender por"
+        opcoes={VENDER_POR_MILHEIRO}
+        atual={balde.unidade}
+        aoEscolher={(unidade) => alterar({ unidade })}
+      />
+      <Opcoes
+        rotulo="Capacidade"
+        opcoes={(Object.keys(PRECO_BALDE) as CapacidadeBalde[]).map((valor) => ({ valor, rotulo: `${valor} L` }))}
+        atual={balde.capacidade}
+        aoEscolher={(capacidade) => alterar({ capacidade })}
+      />
+      <Opcoes rotulo="Alça" opcoes={ALCAS} atual={balde.alca} aoEscolher={(alca) => alterar({ alca })} />
+      <Opcoes rotulo="Tampa" opcoes={COM_OU_SEM_TAMPA} atual={balde.tampa} aoEscolher={(tampa) => alterar({ tampa })} />
+    </>
+  );
+}
+
+function ControlesPreforma({ estado, mudar }: { estado: Estado; mudar: Mudar }) {
+  const preforma = estado.preforma;
+  const alterar = (parte: Partial<Estado["preforma"]>) =>
+    mudar((atual) => ({ ...atual, preforma: { ...atual.preforma, ...parte } }));
+
+  return (
+    <>
+      <Opcoes
+        rotulo="Vender por"
+        opcoes={VENDER_POR_MILHEIRO}
+        atual={preforma.unidade}
+        aoEscolher={(unidade) => alterar({ unidade })}
+      />
+      <Opcoes
+        rotulo="Peso"
+        opcoes={(Object.keys(PRECO_PREFORMA) as PesoPreforma[]).map((valor) => ({ valor, rotulo: `${valor} g` }))}
+        atual={preforma.peso}
+        aoEscolher={(peso) => alterar({ peso })}
+      />
+      <Opcoes
+        rotulo="Gargalo"
+        opcoes={[
+          { valor: "PCO 1881" as const, rotulo: "PCO 1881" },
+          { valor: "PCO 1810" as const, rotulo: "PCO 1810" },
+        ]}
+        atual={preforma.gargalo}
+        aoEscolher={(gargalo) => alterar({ gargalo })}
+      />
+      <NotaDaTabela>
+        Pelo <strong className="text-tinta">peso</strong>, que é o da garrafa que ela vira, e pelo gargalo: o
+        1810 é o de 28 mm alto, o 1881 o baixo.
+      </NotaDaTabela>
+    </>
+  );
+}
+
+function ControlesBigBag({ estado, mudar }: { estado: Estado; mudar: Mudar }) {
+  const bigbag = estado.bigbag;
+  const alterar = (parte: Partial<Estado["bigbag"]>) =>
+    mudar((atual) => ({ ...atual, bigbag: { ...atual.bigbag, ...parte } }));
+
+  return (
+    <>
+      <Opcoes
+        rotulo="Altura"
+        opcoes={(Object.keys(PRECO_BIG_BAG) as AlturaBigBag[]).map((valor) => ({ valor, rotulo: `${valor} cm` }))}
+        atual={bigbag.altura}
+        aoEscolher={(altura) => alterar({ altura })}
+      />
+      <Opcoes
+        rotulo="Fundo"
+        opcoes={[
+          { valor: "SEM" as const, rotulo: "Plano" },
+          { valor: "COM" as const, rotulo: "Com válvula" },
+        ]}
+        atual={bigbag.valvula}
+        aoEscolher={(valvula) => alterar({ valvula })}
+      />
+      <NotaDaTabela>
+        Big bag se cota <strong className="text-tinta">por unidade</strong>: no cadastro, o preço fica na unidade
+        que a indústria usa, sem passar pelo milheiro.
+      </NotaDaTabela>
+    </>
+  );
+}
+
+function ControlesArquear({ estado, mudar }: { estado: Estado; mudar: Mudar }) {
+  const { largura } = estado.arquear;
+  const alterar = (parte: Partial<Estado["arquear"]>) =>
+    mudar((atual) => ({ ...atual, arquear: { ...atual.arquear, ...parte } }));
+
+  return (
+    <>
+      <Opcoes
+        rotulo="Largura"
+        opcoes={(Object.keys(ARQUEAR) as LarguraArquear[]).map((valor) => ({ valor, rotulo: `${valor} mm` }))}
+        atual={largura}
+        aoEscolher={(nova) => alterar({ largura: nova })}
+      />
+      <NotaDaTabela>
+        Por <strong className="text-tinta">quilo</strong>, como a indústria cobra. A espessura vem com a largura (
+        {ARQUEAR[largura].espessura} mm), e o selo de {largura} mm entra no mesmo pedido, por milheiro.
+      </NotaDaTabela>
+    </>
+  );
+}
+
+function ControlesBolha({ estado, mudar }: { estado: Estado; mudar: Mudar }) {
+  const bolha = estado.bolha;
+  const alterar = (parte: Partial<Estado["bolha"]>) =>
+    mudar((atual) => ({ ...atual, bolha: { ...atual.bolha, ...parte } }));
+
+  return (
+    <>
+      <Opcoes
+        rotulo="Largura"
+        opcoes={(Object.keys(BOLHA) as LarguraBolha[]).map((valor) => ({ valor, rotulo: BOLHA[valor].rotulo }))}
+        atual={bolha.largura}
+        aoEscolher={(largura) => alterar({ largura })}
+      />
+      <Opcoes
+        rotulo="Bolha"
+        opcoes={[
+          { valor: "Pequena" as const, rotulo: "Pequena" },
+          { valor: "Grande" as const, rotulo: "Grande" },
+        ]}
+        atual={bolha.bolha}
+        aoEscolher={(tamanho) => alterar({ bolha: tamanho })}
+      />
+      <NotaDaTabela>
+        O rolo tem 100 m e o preço é <strong className="text-tinta">por rolo</strong>. Na descrição, a largura
+        sai em metros, como o mercado escreve.
+      </NotaDaTabela>
+    </>
+  );
+}
+
+/** O pote cresce com a capacidade, baixo e largo; a tampa desce no conjunto. */
+const ESCALA_POTE: Record<CapacidadePote, number> = { "250": 0.66, "500": 0.82, "1000": 1 };
+const COR_POTE = { fill: "var(--placa-lilas)", stroke: "var(--placa-lilas-traco)" };
+
+function DesenhoPote({ estado }: { estado: Estado }) {
+  const { capacidade, tampa } = estado.pote;
+
+  return (
+    <m.svg
+      viewBox="0 0 120 120"
+      className="w-[150px] h-[150px] overflow-visible"
+      style={{ originY: 1 }}
+      animate={{ scale: ESCALA_POTE[capacidade] }}
+      transition={MOLA}
+    >
+      <rect x={14} y={41} width={92} height={75} rx={14} style={{ ...COR_POTE, strokeWidth: 1.25 }} />
+      {/* O rótulo. */}
+      <rect x={14} y={62} width={92} height={30} style={{ fill: COR_POTE.stroke, opacity: 0.14 }} />
+      {/* A boca larga, com a rosca: some embaixo da tampa. */}
+      <rect x={24} y={30} width={72} height={12} rx={2} style={{ ...COR_POTE, strokeWidth: 1.25 }} />
+      <line x1={24} x2={96} y1={34} y2={34} style={{ stroke: COR_POTE.stroke, strokeWidth: 1, opacity: 0.5 }} />
+      <line x1={24} x2={96} y1={38} y2={38} style={{ stroke: COR_POTE.stroke, strokeWidth: 1, opacity: 0.5 }} />
+      <AnimatePresence>
+        {tampa === "COM" && <TampaQueDesce key="tampa" x={20} y={18} largura={80} altura={16} />}
+      </AnimatePresence>
+    </m.svg>
+  );
+}
+
+/** O balde cresce com a capacidade; a alça de metal é fina e cinza, a de plástico é grossa. */
+const ESCALA_BALDE: Record<CapacidadeBalde, number> = { "5": 0.62, "10": 0.8, "20": 1 };
+const COR_BALDE = { fill: "var(--placa-mar)", stroke: "var(--placa-mar-traco)" };
+
+function DesenhoBalde({ estado }: { estado: Estado }) {
+  const { capacidade, alca, tampa } = estado.balde;
+  const metalica = alca === "Metálica";
+
+  return (
+    <m.svg
+      viewBox="0 0 130 140"
+      className="w-[150px] h-[160px] overflow-visible"
+      style={{ originY: 1 }}
+      animate={{ scale: ESCALA_BALDE[capacidade] }}
+      transition={MOLA}
+    >
+      <path
+        d="M21 58 C21 2 109 2 109 58"
+        style={{
+          fill: "none",
+          stroke: metalica ? "var(--tinta-3)" : COR_BALDE.stroke,
+          strokeWidth: metalica ? 2 : 5,
+          strokeLinecap: "round",
+          transition: "stroke .3s, stroke-width .3s",
+        }}
+      />
+      {/* O corpo, mais largo na boca que no fundo. */}
+      <path
+        d="M16 46 H114 L104 130 Q103 136 97 136 H33 Q27 136 26 130 Z"
+        style={{ ...COR_BALDE, strokeWidth: 1.25 }}
+      />
+      <line x1={19} x2={111} y1={72} y2={72} style={{ stroke: COR_BALDE.stroke, strokeWidth: 1, opacity: 0.3 }} />
+      <line x1={22} x2={108} y1={102} y2={102} style={{ stroke: COR_BALDE.stroke, strokeWidth: 1, opacity: 0.3 }} />
+      {/* A borda, e os pinos onde a alça prende. */}
+      <rect x={12} y={40} width={106} height={8} rx={3} style={{ ...COR_BALDE, strokeWidth: 1.25 }} />
+      <circle cx={21} cy={58} r={3} style={{ ...COR_BALDE, strokeWidth: 1.25 }} />
+      <circle cx={109} cy={58} r={3} style={{ ...COR_BALDE, strokeWidth: 1.25 }} />
+      <AnimatePresence>
+        {tampa === "COM" && <TampaQueDesce key="tampa" x={10} y={28} largura={110} altura={14} />}
+      </AnimatePresence>
+    </m.svg>
+  );
+}
+
+/** A pré-forma estica com o peso; o gargalo PCO 1810 é o alto, o 1881 o baixo. */
+const CORPO_PREFORMA: Record<PesoPreforma, number> = { "18": 74, "21": 88, "28": 108 };
+const COR_PREFORMA = { fill: "var(--placa-mar)", stroke: "var(--placa-mar-traco)" };
+
+function DesenhoPreforma({ estado }: { estado: Estado }) {
+  const { peso, gargalo } = estado.preforma;
+  const alturaGargalo = gargalo === "PCO 1810" ? 22 : 14;
+  /** Onde fica o anel de suporte: logo abaixo do gargalo. */
+  const anel = 8 + alturaGargalo;
+
+  return (
+    <svg viewBox="0 0 60 150" className="w-[64px] h-[160px] overflow-visible">
+      {/* O tubo, que o sopro vira garrafa. */}
+      <m.rect
+        x={16}
+        width={28}
+        rx={14}
+        initial={false}
+        animate={{ y: anel + 2, height: CORPO_PREFORMA[peso] }}
+        transition={MOLA}
+        style={{ ...COR_PREFORMA, strokeWidth: 1.25 }}
+      />
+      {/* O gargalo, já no formato final, com a rosca. */}
+      <m.rect
+        x={18}
+        y={8}
+        width={24}
+        rx={2}
+        initial={false}
+        animate={{ height: alturaGargalo }}
+        transition={MOLA}
+        style={{ ...COR_PREFORMA, strokeWidth: 1.25 }}
+      />
+      <line x1={18} x2={42} y1={12} y2={12} style={{ stroke: COR_PREFORMA.stroke, strokeWidth: 1, opacity: 0.5 }} />
+      <line x1={18} x2={42} y1={16} y2={16} style={{ stroke: COR_PREFORMA.stroke, strokeWidth: 1, opacity: 0.5 }} />
+      {/* O anel de suporte, que segura a peça na sopradora. */}
+      <m.rect
+        x={11}
+        width={38}
+        height={5}
+        rx={2}
+        initial={false}
+        animate={{ y: anel }}
+        transition={MOLA}
+        style={{ ...COR_PREFORMA, strokeWidth: 1.25 }}
+      />
+    </svg>
+  );
+}
+
+/** O big bag estica para cima com a altura; a válvula de descarga desce por baixo. */
+const ALTURA_BIG_BAG: Record<AlturaBigBag, number> = { "90": 66, "120": 86, "150": 106 };
+const COR_BIG_BAG = { fill: "var(--placa-pessego)", stroke: "var(--placa-pessego-traco)" };
+/** A base fica parada: o saco cresce para cima, como quando se enche. */
+const BASE_BIG_BAG = 128;
+
+function DesenhoBigBag({ estado }: { estado: Estado }) {
+  const altura = ALTURA_BIG_BAG[estado.bigbag.altura];
+  const topo = BASE_BIG_BAG - altura;
+  const alca = { fill: "none", stroke: COR_BIG_BAG.stroke, strokeWidth: 3, strokeLinecap: "round" as const };
+
+  return (
+    <svg viewBox="0 0 140 150" className="w-[150px] h-[160px] overflow-visible">
+      {/* As duas alças de trás, mais apagadas. */}
+      <m.g initial={false} animate={{ y: topo }} transition={MOLA}>
+        <path d="M40 2 C40 -13 52 -13 52 2" style={{ ...alca, opacity: 0.45 }} />
+        <path d="M88 2 C88 -13 100 -13 100 2" style={{ ...alca, opacity: 0.45 }} />
+      </m.g>
+      <m.rect
+        x={26}
+        width={88}
+        rx={10}
+        initial={false}
+        animate={{ y: topo, height: altura }}
+        transition={MOLA}
+        style={{ ...COR_BIG_BAG, strokeWidth: 1.25 }}
+      />
+      {/* As costuras da ráfia. */}
+      {[56, 84].map((x) => (
+        <m.line
+          key={x}
+          x1={x}
+          x2={x}
+          y2={BASE_BIG_BAG - 6}
+          initial={false}
+          animate={{ y1: topo + 6 }}
+          transition={MOLA}
+          style={{ stroke: COR_BIG_BAG.stroke, strokeWidth: 1, strokeDasharray: "3 3", opacity: 0.45 }}
+        />
+      ))}
+      {/* As alças da frente e a saia de enchimento, que sobem com o topo. */}
+      <m.g initial={false} animate={{ y: topo }} transition={MOLA}>
+        <path d="M30 6 C28 -17 48 -17 46 6" style={alca} />
+        <path d="M94 6 C92 -17 112 -17 110 6" style={alca} />
+        <path d="M58 1 L61 -11 H79 L82 1 Z" style={{ ...COR_BIG_BAG, strokeWidth: 1.25 }} />
+        <line x1={61} x2={79} y1={-7} y2={-7} style={{ stroke: COR_BIG_BAG.stroke, strokeWidth: 1.25 }} />
+      </m.g>
+      <AnimatePresence>
+        {estado.bigbag.valvula === "COM" && (
+          <m.g
+            key="valvula"
+            initial={{ y: -10, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -10, opacity: 0 }}
+            transition={MOLA}
+          >
+            <path
+              d="M62 127 H78 V140 Q70 146 62 140 Z"
+              style={{ ...COR_BIG_BAG, strokeWidth: 1.25 }}
+            />
+            <line x1={62} x2={78} y1={134} y2={134} style={{ stroke: COR_BIG_BAG.stroke, strokeWidth: 1.25 }} />
+          </m.g>
+        )}
+      </AnimatePresence>
+    </svg>
+  );
+}
+
+/** O rolo da fita de arquear: a fita mais larga engrossa o rolo e a ponta solta. */
+const ANEL_ARQUEAR: Record<LarguraArquear, number> = { "12": 15, "16": 20, "19": 25 };
+
+function DesenhoArquear({ estado }: { estado: Estado }) {
+  const anel = ANEL_ARQUEAR[estado.arquear.largura];
+
+  return (
+    <div className="relative grid place-items-center">
+      <m.div
+        className="rounded-full grid place-items-center"
+        style={{
+          width: 104,
+          height: 104,
+          border: "1px solid var(--tinta)",
+          background: "repeating-radial-gradient(circle, var(--tinta) 0 2px, var(--tinta-2) 2px 3px)",
+        }}
+        initial={false}
+        animate={{ padding: anel }}
+        transition={MOLA}
+      >
+        {/* O tubo de papelão no meio. */}
+        <span
+          className="block size-full rounded-full"
+          style={{ background: "var(--placa-sol)", border: "1px solid var(--placa-sol-traco)" }}
+        />
+      </m.div>
+      {/* A ponta solta, que dá a volta na carga. */}
+      <m.span
+        className="absolute rounded-[2px]"
+        style={{ background: "var(--tinta)", right: -30, bottom: 8, width: 46 }}
+        initial={false}
+        animate={{ height: 3 + anel / 5 }}
+        transition={MOLA}
+      />
+    </div>
+  );
+}
+
+/** O rolo de plástico bolha: alonga com a largura, e as bolhas crescem com o tamanho. */
+const COMPRIMENTO_BOLHA: Record<LarguraBolha, number> = { "100": 96, "130": 116, "150": 132 };
+const COR_BOLHA = { fundo: "var(--placa-menta)", traco: "var(--placa-menta-traco)" };
+const DIAMETRO_BOLHA = 72;
+
+function DesenhoBolha({ estado }: { estado: Estado }) {
+  const { largura, bolha } = estado.bolha;
+  const passo = bolha === "Grande" ? 18 : 10;
+
+  return (
+    <m.div
+      className="relative flex items-center"
+      initial={false}
+      animate={{ width: COMPRIMENTO_BOLHA[largura] }}
+      transition={MOLA}
+    >
+      {/* O filme enrolado, com as bolhas. */}
+      <m.div
+        className="flex-1 rounded-r-[14px]"
+        style={{
+          height: DIAMETRO_BOLHA,
+          border: `1px solid ${COR_BOLHA.traco}`,
+          backgroundColor: COR_BOLHA.fundo,
+          backgroundImage: `radial-gradient(circle, color-mix(in srgb, ${COR_BOLHA.traco} 45%, transparent) 0 30%, transparent 34%)`,
+        }}
+        initial={false}
+        animate={{ backgroundSize: `${passo}px ${passo}px` }}
+        transition={{ duration: 0.3, ease: SUAVE }}
+      />
+      {/* A boca do rolo, com o tubo no meio. */}
+      <div
+        className="absolute left-0 -translate-x-1/2 rounded-[50%] grid place-items-center"
+        style={{
+          height: DIAMETRO_BOLHA,
+          width: DIAMETRO_BOLHA * 0.42,
+          border: `1px solid ${COR_BOLHA.traco}`,
+          background: COR_BOLHA.fundo,
+        }}
+      >
+        <span className="w-1/2 h-[30%] rounded-[50%]" style={{ background: "var(--placa-sol-traco)", opacity: 0.55 }} />
+      </div>
+    </m.div>
   );
 }
 

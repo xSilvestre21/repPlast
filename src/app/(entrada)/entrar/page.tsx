@@ -25,7 +25,7 @@ import { FormularioEntrada } from "../formulario";
  *
  * O login continua no topo, ao lado do argumento, como sempre esteve: quem já
  * é cliente entra sem rolar nada. Para quem chegou por indicação a página
- * continua para baixo: o que dá para vender (do saco à caixa de papelão), como
+ * continua para baixo: o que dá para vender (do saco ao big bag), como
  * funciona (com a conta feita de verdade), o que o sistema tem, os planos e as
  * perguntas de quem está decidindo.
  */
@@ -114,8 +114,9 @@ export default async function PaginaEntrar({ searchParams }: PageProps<"/entrar"
 
             <p className="mt-5 text-realce text-tinta-2 leading-relaxed max-w-lg">
               Pedidos, produtos e comissões para quem representa indústrias de embalagens — sacos,
-              filmes, fitas, frascos, bombonas, tampas e papelão — num lugar só. O preço sai das
-              medidas ou da tabela da indústria, o pedido vira PDF e a comissão se calcula sozinha.
+              filmes, fitas, frascos, potes, baldes, bombonas, tampas, big bags, papelão e
+              descartáveis — num lugar só. O preço sai das medidas ou da tabela da indústria, o pedido
+              vira PDF e a comissão se calcula sozinha.
             </p>
 
             <div className="mt-6">
@@ -192,7 +193,7 @@ export default async function PaginaEntrar({ searchParams }: PageProps<"/entrar"
         <Secao
           id="o-que-vende"
           rotulo="O que você vende"
-          titulo="Do saco à caixa de papelão"
+          titulo="Do saco ao big bag"
           texto="Cada linha com a medida e a unidade de venda que a indústria usa — e a descrição do pedido se monta sozinha, do jeito que vai para o PDF."
         >
           <LinhasDeProduto />
@@ -202,7 +203,7 @@ export default async function PaginaEntrar({ searchParams }: PageProps<"/entrar"
           id="como-funciona"
           rotulo="Como funciona"
           titulo="Do produto ao gráfico, sem digitar nada duas vezes"
-          texto="Escolha saco, stretch, fita, frasco, bombona ou tampa, mexa nas medidas e acompanhe: o mesmo número vai do preço da unidade ao pedido, ao e-mail para a indústria, à sua comissão e aos gráficos."
+          texto="Escolha entre doze produtos — do saco ao plástico bolha —, mexa nas medidas e acompanhe: o mesmo número vai do preço da unidade ao pedido, ao e-mail para a indústria, à sua comissão e aos gráficos."
         >
           <Revelar>
             <ComoFunciona />
