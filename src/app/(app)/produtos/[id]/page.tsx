@@ -135,6 +135,8 @@ export default async function PaginaProduto({
           capacidadeUnidade: produto.capacidadeUnidade ?? "",
           alturaCm: paraCampo(produto.alturaCm),
           diametroMm: paraCampo(produto.diametroMm),
+          larguraM: paraCampo(produto.larguraM),
+          comprimentoMm: paraCampo(produto.comprimentoMm),
           materialTampa: produto.materialTampa ?? "",
           complementoTampa: produto.complementoTampa ?? "",
           fornecedorTampaId: produto.fornecedorTampaId ?? "",

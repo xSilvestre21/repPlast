@@ -150,3 +150,33 @@ describe("tampa e acabamento na conta", () => {
       .not.toBeInTheDocument();
   });
 });
+
+describe("a unidade do preço na conta", () => {
+  test("o big bag abre por unidade, e o item sai nela com o preço digitado", async () => {
+    const { campo, escolherTipo } = await abrir();
+
+    await escolherTipo("big", "Big bag");
+    await expect.element(campo("unidadeAvulsa")).toHaveValue("UN");
+    await userEvent.type(campo("comprimentoCm"), "90");
+    await userEvent.type(campo("larguraCm"), "90");
+    await userEvent.type(campo("precoAvulso"), "45,90");
+
+    await expect.element(campo("descricao")).toHaveValue("Big bag 90x90cm");
+    await expect.element(campo("unidade")).toHaveValue("UN");
+    await expect.element(campo("precoUnitario")).toHaveValue("45,90");
+  });
+
+  test("a ráfia no milheiro ainda vende por unidade, dividindo por mil", async () => {
+    const { campo, escolherTipo } = await abrir();
+
+    await escolherTipo("ráfia", "Saco de ráfia");
+    await expect.element(campo("unidadeAvulsa")).toHaveValue("MIL");
+    await userEvent.type(campo("larguraCm"), "60");
+    await userEvent.type(campo("comprimentoCm"), "90");
+    await userEvent.type(campo("precoAvulso"), "1.200,00");
+    await expect.element(campo("precoUnitario")).toHaveValue("1.200,00");
+
+    await campo("unidade").selectOptions("UN");
+    await expect.element(campo("precoUnitario")).toHaveValue("1,20");
+  });
+});

@@ -44,6 +44,27 @@ enum Familia {
   BATOQUE
   /// A alça que se prende ao gargalo, medida por ele.
   ALCA
+  POTE
+  /// Pote e tampa vendidos juntos, com um preço de milheiro só.
+  POTE_TAMPA
+  BALDE
+  /// Balde e tampa vendidos juntos, com um preço de milheiro só.
+  BALDE_TAMPA
+  /// Gatilho e válvula vendidos soltos, medidos pelo gargalo.
+  GATILHO
+  VALVULA
+  /// Pela massa: o peso em gramas fica em `capacidade`, com a unidade "g".
+  PREFORMA
+  // As que escolhem no cadastro a unidade do preço (milheiro, unidade, quilo ou
+  // caixa), guardada em `unidadeAvulsa`.
+  RAFIA
+  BIG_BAG
+  BOLHA
+  FITA_ARQUEAR
+  SELO_ARQUEAR
+  CANTONEIRA
+  /// Os termoformados: copo, pote e tampa descartáveis, bandeja, marmita.
+  DESCARTAVEL
 }
 
 /// Onde o valor do aditivo entra: somado ao fator kg (antes da fórmula) ou ao
@@ -925,6 +946,10 @@ model Produto {
   alturaCm          Decimal? @db.Decimal(10, 2)
   /// Diâmetro da tampa, sozinha ou no conjunto.
   diametroMm        Decimal? @db.Decimal(10, 2)
+  /// Largura do plástico bolha, em metros: o mercado pede "1,30 x 100m".
+  larguraM          Decimal? @db.Decimal(10, 3)
+  /// Comprimento da cantoneira, em mm: "50x50x5x1200mm", tudo na mesma unidade.
+  comprimentoMm     Decimal? @db.Decimal(10, 2)
   /// Material e complemento da tampa do conjunto: `material` e `complemento`
   /// ficam com o frasco ou a bombona, e as duas peças costumam ser diferentes.
   materialTampa     String?

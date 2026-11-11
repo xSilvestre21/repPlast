@@ -20,6 +20,7 @@ import {
   CampoFornecedorDaTampa,
   CamposDaTampa,
   MedidasEmbalagem,
+  PrecoDaEmbalagem,
 } from "@/components/campos-embalagem";
 import { type OpcaoBuscavel, SelecaoBuscavel } from "@/components/selecao-buscavel";
 import { ErroGeral, Formulario } from "@/components/formulario";
@@ -53,6 +54,7 @@ import {
   camposAoTrocarDeTipo,
   descricaoDoTipo,
   tipoPorValor,
+  unidadeDeVenda,
 } from "@/lib/tipos-produto";
 
 import type { EstadoFormulario } from "../acoes";
@@ -110,6 +112,8 @@ const CONTA_VAZIA: Conta = {
   capacidadeUnidade: "",
   alturaCm: "",
   diametroMm: "",
+  larguraM: "",
+  comprimentoMm: "",
   materialTampa: "",
   complementoTampa: "",
   fornecedorTampaId: "",
@@ -289,13 +293,20 @@ export function ContaItem({
    * escolhido lá em cima; nas outras, as da família. Escolha que deixou de
    * valer (trocou de família) cai na primeira.
    */
+  const vendidoPor = tipo ? unidadeDeVenda(tipo, conta.unidadeAvulsa) : "MIL";
   const unidades: UnidadeVenda[] = !tipo
     ? []
     : ehAvulso
       ? [conta.unidadeAvulsa as UnidadeVenda]
       : ehFita
         ? [modoFita.unidade]
-        : unidadesDaFamilia(familia);
+        : // O tipo que escolhe a unidade do preço fica nela, como o avulso; no
+          // milheiro, a unidade vem junto.
+          ehEmbalagem && vendidoPor !== "MIL"
+          ? [vendidoPor]
+          : ehEmbalagem
+            ? ["MIL", "UN"]
+            : unidadesDaFamilia(familia);
   const unidade =
     unidadeEscolhida && unidades.includes(unidadeEscolhida) ? unidadeEscolhida : unidades[0];
 
@@ -416,7 +427,9 @@ export function ContaItem({
               : ehShrink
                 ? "Vendido por kg; entra no cadastro como stretch."
                 : ehEmbalagem
-                  ? "Vendido por milheiro, com preço digitado."
+                  ? tipo.unidadesVenda
+                    ? "Preço digitado, na unidade que se escolher."
+                    : "Vendido por milheiro, com preço digitado."
                   : undefined
           }
         />
@@ -492,7 +505,7 @@ export function ContaItem({
           {ehEmbalagem && (
             <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 lg:items-start">
               <MedidasEmbalagem tipo={tipo} valores={conta} aoMudar={alterarEmbalagem} />
-              <CampoNumero rotulo="Preço do milheiro" sufixo="R$" nome="precoAvulso" conta={conta} alterar={alterar} obrigatorio />
+              <PrecoDaEmbalagem tipo={tipo} valores={conta} aoMudar={alterarEmbalagem} />
             </div>
           )}
 

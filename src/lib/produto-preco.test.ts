@@ -10,7 +10,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   ROTULO_COLUNA_PRECO,
+  type UnidadeVenda,
   ehPorMilheiro,
+  escolheUnidade,
   rotuloPrecoDosItens,
   unidadeDoRotulo,
   pesoDoItem,
@@ -331,6 +333,13 @@ describe("famílias vendidas por milheiro", () => {
     "BOMBONA_TAMPA",
     "BATOQUE",
     "ALCA",
+    "POTE",
+    "POTE_TAMPA",
+    "BALDE",
+    "BALDE_TAMPA",
+    "GATILHO",
+    "VALVULA",
+    "PREFORMA",
   ] as const;
 
   const produto = (familia: (typeof FAMILIAS)[number]): ProdutoPrecificavel => ({
@@ -380,5 +389,59 @@ describe("famílias vendidas por milheiro", () => {
 
   it("não têm peso cadastrado", () => {
     expect(pesoDoItem(produto("BOMBONA"), "MIL", 5).toNumber()).toBe(0);
+  });
+});
+
+describe("famílias que escolhem a unidade do preço", () => {
+  const FAMILIAS = [
+    "RAFIA",
+    "BIG_BAG",
+    "BOLHA",
+    "FITA_ARQUEAR",
+    "SELO_ARQUEAR",
+    "CANTONEIRA",
+    "DESCARTAVEL",
+  ] as const;
+
+  const produto = (
+    familia: (typeof FAMILIAS)[number],
+    unidadeAvulsa: UnidadeVenda,
+  ): ProdutoPrecificavel => ({ familia, unidadeAvulsa, precoAvulso: "45.90" });
+
+  it("são das que têm preço digitado, e escolhem a unidade", () => {
+    for (const familia of FAMILIAS) {
+      expect(ehPorMilheiro(familia)).toBe(true);
+      expect(escolheUnidade(familia)).toBe(true);
+    }
+    expect(escolheUnidade("BOMBONA")).toBe(false);
+    expect(escolheUnidade("AVULSO")).toBe(false);
+  });
+
+  it("no quilo, na caixa e na unidade, o preço vale só nela", () => {
+    const fita = produto("FITA_ARQUEAR", "KG");
+    expect(precoUnitario(fita, "KG")?.toString()).toBe("45.9");
+    expect(precoUnitario(fita, "MIL")).toBeNull();
+    expect(precoUnitario(fita, "UN")).toBeNull();
+    // A unidade continua no item, com o preço digitado: é por onde vai a amostra.
+    expect(unidadesDoItem(fita)).toEqual(["KG", "UN"]);
+
+    const bigBag = produto("BIG_BAG", "UN");
+    expect(precoUnitario(bigBag, "UN")?.toString()).toBe("45.9");
+    expect(unidadesDoItem(bigBag)).toEqual(["UN"]);
+
+    expect(unidadesDoItem(produto("DESCARTAVEL", "CX"))).toEqual(["CX", "UN"]);
+  });
+
+  it("no milheiro, a unidade sai dele dividido por mil, como nas outras", () => {
+    const rafia = produto("RAFIA", "MIL");
+    expect(precoUnitario(rafia, "MIL")?.toString()).toBe("45.9");
+    expect(precoUnitario(rafia, "UN")?.toString()).toBe("0.0459");
+    expect(unidadesDoItem(rafia)).toEqual(["MIL", "UN"]);
+  });
+
+  it("no PDF, o rótulo é o da unidade em que foram vendidas", () => {
+    expect(rotuloColunaPreco("FITA_ARQUEAR", "KG")).toBe("PREÇO/KG");
+    expect(rotuloColunaPreco("RAFIA", "MIL")).toBe("MILHEIRO");
+    expect(rotuloColunaPreco("DESCARTAVEL", "CX")).toBe("PREÇO/CX");
   });
 });

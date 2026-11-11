@@ -30,6 +30,7 @@ import {
   CampoFornecedorDaTampa,
   CamposDaTampa,
   MedidasEmbalagem,
+  PrecoDaEmbalagem,
 } from "@/components/campos-embalagem";
 import { SelecaoBuscavel } from "@/components/selecao-buscavel";
 import { descricaoFita, descricaoRolo, descricaoSaco, formatarNumero } from "@/lib/descricao";
@@ -571,7 +572,9 @@ export function FormularioProduto({
                       : ehShrink
                         ? "Vendido por kg; entra no cadastro como stretch."
                         : ehEmbalagem
-                          ? "Vendido por milheiro, com preço digitado."
+                          ? tipo.unidadesVenda
+                            ? "Preço digitado, na unidade que se escolher."
+                            : "Vendido por milheiro, com preço digitado."
                           : "Preço de tabela."
               }
             />
@@ -641,7 +644,7 @@ export function FormularioProduto({
                     dica={
                       tipo.materialAbre
                         ? `Abre a descrição, como “${tipo.nome || "Fita adesiva"}”.`
-                        : `Escolha da lista ou digite outro. Sai depois da medida, como em “${tipo.nome} PEAD”.`
+                        : `Escolha da lista ou digite outro. Sai depois da medida, como em “${tipo.nome} ${tipo.materiais[0] ?? "PEAD"}”.`
                     }
                   />
                 )}
@@ -789,19 +792,15 @@ export function FormularioProduto({
           <SecaoCartao
             icone={Ruler}
             titulo="Medidas"
-            descricao="Vendido por milheiro, com preço digitado. As medidas formam a descrição."
+            descricao={
+              tipo.unidadesVenda
+                ? "Preço digitado, na unidade em que a indústria cobra. As medidas formam a descrição."
+                : "Vendido por milheiro, com preço digitado. As medidas formam a descrição."
+            }
           >
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <MedidasEmbalagem tipo={tipo} valores={campos} aoMudar={alterarEmbalagem} />
-              <Campo
-                name="precoAvulso"
-                rotulo="Preço do milheiro"
-                sufixo="R$"
-                numero="decimal"
-                required
-                value={campos.precoAvulso}
-                onChange={(e) => alterar("precoAvulso")(e.target.value)}
-              />
+              <PrecoDaEmbalagem tipo={tipo} valores={campos} aoMudar={alterarEmbalagem} />
             </div>
           </SecaoCartao>
         )}

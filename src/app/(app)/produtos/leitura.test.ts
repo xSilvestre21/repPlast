@@ -140,6 +140,8 @@ describe("conta de quem não guardou uma", () => {
       capacidadeUnidade: produto.capacidadeUnidade ?? null,
       alturaCm: coluna(produto.alturaCm),
       diametroMm: coluna(produto.diametroMm),
+      larguraM: coluna(produto.larguraM),
+      comprimentoMm: coluna(produto.comprimentoMm),
       materialTampa: produto.materialTampa ?? null,
       complementoTampa: produto.complementoTampa ?? null,
       fornecedorTampaId: produto.fornecedorTampaId ?? null,
@@ -348,6 +350,60 @@ describe("tipos vendidos por milheiro", () => {
     expect(produto.precoAvulso).toBe("1250");
     expect(produto.diametroMm).toBe("28");
     expect(produto.precoKg).toBeNull();
+  });
+
+  it("o tipo que escolhe a unidade grava a escolhida, e recusa a que ele não tem", () => {
+    expect(
+      dados({ familia: "FITA_ARQUEAR", larguraMm: "12", unidadeAvulsa: "KG" }),
+    ).toMatchObject({ familia: "FITA_ARQUEAR", larguraMm: "12", unidadeAvulsa: "KG" });
+    expect(() => dados({ familia: "BIG_BAG", comprimentoCm: "90", larguraCm: "90", unidadeAvulsa: "KG" })).toThrow(
+      /unidade, milheiro/,
+    );
+    // Os de milheiro continuam no milheiro, venha o que vier no campo.
+    expect(dados({ familia: "POTE", capacidade: "500", capacidadeUnidade: "mL", unidadeAvulsa: "UN" }).unidadeAvulsa).toBe("MIL");
+  });
+
+  it("cada medida nova vai para a sua coluna", () => {
+    expect(
+      dados({
+        familia: "CANTONEIRA",
+        larguraMm: "50",
+        espessuraMm: "5",
+        comprimentoMm: "1200",
+        unidadeAvulsa: "UN",
+      }),
+    ).toMatchObject({
+      larguraMm: "50",
+      espessuraMm: "5",
+      comprimentoMm: "1200",
+      metragemM: null,
+      larguraCm: null,
+    });
+    expect(() =>
+      dados({ familia: "CANTONEIRA", larguraMm: "50", comprimentoMm: "1200", unidadeAvulsa: "UN" }),
+    ).toThrow(/espessura/);
+    expect(
+      dados({ familia: "BOLHA", larguraM: "1,30", metragemM: "100", unidadeAvulsa: "UN" }),
+    ).toMatchObject({ larguraM: "1.3", metragemM: "100", larguraCm: null });
+    expect(
+      dados({ familia: "RAFIA", larguraCm: "60", comprimentoCm: "90", unidadeAvulsa: "MIL" }),
+    ).toMatchObject({ larguraCm: "60", comprimentoCm: "90", espessuraMm: null });
+  });
+
+  it("a pré-forma grava o peso em gramas, e a frase fala de peso", () => {
+    expect(dados({ familia: "PREFORMA", capacidade: "18" })).toMatchObject({
+      capacidade: "18",
+      capacidadeUnidade: "g",
+    });
+    expect(() => dados({ familia: "PREFORMA" })).toThrow(/peso/);
+  });
+
+  it("o descartável grava sem capacidade, e então sem a unidade dela", () => {
+    expect(dados({ familia: "DESCARTAVEL", unidadeAvulsa: "CX" })).toMatchObject({
+      capacidade: null,
+      capacidadeUnidade: null,
+      unidadeAvulsa: "CX",
+    });
   });
 
   it("batoque e alça gravam o gargalo no diâmetro, e o recusam vazio", () => {

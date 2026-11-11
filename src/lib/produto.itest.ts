@@ -150,6 +150,19 @@ describe("o banco guarda cada tipo por milheiro com a sua medida", () => {
     { familia: "BOMBONA_TAMPA" as const, ...capacidade, diametroMm: "63" },
     { familia: "BATOQUE" as const, diametroMm: "18" },
     { familia: "ALCA" as const, diametroMm: "48" },
+    { familia: "POTE" as const, capacidade: "500", capacidadeUnidade: "mL" },
+    { familia: "POTE_TAMPA" as const, capacidade: "500", capacidadeUnidade: "mL", diametroMm: "90" },
+    { familia: "BALDE" as const, ...capacidade },
+    { familia: "BALDE_TAMPA" as const, ...capacidade, diametroMm: "250" },
+    { familia: "GATILHO" as const, diametroMm: "28" },
+    { familia: "VALVULA" as const, diametroMm: "24" },
+    { familia: "PREFORMA" as const, capacidade: "18", capacidadeUnidade: "g" },
+    { familia: "RAFIA" as const, larguraCm: "60", comprimentoCm: "90" },
+    { familia: "BIG_BAG" as const, comprimentoCm: "90", larguraCm: "90", alturaCm: "120" },
+    { familia: "BOLHA" as const, larguraM: "1.3", metragemM: "100" },
+    { familia: "FITA_ARQUEAR" as const, larguraMm: "12" },
+    { familia: "SELO_ARQUEAR" as const, larguraMm: "12" },
+    { familia: "CANTONEIRA" as const, larguraMm: "50", espessuraMm: "5", comprimentoMm: "1200" },
   ];
 
   it.each(COMPLETOS)("aceita $familia completo", async (campos) => {
@@ -160,6 +173,63 @@ describe("o banco guarda cada tipo por milheiro com a sua medida", () => {
 
   it.each(COMPLETOS.map(({ familia }) => familia))("recusa %s sem medida", async (familia) => {
     await expect(admin.produto.create({ data: { ...base(), familia } })).rejects.toThrow();
+  });
+
+  it("aceita descartável sem medida: a bandeja se pede pelo modelo", async () => {
+    const produto = await admin.produto.create({
+      data: { ...base(), familia: "DESCARTAVEL", unidadeAvulsa: "CX" },
+    });
+    await admin.produto.delete({ where: { id: produto.id } });
+  });
+
+  it("aceita pote com acabamento e balde com fornecedor de tampa", async () => {
+    const pote = await admin.produto.create({
+      data: {
+        ...base(),
+        familia: "POTE",
+        capacidade: "500",
+        capacidadeUnidade: "mL",
+        acabamento: "Rotulado IML",
+        acabamentoValorSem: "90",
+      },
+    });
+    const balde = await admin.produto.create({
+      data: {
+        ...base(),
+        familia: "BALDE_TAMPA",
+        ...capacidade,
+        diametroMm: "290",
+        fornecedorTampaId: industriaB,
+      },
+    });
+    await admin.produto.deleteMany({ where: { id: { in: [pote.id, balde.id] } } });
+  });
+
+  it("recusa acabamento e fornecedor de tampa onde não cabem", async () => {
+    await expect(
+      admin.produto.create({
+        data: {
+          ...base(),
+          familia: "BIG_BAG",
+          comprimentoCm: "90",
+          larguraCm: "90",
+          acabamento: "Serigrafado",
+          acabamentoValorSem: "10",
+        },
+      }),
+    ).rejects.toThrow();
+    await expect(
+      admin.produto.create({
+        data: { ...base(), familia: "POTE", capacidade: "1", capacidadeUnidade: "L", fornecedorTampaId: industriaB },
+      }),
+    ).rejects.toThrow();
+  });
+
+  it("aceita o peso da pré-forma em gramas", async () => {
+    const produto = await admin.produto.create({
+      data: { ...base(), familia: "PREFORMA", capacidade: "18", capacidadeUnidade: "g" },
+    });
+    await admin.produto.delete({ where: { id: produto.id } });
   });
 
   it("recusa conjunto sem o diâmetro da tampa", async () => {

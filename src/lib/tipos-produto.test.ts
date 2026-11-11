@@ -12,12 +12,15 @@ import {
   OPCOES_TIPO,
   TIPOS,
   camposAoTrocarDeTipo,
+  camposDaMedida,
   descricaoDoTipo,
   materialAoTrocarDeTipo,
   tipoDoProduto,
   tipoPorValor,
   unidadeDaCapacidade,
+  unidadeDeVenda,
 } from "./tipos-produto";
+import { ehPorMilheiro, escolheUnidade } from "./produto-preco";
 
 const VAZIO: CamposDaEmbalagem = {
   material: "",
@@ -28,6 +31,13 @@ const VAZIO: CamposDaEmbalagem = {
   larguraCm: "",
   alturaCm: "",
   diametroMm: "",
+  larguraMm: "",
+  metragemM: "",
+  espessuraMm: "",
+  larguraM: "",
+  comprimentoMm: "",
+  unidadeAvulsa: "",
+  precoAvulso: "",
   materialTampa: "",
   complementoTampa: "",
   fornecedorTampaId: "",
@@ -179,6 +189,123 @@ describe("descrição impressa", () => {
     ).toBe("Batoque 18mm PE Conta-Gotas P/ Tampa Lacre Natural");
     expect(descricao("ALCA", { diametroMm: "48", material: "PE", complemento: "Azul" })).toBe(
       "Alça para gargalo 48mm PE Azul",
+    );
+  });
+
+  it("pote e balde, pela capacidade, e o conjunto com a tampa", () => {
+    expect(
+      descricao("POTE", {
+        capacidade: "500",
+        capacidadeUnidade: "mL",
+        material: "PP",
+        complemento: "Redondo Boca 90mm Transparente",
+      }),
+    ).toBe("Pote 500mL PP Redondo Boca 90mm Transparente");
+    expect(
+      descricao("BALDE_TAMPA", {
+        capacidade: "20",
+        material: "PP",
+        complemento: "Alça Metálica Tinta",
+        diametroMm: "290",
+        materialTampa: "PP",
+        complementoTampa: "Lacre",
+      }),
+    ).toBe("Balde 20L PP Alça Metálica Tinta + Tampa 290mm PP Lacre");
+  });
+
+  it("gatilho e válvula, pelo gargalo", () => {
+    expect(
+      descricao("GATILHO", { diametroMm: "28", material: "PP", complemento: "28/410 Spray e Jato" }),
+    ).toBe("Gatilho 28mm PP 28/410 Spray e Jato");
+    expect(descricao("VALVULA", { diametroMm: "24", complemento: "Pump 24/410 2 mL" })).toBe(
+      "Válvula 24mm Pump 24/410 2 mL",
+    );
+  });
+
+  it("pré-forma, pelo peso em gramas", () => {
+    expect(
+      descricao("PREFORMA", {
+        capacidade: "18",
+        capacidadeUnidade: "g",
+        material: "PET",
+        complemento: "PCO 1881 Cristal",
+      }),
+    ).toBe("Pré-forma 18g PET PCO 1881 Cristal");
+    // A unidade é uma só: nem escolhida, sai em gramas.
+    expect(descricao("PREFORMA", { capacidade: "21,5" })).toBe("Pré-forma 21,5g");
+  });
+
+  it("ráfia em largura por comprimento, como o saco, e a carga que ela leva", () => {
+    expect(
+      descricao("RAFIA", {
+        larguraCm: "60",
+        comprimentoCm: "90",
+        material: "PP",
+        complemento: "70g/m² P/ 50 kg Laminado Branco",
+      }),
+    ).toBe("Saco de ráfia 60x90cm PP 70g/m² P/ 50 kg Laminado Branco");
+  });
+
+  it("big bag pela caixa, e a carga no complemento", () => {
+    expect(
+      descricao("BIG_BAG", {
+        comprimentoCm: "90",
+        larguraCm: "90",
+        alturaCm: "120",
+        complemento: "1000 kg 4 Alças Topo C/ Saia Fundo C/ Válvula",
+      }),
+    ).toBe("Big bag 90x90x120cm 1000 kg 4 Alças Topo C/ Saia Fundo C/ Válvula");
+  });
+
+  it("plástico bolha e fita de arquear, em rolo", () => {
+    // Como o mercado escreve: a largura em metros, com duas casas.
+    expect(
+      descricao("BOLHA", {
+        larguraM: "1,3",
+        metragemM: "100",
+        material: "PEBD",
+        complemento: "Bolha Pequena 20 Micras",
+      }),
+    ).toBe("Plástico bolha 1,30 x 100m PEBD Bolha Pequena 20 Micras");
+    expect(descricao("BOLHA", { larguraM: "1,2" })).toBe("Plástico bolha 1,20m");
+    expect(
+      descricao("FITA_ARQUEAR", {
+        larguraMm: "12",
+        espessuraMm: "0,6",
+        metragemM: "1500",
+        material: "PP",
+        complemento: "Preta",
+      }),
+    ).toBe("Fita de arquear 12x0,6mm x 1500m PP Preta");
+    // Sem a metragem, que é opcional, fica só a seção.
+    expect(descricao("FITA_ARQUEAR", { larguraMm: "16" })).toBe("Fita de arquear 16mm");
+    expect(descricao("SELO_ARQUEAR", { larguraMm: "12", material: "Aço Galvanizado" })).toBe(
+      "Selo para fita de arquear 12mm Aço Galvanizado",
+    );
+  });
+
+  it("cantoneira: aba por aba por espessura por comprimento, tudo em mm", () => {
+    expect(
+      descricao("CANTONEIRA", {
+        larguraMm: "50",
+        espessuraMm: "5",
+        comprimentoMm: "1200",
+        material: "Papelão",
+      }),
+    ).toBe("Cantoneira 50x50x5x1200mm Papelão");
+  });
+
+  it("descartável: o modelo abre, e a capacidade pode faltar", () => {
+    expect(
+      descricao("DESCARTAVEL", {
+        material: "Copo descartável",
+        capacidade: "200",
+        capacidadeUnidade: "mL",
+        complemento: "PP Transparente Caixa C/ 2500",
+      }),
+    ).toBe("Copo descartável 200mL PP Transparente Caixa C/ 2500");
+    expect(descricao("DESCARTAVEL", { material: "Bandeja", complemento: "EPS" })).toBe(
+      "Bandeja EPS",
     );
   });
 
@@ -383,6 +510,51 @@ describe("catálogo de frascos e bombonas", () => {
     expect(grupo("TAMPA", "Modelo")?.opcoes).not.toContain("Lacre Catraca");
   });
 
+  it("cada medida pede os campos do tipo, com o nome dele", () => {
+    const nomes = (valor: string) => camposDaMedida(tipoPorValor(valor)).map((c) => c.rotulo);
+
+    expect(nomes("CANTONEIRA")).toEqual(["Aba", "Espessura", "Comprimento"]);
+    expect(nomes("RAFIA")).toEqual(["Largura", "Comprimento"]);
+    expect(nomes("GATILHO")).toEqual(["Diâmetro do gargalo"]);
+    expect(camposDaMedida(tipoPorValor("CANTONEIRA")).map((c) => c.sufixo)).toEqual([
+      "mm",
+      "mm",
+      "mm",
+    ]);
+    expect(camposDaMedida(tipoPorValor("BOLHA")).map((c) => c.campo)).toEqual([
+      "larguraM",
+      "metragemM",
+    ]);
+    // A capacidade tem tela própria, com a unidade.
+    expect(nomes("POTE")).toEqual([]);
+    // No descartável nada é obrigatório.
+    expect(tipoPorValor("DESCARTAVEL").medidaOpcional).toBe(true);
+    expect(camposDaMedida(tipoPorValor("FITA_ARQUEAR")).map((c) => c.obrigatorio)).toEqual([
+      true,
+      false,
+      false,
+    ]);
+  });
+
+  it("o tipo que escolhe a unidade do preço abre na de costume dele", () => {
+    expect(unidadeDeVenda(tipoPorValor("BIG_BAG"), "")).toBe("UN");
+    expect(unidadeDeVenda(tipoPorValor("FITA_ARQUEAR"), "")).toBe("KG");
+    expect(unidadeDeVenda(tipoPorValor("FITA_ARQUEAR"), "UN")).toBe("UN");
+    // Unidade que o tipo não aceita cai na primeira dele; sem escolha, milheiro.
+    expect(unidadeDeVenda(tipoPorValor("RAFIA"), "KG")).toBe("MIL");
+    expect(unidadeDeVenda(tipoPorValor("POTE"), "UN")).toBe("MIL");
+  });
+
+  it("trocar para um tipo que escolhe a unidade traz a dele", () => {
+    const campos = { familia: "", material: "", capacidadeUnidade: "", unidadeAvulsa: "UN" };
+    expect(
+      camposAoTrocarDeTipo(null, tipoPorValor("FITA_ARQUEAR"), campos, campos).unidadeAvulsa,
+    ).toBe("KG");
+    expect(camposAoTrocarDeTipo(null, tipoPorValor("POTE"), campos, campos).unidadeAvulsa).toBe(
+      "UN",
+    );
+  });
+
   it("batoque e alça perguntam pelo gargalo", () => {
     for (const valor of ["BATOQUE", "ALCA"]) {
       expect(tipoPorValor(valor).medida, valor).toBe("DIAMETRO");
@@ -391,9 +563,32 @@ describe("catálogo de frascos e bombonas", () => {
     expect(grupo("BATOQUE", "Modelo")?.opcoes).toEqual(["Cego", "C/ Furo", "Conta-Gotas", "Dosador"]);
   });
 
-  it("só frasco e bombona têm acabamento", () => {
+  it("só frasco, bombona, pote e balde têm acabamento — o mesmo que o banco aceita", () => {
     const comAcabamento = TIPOS.filter((t) => t.acabamentos).map((t) => t.valor);
-    expect(comAcabamento.sort()).toEqual(["BOMBONA", "BOMBONA_TAMPA", "FRASCO", "FRASCO_TAMPA"]);
+    expect(comAcabamento.sort()).toEqual([
+      "BALDE",
+      "BALDE_TAMPA",
+      "BOMBONA",
+      "BOMBONA_TAMPA",
+      "FRASCO",
+      "FRASCO_TAMPA",
+      "POTE",
+      "POTE_TAMPA",
+    ]);
+  });
+});
+
+describe("o catálogo e o motor de preço", () => {
+  it("escolhe a unidade do preço exatamente quem o motor de preço trata assim", () => {
+    for (const tipo of TIPOS) {
+      expect(Boolean(tipo.unidadesVenda), tipo.valor).toBe(escolheUnidade(tipo.familia));
+    }
+  });
+
+  it("todo tipo com medida é das famílias de preço digitado", () => {
+    for (const tipo of TIPOS.filter((t) => t.medida)) {
+      expect(ehPorMilheiro(tipo.familia), tipo.valor).toBe(true);
+    }
   });
 });
 

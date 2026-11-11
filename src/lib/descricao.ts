@@ -169,6 +169,24 @@ export function medidaCaixa(
   return texto ? `${texto}cm` : null;
 }
 
+/**
+ * Medidas na mesma unidade, ligadas por "x" e com a unidade no fim: "60x90cm",
+ * "12x0,6mm". As ausentes saem da conta; nenhuma presente, `null`.
+ */
+export function medidaEm(
+  valores: (Decimal.Value | null | undefined)[],
+  unidade: string,
+): string | null {
+  const texto = medidasSeparadas(valores, "x");
+  return texto ? `${texto}${unidade}` : null;
+}
+
+/** Partes em unidades diferentes, ligadas por " x ": "130cm x 100m", "50x50x5mm x 1,2m". */
+export function medidasEmPartes(partes: (string | null)[]): string | null {
+  const presentes = partes.filter((p): p is string => p !== null);
+  return presentes.length > 0 ? presentes.join(" x ") : null;
+}
+
 /** "28mm". */
 export function medidaDiametro(diametroMm: Decimal.Value | null | undefined): string | null {
   const texto = medidasSeparadas([diametroMm], "");

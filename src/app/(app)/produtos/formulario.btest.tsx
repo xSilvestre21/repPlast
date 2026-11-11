@@ -260,6 +260,53 @@ describe("tipos vendidos por milheiro", () => {
     await expect.element(descricao).toHaveValue("Batoque 18mm PE Conta-Gotas");
   });
 
+  test("a fita de arquear abre por quilo, e o preço segue a unidade", async () => {
+    const { tela, descricao, campo } = await novoProduto();
+
+    await escolherTipo(tela, "arquear");
+    await expect.element(campo("unidadeAvulsa")).toHaveValue("KG");
+    await expect.element(tela.getByRole("textbox", { name: /^Preço do quilo/ })).toBeVisible();
+
+    await campo("unidadeAvulsa").selectOptions("UN");
+    await expect.element(tela.getByRole("textbox", { name: /^Preço da unidade/ })).toBeVisible();
+
+    await userEvent.type(campo("larguraMm"), "12");
+    await userEvent.type(campo("espessuraMm"), "0,6");
+    await expect.element(descricao).toHaveValue("Fita de arquear 12x0,6mm");
+  });
+
+  test("a cantoneira pede aba, espessura e comprimento", async () => {
+    const { tela, descricao, campo } = await novoProduto();
+
+    await escolherTipo(tela, "cantoneira");
+    await userEvent.type(campo("larguraMm"), "50");
+    await userEvent.type(campo("espessuraMm"), "5");
+    await userEvent.type(campo("comprimentoMm"), "1200");
+
+    await expect.element(tela.getByRole("textbox", { name: /^Aba/ })).toBeVisible();
+    await expect.element(descricao).toHaveValue("Cantoneira 50x50x5x1200mm");
+  });
+
+  test("o plástico bolha pede a largura em metros, como o mercado", async () => {
+    const { tela, descricao, campo } = await novoProduto();
+
+    await escolherTipo(tela, "bolha");
+    await userEvent.type(campo("larguraM"), "1,30");
+    await userEvent.type(campo("metragemM"), "100");
+
+    await expect.element(descricao).toHaveValue("Plástico bolha 1,30 x 100m");
+  });
+
+  test("a pré-forma pede o peso, em gramas", async () => {
+    const { tela, descricao, campo } = await novoProduto();
+
+    await escolherTipo(tela, "pré-forma");
+    await expect.element(tela.getByRole("textbox", { name: /^Peso/ })).toBeVisible();
+    await userEvent.type(campo("capacidade"), "18");
+
+    await expect.element(descricao).toHaveValue("Pré-forma 18g");
+  });
+
   test("a alça sai como a indústria chama", async () => {
     const { tela, descricao, campo } = await novoProduto();
 

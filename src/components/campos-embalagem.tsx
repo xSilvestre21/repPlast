@@ -3,12 +3,15 @@
 import { Campo, Selecao } from "./ui";
 import { CampoComplemento } from "./campo-complemento";
 import { type OpcaoBuscavel, SelecaoBuscavel } from "./selecao-buscavel";
+import type { UnidadeVenda } from "@/lib/produto-preco";
 import {
   COMPLEMENTOS_TAMPA,
   MATERIAIS_TAMPA,
   type CamposDaEmbalagem,
   type TipoProduto,
+  camposDaMedida,
   unidadeDaCapacidade,
+  unidadeDeVenda,
 } from "@/lib/tipos-produto";
 
 /*
@@ -52,7 +55,11 @@ function CampoMedida({
   );
 }
 
-/** As medidas do tipo: capacidade, as três da caixa ou o diâmetro. */
+/**
+ * As medidas do tipo: a capacidade (ou o peso, na pré-forma), com a escolha da
+ * unidade; nos outros, os campos que `camposDaMedida` lista — as três da caixa,
+ * o diâmetro, a aba da cantoneira.
+ */
 export function MedidasEmbalagem({
   tipo,
   valores,
@@ -62,27 +69,22 @@ export function MedidasEmbalagem({
   valores: CamposDaEmbalagem;
   aoMudar: AoMudar;
 }) {
-  if (tipo.medida === "CAIXA") {
+  if (tipo.medida !== "CAPACIDADE") {
     return (
       <>
-        <CampoMedida name="comprimentoCm" rotulo="Comprimento" sufixo="cm" placeholder="30" required valores={valores} aoMudar={aoMudar} />
-        <CampoMedida name="larguraCm" rotulo="Largura" sufixo="cm" placeholder="20" required valores={valores} aoMudar={aoMudar} />
-        <CampoMedida name="alturaCm" rotulo="Altura" sufixo="cm" placeholder="15" valores={valores} aoMudar={aoMudar} />
+        {camposDaMedida(tipo).map((c) => (
+          <CampoMedida
+            key={c.campo}
+            name={c.campo}
+            rotulo={c.rotulo}
+            sufixo={c.sufixo}
+            placeholder={c.exemplo}
+            required={c.obrigatorio}
+            valores={valores}
+            aoMudar={aoMudar}
+          />
+        ))}
       </>
-    );
-  }
-
-  if (tipo.medida === "DIAMETRO") {
-    return (
-      <CampoMedida
-        name="diametroMm"
-        rotulo={tipo.rotuloDiametro ?? "Diâmetro"}
-        sufixo="mm"
-        placeholder={tipo.exemploDiametro ?? "28"}
-        required
-        valores={valores}
-        aoMudar={aoMudar}
-      />
     );
   }
 
@@ -93,10 +95,10 @@ export function MedidasEmbalagem({
     <>
       <CampoMedida
         name="capacidade"
-        rotulo="Capacidade"
+        rotulo={tipo.rotuloCapacidade?.rotulo ?? "Capacidade"}
         sufixo={unidades.length === 1 ? unidade : undefined}
         placeholder={tipo.exemploCapacidade}
-        required
+        required={!tipo.medidaOpcional}
         valores={valores}
         aoMudar={aoMudar}
       />
@@ -118,6 +120,64 @@ export function MedidasEmbalagem({
       ) : (
         <input type="hidden" name="capacidadeUnidade" value={unidade} />
       )}
+    </>
+  );
+}
+
+const NOME_DA_UNIDADE: Record<UnidadeVenda, string> = {
+  MIL: "Milheiro",
+  UN: "Unidade",
+  KG: "Quilo",
+  CX: "Caixa",
+};
+
+const ROTULO_DO_PRECO: Record<UnidadeVenda, string> = {
+  MIL: "Preço do milheiro",
+  UN: "Preço da unidade",
+  KG: "Preço do quilo",
+  CX: "Preço da caixa",
+};
+
+/**
+ * O preço do tipo: o do milheiro, ou — no tipo que escolhe a unidade — o da
+ * unidade escolhida ao lado.
+ */
+export function PrecoDaEmbalagem({
+  tipo,
+  valores,
+  aoMudar,
+}: {
+  tipo: TipoProduto;
+  valores: CamposDaEmbalagem;
+  aoMudar: AoMudar;
+}) {
+  const unidade = unidadeDeVenda(tipo, valores.unidadeAvulsa);
+
+  return (
+    <>
+      {tipo.unidadesVenda && (
+        <Selecao
+          name="unidadeAvulsa"
+          rotulo="Vendido por"
+          value={unidade}
+          onChange={(e) => aoMudar("unidadeAvulsa", e.target.value)}
+          dica={tipo.dicaUnidade}
+        >
+          {tipo.unidadesVenda.map((u) => (
+            <option key={u} value={u}>
+              {NOME_DA_UNIDADE[u]}
+            </option>
+          ))}
+        </Selecao>
+      )}
+      <CampoMedida
+        name="precoAvulso"
+        rotulo={ROTULO_DO_PRECO[unidade]}
+        sufixo="R$"
+        required
+        valores={valores}
+        aoMudar={aoMudar}
+      />
     </>
   );
 }

@@ -38,6 +38,8 @@ export type ValoresProduto = {
   capacidadeUnidade: string;
   alturaCm: string;
   diametroMm: string;
+  larguraM: string;
+  comprimentoMm: string;
   materialTampa: string;
   complementoTampa: string;
   fornecedorTampaId: string;
@@ -79,6 +81,8 @@ export const VALORES_VAZIOS: ValoresProduto = {
   capacidadeUnidade: "",
   alturaCm: "",
   diametroMm: "",
+  larguraM: "",
+  comprimentoMm: "",
   materialTampa: "",
   complementoTampa: "",
   fornecedorTampaId: "",

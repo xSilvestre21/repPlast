@@ -25,8 +25,37 @@ export type Familia =
   | "FRASCO_TAMPA"
   | "BOMBONA_TAMPA"
   | "BATOQUE"
-  | "ALCA";
+  | "ALCA"
+  | "POTE"
+  | "POTE_TAMPA"
+  | "BALDE"
+  | "BALDE_TAMPA"
+  | "GATILHO"
+  | "VALVULA"
+  | "PREFORMA"
+  | "RAFIA"
+  | "BIG_BAG"
+  | "BOLHA"
+  | "FITA_ARQUEAR"
+  | "SELO_ARQUEAR"
+  | "CANTONEIRA"
+  | "DESCARTAVEL";
 export type UnidadeVenda = "MIL" | "KG" | "UN" | "CX";
+
+/**
+ * Onde o cadastro escolhe a unidade do preço (o `unidadesVenda` do tipo): big bag
+ * por unidade, fita de arquear por quilo, plástico bolha por rolo. Nas outras
+ * famílias por milheiro o preço é sempre o do milheiro.
+ */
+const FAMILIAS_COM_UNIDADE_ESCOLHIDA: readonly string[] = [
+  "RAFIA",
+  "BIG_BAG",
+  "BOLHA",
+  "FITA_ARQUEAR",
+  "SELO_ARQUEAR",
+  "CANTONEIRA",
+  "DESCARTAVEL",
+];
 
 const FAMILIAS_POR_MILHEIRO: readonly string[] = [
   "BOMBONA",
@@ -37,10 +66,28 @@ const FAMILIAS_POR_MILHEIRO: readonly string[] = [
   "BOMBONA_TAMPA",
   "BATOQUE",
   "ALCA",
+  "POTE",
+  "POTE_TAMPA",
+  "BALDE",
+  "BALDE_TAMPA",
+  "GATILHO",
+  "VALVULA",
+  "PREFORMA",
+  ...FAMILIAS_COM_UNIDADE_ESCOLHIDA,
 ];
 
-/** A família é vendida por milheiro, com preço digitado e medida só na descrição? */
+/**
+ * A família tem preço digitado e medida só na descrição, guardados em
+ * `precoAvulso` e `unidadeAvulsa`?
+ *
+ * O nome ficou do começo, quando todas eram por milheiro. Hoje algumas escolhem a
+ * unidade no cadastro (`escolheUnidade`), mas o caminho é o mesmo.
+ */
 export const ehPorMilheiro = (familia: string) => FAMILIAS_POR_MILHEIRO.includes(familia);
+
+/** O cadastro desta família escolhe em que unidade está o preço? */
+export const escolheUnidade = (familia: string) =>
+  FAMILIAS_COM_UNIDADE_ESCOLHIDA.includes(familia);
 
 export interface ProdutoPrecificavel {
   familia: Familia;
@@ -137,6 +184,21 @@ export const ROTULO_COLUNA_PRECO: Record<Familia, string> = {
   BOMBONA_TAMPA: "MILHEIRO",
   BATOQUE: "MILHEIRO",
   ALCA: "MILHEIRO",
+  POTE: "MILHEIRO",
+  POTE_TAMPA: "MILHEIRO",
+  BALDE: "MILHEIRO",
+  BALDE_TAMPA: "MILHEIRO",
+  GATILHO: "MILHEIRO",
+  VALVULA: "MILHEIRO",
+  PREFORMA: "MILHEIRO",
+  // Nas que escolhem a unidade, quem dá o rótulo é ela (`rotuloColunaPreco`).
+  RAFIA: "PREÇO UNIT.",
+  BIG_BAG: "PREÇO UNIT.",
+  BOLHA: "PREÇO UNIT.",
+  FITA_ARQUEAR: "PREÇO UNIT.",
+  SELO_ARQUEAR: "PREÇO UNIT.",
+  CANTONEIRA: "PREÇO UNIT.",
+  DESCARTAVEL: "PREÇO UNIT.",
 };
 
 /**
@@ -215,6 +277,10 @@ export function unidadeDoRotulo(rotulo: string | null | undefined): UnidadeVenda
  * da lista continua sendo a de costume.
  */
 export function unidadesDaFamilia(familia: Familia): UnidadeVenda[] {
+  // Como no avulso: só a unidade escolhida no cadastro tem preço, e
+  // `unidadesComPreco` filtra sozinho. No milheiro, a unidade vem junto.
+  if (escolheUnidade(familia)) return ["MIL", "UN", "KG", "CX"];
+
   switch (familia) {
     case "SACO":
       // Milheiro é o comum; por quilo existe — 27 sacos do acervo do SICOV
@@ -237,6 +303,13 @@ export function unidadesDaFamilia(familia: Familia): UnidadeVenda[] {
     case "BOMBONA_TAMPA":
     case "BATOQUE":
     case "ALCA":
+    case "POTE":
+    case "POTE_TAMPA":
+    case "BALDE":
+    case "BALDE_TAMPA":
+    case "GATILHO":
+    case "VALVULA":
+    case "PREFORMA":
       return ["MIL", "UN"];
     default:
       // Stretch e bobina: o cadastro não tem o peso do rolo, então por
@@ -334,11 +407,15 @@ export function precoUnitario(
 
   if (ehPorMilheiro(produto.familia)) {
     if (produto.precoAvulso == null) return null;
-    const milheiro = new Decimal(produto.precoAvulso).plus(valorDoAcabamento(produto));
+    const preco = new Decimal(produto.precoAvulso).plus(valorDoAcabamento(produto));
+
+    // Preço por quilo, caixa ou unidade: vale só nela, como no avulso.
+    const vendidoPor = escolheUnidade(produto.familia) ? produto.unidadeAvulsa : "MIL";
+    if (vendidoPor !== "MIL") return unidade === vendidoPor ? preco : null;
 
     // Como no saco: a unidade é o milheiro dividido por mil, sem arredondar.
-    if (unidade === "MIL") return milheiro;
-    return unidade === "UN" ? milheiro.dividedBy(1000) : null;
+    if (unidade === "MIL") return preco;
+    return unidade === "UN" ? preco.dividedBy(1000) : null;
   }
 
   if (produto.familia === "AVULSO") {
