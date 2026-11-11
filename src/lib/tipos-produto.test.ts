@@ -167,6 +167,30 @@ describe("descrição impressa", () => {
     expect(descricao("TAMPA", { diametroMm: "28", acabamento: "Serigrafado" })).toBe("Tampa 28mm");
   });
 
+  // Os dois saem como a Alemolde os chama: "Batoque para Tampa 18 Lacre",
+  // "Alça para Gargalo 48". A medida é a do gargalo.
+  it("batoque e alça, pelo gargalo onde entram", () => {
+    expect(
+      descricao("BATOQUE", {
+        diametroMm: "18",
+        material: "PE",
+        complemento: "Conta-Gotas P/ Tampa Lacre Natural",
+      }),
+    ).toBe("Batoque 18mm PE Conta-Gotas P/ Tampa Lacre Natural");
+    expect(descricao("ALCA", { diametroMm: "48", material: "PE", complemento: "Azul" })).toBe(
+      "Alça para gargalo 48mm PE Azul",
+    );
+  });
+
+  it("batoque e alça não levam acabamento", () => {
+    expect(descricao("BATOQUE", { diametroMm: "18", acabamento: "Serigrafado" })).toBe(
+      "Batoque 18mm",
+    );
+    expect(descricao("ALCA", { diametroMm: "48", acabamento: "Serigrafado" })).toBe(
+      "Alça para gargalo 48mm",
+    );
+  });
+
   it("antes de digitar a medida, sai o que já se sabe", () => {
     expect(descricao("BOMBONA", { material: "PEAD" })).toBe("Bombona PEAD");
   });
@@ -325,6 +349,46 @@ describe("catálogo de frascos e bombonas", () => {
       const opcoes = complementos.flatMap((g) => g.opcoes);
       expect(new Set(opcoes).size, valor).toBe(opcoes.length);
     }
+  });
+
+  it("a tampa tem os gargalos e os modelos do catálogo da Alemolde", () => {
+    expect(grupo("TAMPA", "Gargalo")?.opcoes).toEqual(
+      expect.arrayContaining(["PCO 1810", "PCO 1881", "PCO 38", "Finish Europeu"]),
+    );
+    expect(grupo("TAMPA", "Modelo")?.opcoes).toEqual(
+      expect.arrayContaining(["Copo", "Óleo", "Spray", "Lenço Umedecido", "Galão"]),
+    );
+    expect(grupo("TAMPA", "Orifício")?.umaSo).toBe(true);
+    expect(grupo("TAMPA", "Extras")?.opcoes).toContain("Dobradiça Borboleta");
+    expect(tipoPorValor("TAMPA").materiais).toContain("PE");
+  });
+
+  it("o tipo do lacre separa a Baixa 38 Lacre da Lacre 3.0, e o galão fica com o seu", () => {
+    expect(
+      descricao("TAMPA", {
+        diametroMm: "38",
+        material: "PE",
+        complemento: "Rosca Baixa PCO 38 Lacre Anel Seccionado",
+      }),
+    ).not.toBe(
+      descricao("TAMPA", {
+        diametroMm: "38",
+        material: "PE",
+        complemento: "Rosca Baixa PCO 38 Lacre Aletas Dobradas",
+      }),
+    );
+    expect(grupo("TAMPA", "Tipo de lacre")?.umaSo).toBe(true);
+    expect(grupo("TAMPA", "Tipo de lacre")?.opcoes).toContain("Lacre Catraca");
+    // Galão e Lacre Catraca estão em grupos diferentes: um não apaga o outro.
+    expect(grupo("TAMPA", "Modelo")?.opcoes).not.toContain("Lacre Catraca");
+  });
+
+  it("batoque e alça perguntam pelo gargalo", () => {
+    for (const valor of ["BATOQUE", "ALCA"]) {
+      expect(tipoPorValor(valor).medida, valor).toBe("DIAMETRO");
+      expect(tipoPorValor(valor).rotuloDiametro, valor).toBe("Diâmetro do gargalo");
+    }
+    expect(grupo("BATOQUE", "Modelo")?.opcoes).toEqual(["Cego", "C/ Furo", "Conta-Gotas", "Dosador"]);
   });
 
   it("só frasco e bombona têm acabamento", () => {

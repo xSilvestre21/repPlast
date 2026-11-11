@@ -350,6 +350,17 @@ describe("tipos vendidos por milheiro", () => {
     expect(produto.precoKg).toBeNull();
   });
 
+  it("batoque e alça gravam o gargalo no diâmetro, e o recusam vazio", () => {
+    expect(dados({ familia: "BATOQUE", diametroMm: "18" })).toMatchObject({
+      familia: "BATOQUE",
+      diametroMm: "18",
+      unidadeAvulsa: "MIL",
+      materialTampa: null,
+    });
+    expect(dados({ familia: "ALCA", diametroMm: "48" }).diametroMm).toBe("48");
+    expect(() => dados({ familia: "BATOQUE" })).toThrow(/diâmetro/);
+  });
+
   it("recusa preço vazio apontando o campo", () => {
     expect(() =>
       dadosDoFormulario(

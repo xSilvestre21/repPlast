@@ -23,6 +23,8 @@ import {
   Combine,
   Cylinder,
   Disc3,
+  Droplet,
+  HandGrab,
   Layers,
   Loader2,
   Milk,
@@ -75,6 +77,8 @@ const ROTULO_FAMILIA: Record<string, string> = {
   FRASCO_TAMPA: "Frasco + Tampa",
   PAPELAO: "Papelão",
   TAMPA: "Tampa",
+  BATOQUE: "Batoque",
+  ALCA: "Alça",
 };
 
 /**
@@ -95,6 +99,8 @@ const ICONE_FAMILIA: Record<string, LucideIcon> = {
   FRASCO_TAMPA: Combine,
   PAPELAO: Box,
   TAMPA: CircleDashed,
+  BATOQUE: Droplet,
+  ALCA: HandGrab,
 };
 
 const MEDIDAS = [

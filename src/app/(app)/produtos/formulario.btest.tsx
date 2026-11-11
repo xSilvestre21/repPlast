@@ -246,6 +246,29 @@ describe("tipos vendidos por milheiro", () => {
     await expect.element(descricao).toHaveValue("Bombona 20L");
   });
 
+  test("o batoque pede o gargalo e sai com o nome dele", async () => {
+    const { tela, descricao, campo } = await novoProduto();
+
+    await escolherTipo(tela, "batoque");
+    await expect.element(tela.getByRole("textbox", { name: /^Diâmetro do gargalo/ })).toBeVisible();
+    await userEvent.type(campo("diametroMm"), "18");
+    await userEvent.type(tela.getByRole("combobox", { name: "Material" }), "PE");
+    await userEvent.tab();
+    await tela.getByRole("button", { name: "Modelo" }).click();
+    await tela.getByRole("button", { name: "Conta-Gotas" }).click();
+
+    await expect.element(descricao).toHaveValue("Batoque 18mm PE Conta-Gotas");
+  });
+
+  test("a alça sai como a indústria chama", async () => {
+    const { tela, descricao, campo } = await novoProduto();
+
+    await escolherTipo(tela, "alça");
+    await userEvent.type(campo("diametroMm"), "48");
+
+    await expect.element(descricao).toHaveValue("Alça para gargalo 48mm");
+  });
+
   test("escolher o tipo digitando abre as medidas dele", async () => {
     const { tela, descricao, campo } = await novoProduto();
 

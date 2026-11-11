@@ -74,6 +74,18 @@ describe("ler o texto", () => {
     expect(opcoesMarcadas("C/ Disco Ventilado Por Rosca", COMPLEMENTOS_TAMPA)).toEqual(
       new Set(["C/ Disco Ventilado", "Por Rosca"]),
     );
+    // O tipo do lacre não acende o modelo Lacre, nem o copo dosador o modelo Copo.
+    expect(opcoesMarcadas("Lacre Catraca C/ Copo Dosador", COMPLEMENTOS_TAMPA)).toEqual(
+      new Set(["Lacre Catraca", "C/ Copo Dosador"]),
+    );
+  });
+
+  it("a tampa de galão fica com o modelo e com o tipo do lacre", () => {
+    const galao = ["Lacre Catraca", "Galão"].reduce(
+      (texto, opcao) => alternarOpcao(texto, COMPLEMENTOS_TAMPA, opcao),
+      "",
+    );
+    expect(galao).toBe("Galão Lacre Catraca");
   });
 
   it("aceita opção com caractere de expressão regular", () => {

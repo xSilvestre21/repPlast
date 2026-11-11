@@ -99,6 +99,8 @@ const FAMILIAS: Familia[] = [
   "TAMPA",
   "FRASCO_TAMPA",
   "BOMBONA_TAMPA",
+  "BATOQUE",
+  "ALCA",
 ];
 const UNIDADES = ["MIL", "KG", "UN", "CX"] as const;
 
@@ -551,6 +553,8 @@ export function contaDaLinha(linha: LinhaSemConta): Conta {
     case "TAMPA":
     case "FRASCO_TAMPA":
     case "BOMBONA_TAMPA":
+    case "BATOQUE":
+    case "ALCA":
       // O preço da conta é o do milheiro; o da unidade não entra nele.
       if (linha.unidade === "MIL") conta.precoAvulso = preco;
       break;

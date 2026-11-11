@@ -23,7 +23,9 @@ export type Familia =
   | "PAPELAO"
   | "TAMPA"
   | "FRASCO_TAMPA"
-  | "BOMBONA_TAMPA";
+  | "BOMBONA_TAMPA"
+  | "BATOQUE"
+  | "ALCA";
 export type UnidadeVenda = "MIL" | "KG" | "UN" | "CX";
 
 const FAMILIAS_POR_MILHEIRO: readonly string[] = [
@@ -33,6 +35,8 @@ const FAMILIAS_POR_MILHEIRO: readonly string[] = [
   "TAMPA",
   "FRASCO_TAMPA",
   "BOMBONA_TAMPA",
+  "BATOQUE",
+  "ALCA",
 ];
 
 /** A família é vendida por milheiro, com preço digitado e medida só na descrição? */
@@ -131,6 +135,8 @@ export const ROTULO_COLUNA_PRECO: Record<Familia, string> = {
   TAMPA: "MILHEIRO",
   FRASCO_TAMPA: "MILHEIRO",
   BOMBONA_TAMPA: "MILHEIRO",
+  BATOQUE: "MILHEIRO",
+  ALCA: "MILHEIRO",
 };
 
 /**
@@ -229,6 +235,8 @@ export function unidadesDaFamilia(familia: Familia): UnidadeVenda[] {
     case "TAMPA":
     case "FRASCO_TAMPA":
     case "BOMBONA_TAMPA":
+    case "BATOQUE":
+    case "ALCA":
       return ["MIL", "UN"];
     default:
       // Stretch e bobina: o cadastro não tem o peso do rolo, então por

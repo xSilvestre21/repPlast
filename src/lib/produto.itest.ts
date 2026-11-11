@@ -148,6 +148,8 @@ describe("o banco guarda cada tipo por milheiro com a sua medida", () => {
     { familia: "TAMPA" as const, diametroMm: "28" },
     { familia: "FRASCO_TAMPA" as const, ...capacidade, diametroMm: "28" },
     { familia: "BOMBONA_TAMPA" as const, ...capacidade, diametroMm: "63" },
+    { familia: "BATOQUE" as const, diametroMm: "18" },
+    { familia: "ALCA" as const, diametroMm: "48" },
   ];
 
   it.each(COMPLETOS)("aceita $familia completo", async (campos) => {

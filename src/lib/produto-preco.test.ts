@@ -322,7 +322,16 @@ describe("acabamento de frasco e bombona", () => {
 });
 
 describe("famílias vendidas por milheiro", () => {
-  const FAMILIAS = ["BOMBONA", "FRASCO", "PAPELAO", "TAMPA", "FRASCO_TAMPA", "BOMBONA_TAMPA"] as const;
+  const FAMILIAS = [
+    "BOMBONA",
+    "FRASCO",
+    "PAPELAO",
+    "TAMPA",
+    "FRASCO_TAMPA",
+    "BOMBONA_TAMPA",
+    "BATOQUE",
+    "ALCA",
+  ] as const;
 
   const produto = (familia: (typeof FAMILIAS)[number]): ProdutoPrecificavel => ({
     familia,

@@ -74,7 +74,15 @@ export function MedidasEmbalagem({
 
   if (tipo.medida === "DIAMETRO") {
     return (
-      <CampoMedida name="diametroMm" rotulo="Diâmetro" sufixo="mm" placeholder="28" required valores={valores} aoMudar={aoMudar} />
+      <CampoMedida
+        name="diametroMm"
+        rotulo={tipo.rotuloDiametro ?? "Diâmetro"}
+        sufixo="mm"
+        placeholder={tipo.exemploDiametro ?? "28"}
+        required
+        valores={valores}
+        aoMudar={aoMudar}
+      />
     );
   }
 

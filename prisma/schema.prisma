@@ -40,6 +40,10 @@ enum Familia {
   FRASCO_TAMPA
   /// Bombona e tampa vendidas juntas, com um preço de milheiro só.
   BOMBONA_TAMPA
+  /// O batoque vendido solto, medido pelo gargalo onde entra.
+  BATOQUE
+  /// A alça que se prende ao gargalo, medida por ele.
+  ALCA
 }
 
 /// Onde o valor do aditivo entra: somado ao fator kg (antes da fórmula) ou ao

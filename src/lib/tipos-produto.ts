@@ -58,6 +58,14 @@ export interface TipoProduto {
   comTampa?: boolean;
   /** Exemplo do campo de capacidade. */
   exemploCapacidade?: string;
+  /**
+   * Nome do campo de diâmetro, quando não é o da própria peça. No batoque e na
+   * alça é o do gargalo onde ela entra: o "13" do "Batoque 13" é o modelo, e o
+   * gargalo é de 18 mm.
+   */
+  rotuloDiametro?: string;
+  /** Exemplo do campo de diâmetro. */
+  exemploDiametro?: string;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -201,7 +209,21 @@ const COMPLEMENTOS_PAPELAO: readonly GrupoComplemento[] = [
   },
 ];
 
-/** Também os da tampa que acompanha o conjunto. */
+/** A cor de peça de nome feminino: tampa e alça. */
+const COR_FEMININA: GrupoComplemento = {
+  titulo: "Cor",
+  umaSo: true,
+  opcoes: ["Branca", "Preta", "Azul", "Vermelha", "Amarela", "Verde", "Natural"],
+};
+
+/**
+ * Também os da tampa que acompanha o conjunto.
+ *
+ * Conferido com o catálogo inteiro da Alemolde (site e PDF): o que separa a
+ * "Baixa 38 Lacre" da "Baixa 38 Lacre 3.0" é só o tipo do lacre, e por isso ele
+ * tem grupo próprio — e o galão, que tem lacre, não perde o modelo para ele.
+ * PCO 38 é o gargalo das tampas de 38 mm; o Finish Europeu é o da Push Pull Alta.
+ */
 export const COMPLEMENTOS_TAMPA: readonly GrupoComplemento[] = [
   {
     titulo: "Modelo",
@@ -213,27 +235,63 @@ export const COMPLEMENTOS_TAMPA: readonly GrupoComplemento[] = [
       "Disc Top",
       "Push Pull",
       "Dosadora",
+      "Copo",
       "Bico Aplicador",
       "Segurança",
       "Galão",
+      "Óleo",
+      "Spray",
       "Pote",
+      "Lenço Umedecido",
     ],
   },
   { titulo: "Altura", umaSo: true, opcoes: ["Baixa", "Alta"] },
-  { titulo: "Gargalo", umaSo: true, opcoes: ["PCO 1810", "PCO 1881", "28/410"] },
+  {
+    titulo: "Gargalo",
+    umaSo: true,
+    opcoes: ["PCO 1810", "PCO 1881", "PCO 38", "28/410", "Finish Europeu"],
+  },
+  {
+    titulo: "Tipo de lacre",
+    umaSo: true,
+    opcoes: ["Lacre Aletas Dobradas", "Lacre Anel Seccionado", "Lacre Catraca"],
+  },
   { titulo: "Colocação", umaSo: true, opcoes: ["Por Rosca", "Por Pressão"] },
+  { titulo: "Orifício", umaSo: true, opcoes: ["Orifício Aberto", "Orifício Fechado"] },
   {
     titulo: "Vedação",
     opcoes: ["Vedação Própria", "C/ Selo de Indução", "C/ Vedante", "C/ Disco", "C/ Gaxeta"],
   },
   {
     titulo: "Extras",
-    opcoes: ["C/ Batoque", "C/ Copo Dosador", "C/ Disco Ventilado", "C/ Válvula Gore", "C/ Respiro"],
+    opcoes: [
+      "C/ Batoque",
+      "C/ Copo Dosador",
+      "C/ Disco Ventilado",
+      "C/ Válvula Gore",
+      "C/ Respiro",
+      "Dobradiça Borboleta",
+    ],
+  },
+  COR_FEMININA,
+];
+
+/**
+ * O batoque: a peça que entra sob pressão no gargalo, com ou sem furo. Vende-se
+ * solto, por milheiro, e o modelo da tampa com que ele vai fica no Uso — é como
+ * a Alemolde os nomeia ("Batoque para Tampa 18 Lacre").
+ */
+const COMPLEMENTOS_BATOQUE: readonly GrupoComplemento[] = [
+  { titulo: "Modelo", umaSo: true, opcoes: ["Cego", "C/ Furo", "Conta-Gotas", "Dosador"] },
+  {
+    titulo: "Uso",
+    umaSo: true,
+    opcoes: ["P/ Tampa Lacre", "P/ Tampa Segurança", "P/ Tampa Rosca", "P/ Aromatizante"],
   },
   {
     titulo: "Cor",
     umaSo: true,
-    opcoes: ["Branca", "Preta", "Azul", "Vermelha", "Amarela", "Verde", "Natural"],
+    opcoes: ["Natural", "Branco", "Preto", "Azul", "Vermelho", "Amarelo", "Verde"],
   },
 ];
 
@@ -266,8 +324,14 @@ const semGrupo = (grupos: readonly GrupoComplemento[], titulo: string) =>
 const MATERIAIS_BOMBONA = ["PEAD", "PEAD Virgem", "PEAD Reciclado", "PEAD PCR", "PEBD", "PP"];
 const MATERIAIS_FRASCO = ["PEAD", "PET", "PP", "PEBD"];
 
-/** Também os da tampa que acompanha o conjunto. */
-export const MATERIAIS_TAMPA = ["PP", "PP Reciclado", "PEAD", "PEBD"];
+/**
+ * Também os da tampa que acompanha o conjunto. "PE" é como a Alemolde escreve o
+ * polietileno, sem dizer se é de alta ou de baixa.
+ */
+export const MATERIAIS_TAMPA = ["PP", "PP Reciclado", "PE", "PEAD", "PEBD"];
+
+/** Batoque e alça: polietileno quase sempre, e PP no batoque de tampa de rosca. */
+const MATERIAIS_BATOQUE_E_ALCA = ["PE", "PEBD", "PEAD", "PP"];
 
 /* -------------------------------------------------------------------------- */
 /* Os tipos                                                                   */
@@ -406,6 +470,33 @@ export const TIPOS: readonly TipoProduto[] = [
     materiais: MATERIAIS_TAMPA,
     complementos: COMPLEMENTOS_TAMPA,
     medida: "DIAMETRO",
+  },
+  {
+    valor: "BATOQUE",
+    familia: "BATOQUE",
+    rotulo: "Batoque",
+    nome: "Batoque",
+    materialAbre: false,
+    rotuloMaterial: "Material",
+    materiais: MATERIAIS_BATOQUE_E_ALCA,
+    complementos: COMPLEMENTOS_BATOQUE,
+    medida: "DIAMETRO",
+    rotuloDiametro: "Diâmetro do gargalo",
+    exemploDiametro: "18",
+  },
+  {
+    // A alça que se prende ao gargalo de galão (a da Alemolde aguenta até 10 L).
+    valor: "ALCA",
+    familia: "ALCA",
+    rotulo: "Alça",
+    nome: "Alça para gargalo",
+    materialAbre: false,
+    rotuloMaterial: "Material",
+    materiais: MATERIAIS_BATOQUE_E_ALCA,
+    complementos: [COR_FEMININA],
+    medida: "DIAMETRO",
+    rotuloDiametro: "Diâmetro do gargalo",
+    exemploDiametro: "48",
   },
   {
     valor: "AVULSO",
