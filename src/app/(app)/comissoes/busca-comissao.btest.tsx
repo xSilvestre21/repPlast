@@ -51,6 +51,7 @@ const BASE: LinhaPedido = {
   fechamento: "",
   dataCompetencia: "2026-10-15",
   parcelasAtuais: [],
+  parcelasAcertadas: [],
   podeParcelar: true,
   parcelarExigeDesfazerAcerto: false,
   atraso: { naoPaga: false, para: null },

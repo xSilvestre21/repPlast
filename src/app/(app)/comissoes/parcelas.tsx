@@ -32,6 +32,7 @@ import { CalendarDays, Hash, Plus, RotateCcw, Scissors, Undo2, X } from "lucide-
 import Decimal from "decimal.js";
 import { useActionState, useId, useRef, useState } from "react";
 
+import { useAoSalvar } from "@/components/ao-salvar";
 import { CampoData } from "@/components/campo-data";
 import { CampoMoeda } from "@/components/campo-mascarado";
 import {
@@ -42,6 +43,7 @@ import {
   MensagemErro,
   formatarMoeda,
 } from "@/components/ui";
+import { nomeDaCompetencia } from "@/lib/adiamento";
 import { ratearComissao } from "@/lib/comissao";
 import { mascararMoeda } from "@/lib/mascara";
 import {
@@ -104,6 +106,58 @@ function Passo({ numero, children }: { numero: number; children: string }) {
   );
 }
 
+/** "1", "1 e 2", "1, 2 e 3". */
+function emLista(itens: string[]): string {
+  return itens.length < 2 ? (itens[0] ?? "") : `${itens.slice(0, -1).join(", ")} e ${itens.at(-1)}`;
+}
+
+/**
+ * Por que o parcelamento ainda não pode ser desfeito, e o caminho — ou `null`,
+ * quando pode.
+ *
+ * Parcela com acerto lançado não se apaga: levaria junto o registro do que a
+ * indústria pagou. O servidor recusa; o aviso existe para a pessoa não ter de
+ * adivinhar onde fica o “Desfazer acerto” — dentro de “Recebi esta parcela”,
+ * na linha DAQUELA parcela, que pode estar na lista de outro mês.
+ */
+export function impedimentoDoDesfazer(
+  acertadas: { numero: number; mes: string }[],
+  { mesDaTela, desta, total }: { mesDaTela: string; desta: number | null; total: number },
+): string | null {
+  if (acertadas.length === 0) return null;
+
+  const uma = acertadas.length === 1;
+  const numeros = emLista(acertadas.map((a) => String(a.numero)));
+  const editar = `“Editar as ${total} parcelas”`;
+  const ondeFica = (a: { numero: number; mes: string }) =>
+    a.numero === desta
+      ? "aqui mesmo"
+      : a.mes === mesDaTela
+        ? "nesta lista"
+        : `na lista de ${nomeDaCompetencia(a.mes)}`;
+
+  const abrir =
+    uma && acertadas[0].numero === desta
+      ? `1. Feche este aviso e, no painel desta parcela, toque em “Recebi esta parcela” (ao lado de ${editar}).`
+      : uma
+        ? `1. Abra a parcela ${numeros} (${ondeFica(acertadas[0])}) pelo botão “Ver acerto” e toque em “Recebi esta parcela”.`
+        : `1. Abra cada uma pelo botão “Ver acerto” — ${emLista(
+            acertadas.map((a) => `a ${a.numero} ${ondeFica(a)}`),
+          )} — e toque em “Recebi esta parcela”.`;
+
+  return [
+    `${uma ? `A parcela ${numeros} já tem` : `As parcelas ${numeros} já têm`} acerto lançado. ` +
+      `Desfazer o parcelamento apagaria o registro do que a indústria pagou, então apague ${
+        uma ? "esse acerto" : "esses acertos"
+      } antes:`,
+    "",
+    abrir,
+    "2. Clique em “Desfazer acerto” e confirme.",
+    "",
+    `Depois volte em ${editar} e desfaça o parcelamento.`,
+  ].join("\n");
+}
+
 export function EditorParcelas({
   venda,
   percentual,
@@ -112,6 +166,9 @@ export function EditorParcelas({
   prazoSugerido,
   fechamento,
   atuais,
+  acertadas = [],
+  mesDaTela = "",
+  desta = null,
   salvar,
   desfazer,
   aoFechar,
@@ -132,6 +189,11 @@ export function EditorParcelas({
   fechamento: string;
   /** As parcelas que o pedido já tem. Vazio: parcelamento novo. */
   atuais: Linha[];
+  /** As parcelas com acerto lançado, e o mês da lista de cada uma. */
+  acertadas?: { numero: number; mes: string }[];
+  /** "AAAA-MM" da tela, e a parcela cuja linha abriu o editor — para o aviso dizer "nesta lista". */
+  mesDaTela?: string;
+  desta?: number | null;
   salvar: Acao;
   /** Só quando o pedido já é parcelado. */
   desfazer: Acao | null;
@@ -153,6 +215,8 @@ export function EditorParcelas({
             "depois de faturar). Para parcelar de novo, escolha " +
             "“Recebo em parcelas” outra vez.",
           rotulo: "Desfazer parcelamento",
+          // Com parcela acertada, a janela não oferece o botão: diz o caminho.
+          impedimento: impedimentoDoDesfazer(acertadas, { mesDaTela, desta, total: atuais.length }),
         }
       : undefined,
   );
@@ -196,17 +260,10 @@ export function EditorParcelas({
   const [erroDatas, setErroDatas] = useState<string | null>(null);
   const { fechaNoDia, campos: camposPagamento } = usePagamentoComissao(fechamento);
 
-  // Fecha ao salvar sem erro — o mesmo ajuste de estado do acerto e da meta.
-  const [estadoVisto, setEstadoVisto] = useState(estado);
-  if (estado !== estadoVisto) {
-    setEstadoVisto(estado);
-    if (!estado.erro) aoFechar();
-  }
-  const [desfazerVisto, setDesfazerVisto] = useState(estadoDesfazer);
-  if (estadoDesfazer !== desfazerVisto) {
-    setDesfazerVisto(estadoDesfazer);
-    if (!estadoDesfazer.erro) aoFechar();
-  }
+  // Fecha ao salvar sem erro — depois da renderização: `aoFechar` mexe no
+  // estado da linha, e não no deste editor (`ao-salvar.ts`).
+  useAoSalvar(estado, aoFechar);
+  useAoSalvar(estadoDesfazer, aoFechar);
 
   function gerar(listaDias: number[]): Linha[] {
     const valores = dividirIgual(venda, listaDias.length);

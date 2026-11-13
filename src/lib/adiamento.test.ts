@@ -31,8 +31,8 @@ describe("problemaNoAdiamento", () => {
   });
 
   it("recusa o que não é mês", () => {
-    expect(problemaNoAdiamento("2026-08", "")).toContain("Escolha na lista");
-    expect(problemaNoAdiamento("2026-08", "2026-13")).toContain("Escolha na lista");
+    expect(problemaNoAdiamento("2026-08", "")).toContain("Escolha no calendário");
+    expect(problemaNoAdiamento("2026-08", "2026-13")).toContain("Escolha no calendário");
   });
 });
 

@@ -98,8 +98,8 @@ export function Comissoes() {
         </li>
         <li>
           A indústria <strong className="text-tinta">atrasou</strong>? Em “Ainda não foi pago”, diga o mês em
-          que ela vai pagar: o pedido continua aparecendo no mês dele, com o selo “Recebe em…”, e a comissão
-          passa a contar no mês do pagamento. Não sabe quando? Marque “Ainda não sei quando”: ele fica como
+          que ela vai pagar: o pedido continua aparecendo no mês dele, com o selo lilás “Pagamento adiado”, e a
+          comissão passa a contar no mês do pagamento — onde ele aparece com o mesmo selo. Não sabe quando? Marque “Ainda não sei quando”: ele fica como
           pendente e aparece em “Pendentes de meses anteriores” até você lançar o acerto.
         </li>
         <li>

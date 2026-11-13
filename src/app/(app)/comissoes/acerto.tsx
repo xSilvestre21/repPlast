@@ -25,9 +25,11 @@ import {
   Check,
   ChevronDown,
   Clock,
+  Forward,
   Hourglass,
   TriangleAlert,
   User,
+  type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { useId, useState } from "react";
@@ -35,7 +37,7 @@ import { useId, useState } from "react";
 import { FolhaDeBaixo } from "@/components/folha-de-baixo";
 import { useTelaEstreita } from "@/components/tela-estreita";
 import { SeloStatus } from "@/components/selo-status";
-import { Botao, Celula, Selo, formatarMoeda, formatarPercentual } from "@/components/ui";
+import { Botao, Celula, Selo, formatarMoeda, formatarPercentual, type TomSelo } from "@/components/ui";
 import { nomeCurtoDaCompetencia } from "@/lib/adiamento";
 import { pontualidadeEntrega } from "@/lib/comissao";
 
@@ -44,7 +46,7 @@ import { chaveDaLinha } from "./busca";
 import { useLinhaVisivel } from "./busca-comissao";
 import { colunasDaComissao } from "./colunas";
 import { MARCADOR_DO_MES, type AcoesDaLinha, type LinhaPedido } from "./linha";
-import { PainelAcerto } from "./painel-acerto";
+import { PainelAcerto, type VistaDoPainel } from "./painel-acerto";
 
 export type { AcoesDaLinha, LinhaPedido };
 
@@ -106,65 +108,82 @@ function Fatias({ nome, rateio }: { nome: string | null; rateio: LinhaPedido["ra
 const TRACO = <span className="text-tinta-3">—</span>;
 
 /**
- * O selo do pagamento que atrasou, sob o nome do cliente.
+ * O selo do pagamento que atrasou, sob o nome do cliente: uma pílula curta com
+ * o estado e, ao lado, o link para o outro mês da história.
  *
- * Diz três coisas diferentes, conforme onde a linha está:
- *   - "Não pago": a indústria atrasou e não há previsão;
- *   - "Recebe em novembro": a linha está no mês DELA, mas a comissão conta em
- *     outro — com o caminho para lá;
- *   - "De agosto · pagamento adiado": a linha está no mês em que conta, e veio
- *     de outro.
+ *   - "Não pago": a indústria atrasou e não há previsão. Na lista de pendentes,
+ *     o link leva ao mês do pedido;
+ *   - "Pagamento adiado", nos DOIS meses da história: no do pedido, o link diz
+ *     "recebe em novembro" e leva para lá; no mês em que conta, diz "pedido de
+ *     agosto" e volta. A mesma pílula nas duas listas diz que é a mesma coisa;
+ *   - "Pago com atraso", no mês do pedido, depois do acerto lançado no outro.
+ *
+ * O adiado é lilás. Era azul, igual à marca da parcela logo acima ("Parcela 1
+ * de 3 · vence…"), e as duas pareciam a mesma coisa.
+ *
+ * A pílula era "De setembro · pagamento adiado", que não quebra linha (`.carimbo`
+ * é `nowrap`): passava por cima da coluna ao lado e, no cartão do celular, do
+ * botão. Agora a pílula é curta e o mês vai no link, que quebra. No cartão de
+ * um celular pequeno, a pílula perde o ícone (ver `pilula`); e, se ainda assim
+ * não couber, corta com reticências dentro da coluna em vez de sair dela.
  */
 function SeloDoAtraso({ pedido, endereco }: { pedido: LinhaPedido; endereco: (mes: string) => string }) {
   const { atraso, lugar, mesNatural, mesDaTela } = pedido;
   const feminino = pedido.parcela !== null;
   const acertado = pedido.recebido !== null;
+  const deQuem = feminino ? "parcela" : "pedido";
+
+  // Na coluna estreita (o cartão de um celular pequeno) o ícone sai antes de o
+  // texto ser cortado: ele não diz nada que a palavra já não diga.
+  const pilula = (tom: TomSelo, icone: LucideIcon, texto: string) => (
+    <Selo tom={tom} icone={icone} className="max-w-full min-w-0 @max-[9.5rem]:[&>svg]:hidden">
+      <span className="min-w-0 truncate">{texto}</span>
+    </Selo>
+  );
+  const link = (mes: string, texto: string) => (
+    <Link
+      href={endereco(mes)}
+      className="relative alvo-toque text-mini text-tinta-3 underline underline-offset-2
+        decoration-filete-forte hover:text-carimbo transition-colors"
+    >
+      {texto}
+    </Link>
+  );
+
+  let conteudo: React.ReactNode = null;
 
   if (atraso.naoPaga) {
-    return (
-      <span className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
-        <Selo tom="perigo" icone={Hourglass}>
-          {feminino ? "Não paga" : "Não pago"}
-          {lugar === "pendente" && ` · de ${nomeCurtoDaCompetencia(mesNatural, mesDaTela)}`}
-        </Selo>
-        {lugar === "pendente" && (
-          <Link
-            href={endereco(mesNatural)}
-            className="relative alvo-toque text-mini text-tinta-3 underline underline-offset-2
-              decoration-filete-forte hover:text-carimbo transition-colors"
-          >
-            ver em {nomeCurtoDaCompetencia(mesNatural, mesDaTela)}
-          </Link>
-        )}
-      </span>
+    conteudo = (
+      <>
+        {pilula("perigo", Hourglass, feminino ? "Não paga" : "Não pago")}
+        {lugar === "pendente" &&
+          link(mesNatural, `${deQuem} de ${nomeCurtoDaCompetencia(mesNatural, mesDaTela)}`)}
+      </>
     );
-  }
-
-  if (!atraso.para) return null;
-
-  if (lugar === "adiada-daqui") {
+  } else if (atraso.para && lugar === "adiada-daqui") {
     const mes = nomeCurtoDaCompetencia(atraso.para, mesDaTela);
-    return (
-      <span className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
-        <Selo tom={acertado ? "verde" : "carimbo"} icone={acertado ? Check : CalendarClock}>
-          {acertado ? (feminino ? "Recebida" : "Recebido") : "Recebe"} em {mes}
-        </Selo>
-        <Link
-          href={endereco(atraso.para)}
-          className="relative alvo-toque text-mini text-tinta-3 underline underline-offset-2
-            decoration-filete-forte hover:text-carimbo transition-colors"
-        >
-          ver em {mes}
-        </Link>
-      </span>
+    conteudo = (
+      <>
+        {acertado
+          ? pilula("verde", Check, feminino ? "Paga com atraso" : "Pago com atraso")
+          : pilula("lilas", Forward, "Pagamento adiado")}
+        {link(atraso.para, `${acertado ? "recebido" : "recebe"} em ${mes}`)}
+      </>
+    );
+  } else if (atraso.para) {
+    conteudo = (
+      <>
+        {pilula("lilas", Forward, "Pagamento adiado")}
+        {link(mesNatural, `${deQuem} de ${nomeCurtoDaCompetencia(mesNatural, mesDaTela)}`)}
+      </>
     );
   }
+
+  if (!conteudo) return null;
 
   return (
-    <span className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
-      <Selo tom="carimbo" icone={CalendarClock}>
-        De {nomeCurtoDaCompetencia(mesNatural, mesDaTela)} · pagamento adiado
-      </Selo>
+    <span className="@container block mt-1.5 min-w-0">
+      <span className="flex flex-wrap items-center gap-x-2 gap-y-1">{conteudo}</span>
     </span>
   );
 }
@@ -199,7 +218,7 @@ export function LinhaComissao({
    */
   const [jaAbriu, setJaAbriu] = useState(false);
   /** O que o painel está mostrando, para o título da folha do celular. */
-  const [aba, setAba] = useState<"recebi" | "nao-pago" | "parcelas">("recebi");
+  const [vista, setVista] = useState<VistaDoPainel>("recebi");
   const painel = useId();
   const estreita = useTelaEstreita();
   // A busca da tela (`busca-comissao.tsx`) esconde a linha, sem desmontá-la:
@@ -222,7 +241,7 @@ export function LinhaComissao({
       pedido={pedido}
       acoes={acoes}
       aoFechar={() => setAberto(false)}
-      aoMudarDeAba={setAba}
+      aoMudarDeVista={setVista}
     />
   );
 
@@ -247,7 +266,12 @@ export function LinhaComissao({
           em tela larga. A rolagem continua existindo nas telas menores, pelo
           `min-w-200` da tabela.
         */}
-        <Celula data-area="cliente" className="w-full max-w-0">
+        {/*
+          No cartão do celular a célula é item de grade, que por padrão cresce
+          até caber o texto mais largo que não quebra — e invadia o botão ao
+          lado. `min-w-0` a prende na faixa dela.
+        */}
+        <Celula data-area="cliente" className="w-full max-w-0 max-sm:min-w-0">
           <span className={`block truncate max-sm:whitespace-normal max-sm:font-medium ${cancelado ? "text-tinta-3" : ""}`}>
             {pedido.apelidoCliente}
           </span>
@@ -431,7 +455,7 @@ export function LinhaComissao({
                   aberto={aberto}
                   aoFechar={() => setAberto(false)}
                   titulo={
-                    aba === "parcelas"
+                    vista === "parcelas"
                       ? `Parcelas do pedido #${pedido.numero}`
                       : pedido.parcela
                         ? `Parcela ${pedido.parcela.numero} de ${pedido.parcela.total} do pedido #${pedido.numero}`

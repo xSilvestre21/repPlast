@@ -852,7 +852,7 @@ export function Paginacao({
 /* Selos e indicadores                                                        */
 /* -------------------------------------------------------------------------- */
 
-export type TomSelo = "neutro" | "verde" | "carimbo" | "perigo" | "cancelado";
+export type TomSelo = "neutro" | "verde" | "carimbo" | "perigo" | "cancelado" | "lilas";
 
 /**
  * Pílula de estado.
@@ -883,6 +883,7 @@ export function Selo({
     carimbo: "carimbo carimbo-azul",
     perigo: "carimbo carimbo-perigo",
     cancelado: "carimbo carimbo-apagado line-through decoration-1",
+    lilas: "carimbo carimbo-lilas",
   };
 
   return (

@@ -20,8 +20,10 @@
 import { CalendarClock, CircleHelp, Undo2 } from "lucide-react";
 import { useActionState, useState } from "react";
 
+import { useAoSalvar } from "@/components/ao-salvar";
+import { CampoMes } from "@/components/campo-mes";
 import { ErroGeral, Formulario } from "@/components/formulario";
-import { Botao, MensagemErro, Selecao, formatarMoeda } from "@/components/ui";
+import { Botao, MensagemErro, formatarMoeda } from "@/components/ui";
 import {
   mesSugerido,
   mesesParaAdiar,
@@ -68,20 +70,13 @@ export function NaoPago({
   const [quando, setQuando] = useState<Quando>(atraso.para ? "mes" : "sem-previsao");
   const [mes, setMes] = useState(() => mesSugerido(mesNatural, hoje, atraso.para));
 
-  // Fecha ao salvar sem erro — o mesmo ajuste de estado do acerto e da meta.
-  const [visto, setVisto] = useState(estado);
-  if (estado !== visto) {
-    setVisto(estado);
-    if (!estado.erro) aoSalvar();
-  }
-  const [desmarcarVisto, setDesmarcarVisto] = useState(estadoDesmarcar);
-  if (estadoDesmarcar !== desmarcarVisto) {
-    setDesmarcarVisto(estadoDesmarcar);
-    if (!estadoDesmarcar.erro) aoSalvar();
-  }
+  // Fecha ao salvar sem erro — depois da renderização (`ao-salvar.ts`).
+  useAoSalvar(estado, aoSalvar);
+  useAoSalvar(estadoDesmarcar, aoSalvar);
 
   const feminino = oQue === "a parcela";
   const doMes = nomeDaCompetencia(mesNatural);
+  const opcoes = mesesParaAdiar(mesNatural, hoje);
   const Sujeito = feminino ? "A parcela" : "O pedido";
 
   const botaoDesmarcar = (
@@ -119,8 +114,8 @@ export function NaoPago({
           ) : (
             <>
               {Sujeito} já tem acerto lançado, então a indústria pagou. Para marcar como{" "}
-              {feminino ? "não paga" : "não pago"}, use antes o botão “Desfazer acerto”, em “
-              {feminino ? "Recebi esta parcela" : "Recebi"}”.
+              {feminino ? "não paga" : "não pago"}, apague antes o acerto: toque em “Voltar”, escolha “
+              {feminino ? "Recebi esta parcela" : "Recebi"}” e use o botão “Desfazer acerto”.
             </>
           )}
         </p>
@@ -153,20 +148,21 @@ export function NaoPago({
       />
       <input type="hidden" name="quando" value={quando} />
 
+      {/* A grade dos meses, como no topo da tela — era um <select> nativo,
+          uma lista cinza de treze linhas. O mês do pedido aparece marcado e
+          apagado: a comissão já conta nele, adiar é para depois. */}
       {quando === "mes" && (
-        <Selecao
+        <CampoMes
           name="mes"
           rotulo="A indústria vai pagar em"
           defaultValue={mes}
-          onChange={(e) => setMes(e.currentTarget.value)}
-          className="sm:max-w-64"
-        >
-          {mesesParaAdiar(mesNatural, hoje).map((m) => (
-            <option key={m} value={m}>
-              {nomeDaCompetencia(m)}
-            </option>
-          ))}
-        </Selecao>
+          onChange={setMes}
+          hoje={hoje}
+          min={opcoes[0]}
+          max={opcoes[opcoes.length - 1]}
+          marcas={[{ mes: mesNatural, texto: `mês ${feminino ? "da parcela" : "do pedido"}` }]}
+          className="sm:max-w-80"
+        />
       )}
 
       {/* O que a escolha faz, antes de salvar — é o que a pessoa precisa saber
@@ -179,7 +175,7 @@ export function NaoPago({
         {quando === "mes" ? (
           <>
             {Sujeito} continua aparecendo em <strong className="text-tinta">{doMes}</strong>, com o selo
-            “Recebe em {nomeCurtoDaCompetencia(mes, mesNatural)}”, mas a comissão de{" "}
+            “Pagamento adiado”, mas a comissão de{" "}
             <span className="numerico">{formatarMoeda(previsto)}</span> sai da soma desse mês e passa a contar
             em <strong className="text-tinta">{nomeDaCompetencia(mes)}</strong>. É lá que você lança o acerto
             quando a indústria pagar.

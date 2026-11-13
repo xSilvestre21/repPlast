@@ -65,6 +65,12 @@ export type LinhaPedido = {
   /** As parcelas do pedido, para o editor reabrir com elas. */
   parcelasAtuais: { vencimento: string; valor: string }[];
   /**
+   * As parcelas que já têm acerto, e o mês ("AAAA-MM") em cuja lista cada uma
+   * está. Desfazer o parcelamento apagaria esse acerto: o editor diz antes
+   * onde ir para desfazê-lo, em vez de deixar o servidor recusar.
+   */
+  parcelasAcertadas: { numero: number; mes: string }[];
+  /**
    * Pode abrir o editor de parcelas: administrador, pedido não cancelado e sem
    * acerto lançado no pedido inteiro (a ação recusaria parcelar por cima dele).
    */

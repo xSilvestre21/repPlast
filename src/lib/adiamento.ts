@@ -63,7 +63,7 @@ export function nomeCurtoDaCompetencia(competencia: string, referencia: string):
  * "adiado" para trás sumiria do mês em que foi vendido sem motivo.
  */
 export function problemaNoAdiamento(natural: string, mes: string): string | null {
-  if (!ehCompetencia(mes)) return "Escolha na lista o mês em que a indústria vai pagar.";
+  if (!ehCompetencia(mes)) return "Escolha no calendário o mês em que a indústria vai pagar.";
 
   if (mes <= natural) {
     return (

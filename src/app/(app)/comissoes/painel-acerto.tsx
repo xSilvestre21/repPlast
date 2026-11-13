@@ -17,22 +17,18 @@
  * mexe no acerto, e vice-versa.
  */
 
-import { Check, CircleDollarSign, Hourglass, Scissors, Truck, Undo2 } from "lucide-react";
+import { ArrowLeft, Check, CircleDollarSign, Hourglass, Scissors, Truck, Undo2 } from "lucide-react";
 import Decimal from "decimal.js";
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 
+import { useAoSalvar } from "@/components/ao-salvar";
 import { CampoData } from "@/components/campo-data";
+import { CampoMes } from "@/components/campo-mes";
 import { CampoMoeda } from "@/components/campo-mascarado";
+import { focarSePuder } from "@/components/foco";
 import { ErroGeral, Formulario } from "@/components/formulario";
 import { usePerguntaAntes } from "@/components/pergunta-antes";
-import {
-  Botao,
-  Campo,
-  EspacoDoRotulo,
-  Selecao,
-  formatarMoeda,
-  formatarPercentual,
-} from "@/components/ui";
+import { Botao, Campo, EspacoDoRotulo, formatarMoeda, formatarPercentual } from "@/components/ui";
 import { mesesParaAdiar, nomeCurtoDaCompetencia, nomeDaCompetencia } from "@/lib/adiamento";
 import { comissaoDoPedido } from "@/lib/comissao";
 import { mascararMoeda } from "@/lib/mascara";
@@ -52,44 +48,76 @@ function paraData(iso: string): Date {
 }
 
 /** O título de uma das duas partes do painel. */
-function Titulo({ icone: Glifo, children }: { icone: typeof Truck; children: string }) {
+function Titulo({ icone: Glifo, id, children }: { icone: typeof Truck; id?: string; children: string }) {
   return (
-    <h3 className="flex items-center gap-2 text-mini font-semibold uppercase tracking-wide text-tinta-2">
+    <h3 id={id} className="flex items-center gap-2 text-mini font-semibold uppercase tracking-wide text-tinta-2">
       <Glifo size={14} strokeWidth={2.25} aria-hidden="true" className="text-tinta-3" />
       {children}
     </h3>
   );
 }
 
-type Aba = "recebi" | "nao-pago" | "parcelas";
+type Aba = "recebi" | "parcelas";
+
+/** O que o painel está mostrando — a folha do celular muda de título com isto. */
+export type VistaDoPainel = Aba | "nao-pago";
 
 export function PainelAcerto({
   pedido,
   acoes,
   aoFechar,
-  aoMudarDeAba,
+  aoMudarDeVista,
 }: {
   pedido: LinhaPedido;
   acoes: AcoesDaLinha;
   /** Fecha o painel: depois de salvar o acerto, o "não pago" ou as parcelas. */
   aoFechar: () => void;
-  /** A folha do celular muda de título com a aba. */
-  aoMudarDeAba?: (aba: Aba) => void;
+  aoMudarDeVista?: (vista: VistaDoPainel) => void;
 }) {
   const acertado = pedido.recebido !== null;
-  const marcado = pedido.atraso.naoPaga || pedido.atraso.para !== null;
+  const { atraso } = pedido;
+  const marcado = atraso.naoPaga || atraso.para !== null;
 
-  // Abre no que vale hoje: quem marcou "não pago" volta para mudar isso.
-  const [aba, setAbaInterna] = useState<Aba>(!acertado && marcado ? "nao-pago" : "recebi");
+  /*
+   * Abre sempre no "Recebi": até a linha marcada como não paga, quando abre, é
+   * quase sempre porque a indústria pagou. O cartão do "não pago" diz que ela
+   * está marcada, e leva até a marca.
+   */
+  const [aba, setAbaInterna] = useState<Aba>("recebi");
+  /*
+   * "Ainda não foi pago" abre uma tela só dele, no lugar do painel inteiro. As
+   * duas respostas dele ("não sei quando", "já sei o mês") eram cartões iguais
+   * aos três de cima, logo embaixo deles, e liam como mais opções da mesma
+   * pergunta.
+   */
+  const [naoPago, setNaoPagoInterno] = useState(false);
+  const voltarRef = useRef<HTMLButtonElement>(null);
+  const grupoRef = useRef<HTMLDivElement>(null);
+
   const setAba = (nova: Aba) => {
     setAbaInterna(nova);
-    aoMudarDeAba?.(nova);
+    aoMudarDeVista?.(nova);
   };
+  const setNaoPago = (aberto: boolean) => {
+    setNaoPagoInterno(aberto);
+    aoMudarDeVista?.(aberto ? "nao-pago" : aba);
+  };
+
+  // O foco vai junto com a troca de tela — só para quem está no teclado
+  // (`focarSePuder`): o botão clicado sumiu, e o foco cairia no começo da página.
+  const trocouDeTela = useRef(false);
+  useEffect(() => {
+    if (!trocouDeTela.current) return;
+    trocouDeTela.current = false;
+    if (naoPago) focarSePuder(voltarRef.current);
+    else focarSePuder(grupoRef.current?.querySelector<HTMLElement>('[role="radio"][data-valor="nao-pago"]'));
+  }, [naoPago]);
 
   const feminino = pedido.parcela !== null;
   const temParcelas = pedido.podeParcelar || pedido.parcela !== null || pedido.parcelarExigeDesfazerAcerto;
+  const mesDoAtraso = atraso.para ? nomeCurtoDaCompetencia(atraso.para, pedido.mesDaTela) : "";
 
-  const opcoes: Escolha<Aba>[] = [
+  const opcoes: Escolha<Aba | "nao-pago">[] = [
     {
       valor: "recebi",
       icone: Check,
@@ -100,7 +128,17 @@ export function PainelAcerto({
       valor: "nao-pago",
       icone: Hourglass,
       titulo: feminino ? "Ainda não foi paga" : "Ainda não foi pago",
-      descricao: "A indústria atrasou. Marcar, e dizer o mês se você já souber.",
+      // A marca que já existe, dita no próprio cartão: é por ele que se muda.
+      descricao: acertado
+        ? atraso.para
+          ? `A indústria pagou com atraso, em ${mesDoAtraso}.`
+          : "A indústria atrasou? Marcar, e dizer o mês se você já souber."
+        : atraso.para
+          ? `Marcado: a indústria paga em ${mesDoAtraso}. Mudar o mês ou tirar a marca.`
+          : atraso.naoPaga
+            ? "Marcado, sem previsão. Dizer o mês ou tirar a marca."
+            : "A indústria atrasou. Marcar, e dizer o mês se você já souber.",
+      leva: true,
     },
     ...(temParcelas
       ? [
@@ -116,76 +154,127 @@ export function PainelAcerto({
       : []),
   ];
 
+  const fecharNaoPago = () => {
+    // Salvou: a próxima vez que a linha abrir, abre no começo.
+    setNaoPago(false);
+    aoFechar();
+  };
+
   return (
-    <div className="space-y-5">
-      <Entrega pedido={pedido} salvar={acoes.entrega} />
+    <>
+      {naoPago && (
+        <section aria-labelledby={`${pedido.id}-nao-pago`} className="space-y-4">
+          <Botao
+            ref={voltarRef}
+            type="button"
+            variante="secundaria"
+            tamanho="compacto"
+            icone={ArrowLeft}
+            onClick={() => {
+              trocouDeTela.current = true;
+              setNaoPago(false);
+            }}
+          >
+            Voltar
+          </Botao>
 
-      <section className="space-y-3 border-t border-filete pt-4">
-        <Titulo icone={CircleDollarSign}>
-          {feminino ? "O que aconteceu com o pagamento desta parcela?" : "O que aconteceu com o pagamento?"}
-        </Titulo>
+          <div className="space-y-1">
+            <Titulo icone={Hourglass} id={`${pedido.id}-nao-pago`}>
+              {feminino ? "Ainda não foi paga" : "Ainda não foi pago"}
+            </Titulo>
+            <p className="text-corpo text-tinta-2 leading-relaxed">
+              {acertado
+                ? `${feminino ? "Esta parcela" : "Este pedido"} já tem acerto lançado.`
+                : `Você já sabe quando a indústria vai pagar a comissão ${feminino ? "desta parcela" : "deste pedido"}?`}
+            </p>
+          </div>
 
-        <Escolhas
-          nome="O que aconteceu com o pagamento"
-          atual={aba}
-          aoEscolher={setAba}
-          opcoes={opcoes}
-        />
-
-        {/*
-          `hidden`, e não desmontar: trocar de resposta para ler a outra não
-          apaga o que já foi digitado nesta.
-        */}
-        <div hidden={aba !== "recebi"}>
-          <Recebi pedido={pedido} salvar={acoes.acerto} aoSalvar={aoFechar} />
-        </div>
-
-        {aba === "nao-pago" && (
           <NaoPago
             oQue={feminino ? "a parcela" : "o pedido"}
             mesNatural={pedido.mesNatural}
             hoje={pedido.hoje}
-            atraso={pedido.atraso}
+            atraso={atraso}
             acertado={acertado}
             previsto={pedido.previsto}
             marcar={acoes.naoPago}
             desmarcar={acoes.desmarcarNaoPago}
-            aoSalvar={aoFechar}
+            aoSalvar={fecharNaoPago}
           />
-        )}
+        </section>
+      )}
 
-        {aba === "parcelas" &&
-          (pedido.parcelarExigeDesfazerAcerto ? (
-            <p className="text-corpo text-tinta-2 leading-relaxed">
-              Este pedido já tem acerto lançado no valor inteiro. Para receber em parcelas, use antes o
-              botão “Desfazer acerto”, em “Recebi”.
-            </p>
-          ) : (
-            <>
-              {/* Parcelar tira a marca do pedido inteiro: daqui em diante,
-                  quem atrasa é uma parcela, e é nela que se marca. */}
-              {!pedido.parcela && marcado && (
-                <p role="note" className="text-mini text-tinta-2 leading-relaxed">
-                  Ao salvar as parcelas, o “{pedido.atraso.para ? "recebe em outro mês" : "não pago"}” deste
-                  pedido sai: cada parcela conta no mês dela, e a que atrasar se marca na linha dela.
-                </p>
-              )}
-              <EditorParcelas
-                venda={pedido.venda}
-                percentual={pedido.percentual}
-                percentualPreposto={pedido.percentualPreposto}
-                dataBase={pedido.dataBaseParcelas}
-                prazoSugerido={pedido.prazoPagamento}
-                fechamento={pedido.fechamento}
-                atuais={pedido.parcelasAtuais}
-                salvar={acoes.parcelas}
-                desfazer={pedido.parcela ? acoes.desfazerParcelas : null}
-                aoFechar={aoFechar}
-              />
-            </>
-          ))}
-      </section>
-    </div>
+      {/*
+        Escondido, e não desmontado, enquanto a tela do "não pago" está aberta:
+        voltar dela encontra o que já tinha sido digitado aqui.
+      */}
+      <div hidden={naoPago} className="space-y-5">
+        <Entrega pedido={pedido} salvar={acoes.entrega} />
+
+        <section className="space-y-3 border-t border-filete pt-4">
+          <Titulo icone={CircleDollarSign}>
+            {feminino ? "O que aconteceu com o pagamento desta parcela?" : "O que aconteceu com o pagamento?"}
+          </Titulo>
+
+          <div ref={grupoRef}>
+            <Escolhas
+              nome="O que aconteceu com o pagamento"
+              atual={aba}
+              aoEscolher={(valor) => {
+                if (valor === "nao-pago") {
+                  trocouDeTela.current = true;
+                  setNaoPago(true);
+                } else {
+                  setAba(valor);
+                }
+              }}
+              opcoes={opcoes}
+            />
+          </div>
+
+          {/*
+            `hidden`, e não desmontar: trocar de resposta para ler a outra não
+            apaga o que já foi digitado nesta.
+          */}
+          <div hidden={aba !== "recebi"}>
+            <Recebi pedido={pedido} salvar={acoes.acerto} aoSalvar={aoFechar} />
+          </div>
+
+          {aba === "parcelas" &&
+            (pedido.parcelarExigeDesfazerAcerto ? (
+              <p className="text-corpo text-tinta-2 leading-relaxed">
+                Este pedido já tem acerto lançado no valor inteiro. Para receber em parcelas, apague
+                antes esse acerto: toque em “Recebi”, aqui em cima, e use o botão “Desfazer acerto”.
+              </p>
+            ) : (
+              <>
+                {/* Parcelar tira a marca do pedido inteiro: daqui em diante,
+                    quem atrasa é uma parcela, e é nela que se marca. */}
+                {!pedido.parcela && marcado && (
+                  <p role="note" className="text-mini text-tinta-2 leading-relaxed">
+                    Ao salvar as parcelas, o “{pedido.atraso.para ? "recebe em outro mês" : "não pago"}” deste
+                    pedido sai: cada parcela conta no mês dela, e a que atrasar se marca na linha dela.
+                  </p>
+                )}
+                <EditorParcelas
+                  venda={pedido.venda}
+                  percentual={pedido.percentual}
+                  percentualPreposto={pedido.percentualPreposto}
+                  dataBase={pedido.dataBaseParcelas}
+                  prazoSugerido={pedido.prazoPagamento}
+                  fechamento={pedido.fechamento}
+                  atuais={pedido.parcelasAtuais}
+                  acertadas={pedido.parcelasAcertadas}
+                  mesDaTela={pedido.mesDaTela}
+                  desta={pedido.parcela?.numero ?? null}
+                  salvar={acoes.parcelas}
+                  desfazer={pedido.parcela ? acoes.desfazerParcelas : null}
+                  aoFechar={aoFechar}
+                />
+              </>
+            ))}
+        </section>
+      </div>
+    </>
   );
 }
 
@@ -287,11 +376,7 @@ function Recebi({
   const feminino = pedido.parcela !== null;
 
   // Fecha ao salvar sem erro; com erro, fica aberto mostrando a mensagem.
-  const [visto, setVisto] = useState(estado);
-  if (estado !== visto) {
-    setVisto(estado);
-    if (!estado.erro) aoSalvar();
-  }
+  useAoSalvar(estado, aoSalvar);
 
   const [valor, setValor] = useState(pedido.valorRecebido);
   /*
@@ -429,23 +514,23 @@ function Recebi({
       {!pedido.parcela && pagamento.campos}
 
       {marcado && (
-        <Selecao
+        <CampoMes
+          // A exceção do fechamento muda o mês da linha, e com ele os meses que
+          // se pode escolher: o campo recomeça do que vale agora.
+          key={mesDela}
           name="contaEm"
           rotulo="Em que mês a indústria pagou?"
           defaultValue={pagouEm}
-          onChange={(e) => setContaEm(e.currentTarget.value)}
+          onChange={setContaEm}
+          hoje={pedido.hoje}
+          min={meses[0]}
+          max={meses[meses.length - 1]}
+          marcas={[{ mes: mesDela, texto: `mês ${feminino ? "da parcela" : "do pedido"}` }]}
           dica={`${feminino ? "Esta parcela" : "Este pedido"} estava ${
             pedido.atraso.para ? "com o pagamento adiado" : feminino ? "como não paga" : "como não pago"
           }. A comissão conta no mês que você escolher aqui.`}
           className="sm:max-w-80"
-        >
-          {meses.map((m) => (
-            <option key={m} value={m}>
-              {nomeDaCompetencia(m)}
-              {m === mesDela ? ` — o mês ${feminino ? "da parcela" : "do pedido"}` : ""}
-            </option>
-          ))}
-        </Selecao>
+        />
       )}
 
       <p className="text-mini text-tinta-3 leading-relaxed">

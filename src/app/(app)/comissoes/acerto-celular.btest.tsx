@@ -47,6 +47,7 @@ const PEDIDO: LinhaPedido = {
   fechamento: "",
   dataCompetencia: "2026-10-05",
   parcelasAtuais: [],
+  parcelasAcertadas: [],
   podeParcelar: true,
   parcelarExigeDesfazerAcerto: false,
   atraso: { naoPaga: false, para: null },
@@ -59,11 +60,11 @@ const PEDIDO: LinhaPedido = {
 
 const NADA = async () => ({});
 
-function montar() {
+function montar(pedido: LinhaPedido = PEDIDO) {
   return render(
     <Tabela colunas={colunasDaComissao(true)} larguraMinima="min-w-200" className="tabela-cartoes">
       <LinhaComissao
-        pedido={PEDIDO}
+        pedido={pedido}
         comPercentual
         acoes={{
           acerto: NADA,
@@ -135,6 +136,70 @@ describe("apuração no celular em pé", () => {
 
     await folha.getByRole("button", { name: "Fechar" }).click();
     await expect.element(folha).not.toBeInTheDocument();
+  });
+
+  /*
+   * A pílula era "De setembro · pagamento adiado", que não quebra linha: no
+   * cartão, a coluna do cliente tem metade da largura, e ela passava por cima
+   * do botão "Acertar".
+   */
+  for (const [caso, pedido, texto, link] of [
+    [
+      "no mês em que recebe",
+      { ...PEDIDO, atraso: { naoPaga: false, para: "2026-12" }, mesDaTela: "2026-12", hoje: "2026-12" },
+      "Pagamento adiado",
+      "pedido de outubro",
+    ],
+    [
+      "no mês do pedido",
+      { ...PEDIDO, atraso: { naoPaga: false, para: "2026-12" }, lugar: "adiada-daqui" },
+      "Pagamento adiado",
+      "recebe em dezembro",
+    ],
+  ] as const) {
+    test(`o selo do pagamento adiado (${caso}) fica dentro do cartão, inteiro e longe do botão`, async () => {
+      await montar(pedido as LinhaPedido);
+
+      const cliente = document.querySelector('[data-area="cliente"]')!.getBoundingClientRect();
+      const botao = page.getByRole("button", { name: "Acertar" }).element().getBoundingClientRect();
+      const rotulo = page.getByText(texto).element() as HTMLElement;
+      const selo = rotulo.closest(".carimbo")!.getBoundingClientRect();
+      const caminho = page.getByRole("link", { name: link }).element().getBoundingClientRect();
+
+      for (const caixa of [selo, caminho]) {
+        expect(caixa.right).toBeLessThanOrEqual(cliente.right + 0.5);
+        expect(caixa.right).toBeLessThanOrEqual(botao.left);
+      }
+      // E sem reticências: "Recebe em nove…" cabia, mas não dizia mais nada.
+      expect(rotulo.scrollWidth).toBeLessThanOrEqual(rotulo.clientWidth);
+    });
+  }
+
+  test("na folha, “ainda não foi pago” é uma tela só dele, e a grade dos meses abre por cima", async () => {
+    await montar();
+
+    await page.getByRole("button", { name: "Acertar" }).click();
+    const folha = page.getByRole("dialog", { name: /Pedido #2300/ });
+    await folha.getByRole("radio", { name: /^Ainda não foi pago/ }).click();
+
+    await expect.element(folha.getByRole("heading", { name: "Ainda não foi pago" })).toBeVisible();
+    await expect.element(folha.getByRole("radio", { name: /^Recebi/ })).not.toBeInTheDocument();
+    await folha.getByRole("radio", { name: /^Já sei o mês/ }).click();
+
+    // A folha é um <dialog> modal: a grade tem de abrir POR CIMA dela, clicável.
+    await folha.getByRole("button", { name: /^A indústria vai pagar em:/ }).click();
+    const grade = page.getByRole("dialog", { name: /^Escolher/ });
+    await expect.element(grade).toBeVisible();
+    const caixa = grade.element().getBoundingClientRect();
+    expect(caixa.left).toBeGreaterThanOrEqual(0);
+    expect(caixa.right).toBeLessThanOrEqual(390);
+    await grade.getByRole("button", { name: "dezembro de 2026" }).click();
+
+    await expect
+      .element(folha.getByRole("button", { name: "A indústria vai pagar em: dezembro de 2026" }))
+      .toBeVisible();
+    // A folha continua aberta: escolher o mês não a fecha.
+    await expect.element(folha.getByText(/passa a contar\s+em\s+dezembro de 2026/)).toBeVisible();
   });
 
   test("no rodapé das parcelas, as ações têm altura de botão e não se encostam", async () => {

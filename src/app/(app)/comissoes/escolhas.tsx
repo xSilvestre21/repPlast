@@ -12,7 +12,7 @@
  * É um grupo de rádio de verdade: uma parada no Tab, as setas trocam.
  */
 
-import type { LucideIcon } from "lucide-react";
+import { ChevronRight, type LucideIcon } from "lucide-react";
 import { useRef } from "react";
 
 export type Escolha<T extends string> = {
@@ -20,6 +20,11 @@ export type Escolha<T extends string> = {
   icone: LucideIcon;
   titulo: string;
   descricao: string;
+  /**
+   * A resposta abre outra tela, em vez de mostrar os campos embaixo. O cartão
+   * ganha a seta para a direita, que diz isso antes do clique.
+   */
+  leva?: boolean;
 };
 
 export function Escolhas<T extends string>({
@@ -62,6 +67,7 @@ export function Escolhas<T extends string>({
             type="button"
             role="radio"
             aria-checked={marcada}
+            data-valor={opcao.valor}
             // Uma parada só no Tab: a marcada, ou a primeira quando não há.
             tabIndex={marcada || (atual === null && i === 0) ? 0 : -1}
             onClick={() => aoEscolher(opcao.valor)}
@@ -91,6 +97,14 @@ export function Escolhas<T extends string>({
               <span className="block text-corpo font-semibold text-tinta">{opcao.titulo}</span>
               <span className="block text-mini text-tinta-2 leading-snug mt-0.5">{opcao.descricao}</span>
             </span>
+            {opcao.leva && (
+              <ChevronRight
+                size={16}
+                strokeWidth={2}
+                aria-hidden="true"
+                className="shrink-0 ml-auto self-center text-tinta-3"
+              />
+            )}
           </button>
         );
       })}

@@ -795,6 +795,16 @@ dialog:focus-visible {
   color: color-mix(in srgb, var(--carimbo) 70%, var(--tinta));
 }
 
+/*
+ * O pagamento adiado. Era azul, e ficava igual à marca da parcela logo acima
+ * dele ("Parcela 1 de 3 · vence…", também azul): pareciam a mesma coisa. O
+ * lilás é o da placa de ícone, já com a versão do tema escuro.
+ */
+.carimbo-lilas {
+  background: var(--placa-lilas);
+  color: color-mix(in srgb, var(--placa-lilas-traco) 75%, var(--tinta));
+}
+
 
 /** Ponto que pulsa: usado onde há algo acontecendo agora. */
 .pulso {

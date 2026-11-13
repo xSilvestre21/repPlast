@@ -44,7 +44,9 @@ import {
   type PedidoDaComissao,
   type RepasseLancado,
 } from "@/lib/comissao-consulta";
+import { competenciaDoItem } from "@/lib/adiamento";
 import { ratearComissao } from "@/lib/comissao";
+import { mesDoRecebimento } from "@/lib/parcelas";
 import { prepostosComCor } from "@/lib/cores-prepostos";
 import { escreverNumeroBr } from "@/lib/numero-br";
 import { escopoAtual } from "@/lib/sessao";
@@ -71,6 +73,7 @@ import { colunasDaComissao } from "./colunas";
 import { FiltroIndustria } from "./filtro-industria";
 import { ordemDoParametro, ordenarPorNumero, type OrdemComissao } from "./ordem";
 import { PainelMeta } from "./painel-meta";
+import { ResumoDaIndustria } from "./resumo-da-industria";
 import { LinhaRepasse, ResumoRepasse, ValoresDaLinha, type DadosRepasse } from "./repasse";
 import { Pagina } from "@/components/pagina";
 import { NavegadorMes, nomeDoMes } from "@/components/navegador-mes";
@@ -587,16 +590,7 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
                       </div>
                     </div>
 
-                    <div className="text-right">
-                      <div className="cifra text-forte numerico">
-                        {formatarMoeda(
-                          (ehAdmin ? resumo.valor : resumo.previstoDoPreposto).toString(),
-                        )}
-                      </div>
-                      <div className="text-mini text-tinta-3 mt-1">
-                        {ehAdmin ? "comissão prevista" : "sua fatia"}
-                      </div>
-                    </div>
+                    <ResumoDaIndustria resumo={resumo} ehAdmin={ehAdmin} />
                   </div>
 
                   {/* No celular em pé, cada pedido vira cartão (`.tabela-cartoes`). */}
@@ -784,6 +778,17 @@ function paraLinha(
       vencimento: iso(p.vencimento)!,
       valor: escreverNumeroBr(p.base.toString(), 2, 2),
     })),
+    // O mês de cada uma é o da lista em que ela aparece: a mesma conta de
+    // `expandirParcelas` (vencimento, fechamento e adiamento).
+    parcelasAcertadas: pedido.parcelasDoPedido
+      .filter((p) => p.valorRecebido !== null)
+      .map((p) => ({
+        numero: p.numero,
+        mes: competenciaDoItem(
+          mesDoRecebimento(iso(p.vencimento)!, pedido.diaFechamentoComissao),
+          p.comissaoAdiadaPara,
+        ),
+      })),
     podeParcelar: ehAdmin && !cancelado && !pedido.parcela && !acerto,
     // Só o acerto impede: a linha diz isso em vez de esconder o link calada.
     parcelarExigeDesfazerAcerto: ehAdmin && !cancelado && !pedido.parcela && acerto !== null,

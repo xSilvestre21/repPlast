@@ -642,9 +642,11 @@ export async function salvarParcelas(
       select: { numero: true },
     });
     if (acertadas.length > 0) {
+      const n = acertadas[0].numero;
       throw new ErroParaUsuario(
-        `A parcela ${acertadas[0].numero} já tem acerto e não pode sair do parcelamento. ` +
-          "Use “Desfazer acerto” nela antes, ou mantenha a quantidade de parcelas.",
+        `A parcela ${n} já tem acerto e não pode sair do parcelamento. Mantenha a quantidade de ` +
+          `parcelas, ou apague antes o acerto dela: abra a parcela ${n} pelo botão “Ver acerto”, ` +
+          "toque em “Recebi esta parcela” e clique em “Desfazer acerto”.",
       );
     }
 
@@ -715,15 +717,26 @@ export async function desfazerParcelas(
     await exigirAdmin();
     const { organizacaoId, db } = await escopoAtual();
 
-    const acertada = await db.parcelaRecebimento.findFirst({
+    /*
+     * A tela já avisa antes (`impedimentoDoDesfazer`); isto é para quando ela
+     * estava desatualizada. A frase diz onde fica o “Desfazer acerto” — dentro
+     * de “Recebi esta parcela” —, que era o que ninguém achava.
+     */
+    const acertadas = await db.parcelaRecebimento.findMany({
       where: { pedidoId, pedido: { organizacaoId }, valorRecebido: { not: null } },
       select: { numero: true },
+      orderBy: { numero: "asc" },
     });
-    if (acertada) {
+    if (acertadas.length > 0) {
+      const uma = acertadas.length === 1;
+      const numeros = acertadas.map((a) => a.numero);
+      const lista =
+        numeros.length === 1 ? `${numeros[0]}` : `${numeros.slice(0, -1).join(", ")} e ${numeros.at(-1)}`;
       throw new ErroParaUsuario(
-        `A parcela ${acertada.numero} já tem acerto lançado. Apague os acertos das parcelas ` +
-          "(“Desfazer acerto”, em cada uma) antes de desfazer o parcelamento — senão o que a " +
-          "indústria pagou se perderia.",
+        `${uma ? `A parcela ${lista} já tem` : `As parcelas ${lista} já têm`} acerto lançado, e ` +
+          "desfazer o parcelamento apagaria o registro do que a indústria pagou. Apague antes " +
+          `${uma ? "esse acerto" : "esses acertos"}: abra ${uma ? "a parcela" : "cada uma"} pelo ` +
+          "botão “Ver acerto”, toque em “Recebi esta parcela” e clique em “Desfazer acerto”.",
       );
     }
 
