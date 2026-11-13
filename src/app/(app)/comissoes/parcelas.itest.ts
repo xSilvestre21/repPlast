@@ -40,7 +40,7 @@ vi.mock("@/lib/sessao", () => ({
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
-const { desfazerParcelas, salvarAcerto, salvarParcelas } = await import("./acoes");
+const { desfazerParcelas, salvarAcerto, salvarEntrega, salvarParcelas } = await import("./acoes");
 
 beforeAll(async () => {
   const o = await admin.organizacao.create({
@@ -168,7 +168,7 @@ describe("acerto do pedido inteiro", () => {
     const estado = await salvarAcerto(
       pedidoId,
       {},
-      acerto({ valorRecebido: "", comissaoPercentualRecebido: "", entregueEm: "", pagamento: "vencimento" }),
+      acerto({ valorRecebido: "", comissaoPercentualRecebido: "", pagamento: "vencimento" }),
     );
     expect(estado.erro).toBeUndefined();
 
@@ -177,13 +177,15 @@ describe("acerto do pedido inteiro", () => {
   });
 
   it("“desfazer acerto” apaga o valor e o %, sejam quais forem os campos", async () => {
+    // A entrega tem o formulário dela, e não depende de acerto nenhum.
+    expect((await salvarEntrega(pedidoId, {}, acerto({ entregueEm: "2027-03-16" }))).erro).toBeUndefined();
+
     await salvarAcerto(
       pedidoId,
       {},
       acerto({
         valorRecebido: "1.000,00",
         comissaoPercentualRecebido: "50",
-        entregueEm: "2027-03-16",
         pagamento: "seguinte",
         diaFechamentoComissao: "30",
       }),
@@ -199,7 +201,6 @@ describe("acerto do pedido inteiro", () => {
       acerto({
         valorRecebido: "1.000,00",
         comissaoPercentualRecebido: "50",
-        entregueEm: "2027-03-16",
         pagamento: "seguinte",
         diaFechamentoComissao: "30",
         desfazer: "sim",
@@ -210,6 +211,17 @@ describe("acerto do pedido inteiro", () => {
     pedido = await admin.pedido.findUniqueOrThrow({ where: { id: pedidoId } });
     expect(pedido.valorRecebido).toBeNull();
     expect(pedido.comissaoPercentualRecebido).toBeNull();
+    // Nem o acerto nem o desfazer mexem na data da entrega.
     expect(pedido.entregueEm?.toISOString().slice(0, 10)).toBe("2027-03-16");
+  });
+
+  it("valor sem percentual não é acerto: a frase vai para o campo vazio", async () => {
+    const estado = await salvarAcerto(
+      pedidoId,
+      {},
+      acerto({ valorRecebido: "", comissaoPercentualRecebido: "5" }),
+    );
+    expect(estado.campo).toBe("valorRecebido");
+    expect(estado.erro).toMatch(/Ainda não foi pago/);
   });
 });

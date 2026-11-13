@@ -1068,6 +1068,21 @@ model Pedido {
   /// próprio mês — é como ficam os pedidos de antes, que não mudam sozinhos.
   diaFechamentoComissao Int?
 
+  // --- Pagamento atrasado ------------------------------------------------
+  //
+  // A indústria não pagou no mês em que devia. Os dois campos existem iguais
+  // em `ParcelaRecebimento`, e não convivem (CHECK): ou não se sabe quando ela
+  // paga, ou se sabe o mês. As regras estão em `lib/adiamento.ts`.
+
+  /// "Ainda não foi pago", sem previsão: o pedido fica no mês dele, a acertar,
+  /// e aparece nos meses seguintes como pendente. Só sem acerto lançado.
+  comissaoNaoPaga Boolean @default(false)
+
+  /// "AAAA-MM" em que a comissão conta, no lugar do mês da entrega: a indústria
+  /// atrasou e paga (ou pagou) neste mês. FICA gravado depois do acerto — é o
+  /// que mantém o dinheiro no mês em que entrou e o selo no mês do pedido.
+  comissaoAdiadaPara String? @db.Char(7)
+
   /// Data em que a entrega aconteceu de verdade. Existe para comparar com
   /// `prazoEntrega` e mostrar se atrasou, adiantou ou saiu no dia.
   entregueEm DateTime? @db.Date
@@ -1196,6 +1211,11 @@ model ParcelaRecebimento {
   /// juntos, ou nenhum.
   valorRecebido              Decimal? @db.Decimal(14, 2)
   comissaoPercentualRecebido Decimal? @db.Decimal(6, 3)
+
+  /// O pagamento atrasado DESTA parcela — os mesmos dois campos do pedido, com
+  /// as mesmas regras (ver `Pedido.comissaoNaoPaga` e `comissaoAdiadaPara`).
+  comissaoNaoPaga    Boolean @default(false)
+  comissaoAdiadaPara String? @db.Char(7)
 
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt

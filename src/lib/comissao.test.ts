@@ -554,7 +554,10 @@ describe("o dono do escritório não é preposto de si mesmo", () => {
     fornecedor: { id: "f1", nome: "F", comissaoPercentual: "5" },
     prazoPagamento: null,
     diaFechamentoComissao: null,
+    comissaoNaoPaga: false,
+    comissaoAdiadaPara: null,
     competencia: "2026-09",
+    competenciaNatural: "2026-09",
     parcela: null,
     vendaDoPedido: "1000",
     parcelasDoPedido: [],
@@ -678,6 +681,8 @@ describe("parcelas viram itens da comissão", () => {
     fornecedor: { id: "f", nome: "F", comissaoPercentual: "5" },
     prazoPagamento: "28/35/42",
     diaFechamentoComissao: null,
+    comissaoNaoPaga: false,
+    comissaoAdiadaPara: null as string | null,
   };
 
   const parcela = (numero: number, vencimento: string, base: string, recebido?: string) => ({
@@ -687,6 +692,8 @@ describe("parcelas viram itens da comissão", () => {
     base,
     valorRecebido: recebido ?? null,
     comissaoPercentualRecebido: recebido ? "5" : null,
+    comissaoNaoPaga: false,
+    comissaoAdiadaPara: null as string | null,
   });
 
   it("sem parcela, é o pedido inteiro no mês da entrega", () => {
@@ -745,6 +752,35 @@ describe("parcelas viram itens da comissão", () => {
     // Entregue em 27/07: com fechamento 30, conta em agosto; com 20, em setembro.
     expect(expandirParcelas({ ...pedido, diaFechamentoComissao: 30 }, [])[0].competencia).toBe("2026-08");
     expect(expandirParcelas({ ...pedido, diaFechamentoComissao: 20 }, [])[0].competencia).toBe("2026-09");
+  });
+
+  it("pagamento adiado: o pedido conta no mês em que a indústria paga, e guarda o mês dele", () => {
+    const [item] = expandirParcelas({ ...pedido, comissaoAdiadaPara: "2026-11" }, []);
+
+    expect(item.competencia).toBe("2026-11");
+    expect(item.competenciaNatural).toBe("2026-07");
+  });
+
+  it("“não pago”, sem previsão, não muda o pedido de mês", () => {
+    const [item] = expandirParcelas({ ...pedido, comissaoNaoPaga: true }, []);
+
+    expect(item.competencia).toBe("2026-07");
+    expect(item.competenciaNatural).toBe("2026-07");
+    expect(item.comissaoNaoPaga).toBe(true);
+  });
+
+  it("na parcela, o atraso é o DELA: o do pedido não vale, e as outras ficam onde estavam", () => {
+    const itens = expandirParcelas({ ...pedido, comissaoAdiadaPara: "2027-01" }, [
+      parcela(1, "2026-08-24", "5000"),
+      { ...parcela(2, "2026-09-07", "4765"), comissaoAdiadaPara: "2026-12" },
+    ]);
+
+    expect(itens.map((i) => [i.competenciaNatural, i.competencia, i.comissaoAdiadaPara])).toEqual([
+      ["2026-08", "2026-08", null],
+      ["2026-09", "2026-12", "2026-12"],
+    ]);
+    // O "recebimento" da parcela é o mês em que ela conta, adiada ou não.
+    expect(itens[1].parcela?.recebimento).toBe("2026-12");
   });
 
   it("duas parcelas no mesmo mês são um pedido só na contagem", () => {

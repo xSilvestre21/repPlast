@@ -53,6 +53,17 @@ export function somarDias(iso: string, dias: number): string {
 }
 
 /**
+ * "AAAA-MM-DD" + meses, no mesmo dia — é o "todo dia 10" de quem escolhe as
+ * datas das parcelas em vez dos dias. O dia que o mês não tem vira o último
+ * dele: 31/jan + 1 mês é 28/fev, e não 3/mar.
+ */
+export function somarMeses(iso: string, meses: number): string {
+  const [ano, mes, dia] = iso.split("-").map(Number);
+  const ultimoDia = new Date(Date.UTC(ano, mes + meses, 0)).getUTCDate();
+  return new Date(Date.UTC(ano, mes - 1 + meses, Math.min(dia, ultimoDia))).toISOString().slice(0, 10);
+}
+
+/**
  * O mês ("AAAA-MM") em que a indústria paga a comissão de uma parcela que
  * vence em `vencimento` — e, por isso, o mês em que ela conta.
  *

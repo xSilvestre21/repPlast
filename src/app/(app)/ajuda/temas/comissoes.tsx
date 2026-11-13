@@ -88,15 +88,31 @@ export function Comissoes() {
           (22 já acha o 2224) ou troque a <strong className="text-tinta">Ordem</strong> para “Nº do pedido”.
         </li>
         <li>
-          A indústria pagou base menor ou percentual menor? No acerto dá para mudar os dois. Lançou errado?
+          “Lançar acerto” abre o painel do pedido, que pergunta o que aconteceu com o pagamento:{" "}
+          <strong className="text-tinta">Recebi</strong>, <strong className="text-tinta">Ainda não foi pago</strong>{" "}
+          ou <strong className="text-tinta">Recebo em parcelas</strong>.
+        </li>
+        <li>
+          A indústria pagou base menor ou percentual menor? Em “Recebi” dá para mudar os dois. Lançou errado?
           “Desfazer acerto” volta o pedido a previsto.
+        </li>
+        <li>
+          A indústria <strong className="text-tinta">atrasou</strong>? Em “Ainda não foi pago”, diga o mês em
+          que ela vai pagar: o pedido continua aparecendo no mês dele, com o selo “Recebe em…”, e a comissão
+          passa a contar no mês do pagamento. Não sabe quando? Marque “Ainda não sei quando”: ele fica como
+          pendente e aparece em “Pendentes de meses anteriores” até você lançar o acerto.
+        </li>
+        <li>
+          A <strong className="text-tinta">data de entrega</strong> tem o botão dela, no alto do painel. É só
+          para acompanhar se a indústria entregou no prazo: não é a data do pagamento, não muda a comissão e
+          salva mesmo sem você ter recebido.
         </li>
         <li>O pedido cancelado continua na lista do mês, riscado e fora da soma, com o motivo escrito.</li>
       </ul>
 
       <Onde>
         avatar (canto de cima) → <Link href="/comissoes" className="text-carimbo hover:underline">Comissões</Link> →
-        clique na linha do pedido
+        “Lançar acerto”, na linha do pedido
       </Onde>
     </div>
   );

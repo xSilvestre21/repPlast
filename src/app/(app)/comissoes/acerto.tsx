@@ -14,6 +14,9 @@
  *
  * Enquanto não há acerto, a linha mostra só o previsto — que é a verdade
  * daquele momento: o pedido foi enviado e ainda não foi pago.
+ *
+ * O que a linha abre está em `painel-acerto.tsx`. Aqui fica o que se lê sem
+ * abrir nada — inclusive os selos do pagamento que atrasou.
  */
 
 import {
@@ -22,115 +25,32 @@ import {
   Check,
   ChevronDown,
   Clock,
-  Scissors,
+  Hourglass,
   TriangleAlert,
-  Undo2,
   User,
 } from "lucide-react";
 import Link from "next/link";
-import { useActionState, useId, useState } from "react";
+import { useId, useState } from "react";
 
-import { CampoData } from "@/components/campo-data";
 import { FolhaDeBaixo } from "@/components/folha-de-baixo";
 import { useTelaEstreita } from "@/components/tela-estreita";
-import { CampoMoeda } from "@/components/campo-mascarado";
 import { SeloStatus } from "@/components/selo-status";
-import {
-  Botao,
-  BotaoTexto,
-  Campo,
-  Celula,
-  EspacoDoRotulo,
-  formatarMoeda,
-  formatarPercentual,
-} from "@/components/ui";
-import { ErroGeral, Formulario } from "@/components/formulario";
-import { usePerguntaAntes } from "@/components/pergunta-antes";
+import { Botao, Celula, Selo, formatarMoeda, formatarPercentual } from "@/components/ui";
+import { nomeCurtoDaCompetencia } from "@/lib/adiamento";
 import { pontualidadeEntrega } from "@/lib/comissao";
-import { mesDoRecebimento } from "@/lib/parcelas";
 
-import type { EstadoFormulario } from "./acoes";
 import { BolinhaPreposto } from "@/components/bolinha-preposto";
 import { chaveDaLinha } from "./busca";
 import { useLinhaVisivel } from "./busca-comissao";
 import { colunasDaComissao } from "./colunas";
-import { usePagamentoComissao } from "./pagamento-comissao";
-import { EditorParcelas } from "./parcelas";
+import { MARCADOR_DO_MES, type AcoesDaLinha, type LinhaPedido } from "./linha";
+import { PainelAcerto } from "./painel-acerto";
+
+export type { AcoesDaLinha, LinhaPedido };
 
 const DATA = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "UTC" });
-const MES = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" });
 // Sem o ano: a parcela está na lista do mês em que vence, o ano é o da tela.
 const DIA_MES = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" });
-
-export type LinhaPedido = {
-  id: string;
-  numero: number;
-  status: string;
-  /** Vazio quando o pedido não foi cancelado, ou quando ninguém escreveu. */
-  motivoCancelamento: string;
-  apelidoCliente: string;
-  /** "AAAA-MM-DD", como o input date espera. */
-  prazoEntrega: string | null;
-  entregueEm: string | null;
-  base: string;
-  percentual: string;
-  previsto: number;
-  /** Já no padrão brasileiro; vazio quando ainda não houve acerto. */
-  valorRecebido: string;
-  percentualRecebido: string;
-  recebido: number | null;
-
-  /** Nome do preposto que leva a fatia. Nulo quando o pedido é da casa. */
-  preposto: string | null;
-  /** A cor dele (`corDoPreposto`). Só na tela do administrador. */
-  corPreposto: string | null;
-  /** A fatia do preposto, para o editor de parcelas mostrar a de cada uma. */
-  percentualPreposto: string | null;
-  /**
-   * As duas fatias, do previsto e do já acertado.
-   *
-   * Chegam NULAS na tela do preposto — e isso não é a tela escondendo: a página
-   * simplesmente não as coloca aqui, então elas não viajam para o navegador
-   * dele. O que o escritório ganha não é assunto dele.
-   */
-  rateio: { preposto: number; escritorio: number } | null;
-  rateioRecebido: { preposto: number; escritorio: number } | null;
-  /** O acerto é do administrador: é ele quem recebe da indústria. */
-  podeAcertar: boolean;
-
-  /**
-   * Preenchido quando a linha é UMA parcela do pedido. Aí base, previsto e
-   * acerto acima são os dela. O mês dela é o `recebimento` ("AAAA-MM"): o do
-   * vencimento, ou depois dele quando a indústria só paga após o faturamento.
-   */
-  parcela: { numero: number; total: number; vencimento: string; recebimento: string } | null;
-  /** A venda sem IPI do pedido inteiro, "9765.00" — o que as parcelas dividem. */
-  venda: string;
-  prazoPagamento: string | null;
-  /** "AAAA-MM-DD" de onde os dias das parcelas contam: a entrega prevista. */
-  dataBaseParcelas: string;
-  /**
-   * O dia em que a indústria fecha o faturamento deste pedido ("30"); vazio,
-   * paga no mês do vencimento. Vale para o pedido inteiro e para as parcelas.
-   */
-  fechamento: string;
-  /** "AAAA-MM-DD" que decide o mês do pedido inteiro: a entrega, ou a criação. */
-  dataCompetencia: string;
-  /** As parcelas do pedido, para o editor reabrir com elas. */
-  parcelasAtuais: { vencimento: string; valor: string }[];
-  /**
-   * Pode abrir o editor de parcelas: administrador, pedido não cancelado e sem
-   * acerto lançado no pedido inteiro (a ação recusaria parcelar por cima dele).
-   */
-  podeParcelar: boolean;
-  /**
-   * Parcelaria, não fosse o acerto já lançado no pedido inteiro. A linha diz
-   * isso em vez de esconder o link sem explicação.
-   */
-  parcelarExigeDesfazerAcerto: boolean;
-};
-
-type Acao = (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
 
 function paraData(iso: string | null): Date | null {
   return iso ? new Date(`${iso}T00:00:00.000Z`) : null;
@@ -185,227 +105,126 @@ function Fatias({ nome, rateio }: { nome: string | null; rateio: LinhaPedido["ra
 
 const TRACO = <span className="text-tinta-3">—</span>;
 
+/**
+ * O selo do pagamento que atrasou, sob o nome do cliente.
+ *
+ * Diz três coisas diferentes, conforme onde a linha está:
+ *   - "Não pago": a indústria atrasou e não há previsão;
+ *   - "Recebe em novembro": a linha está no mês DELA, mas a comissão conta em
+ *     outro — com o caminho para lá;
+ *   - "De agosto · pagamento adiado": a linha está no mês em que conta, e veio
+ *     de outro.
+ */
+function SeloDoAtraso({ pedido, endereco }: { pedido: LinhaPedido; endereco: (mes: string) => string }) {
+  const { atraso, lugar, mesNatural, mesDaTela } = pedido;
+  const feminino = pedido.parcela !== null;
+  const acertado = pedido.recebido !== null;
+
+  if (atraso.naoPaga) {
+    return (
+      <span className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+        <Selo tom="perigo" icone={Hourglass}>
+          {feminino ? "Não paga" : "Não pago"}
+          {lugar === "pendente" && ` · de ${nomeCurtoDaCompetencia(mesNatural, mesDaTela)}`}
+        </Selo>
+        {lugar === "pendente" && (
+          <Link
+            href={endereco(mesNatural)}
+            className="relative alvo-toque text-mini text-tinta-3 underline underline-offset-2
+              decoration-filete-forte hover:text-carimbo transition-colors"
+          >
+            ver em {nomeCurtoDaCompetencia(mesNatural, mesDaTela)}
+          </Link>
+        )}
+      </span>
+    );
+  }
+
+  if (!atraso.para) return null;
+
+  if (lugar === "adiada-daqui") {
+    const mes = nomeCurtoDaCompetencia(atraso.para, mesDaTela);
+    return (
+      <span className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+        <Selo tom={acertado ? "verde" : "carimbo"} icone={acertado ? Check : CalendarClock}>
+          {acertado ? (feminino ? "Recebida" : "Recebido") : "Recebe"} em {mes}
+        </Selo>
+        <Link
+          href={endereco(atraso.para)}
+          className="relative alvo-toque text-mini text-tinta-3 underline underline-offset-2
+            decoration-filete-forte hover:text-carimbo transition-colors"
+        >
+          ver em {mes}
+        </Link>
+      </span>
+    );
+  }
+
+  return (
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+      <Selo tom="carimbo" icone={CalendarClock}>
+        De {nomeCurtoDaCompetencia(mesNatural, mesDaTela)} · pagamento adiado
+      </Selo>
+    </span>
+  );
+}
+
 export function LinhaComissao({
   pedido,
   comPercentual,
-  salvar,
-  salvarParcelas,
-  desfazerParcelas,
+  acoes,
+  enderecoDoMes,
 }: {
   pedido: LinhaPedido;
   comPercentual: boolean;
-  /** O acerto desta linha — do pedido inteiro, ou da parcela. */
-  salvar: Acao;
-  salvarParcelas: Acao;
-  desfazerParcelas: Acao;
+  /** As ações desta linha — do pedido, ou da parcela. Só o administrador as usa. */
+  acoes: AcoesDaLinha;
+  /**
+   * O endereço da tela com `MARCADOR_DO_MES` no lugar do mês — para o selo levar
+   * até onde a comissão conta.
+   */
+  enderecoDoMes: string;
 }) {
-  const [estado, enviar, salvando] = useActionState(salvar, {});
+  const endereco = (mes: string) => enderecoDoMes.replace(MARCADOR_DO_MES, mes);
   const acertado = pedido.recebido !== null;
   const cancelado = pedido.status === "CANCELADO";
+  // No mês dela, contando em outro: à vista, e fora da soma deste mês.
+  const foraDaSoma = pedido.lugar === "adiada-daqui";
   const [aberto, setAberto] = useState(false);
-  // Dentro do painel aberto: o acerto, ou o editor de parcelas no lugar dele.
-  const [parcelando, setParcelando] = useState(false);
+  /*
+   * O painel só é montado quando a linha abre pela primeira vez: num mês de
+   * sessenta pedidos, eram sessenta formulários escondidos, cada um com o seu
+   * calendário. Depois de aberto ele FICA montado — fechar e reabrir não apaga
+   * o que foi digitado nem o erro da última tentativa.
+   */
+  const [jaAbriu, setJaAbriu] = useState(false);
+  /** O que o painel está mostrando, para o título da folha do celular. */
+  const [aba, setAba] = useState<"recebi" | "nao-pago" | "parcelas">("recebi");
   const painel = useId();
   const estreita = useTelaEstreita();
   // A busca da tela (`busca-comissao.tsx`) esconde a linha, sem desmontá-la:
   // o acerto aberto continua com o que foi digitado quando ela volta.
+  // (a lista de pendentes fica fora da busca, e lá a linha está sempre à vista.)
   const visivel = useLinhaVisivel(chaveDaLinha(pedido.id, pedido.parcela?.numero ?? null));
 
-  /*
-   * Salvou sem erro, fecha o acerto — na mesma renderização em que a linha
-   * recebe os valores novos. Com erro, fica aberto mostrando a mensagem. Mesmo
-   * ajuste de estado durante a renderização do formulário da meta
-   * (`painel-meta.tsx`), no lugar de um efeito com `setState`.
-   */
-  const [estadoVisto, setEstadoVisto] = useState(estado);
-  if (estado !== estadoVisto) {
-    setEstadoVisto(estado);
-    if (!estado.erro) setAberto(false);
-  }
-
-  /*
-   * Quando a indústria paga o pedido inteiro. Só no pedido sem parcelas: no
-   * parcelado, a escolha mora no editor de parcelas, que muda o mês de todas.
-   */
-  const pagamento = usePagamentoComissao(pedido.fechamento);
-  const mesDaComissao = mesDoRecebimento(pedido.dataCompetencia, pagamento.fechaNoDia);
-  const fechamentoGravado = pedido.fechamento ? Number(pedido.fechamento) : null;
-  const pagaAposFaturar =
-    !pedido.parcela &&
-    mesDoRecebimento(pedido.dataCompetencia, fechamentoGravado) !== pedido.dataCompetencia.slice(0, 7);
-
-  /*
-   * Desfazer o acerto lançado errado. Antes, o único caminho era apagar o
-   * valor e o % e salvar — e o % já vem preenchido, então quem apagava só o
-   * valor recebia um erro e achava que não tinha volta.
-   */
-  const perguntaDesfazer = usePerguntaAntes(
-    acertado
-      ? {
-          titulo: pedido.parcela
-            ? `Desfazer o acerto da parcela ${pedido.parcela.numero} do pedido #${pedido.numero}?`
-            : `Desfazer o acerto do pedido #${pedido.numero}?`,
-          texto:
-            `O valor recebido (${formatarMoeda(pedido.recebido!)}) e o % do acerto são apagados, e ` +
-            `${pedido.parcela ? "a parcela" : "o pedido"} volta a contar só como previsto, ` +
-            `${formatarMoeda(pedido.previsto)}. A data de entrega continua como está. Depois, ` +
-            "lance o valor certo e salve.",
-          rotulo: "Desfazer acerto",
-        }
-      : undefined,
-  );
+  const fechamentoGravado = pedido.fechamento !== "";
+  const pagaAposFaturar = !pedido.parcela && fechamentoGravado && pedido.atraso.para === null;
 
   const diferenca = acertado ? pedido.recebido! - pedido.previsto : 0;
   const colunas = colunasDaComissao(comPercentual).length;
 
   /*
-   * O acerto, ou o editor de parcelas no lugar dele. Um elemento só, posto na
-   * linha da tabela (tela larga) ou na folha que sobe de baixo (celular).
+   * O painel do acerto. Um elemento só, posto na linha da tabela (tela larga)
+   * ou na folha que sobe de baixo (celular).
    */
-  const conteudoDoPainel =
-    parcelando ? (
-      <EditorParcelas
-        venda={pedido.venda}
-        percentual={pedido.percentual}
-        percentualPreposto={pedido.percentualPreposto}
-        dataBase={pedido.dataBaseParcelas}
-        prazoSugerido={pedido.prazoPagamento}
-        fechamento={pedido.fechamento}
-        atuais={pedido.parcelasAtuais}
-        salvar={salvarParcelas}
-        desfazer={pedido.parcela ? desfazerParcelas : null}
-        aoFechar={() => setParcelando(false)}
-      />
-    ) : (
-      <Formulario estado={estado} action={enviar} className="space-y-4">
-        {/* Pelo topo: o erro de um campo aparece embaixo dele, e pela
-            base os vizinhos desceriam junto. */}
-        <div className="flex flex-wrap items-start gap-3">
-          <CampoMoeda
-            name="valorRecebido"
-            rotulo="Valor recebido"
-            defaultValue={pedido.valorRecebido}
-            placeholder={formatarMoeda(pedido.base).replace("R$", "").trim()}
-            className="basis-36 grow"
-          />
-
-          <Campo
-            name="comissaoPercentualRecebido"
-            rotulo="%"
-            numero="decimal"
-            /*
-              Nasce com o percentual do pedido, como o usuário pediu: no caso
-              comum a indústria paga o combinado, e quem precisa mudar muda.
-            */
-            defaultValue={pedido.percentualRecebido || pedido.percentual}
-            className="basis-24 grow-0"
-          />
-
-          <CampoData
-            name="entregueEm"
-            rotulo="Entregue em"
-            defaultValue={pedido.entregueEm ?? ""}
-            atalhos={[]}
-            atalhosUteis={[]}
-            className="basis-40 grow"
-          />
-
-          {/* No celular, o Salvar desce para a largura toda, no alcance do
-              polegar — ao lado dos campos, numa folha estreita, ele espremia o
-              campo da data. */}
-          <div className="max-sm:basis-full">
-            <EspacoDoRotulo />
-            <Botao
-              type="submit"
-              variante="secundaria"
-              carregando={salvando}
-              className="px-4 py-2 max-sm:w-full max-sm:py-3"
-            >
-              {salvando ? "Salvando…" : "Salvar"}
-            </Botao>
-          </div>
-        </div>
-
-        {!pedido.parcela && (
-          <div className="space-y-1.5">
-            {pagamento.campos}
-            <p className="text-mini text-tinta-3">
-              A comissão deste pedido conta em{" "}
-              <span className="font-semibold text-tinta-2">
-                {MES.format(new Date(`${mesDaComissao}-01T00:00:00Z`))}
-              </span>
-              .
-            </p>
-          </div>
-        )}
-
-        <p className="text-mini text-tinta-3 leading-relaxed">
-          {pedido.parcela
-            ? `Parcela ${pedido.parcela.numero} de ${pedido.parcela.total}: `
-            : "Previsto: "}
-          {formatarMoeda(pedido.base)} × {formatarPercentual(pedido.percentual)} ={" "}
-          <span className="numerico">{formatarMoeda(pedido.previsto)}</span>.
-          {pedido.prazoEntrega && ` Entrega prometida para ${DATA.format(paraData(pedido.prazoEntrega)!)}.`}
-        </p>
-
-        <ErroGeral />
-
-        {acertado && (
-          <div>
-            <BotaoTexto
-              type="submit"
-              name="desfazer"
-              value="sim"
-              onClick={perguntaDesfazer.aoClicar}
-              disabled={salvando}
-              perigoso
-              className="inline-flex items-center gap-1"
-            >
-              <Undo2 size={12} aria-hidden="true" />
-              desfazer acerto
-            </BotaoTexto>
-            {perguntaDesfazer.janela}
-          </div>
-        )}
-
-        {/*
-          Parcelar mora aqui, no acerto: é conferindo com a indústria que
-          se descobre que o pagamento vem em partes.
-        */}
-        {(pedido.podeParcelar || pedido.parcela || pedido.parcelarExigeDesfazerAcerto) && (
-          /*
-            Botão de verdade, num rodapé separado por filete. Era um link
-            miúdo e cinza no fim do painel, que se perdia entre as notas.
-          */
-          <div className="flex flex-wrap items-center gap-3 border-t border-filete pt-3">
-            {pedido.parcelarExigeDesfazerAcerto ? (
-              <p className="text-mini text-tinta-3">
-                Para parcelar o recebimento, use “desfazer acerto” antes.
-              </p>
-            ) : (
-              <>
-                <Botao
-                  type="button"
-                  variante="secundaria"
-                  tamanho="compacto"
-                  icone={Scissors}
-                  onClick={() => setParcelando(true)}
-                >
-                  {pedido.parcela
-                    ? `Editar as ${pedido.parcela.total} parcelas`
-                    : "Parcelar o recebimento"}
-                </Botao>
-                <span className="text-mini text-tinta-3">
-                  {pedido.parcela
-                    ? "Mude datas e valores; cada parcela conta no mês em que a indústria a paga."
-                    : "A indústria paga em partes? Cada parcela conta no mês em que ela a paga."}
-                </span>
-              </>
-            )}
-          </div>
-        )}
-      </Formulario>
-    );
+  const conteudoDoPainel = jaAbriu && pedido.podeAcertar && (
+    <PainelAcerto
+      pedido={pedido}
+      acoes={acoes}
+      aoFechar={() => setAberto(false)}
+      aoMudarDeAba={setAba}
+    />
+  );
 
   return (
     <>
@@ -437,6 +256,9 @@ export function LinhaComissao({
             não num chip: ao lado, o chip tomava a largura do nome; embaixo, o
             recuo da borda dele fazia a linha parecer torta.
           */}
+          {pedido.industria && (
+            <span className="block truncate text-mini text-tinta-3 mt-0.5">{pedido.industria}</span>
+          )}
           {pedido.preposto && (
             <span className="flex items-center gap-1 text-mini text-tinta-3 mt-0.5 min-w-0">
               {pedido.corPreposto ? (
@@ -472,6 +294,7 @@ export function LinhaComissao({
             parecia outro registro. Responde a pergunta que a linha zerada
             levanta: por que este pedido está no mês sem somar nada.
           */}
+          {!cancelado && <SeloDoAtraso pedido={pedido} endereco={endereco} />}
           {pedido.motivoCancelamento && (
             <span className="flex items-start gap-1 text-mini text-perigo mt-0.5">
               <Ban size={11} strokeWidth={2} aria-hidden="true" className="shrink-0 mt-[3px]" />
@@ -524,6 +347,18 @@ export function LinhaComissao({
         <Celula alinhamento="numero" data-area="previsto" data-rotulo="Previsto">
           {cancelado ? (
             <span className="text-mini text-tinta-3">fora da soma</span>
+          ) : foraDaSoma ? (
+            /*
+              O valor continua à vista — é o que a indústria deve —, mas
+              apagado e com a nota: ele não entra no total DESTE mês, e sem
+              isso a soma das linhas não bateria com o total embaixo.
+            */
+            <>
+              <span className="text-tinta-3">{formatarMoeda(pedido.previsto)}</span>
+              <span className="block text-mini text-tinta-3 mt-0.5">
+                conta em {nomeCurtoDaCompetencia(pedido.atraso.para!, pedido.mesDaTela)}
+              </span>
+            </>
           ) : (
             <>
               <span className="font-medium">{formatarMoeda(pedido.previsto)}</span>
@@ -533,7 +368,9 @@ export function LinhaComissao({
         </Celula>
 
         <Celula alinhamento="numero" data-area="recebido" data-rotulo="Recebido">
-          {acertado ? (
+          {acertado && foraDaSoma ? (
+            <span className="text-tinta-3">{formatarMoeda(pedido.recebido!)}</span>
+          ) : acertado ? (
             <>
               <span className="font-medium">{formatarMoeda(pedido.recebido!)}</span>
               <Fatias nome={pedido.preposto} rateio={pedido.rateioRecebido} />
@@ -547,9 +384,11 @@ export function LinhaComissao({
           alinhamento="numero"
           data-area="diferenca"
           data-rotulo="Diferença"
-          className={!acertado || diferenca === 0 ? "" : diferenca < 0 ? "text-perigo" : "text-verde"}
+          className={
+            !acertado || foraDaSoma || diferenca === 0 ? "" : diferenca < 0 ? "text-perigo" : "text-verde"
+          }
         >
-          {acertado ? `${diferenca > 0 ? "+" : ""}${formatarMoeda(diferenca)}` : TRACO}
+          {acertado && !foraDaSoma ? `${diferenca > 0 ? "+" : ""}${formatarMoeda(diferenca)}` : TRACO}
         </Celula>
 
         <Celula alinhamento="acao" data-area="acao">
@@ -558,44 +397,45 @@ export function LinhaComissao({
           ) : (
             pedido.podeAcertar && (
               <>
-              <BotaoTexto
+              {/*
+                Botão de verdade, dizendo o que faz. Era o link "acertar",
+                sublinhado e cinza: o que mais se usava na tela e o que menos
+                parecia um botão.
+              */}
+              <Botao
                 type="button"
+                variante="secundaria"
+                tamanho="compacto"
                 onClick={() => {
                   setAberto((a) => !a);
-                  // Fechar abandona o parcelamento em andamento: reabrir mostra
-                  // o acerto, que é o que a linha abre por padrão.
-                  setParcelando(false);
+                  setJaAbriu(true);
                 }}
                 aria-expanded={aberto}
                 aria-controls={painel}
-                // No cartão, botão de verdade: o "acertar" sublinhado de 17px
-                // era o que mais se tocava na tela e o menor alvo dela.
-                className="inline-flex items-center gap-1 max-sm:no-underline max-sm:rounded-full
-                  max-sm:border max-sm:border-filete-forte max-sm:px-3.5 max-sm:py-2 max-sm:text-corpo
-                  max-sm:text-tinta"
+                className="px-3 max-sm:px-3.5"
               >
-                {acertado ? "acerto" : "acertar"}
+                {/* No cartão do celular a ação tem um terço da largura: o
+                    rótulo inteiro passava por cima do nome do cliente. */}
+                <span className="max-sm:hidden">{acertado ? "Ver acerto" : "Lançar acerto"}</span>
+                <span className="sm:hidden">{acertado ? "Acerto" : "Acertar"}</span>
                 <ChevronDown
                   size={13}
                   strokeWidth={2}
                   aria-hidden="true"
                   className={`transition-transform duration-200 max-sm:hidden ${aberto ? "rotate-180" : ""}`}
                 />
-              </BotaoTexto>
+              </Botao>
               {estreita && (
                 <FolhaDeBaixo
                   id={painel}
                   aberto={aberto}
-                  aoFechar={() => {
-                    setAberto(false);
-                    setParcelando(false);
-                  }}
+                  aoFechar={() => setAberto(false)}
                   titulo={
-                    parcelando
+                    aba === "parcelas"
                       ? `Parcelas do pedido #${pedido.numero}`
                       : pedido.parcela
-                        ? `Acerto da parcela ${pedido.parcela.numero} de ${pedido.parcela.total}`
-                        : `Acerto do pedido #${pedido.numero}`
+                        ? `Parcela ${pedido.parcela.numero} de ${pedido.parcela.total} do pedido #${pedido.numero}`
+                        : `Pedido #${pedido.numero}`
                   }
                   descricao={`${pedido.apelidoCliente} · previsto ${formatarMoeda(pedido.previsto)}`}
                 >

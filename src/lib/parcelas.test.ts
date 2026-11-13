@@ -14,6 +14,7 @@ import {
   problemaNasParcelas,
   restanteDaBase,
   somarDias,
+  somarMeses,
 } from "./parcelas";
 
 describe("lerPrazoEmDias", () => {
@@ -53,6 +54,22 @@ describe("somarDias", () => {
   it("vira o mês e o ano sem escorregar pelo fuso", () => {
     expect(somarDias("2026-10-10", 20)).toBe("2026-10-30");
     expect(somarDias("2026-12-20", 15)).toBe("2027-01-04");
+  });
+});
+
+describe("somarMeses", () => {
+  it("mantém o dia, mês a mês, e vira o ano", () => {
+    expect([0, 1, 2, 3].map((m) => somarMeses("2026-11-10", m))).toEqual([
+      "2026-11-10",
+      "2026-12-10",
+      "2027-01-10",
+      "2027-02-10",
+    ]);
+  });
+
+  it("o dia que o mês não tem vira o último dele", () => {
+    expect(somarMeses("2027-01-31", 1)).toBe("2027-02-28");
+    expect(somarMeses("2026-08-31", 1)).toBe("2026-09-30");
   });
 });
 

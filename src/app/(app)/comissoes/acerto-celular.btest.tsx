@@ -3,8 +3,9 @@
  *
  * O que se protege: abaixo de 640px a linha do pedido vira cartão — nada fica
  * escondido à direita, e cada valor tem o rótulo que perdeu com o cabeçalho —,
- * e "acertar" abre o acerto numa folha que sobe de baixo, e não dentro da
- * linha, onde o formulário herdava a largura da tabela e saía cortado.
+ * e "Lançar acerto" abre o painel numa folha que sobe de baixo, e não dentro
+ * da linha, onde o formulário herdava a largura da tabela e saía cortado. Na
+ * folha, as três respostas ficam uma embaixo da outra, inteiras.
  *
  * Rode com:  npm run test:navegador
  */
@@ -48,7 +49,15 @@ const PEDIDO: LinhaPedido = {
   parcelasAtuais: [],
   podeParcelar: true,
   parcelarExigeDesfazerAcerto: false,
+  atraso: { naoPaga: false, para: null },
+  mesNatural: "2026-10",
+  mesDaTela: "2026-10",
+  hoje: "2026-10",
+  lugar: "no-mes",
+  industria: null,
 };
+
+const NADA = async () => ({});
 
 function montar() {
   return render(
@@ -56,9 +65,15 @@ function montar() {
       <LinhaComissao
         pedido={PEDIDO}
         comPercentual
-        salvar={async () => ({})}
-        salvarParcelas={async () => ({})}
-        desfazerParcelas={async () => ({})}
+        acoes={{
+          acerto: NADA,
+          entrega: NADA,
+          naoPago: NADA,
+          desmarcarNaoPago: NADA,
+          parcelas: NADA,
+          desfazerParcelas: NADA,
+        }}
+        enderecoDoMes="/comissoes?mes=__MES__"
       />
     </Tabela>,
   );
@@ -86,15 +101,35 @@ describe("apuração no celular em pé", () => {
     expect(getComputedStyle(previsto, "::before").content).toBe('"Previsto"');
   });
 
-  test("acertar abre a folha que sobe de baixo, com o formulário dentro", async () => {
+  test("o botão da linha cabe no cartão, e abre a folha que sobe de baixo com o painel dentro", async () => {
     await montar();
 
-    await page.getByRole("button", { name: /acertar/ }).click();
+    // No cartão o rótulo é curto: a ação tem um terço da largura, e o botão
+    // não pode passar por cima do nome do cliente.
+    const botao = page.getByRole("button", { name: "Acertar" });
+    const caixaDoBotao = botao.element().getBoundingClientRect();
+    const nome = document.querySelector('[data-area="cliente"]')!.getBoundingClientRect();
+    expect(caixaDoBotao.right).toBeLessThanOrEqual(390);
+    expect(caixaDoBotao.left).toBeGreaterThanOrEqual(nome.right);
+    await botao.click();
 
     const folha = page.getByRole("dialog");
     await expect.element(folha).toBeVisible();
-    await expect.element(folha.getByRole("heading", { name: "Acerto do pedido #2300" })).toBeVisible();
-    await expect.element(folha.getByText("Valor recebido")).toBeVisible();
+    await expect.element(folha.getByRole("heading", { name: "Pedido #2300" })).toBeVisible();
+    await expect.element(folha.getByText("Venda sobre a qual a indústria pagou")).toBeVisible();
+
+    // As três respostas, uma embaixo da outra e sem passar da folha.
+    const caixa = document.querySelector("dialog")!.getBoundingClientRect();
+    const respostas = [...document.querySelectorAll('dialog [role="radio"]')].map((r) =>
+      r.getBoundingClientRect(),
+    );
+    expect(respostas).toHaveLength(3);
+    for (const [i, resposta] of respostas.entries()) {
+      expect(resposta.right).toBeLessThanOrEqual(caixa.right);
+      expect(resposta.height).toBeGreaterThanOrEqual(44);
+      if (i > 0) expect(resposta.top).toBeGreaterThanOrEqual(respostas[i - 1].bottom);
+    }
+
     // A linha do painel da tela larga não existe aqui.
     expect(document.querySelector("tr[hidden]")).toBeNull();
 
@@ -122,7 +157,7 @@ describe("apuração no celular em pé", () => {
       />,
     );
 
-    const caixas = ["mais uma parcela", "cancelar", "desfazer parcelamento"].map((nome) =>
+    const caixas = ["Adicionar parcela", "Cancelar", "Desfazer parcelamento"].map((nome) =>
       page.getByRole("button", { name: nome }).element().getBoundingClientRect(),
     );
     for (const caixa of caixas) expect(caixa.height).toBeGreaterThanOrEqual(44);
@@ -135,9 +170,10 @@ describe("apuração no celular em pé", () => {
   test("o parcelamento cabe na folha: nenhuma parcela fica para o lado", async () => {
     await montar();
 
-    await page.getByRole("button", { name: /acertar/ }).click();
+    await page.getByRole("button", { name: "Acertar" }).click();
     const folha = page.getByRole("dialog");
-    await folha.getByRole("button", { name: "Parcelar o recebimento" }).click();
+    await folha.getByRole("radio", { name: /^Recebo em parcelas/ }).click();
+    await folha.getByRole("radio", { name: /^Por dias depois da entrega/ }).click();
     // Com vírgula, como se digita no teclado do iPhone.
     await folha.getByLabelText(/^Dias a partir da entrega/).fill("28,35,42");
     await folha.getByRole("button", { name: "Dividir em partes iguais" }).click();

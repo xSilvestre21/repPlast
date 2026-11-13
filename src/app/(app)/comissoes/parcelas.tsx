@@ -6,14 +6,19 @@
  * Abre dentro do painel de acerto da linha, como o próprio acerto: conferir o
  * extrato e parcelar são a mesma conversa com a indústria.
  *
- * Duas formas de montar, que se completam:
+ * Começa PERGUNTANDO como a pessoa quer montar, com as duas formas à vista —
+ * antes só havia o campo dos dias, e quem tinha as datas na mão (o boleto, o
+ * extrato) não descobria que podia escolhê-las no calendário:
  *
- *   - os DIAS a partir da entrega ("28/35/42", já sugeridos pelo prazo de
+ *   - por DIAS a partir da entrega ("28/35/42", já sugeridos pelo prazo de
  *     pagamento do pedido) e "Dividir", que gera parcelas iguais — o que o
  *     SICOV fazia;
- *   - depois, mexer no valor de qualquer parcela: a ÚLTIMA é sempre o que
- *     sobra, então diminuir uma empurra a diferença para frente sem a pessoa
- *     fazer conta.
+ *   - escolhendo as DATAS: quantas parcelas e a data da primeira; as outras
+ *     nascem um mês depois da anterior, e cada uma se troca no calendário.
+ *
+ * Nas duas, depois, dá para mexer na data e no valor de qualquer parcela: a
+ * ÚLTIMA é sempre o que sobra, então diminuir uma empurra a diferença para
+ * frente sem a pessoa fazer conta.
  *
  * E quando a indústria paga: no mês do vencimento, ou só no mês seguinte ao
  * faturamento que fecha num dia — aí cada linha diz em que mês a comissão
@@ -23,7 +28,7 @@
  * gravar.
  */
 
-import { Plus, Scissors, X } from "lucide-react";
+import { CalendarDays, Hash, Plus, RotateCcw, Scissors, Undo2, X } from "lucide-react";
 import Decimal from "decimal.js";
 import { useActionState, useId, useRef, useState } from "react";
 
@@ -31,7 +36,6 @@ import { CampoData } from "@/components/campo-data";
 import { CampoMoeda } from "@/components/campo-mascarado";
 import {
   Botao,
-  BotaoTexto,
   CLASSE_CONTROLE,
   Campo,
   EspacoDoRotulo,
@@ -46,6 +50,7 @@ import {
   mesDoRecebimento,
   restanteDaBase,
   somarDias,
+  somarMeses,
 } from "@/lib/parcelas";
 
 import { ErroGeral, Formulario } from "@/components/formulario";
@@ -53,6 +58,7 @@ import { usePerguntaAntes } from "@/components/pergunta-antes";
 import { campoDaLinha, erroDoCampo } from "@/lib/erro-formulario";
 
 import type { EstadoFormulario } from "./acoes";
+import { Escolhas } from "./escolhas";
 import { usePagamentoComissao } from "./pagamento-comissao";
 
 type Acao = (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
@@ -77,10 +83,26 @@ function mesDe(iso: string): string {
   return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? MES.format(new Date(`${iso}T00:00:00Z`)) : "";
 }
 
+/** As ações do rodapé, no celular: da largura da folha e com altura de dedo. */
+const ACAO_NO_CELULAR = "max-sm:w-full max-sm:justify-center max-sm:py-3 max-sm:text-corpo";
 
-/** As ações de texto do rodapé, no celular: altura de botão, centradas, sem sublinhado. */
-const ACAO_NO_CELULAR =
-  "max-sm:flex max-sm:justify-center max-sm:py-3 max-sm:text-corpo max-sm:no-underline";
+/** Como as parcelas estão sendo montadas. */
+type Modo = "dias" | "datas";
+
+/** O título de um passo: "1", "Como quer montar as parcelas?". */
+function Passo({ numero, children }: { numero: number; children: string }) {
+  return (
+    <h4 className="flex items-center gap-2 text-corpo font-semibold text-tinta">
+      <span
+        aria-hidden="true"
+        className="grid place-items-center size-5 rounded-full bg-tinta text-papel text-micro font-semibold numerico"
+      >
+        {numero}
+      </span>
+      {children}
+    </h4>
+  );
+}
 
 export function EditorParcelas({
   venda,
@@ -128,9 +150,9 @@ export function EditorParcelas({
           texto:
             `As ${atuais.length} parcelas são apagadas e o pedido volta a contar inteiro, ` +
             `${formatarMoeda(Number(venda))}, no mês da entrega (ou no seguinte, se a indústria só paga ` +
-            "depois de faturar). Para parcelar de novo, use " +
-            "“Parcelar o recebimento” outra vez.",
-          rotulo: "Desfazer",
+            "depois de faturar). Para parcelar de novo, escolha " +
+            "“Recebo em parcelas” outra vez.",
+          rotulo: "Desfazer parcelamento",
         }
       : undefined,
   );
@@ -157,6 +179,21 @@ export function EditorParcelas({
   const [geracao, setGeracao] = useState(0);
   const [erroDias, setErroDias] = useState<string | null>(null);
   const idDias = useId();
+
+  /*
+   * A forma de montar. Com prazo legível no pedido, abre nos dias, já
+   * divididos — é o caso de quase sempre. Sem ele, ninguém escolheu ainda, e a
+   * tela espera a resposta. No pedido já parcelado, as parcelas gravadas vêm
+   * primeiro: montar de novo é um botão.
+   */
+  const [modo, setModo] = useState<Modo | null>(
+    atuais.length === 0 && sugeridos && sugeridos.length > 1 ? "dias" : null,
+  );
+  const [montando, setMontando] = useState(atuais.length === 0);
+  const [quantas, setQuantas] = useState("2");
+  // Um mês depois da entrega: é o "30 dias" de quem não tem prazo em dias.
+  const [primeira, setPrimeira] = useState(() => somarMeses(dataBase, 1));
+  const [erroDatas, setErroDatas] = useState<string | null>(null);
   const { fechaNoDia, campos: camposPagamento } = usePagamentoComissao(fechamento);
 
   // Fecha ao salvar sem erro — o mesmo ajuste de estado do acerto e da meta.
@@ -189,6 +226,23 @@ export function EditorParcelas({
     setLinhas(gerar(lidos));
     setGeracao((g) => g + 1);
     setDivididoCom(dias);
+  }
+
+  /** As parcelas pelo calendário: `quantas`, a primeira em `primeira`, uma por mês. */
+  function criarPorDatas() {
+    const n = Number(quantas);
+    if (!/^\d{1,2}$/.test(quantas.trim()) || n < 2 || n > 24) {
+      setErroDatas("Diga em quantas parcelas a indústria paga — de 2 a 24, como 3.");
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(primeira)) {
+      setErroDatas("Escolha no calendário a data da primeira parcela.");
+      return;
+    }
+    setErroDatas(null);
+    const valores = dividirIgual(venda, n);
+    setLinhas(valores.map((valor, i) => ({ vencimento: somarMeses(primeira, i), valor: paraCampo(valor) })));
+    setGeracao((g) => g + 1);
   }
 
   /** Volta ao prazo do pedido, e às parcelas dele. */
@@ -258,108 +312,240 @@ export function EditorParcelas({
 
   return (
     <div className="space-y-4">
-      {/* Pelo topo, com o espaço de um rótulo sobre o botão: o erro dos dias
-          aparece embaixo da caixa, e pela base o botão desceria junto. */}
-      <div className="flex flex-wrap items-start gap-3">
-        <Campo
-          id={idDias}
-          rotulo="Dias a partir da entrega"
-          erro={erroDias ?? undefined}
-          value={dias}
-          onChange={(e) => {
-            setDias(e.currentTarget.value);
-            setErroDias(null);
-          }}
-          onFocus={() => {
-            selecionouAoTocar.current = false;
-          }}
-          onClick={(e) => {
-            // Ainda com o prazo do pedido, o primeiro toque seleciona tudo: o que
-            // se digita substitui. O segundo já põe o cursor onde se tocou.
-            if (situacaoDosDias !== "do-pedido" || selecionouAoTocar.current) return;
-            selecionouAoTocar.current = true;
-            // `setSelectionRange`, e não `select()`: no Safari do iPhone, só ele seleciona.
-            e.currentTarget.setSelectionRange(0, e.currentTarget.value.length);
-          }}
-          onKeyDown={(e) => {
-            // Enter aqui divide, em vez de enviar o formulário de parcelas.
-            if (e.key === "Enter") {
-              e.preventDefault();
-              dividir();
-            }
-          }}
-          placeholder="28/35/42"
-          // "decimal", e não "numeric": o teclado numérico do iPhone não tem a
-          // barra. Com este vem a vírgula, e "28,35,42" lê igual
-          // (`lerPrazoEmDias` aceita qualquer separador).
-          inputMode="decimal"
-          dica="Um número por parcela, quantos quiser: 30/60/90/120. No celular, separe com vírgula: 30,60,90,120."
-          autoComplete="off"
-          className="basis-48 grow"
-        />
-        <div className="max-sm:basis-full">
-          <EspacoDoRotulo />
-          <div className="flex items-center h-11">
-            <Botao
-              type="button"
-              variante="secundaria"
-              icone={Scissors}
-              onClick={dividir}
-              className="max-sm:w-full max-sm:justify-center"
-            >
-              Dividir em partes iguais
-            </Botao>
+      {!montando ? (
+        /*
+          O pedido já parcelado abre nas parcelas dele: quase sempre se vem
+          trocar uma data ou um valor, não começar de novo.
+        */
+        <div className="flex flex-wrap items-center gap-3">
+          <p className="text-corpo text-tinta-2 leading-relaxed basis-64 grow">
+            Estas são as {atuais.length} parcelas gravadas. Mude a data ou o valor de qualquer uma, logo
+            abaixo.
+          </p>
+          <Botao
+            type="button"
+            variante="secundaria"
+            tamanho="compacto"
+            icone={RotateCcw}
+            onClick={() => setMontando(true)}
+            className={ACAO_NO_CELULAR}
+          >
+            Montar as parcelas de novo
+          </Botao>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <Passo numero={1}>Como quer montar as parcelas?</Passo>
+
+          <Escolhas
+            nome="Como montar as parcelas"
+            atual={modo}
+            aoEscolher={(novo) => {
+              setModo(novo);
+              // Quem troca para as datas com parcelas já na tela parte delas:
+              // o campo abre com a quantidade que está embaixo.
+              if (novo === "datas" && linhas.length >= 2) setQuantas(String(linhas.length));
+            }}
+            opcoes={[
+              {
+                valor: "dias",
+                icone: Hash,
+                titulo: "Por dias depois da entrega",
+                descricao: "Você escreve os dias, como 28/35/42, e o sistema calcula as datas.",
+              },
+              {
+                valor: "datas",
+                icone: CalendarDays,
+                titulo: "Escolhendo as datas",
+                descricao: "Você diz quantas parcelas são e escolhe a data de cada uma no calendário.",
+              },
+            ]}
+          />
+
+          {modo === "dias" && (
+            <>
+        {/* Pelo topo, com o espaço de um rótulo sobre o botão: o erro dos dias
+            aparece embaixo da caixa, e pela base o botão desceria junto. */}
+        <div className="flex flex-wrap items-start gap-3">
+          <Campo
+            id={idDias}
+            rotulo="Dias a partir da entrega"
+            erro={erroDias ?? undefined}
+            value={dias}
+            onChange={(e) => {
+              setDias(e.currentTarget.value);
+              setErroDias(null);
+            }}
+            onFocus={() => {
+              selecionouAoTocar.current = false;
+            }}
+            onClick={(e) => {
+              // Ainda com o prazo do pedido, o primeiro toque seleciona tudo: o que
+              // se digita substitui. O segundo já põe o cursor onde se tocou.
+              if (situacaoDosDias !== "do-pedido" || selecionouAoTocar.current) return;
+              selecionouAoTocar.current = true;
+              // `setSelectionRange`, e não `select()`: no Safari do iPhone, só ele seleciona.
+              e.currentTarget.setSelectionRange(0, e.currentTarget.value.length);
+            }}
+            onKeyDown={(e) => {
+              // Enter aqui divide, em vez de enviar o formulário de parcelas.
+              if (e.key === "Enter") {
+                e.preventDefault();
+                dividir();
+              }
+            }}
+            placeholder="28/35/42"
+            // "decimal", e não "numeric": o teclado numérico do iPhone não tem a
+            // barra. Com este vem a vírgula, e "28,35,42" lê igual
+            // (`lerPrazoEmDias` aceita qualquer separador).
+            inputMode="decimal"
+            dica="Um número por parcela, quantos quiser: 30/60/90/120. No celular, separe com vírgula: 30,60,90,120."
+            autoComplete="off"
+            className="basis-48 grow"
+          />
+          <div className="max-sm:basis-full">
+            <EspacoDoRotulo />
+            <div className="flex items-center h-11">
+              <Botao
+                type="button"
+                variante="secundaria"
+                icone={Scissors}
+                onClick={dividir}
+                className="max-sm:w-full max-sm:justify-center"
+              >
+                Dividir em partes iguais
+              </Botao>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/*
-        De onde vêm os dias, embaixo do campo — em cima, a nota que muda de
-        tamanho ao digitar empurraria a caixa para baixo no meio da digitação.
-        O prazo do pedido abre o campo só para começar: o pagamento quem decide
-        é o representante, com o que combinou com a indústria.
-      */}
-      {situacaoDosDias && (
-        <p
-          role="note"
-          aria-live="polite"
-          className="rounded-suave bg-folha-2 px-4 py-3 text-corpo text-tinta-2 leading-relaxed"
-        >
-          {situacaoDosDias === "do-pedido" ? (
-            <>
-              <strong className="text-tinta numerico">{sugerido}</strong> é o prazo de pagamento do pedido, e
-              vem preenchido só para começar. Quem decide as parcelas é você: apague e escreva os dias em que a
-              indústria vai pagar.
-            </>
-          ) : (
-            <>
-              {situacaoDosDias === "vazio"
-                ? "Escreva os dias em que a indústria vai pagar, um por parcela. "
-                : situacaoDosDias === "falta-dividir"
-                  ? "Para as parcelas seguirem estes dias, toque em “Dividir em partes iguais”. "
-                  : "As parcelas seguem os seus dias. "}
-              O prazo do pedido era <strong className="text-tinta numerico">{sugerido}</strong> —{" "}
-              <button
-                type="button"
-                onClick={voltarAoPedido}
-                className="relative alvo-toque font-medium text-carimbo underline underline-offset-2
-                  decoration-carimbo/35 hover:decoration-carimbo cursor-pointer"
-              >
-                voltar a ele
-              </button>
-              .
+        {/*
+          De onde vêm os dias, embaixo do campo — em cima, a nota que muda de
+          tamanho ao digitar empurraria a caixa para baixo no meio da digitação.
+          O prazo do pedido abre o campo só para começar: o pagamento quem decide
+          é o representante, com o que combinou com a indústria.
+        */}
+        {situacaoDosDias && (
+          <p
+            role="note"
+            aria-live="polite"
+            className="rounded-suave bg-folha-2 px-4 py-3 text-corpo text-tinta-2 leading-relaxed"
+          >
+            {situacaoDosDias === "do-pedido" ? (
+              <>
+                <strong className="text-tinta numerico">{sugerido}</strong> é o prazo de pagamento do pedido, e
+                vem preenchido só para começar. Quem decide as parcelas é você: apague e escreva os dias em que a
+                indústria vai pagar.
+              </>
+            ) : (
+              <>
+                {situacaoDosDias === "vazio"
+                  ? "Escreva os dias em que a indústria vai pagar, um por parcela. "
+                  : situacaoDosDias === "falta-dividir"
+                    ? "Para as parcelas seguirem estes dias, toque em “Dividir em partes iguais”. "
+                    : "As parcelas seguem os seus dias. "}
+                O prazo do pedido era <strong className="text-tinta numerico">{sugerido}</strong> —{" "}
+                <button
+                  type="button"
+                  onClick={voltarAoPedido}
+                  className="relative alvo-toque font-medium text-carimbo underline underline-offset-2
+                    decoration-carimbo/35 hover:decoration-carimbo cursor-pointer"
+                >
+                  voltar a ele
+                </button>
+                .
+              </>
+            )}
+          </p>
+        )}
             </>
           )}
-        </p>
+
+          {modo === "datas" && (
+            <>
+              {/* Pelo topo, como nos dias: o erro aparece embaixo da caixa. */}
+              <div className="flex flex-wrap items-start gap-3">
+                <Campo
+                  rotulo="Quantas parcelas?"
+                  erro={erroDatas ?? undefined}
+                  value={quantas}
+                  onChange={(e) => {
+                    setQuantas(e.currentTarget.value);
+                    setErroDatas(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      criarPorDatas();
+                    }
+                  }}
+                  numero="inteiro"
+                  autoComplete="off"
+                  placeholder="3"
+                  className="basis-40 grow-0"
+                />
+                <CampoData
+                  name="primeiraParcela"
+                  rotulo="Data da primeira parcela"
+                  defaultValue={primeira}
+                  onChange={(valor) => {
+                    setPrimeira(valor);
+                    setErroDatas(null);
+                  }}
+                  atalhos={[]}
+                  atalhosUteis={[]}
+                  className="basis-56 grow sm:grow-0"
+                />
+                <div className="max-sm:basis-full">
+                  <EspacoDoRotulo />
+                  <div className="flex items-center h-11">
+                    <Botao
+                      type="button"
+                      variante="secundaria"
+                      icone={CalendarDays}
+                      onClick={criarPorDatas}
+                      className="max-sm:w-full max-sm:justify-center"
+                    >
+                      Criar parcelas
+                    </Botao>
+                  </div>
+                </div>
+              </div>
+              <p role="note" className="rounded-suave bg-folha-2 px-4 py-3 text-corpo text-tinta-2 leading-relaxed">
+                As parcelas nascem iguais, uma por mês a partir da primeira. Depois é só trocar a data de
+                cada uma no calendário, logo abaixo — não precisa ser todo mês.
+              </p>
+            </>
+          )}
+        </div>
       )}
 
       {linhas.length > 0 && (
         <Formulario estado={estado} action={enviar} className="space-y-3">
+          {montando && <Passo numero={2}>Confira as datas e os valores</Passo>}
+
           {/*
             Antes das parcelas, porque muda o mês de todas: há indústria que
             fatura até um dia e só paga a comissão no mês seguinte.
           */}
           {camposPagamento}
+
+          {/*
+            O nome de cada coluna, na mesma grade das linhas. No celular a
+            parcela vira bloco, e cada campo já tem o rótulo dele para o leitor
+            de tela — o cabeçalho sobraria.
+          */}
+          <div
+            aria-hidden="true"
+            className="grid grid-cols-[2.5rem_minmax(15rem,17rem)_minmax(9rem,1fr)_minmax(7rem,auto)_2rem]
+              gap-3 text-mini font-medium text-tinta-3 max-sm:hidden"
+          >
+            <span />
+            <span>Vence em</span>
+            <span>Valor da venda</span>
+            <span>Conta em</span>
+            <span />
+          </div>
 
           <ol className="space-y-2">
             {linhas.map((linha, i) => {
@@ -484,11 +670,10 @@ export function EditorParcelas({
           <MensagemErro>{estadoDesfazer.erro}</MensagemErro>
 
           {/*
-            No celular, as ações viram botões de altura cheia, um embaixo do
-            outro — lado a lado, como links de 17px, "mais uma parcela",
-            "desfazer" e "cancelar" ficavam colados e o dedo errava. O desfazer,
-            que apaga, vai por último e separado por um filete, como o iOS
-            afasta a ação destrutiva das outras.
+            Botões, todos — "mais uma parcela", "desfazer" e "cancelar" eram
+            links de 17px, e passavam por texto de rodapé. No celular viram de
+            altura cheia, um embaixo do outro; o desfazer, que apaga, vai por
+            último e afastado, como o iOS afasta a ação destrutiva das outras.
           */}
           <div className="flex flex-wrap items-center gap-3 max-sm:flex-col max-sm:items-stretch max-sm:gap-2">
             <Botao
@@ -500,37 +685,46 @@ export function EditorParcelas({
             >
               {salvando ? "Salvando…" : "Salvar parcelas"}
             </Botao>
-            <BotaoTexto
+            <Botao
               type="button"
+              variante="secundaria"
+              tamanho="compacto"
+              icone={Plus}
               onClick={adicionar}
-              className={`inline-flex items-center gap-1 ${ACAO_NO_CELULAR} max-sm:rounded-full max-sm:border
-                max-sm:border-filete-forte max-sm:text-tinta`}
+              className={ACAO_NO_CELULAR}
             >
-              <Plus size={12} aria-hidden="true" />
-              mais uma parcela
-            </BotaoTexto>
+              Adicionar parcela
+            </Botao>
+            <Botao
+              type="button"
+              variante="secundaria"
+              tamanho="compacto"
+              onClick={aoFechar}
+              className={ACAO_NO_CELULAR}
+            >
+              Cancelar
+            </Botao>
             {desfazer && (
-              <BotaoTexto
+              <Botao
                 type="submit"
                 formAction={enviarDesfazer}
                 onClick={perguntaDesfazer.aoClicar}
-                disabled={desfazendo}
-                perigoso
-                className={`sm:ml-auto ${ACAO_NO_CELULAR} max-sm:order-last max-sm:mt-2 max-sm:border-t
-                  max-sm:border-filete max-sm:pt-4 max-sm:text-perigo`}
+                variante="perigo"
+                tamanho="compacto"
+                icone={Undo2}
+                carregando={desfazendo}
+                className={`sm:ml-auto ${ACAO_NO_CELULAR} max-sm:order-last max-sm:mt-2`}
               >
-                {desfazendo ? "desfazendo…" : "desfazer parcelamento"}
-              </BotaoTexto>
+                {desfazendo ? "Desfazendo…" : "Desfazer parcelamento"}
+              </Botao>
             )}
             {perguntaDesfazer.janela}
-            <BotaoTexto type="button" onClick={aoFechar} className={ACAO_NO_CELULAR}>
-              cancelar
-            </BotaoTexto>
           </div>
 
           <p className="text-mini text-tinta-3 leading-relaxed">
-            Venda de {formatarMoeda(Number(venda))}. Mude o valor de qualquer parcela: a última fica
-            com o restante. Cada parcela conta na comissão do mês em que a indústria a paga.
+            Venda de {formatarMoeda(Number(venda))}. Toque na data para trocá-la no calendário. Mude o
+            valor de qualquer parcela: a última fica com o restante. Cada parcela conta na comissão do
+            mês em que a indústria a paga.
           </p>
         </Formulario>
       )}

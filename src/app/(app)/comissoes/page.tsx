@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Factory, HandCoins, PiggyBank, Send, Users } from "lucide-react";
+import { Factory, HandCoins, Hourglass, PiggyBank, Send, Users } from "lucide-react";
 
 import {
   BotaoLink,
@@ -27,12 +27,15 @@ import {
 } from "@/lib/comissao";
 import {
   acertoDoPedido,
+  adiadosDaCompetencia,
   canceladosDaCompetencia,
   contarPedidos,
   mesesComMetaBatida,
   metasDoUsuario,
   pedidosDaCompetencia,
+  pendentesAnteriores,
   percentualDoPedido,
+  porDataDoItem,
   percentualPrepostoDoPedido,
   prepostoDoPedido,
   repassesLancados,
@@ -49,13 +52,19 @@ import { escopoAtual } from "@/lib/sessao";
 import {
   definirMeta,
   desfazerParcelas,
+  desmarcarNaoPago,
+  desmarcarParcelaNaoPaga,
   excluirRepasse,
+  marcarNaoPago,
+  marcarParcelaNaoPaga,
   registrarRepasse,
   salvarAcerto,
   salvarAcertoParcela,
+  salvarEntrega,
   salvarParcelas,
 } from "./acoes";
-import { LinhaComissao, type LinhaPedido } from "./acerto";
+import { LinhaComissao } from "./acerto";
+import { MARCADOR_DO_MES, type AcoesDaLinha, type LinhaPedido } from "./linha";
 import { chaveDaLinha } from "./busca";
 import { BuscaComissao, GrupoDaBusca, LinhaDoTotal } from "./busca-comissao";
 import { colunasDaComissao } from "./colunas";
@@ -101,10 +110,14 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
 
   const { organizacaoId, db, ehAdmin, usuarioId } = await escopoAtual();
 
-  const [metas, pedidos, cancelados, repasses, prepostos] = await Promise.all([
+  const [metas, pedidos, cancelados, adiados, pendentes, repasses, prepostos] = await Promise.all([
     metasDoUsuario(db, usuarioId),
     pedidosDaCompetencia(db, organizacaoId, competencia, ehAdmin ? null : usuarioId),
     canceladosDaCompetencia(db, organizacaoId, competencia, ehAdmin ? null : usuarioId),
+    // O pagamento que atrasou (`lib/adiamento.ts`): os deste mês que contam em
+    // outro, e os não pagos de meses que já passaram. Os dois para APARECER.
+    adiadosDaCompetencia(db, organizacaoId, competencia, ehAdmin ? null : usuarioId),
+    pendentesAnteriores(db, organizacaoId, competencia, ehAdmin ? null : usuarioId),
     repassesLancados(db, organizacaoId, ehAdmin ? null : usuarioId),
     // Os nomes de quem tem saldo sem ter vendido nada no mês, e a ordem de
     // cadastro, que decide a cor de cada um. Só o admin lista.
@@ -166,14 +179,24 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
    *
    * Na ordem por número, o cancelado entra no lugar do número dele; na de
    * sempre, as linhas seguem como vieram — pela entrega, cancelados no fim.
+   *
+   * O de pagamento ADIADO para outro mês entra do mesmo jeito: na lista, no
+   * lugar da data dele, e fora do `resumo` — ele soma no mês em que a indústria
+   * paga, e lá aparece de novo, contando.
    */
+  const foraDaSoma = new Set(adiados);
   const porFornecedor = [
-    ...Map.groupBy([...pedidos, ...cancelados], (p) => p.fornecedor.id).entries(),
+    ...Map.groupBy(
+      [...[...pedidos, ...adiados].sort(porDataDoItem), ...cancelados],
+      (p) => p.fornecedor.id,
+    ).entries(),
   ]
     .map(([, doFornecedor]) => ({
       fornecedor: doFornecedor[0].fornecedor,
       pedidos: ordem === "numero" ? ordenarPorNumero(doFornecedor) : doFornecedor,
-      resumo: resumirComissao(doFornecedor.filter((p) => p.status === "ENVIADO")),
+      resumo: resumirComissao(
+        doFornecedor.filter((p) => p.status === "ENVIADO" && !foraDaSoma.has(p)),
+      ),
     }))
     .sort((a, b) => a.fornecedor.nome.localeCompare(b.fornecedor.nome, "pt-BR"));
 
@@ -249,6 +272,13 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
       : null;
 
   const hoje = new Date().toISOString().slice(0, 10);
+  // O que cada linha precisa saber da tela: o mês dela, o de hoje e o endereço
+  // dos outros meses — para o selo do pagamento adiado levar até lá.
+  const tela = {
+    mes: competencia,
+    hoje: competenciaDe(new Date()),
+    enderecoDoMes: endereco(MARCADOR_DO_MES, escolhida, ordem),
+  };
 
   // O bruto só diz algo quando difere do líquido: num mês sem preposto, ou no
   // escritório de uma pessoa só, seria o mesmo número repetido embaixo.
@@ -272,8 +302,20 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
    */
   const grupos = visiveis.map((grupo) => ({
     ...grupo,
-    linhas: grupo.pedidos.map((pedido) => ({ pedido, linha: paraLinha(pedido, ehAdmin, cores) })),
+    linhas: grupo.pedidos.map((pedido) => ({
+      pedido,
+      linha: paraLinha(pedido, ehAdmin, cores, tela, foraDaSoma.has(pedido) ? "adiada-daqui" : "no-mes"),
+    })),
   }));
+
+  /*
+   * Os não pagos de meses anteriores, com a indústria escolhida quando há uma.
+   * Ficam FORA da busca e dos totais: são de outros meses, e estão aqui só
+   * para a dívida da indústria não sumir quando o mês vira.
+   */
+  const linhasPendentes = pendentes
+    .filter((p) => !escolhida || p.fornecedor.id === escolhida)
+    .map((pedido) => ({ pedido, linha: paraLinha(pedido, ehAdmin, cores, tela, "pendente") }));
   const indiceDaBusca = grupos.flatMap(({ fornecedor, linhas }) =>
     linhas.map(({ linha }) => ({
       chave: chaveDaLinha(linha.id, linha.parcela?.numero ?? null),
@@ -434,6 +476,35 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
         </Cartao>
       )}
 
+      {linhasPendentes.length > 0 && (
+        <Cartao className="p-5 sm:p-6 mb-5">
+          <div className="flex items-start gap-3 mb-4">
+            <Placa icone={Hourglass} tom="pessego" pequena />
+            <div className="min-w-0">
+              <h2 className="text-realce font-semibold">Pendentes de meses anteriores</h2>
+              <p className="text-corpo text-tinta-2 mt-0.5 leading-relaxed">
+                {plural(contarPedidos(pendentes), "pedido")} que a indústria ainda não pagou. Cada um soma
+                no mês dele, em “A acertar” — aqui é só para não sumir de vista.
+                {ehAdmin &&
+                  " Quando ela pagar, toque em “Lançar acerto” e diga em que mês foi: a comissão passa a contar nele."}
+              </p>
+            </div>
+          </div>
+
+          <Tabela colunas={colunas} larguraMinima="min-w-200" className="tabela-cartoes">
+            {linhasPendentes.map(({ pedido, linha }) => (
+              <LinhaComissao
+                key={`${pedido.id}:${pedido.parcela?.id ?? ""}`}
+                pedido={linha}
+                comPercentual={ehAdmin}
+                acoes={acoesDaLinha(pedido)}
+                enderecoDoMes={tela.enderecoDoMes}
+              />
+            ))}
+          </Tabela>
+        </Cartao>
+      )}
+
       {/* Com uma indústria só no mês não há o que escolher — a não ser voltar a
           "Todas", quando a escolhida não teve pedido. */}
       {(porFornecedor.length > 1 || escolhida) && (
@@ -540,14 +611,8 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
                         key={`${pedido.id}:${pedido.parcela?.id ?? ""}`}
                         pedido={linha}
                         comPercentual={ehAdmin}
-                        // Na parcela, o acerto é DELA; no pedido inteiro, dele.
-                        salvar={
-                          pedido.parcela
-                            ? salvarAcertoParcela.bind(null, pedido.parcela.id)
-                            : salvarAcerto.bind(null, pedido.id)
-                        }
-                        salvarParcelas={salvarParcelas.bind(null, pedido.id)}
-                        desfazerParcelas={desfazerParcelas.bind(null, pedido.id)}
+                        acoes={acoesDaLinha(pedido)}
+                        enderecoDoMes={tela.enderecoDoMes}
                       />
                     ))}
                   </Tabela>
@@ -616,6 +681,25 @@ function TotalDaIndustria({
   );
 }
 
+/**
+ * As ações de uma linha, já presas ao alvo certo: na parcela, o acerto e o
+ * "não pago" são DELA; a entrega e o parcelamento são sempre do pedido.
+ */
+function acoesDaLinha(pedido: PedidoDaComissao): AcoesDaLinha {
+  const parcela = pedido.parcela?.id;
+
+  return {
+    acerto: parcela ? salvarAcertoParcela.bind(null, parcela) : salvarAcerto.bind(null, pedido.id),
+    entrega: salvarEntrega.bind(null, pedido.id),
+    naoPago: parcela ? marcarParcelaNaoPaga.bind(null, parcela) : marcarNaoPago.bind(null, pedido.id),
+    desmarcarNaoPago: parcela
+      ? desmarcarParcelaNaoPaga.bind(null, parcela)
+      : desmarcarNaoPago.bind(null, pedido.id),
+    parcelas: salvarParcelas.bind(null, pedido.id),
+    desfazerParcelas: desfazerParcelas.bind(null, pedido.id),
+  };
+}
+
 /** "AAAA-MM-DD" em UTC — é o que o input `date` espera, e a coluna não tem hora. */
 function iso(data: Date | null): string | null {
   return data ? data.toISOString().slice(0, 10) : null;
@@ -633,6 +717,8 @@ function paraLinha(
   pedido: PedidoDaComissao,
   ehAdmin: boolean,
   cores: Map<string, string>,
+  tela: { mes: string; hoje: string },
+  lugar: LinhaPedido["lugar"],
 ): LinhaPedido {
   /*
    * O cancelado vale ZERO aqui, e não o que valeria se tivesse ido em frente.
@@ -714,6 +800,17 @@ function paraLinha(
     rateioRecebido: cancelado ? null : fatias(recebido),
     // Quem recebe da indústria é o escritório; é ele que lança o acerto.
     podeAcertar: ehAdmin && !cancelado,
+    atraso: {
+      naoPaga: !cancelado && pedido.comissaoNaoPaga,
+      // O mês para o qual foi adiado é o mês em que conta, quando não é o dela.
+      para: pedido.competencia !== pedido.competenciaNatural ? pedido.competencia : null,
+    },
+    mesNatural: pedido.competenciaNatural,
+    mesDaTela: tela.mes,
+    hoje: tela.hoje,
+    lugar,
+    // Só na lista de pendentes, que mistura as indústrias numa tabela só.
+    industria: lugar === "pendente" ? pedido.fornecedor.nome : null,
   };
 }
 

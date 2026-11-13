@@ -179,6 +179,13 @@ export function Parcelamento() {
 
       <ul className="space-y-1.5 text-corpo text-tinta-2 list-disc pl-5 max-w-2xl">
         <li>
+          Há duas formas de montar, e o painel pergunta qual:{" "}
+          <strong className="text-tinta">por dias depois da entrega</strong> (28/35/42) ou{" "}
+          <strong className="text-tinta">escolhendo as datas</strong> — você diz quantas parcelas são e a data
+          da primeira, e troca cada uma no calendário. Nas duas, a data e o valor de qualquer parcela se
+          mudam depois.
+        </li>
+        <li>
           O campo de dias abre com o <strong className="text-tinta">prazo de pagamento do pedido</strong>, só
           como ponto de partida. Quem decide as parcelas é você: apague e escreva os dias que combinou com a
           indústria, quantos quiser — com barra (30/60/90) ou, no celular, com vírgula (30,60,90). Um toque no
@@ -192,12 +199,18 @@ export function Parcelamento() {
           Depois de parcelado, cada parcela tem o seu acerto. Se o pedido inteiro já foi acertado, desfaça o
           acerto antes de parcelar.
         </li>
-        <li>Parcelou errado? “Desfazer” volta o pedido a uma linha só, e dá para parcelar de novo.</li>
+        <li>
+          Uma parcela atrasou? Na linha dela, “Lançar acerto” → “Ainda não foi paga”: só ela muda de mês, as
+          outras ficam onde estão.
+        </li>
+        <li>
+          Parcelou errado? “Desfazer parcelamento” volta o pedido a uma linha só, e dá para parcelar de novo.
+        </li>
       </ul>
 
       <Onde>
         <Link href="/comissoes" className="text-carimbo hover:underline">Comissões</Link> → a linha do pedido →
-        “Parcelar o recebimento” → os seus dias → “Dividir em partes iguais” → “Salvar parcelas”
+        “Lançar acerto” → “Recebo em parcelas” → os seus dias ou as suas datas → “Salvar parcelas”
       </Onde>
     </div>
   );

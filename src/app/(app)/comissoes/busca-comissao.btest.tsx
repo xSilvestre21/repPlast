@@ -53,7 +53,15 @@ const BASE: LinhaPedido = {
   parcelasAtuais: [],
   podeParcelar: true,
   parcelarExigeDesfazerAcerto: false,
+  atraso: { naoPaga: false, para: null },
+  mesNatural: "2026-10",
+  mesDaTela: "2026-10",
+  hoje: "2026-10",
+  lugar: "no-mes",
+  industria: null,
 };
+
+const NADA = async () => ({});
 
 /** Duas indústrias: a ERIPACK com três linhas (uma é o #300 parcelado em dois), a VEGA com uma. */
 const GRUPOS: { id: string; nome: string; linhas: LinhaPedido[] }[] = [
@@ -111,9 +119,15 @@ async function abrir() {
                   key={chaveDaLinha(l.id, l.parcela?.numero ?? null)}
                   pedido={l}
                   comPercentual
-                  salvar={async () => ({})}
-                  salvarParcelas={async () => ({})}
-                  desfazerParcelas={async () => ({})}
+                  acoes={{
+                    acerto: NADA,
+                    entrega: NADA,
+                    naoPago: NADA,
+                    desmarcarNaoPago: NADA,
+                    parcelas: NADA,
+                    desfazerParcelas: NADA,
+                  }}
+                  enderecoDoMes="/comissoes?mes=__MES__"
                 />
               ))}
             </Tabela>
@@ -206,6 +220,8 @@ describe("busca de Comissões", () => {
     const linha77 = linhasDo(container, 77)[0];
     (linha77.querySelector("button") as HTMLButtonElement).click();
     const painel = linha77.nextElementSibling as HTMLTableRowElement;
+    // O painel só é montado quando a linha abre pela primeira vez.
+    await expect.poll(() => painel.querySelector('input[name="valorRecebido"]')).not.toBeNull();
     const campo = painel.querySelector<HTMLInputElement>('input[name="valorRecebido"]')!;
     await expect.poll(() => visivel(campo)).toBe(true);
     await userEvent.fill(campo, "12345");

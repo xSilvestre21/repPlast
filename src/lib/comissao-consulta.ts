@@ -22,6 +22,7 @@ import {
   type ResumoComissao,
   type SaldoRepasse,
 } from "./comissao";
+import { competenciaDoItem } from "./adiamento";
 import type { DbOrganizacao } from "./db";
 import { nomeCompleto } from "./nome-usuario";
 import { mesDoRecebimento } from "./parcelas";
@@ -51,14 +52,27 @@ export interface PedidoDaComissao {
    * pedido (ou cada parcela) conta no mês em que ela paga (`mesDoRecebimento`).
    */
   diaFechamentoComissao: number | null;
+  /**
+   * O pagamento atrasado deste item (`lib/adiamento.ts`): "não pago" sem
+   * previsão, ou o mês para o qual foi adiado. Como o acerto, são os do pedido
+   * no pedido inteiro e os DA PARCELA quando o item é uma.
+   */
+  comissaoNaoPaga: boolean;
+  comissaoAdiadaPara: string | null;
 
   /**
    * O mês em que ESTE item conta: o da entrega (pedido inteiro) ou o do
    * vencimento (parcela) — ou depois dele, quando a indústria só paga após
-   * faturar (`mesDoRecebimento`). É por aqui que tudo agrupa por mês — não mais
-   * por `competenciaDoPedido`, que não sabe de parcela.
+   * faturar (`mesDoRecebimento`) —, a não ser que o pagamento tenha sido adiado:
+   * aí é o mês em que a indústria paga. É por aqui que tudo agrupa por mês —
+   * não mais por `competenciaDoPedido`, que não sabe de parcela.
    */
   competencia: string;
+  /**
+   * O mês DELE, antes de qualquer adiamento. Igual a `competencia` em quase
+   * todo item; diferente, o item está à vista neste mês e somando no outro.
+   */
+  competenciaNatural: string;
   /**
    * Preenchido quando o item é UMA parcela de um pedido parcelado. Aí
    * `subtotalSemIpi` e o acerto deixam de ser os do pedido e passam a ser os
@@ -85,12 +99,14 @@ export interface ParcelaDoPedido {
   base: { toString(): string };
   valorRecebido: { toString(): string } | null;
   comissaoPercentualRecebido: { toString(): string } | null;
+  comissaoNaoPaga: boolean;
+  comissaoAdiadaPara: string | null;
 }
 
 /** O pedido como sai do banco, antes de virar item: sem os campos derivados. */
 type PedidoBruto = Omit<
   PedidoDaComissao,
-  "competencia" | "parcela" | "vendaDoPedido" | "parcelasDoPedido"
+  "competencia" | "competenciaNatural" | "parcela" | "vendaDoPedido" | "parcelasDoPedido"
 >;
 
 /**
@@ -104,7 +120,11 @@ type PedidoBruto = Omit<
  * uma esquecer para o mês somar o pedido inteiro e a parcela juntos.
  *
  * O acerto do pedido é ignorado no parcelado: a ação de parcelar recusa pedido
- * já acertado, e cada parcela passa a ter o seu.
+ * já acertado, e cada parcela passa a ter o seu. O atraso também: parcelar
+ * limpa o do pedido, e cada parcela tem o dela.
+ *
+ * O adiamento entra aqui pelo mesmo motivo do parcelamento: `competencia` é o
+ * mês em que a indústria paga, e ninguém depois daqui precisa saber por quê.
  */
 export function expandirParcelas(
   pedido: PedidoBruto,
@@ -113,13 +133,15 @@ export function expandirParcelas(
   const ordenadas = [...parcelas].sort((a, b) => a.numero - b.numero);
 
   if (ordenadas.length === 0) {
+    const natural = mesDoRecebimento(
+      (pedido.prazoEntrega ?? pedido.criadoEm).toISOString().slice(0, 10),
+      pedido.diaFechamentoComissao,
+    );
     return [
       {
         ...pedido,
-        competencia: mesDoRecebimento(
-          (pedido.prazoEntrega ?? pedido.criadoEm).toISOString().slice(0, 10),
-          pedido.diaFechamentoComissao,
-        ),
+        competencia: competenciaDoItem(natural, pedido.comissaoAdiadaPara),
+        competenciaNatural: natural,
         parcela: null,
         vendaDoPedido: pedido.subtotalSemIpi,
         parcelasDoPedido: [],
@@ -128,16 +150,20 @@ export function expandirParcelas(
   }
 
   return ordenadas.map((p) => {
-    const recebimento = mesDoRecebimento(
+    const natural = mesDoRecebimento(
       p.vencimento.toISOString().slice(0, 10),
       pedido.diaFechamentoComissao,
     );
+    const recebimento = competenciaDoItem(natural, p.comissaoAdiadaPara);
     return {
       ...pedido,
       subtotalSemIpi: p.base,
       valorRecebido: p.valorRecebido,
       comissaoPercentualRecebido: p.comissaoPercentualRecebido,
+      comissaoNaoPaga: p.comissaoNaoPaga,
+      comissaoAdiadaPara: p.comissaoAdiadaPara,
       competencia: recebimento,
+      competenciaNatural: natural,
       parcela: {
         id: p.id,
         numero: p.numero,
@@ -251,6 +277,8 @@ const CAMPOS_DA_COMISSAO = {
   fornecedor: { select: { id: true, nome: true, comissaoPercentual: true } },
   prazoPagamento: true,
   diaFechamentoComissao: true,
+  comissaoNaoPaga: true,
+  comissaoAdiadaPara: true,
 } as const;
 
 /**
@@ -311,10 +339,41 @@ async function parcelasDe(db: DbOrganizacao, pedidoIds: string[]) {
       base: true,
       valorRecebido: true,
       comissaoPercentualRecebido: true,
+      comissaoNaoPaga: true,
+      comissaoAdiadaPara: true,
     },
   });
 
   return Map.groupBy(parcelas, (p) => p.pedidoId);
+}
+
+/** A data pela qual os itens se ordenam: o vencimento da parcela, ou a entrega. */
+function quando(item: PedidoDaComissao): number {
+  return (item.parcela?.vencimento ?? item.prazoEntrega ?? item.criadoEm).getTime();
+}
+
+/** A ordem das listas de comissão: pela data, depois pelo número e pela parcela. */
+export function porDataDoItem(a: PedidoDaComissao, b: PedidoDaComissao): number {
+  return (
+    quando(a) - quando(b) ||
+    a.numero - b.numero ||
+    (a.parcela?.numero ?? 0) - (b.parcela?.numero ?? 0)
+  );
+}
+
+/** Os pedidos como vieram do banco, já em itens: com o preposto e as parcelas abertas. */
+async function emItens<
+  T extends Omit<PedidoBruto, "representante"> & { representanteId: string | null },
+>(db: DbOrganizacao, brutos: T[]): Promise<PedidoDaComissao[]> {
+  const [pedidos, parcelas] = await Promise.all([
+    comRepresentante(db, brutos),
+    parcelasDe(
+      db,
+      brutos.map((p) => p.id),
+    ),
+  ]);
+
+  return pedidos.flatMap((pedido) => expandirParcelas(pedido, parcelas.get(pedido.id) ?? []));
 }
 
 /**
@@ -327,6 +386,11 @@ async function parcelasDe(db: DbOrganizacao, pedidoIds: string[]) {
  * antes. Depois de abrir as parcelas, o filtro final é pela competência de cada
  * item: o pedido parcelado que veio pela entrega mas não tem parcela na janela
  * sai aqui.
+ *
+ * E o de pagamento ADIADO para a janela, que pode ser de muitos meses antes —
+ * fora do recuo de dois meses do fechamento, e por isso buscado pelo mês
+ * gravado nele. O que foi adiado para FORA da janela vem pela entrega e sai no
+ * filtro final, como a parcela.
  *
  * O mês e a janela passam ambos por esta função, e é isso que garante o ponto
  * de setembro no gráfico ser o número de setembro na apuração.
@@ -354,32 +418,18 @@ async function itensEnviadosEntre(
         { prazoEntrega: { gte: desde, lt: ate } },
         { prazoEntrega: null, criadoEm: { gte: desde, lt: ate } },
         { parcelas: { some: { vencimento: { gte: desde, lt: ate } } } },
+        // "AAAA-MM" compara como texto, na mesma ordem dos meses.
+        { comissaoAdiadaPara: { gte: deCompetencia, lte: ateCompetencia } },
+        { parcelas: { some: { comissaoAdiadaPara: { gte: deCompetencia, lte: ateCompetencia } } } },
       ],
       ...(apenasDoPreposto ? { representanteId: apenasDoPreposto } : {}),
     },
     select: CAMPOS_DA_COMISSAO,
   });
 
-  const [pedidos, parcelas] = await Promise.all([
-    comRepresentante(db, brutos),
-    parcelasDe(
-      db,
-      brutos.map((p) => p.id),
-    ),
-  ]);
-
-  const quando = (item: PedidoDaComissao) =>
-    (item.parcela?.vencimento ?? item.prazoEntrega ?? item.criadoEm).getTime();
-
-  return pedidos
-    .flatMap((pedido) => expandirParcelas(pedido, parcelas.get(pedido.id) ?? []))
+  return (await emItens(db, brutos))
     .filter((item) => item.competencia >= deCompetencia && item.competencia <= ateCompetencia)
-    .sort(
-      (a, b) =>
-        quando(a) - quando(b) ||
-        a.numero - b.numero ||
-        (a.parcela?.numero ?? 0) - (b.parcela?.numero ?? 0),
-    );
+    .sort(porDataDoItem);
 }
 
 /**
@@ -445,9 +495,79 @@ export async function canceladosDaCompetencia(
   // Inteiro, sem abrir parcela: o cancelado está na lista para ser visto, não
   // somado, e parcela de pedido cancelado não vence. Nem o fechamento o muda
   // de mês — a indústria não paga o que não faturou, e ele fica no da entrega.
+  // O atraso também não: cancelado não tem pagamento a esperar.
   return (await comRepresentante(db, pedidos)).flatMap((p) =>
-    expandirParcelas({ ...p, diaFechamentoComissao: null }, []),
+    expandirParcelas(
+      { ...p, diaFechamentoComissao: null, comissaoNaoPaga: false, comissaoAdiadaPara: null },
+      [],
+    ),
   );
+}
+
+/**
+ * Os itens DESTE mês cujo pagamento foi adiado para outro — para aparecer, não
+ * para somar.
+ *
+ * É o pedido de agosto que a indústria só paga em novembro: ele soma em
+ * novembro (`pedidosDaCompetencia` o traz lá), e continua à vista em agosto,
+ * com o selo, porque foi em agosto que ele foi vendido e entregue. Mesmo corte
+ * do cancelado: quem mostra pede as duas listas e soma só a primeira.
+ *
+ * Sem filtro de data: pedido adiado é exceção, e o índice parcial os acha.
+ */
+export async function adiadosDaCompetencia(
+  db: DbOrganizacao,
+  organizacaoId: string,
+  competencia: string,
+  apenasDoPreposto?: string | null,
+) {
+  const brutos = await db.pedido.findMany({
+    where: {
+      organizacaoId,
+      status: "ENVIADO",
+      amostra: false,
+      OR: [
+        { comissaoAdiadaPara: { not: null } },
+        { parcelas: { some: { comissaoAdiadaPara: { not: null } } } },
+      ],
+      ...(apenasDoPreposto ? { representanteId: apenasDoPreposto } : {}),
+    },
+    select: CAMPOS_DA_COMISSAO,
+  });
+
+  return (await emItens(db, brutos))
+    .filter((item) => item.competenciaNatural === competencia && item.competencia !== competencia)
+    .sort(porDataDoItem);
+}
+
+/**
+ * Os itens "não pagos", sem previsão, de meses ANTERIORES a este — a lista
+ * "pendentes de meses anteriores" da tela.
+ *
+ * Eles somam no mês deles, em "a acertar"; aqui só aparecem, para o que a
+ * indústria deve não sumir de vista quando o mês vira. Saem da lista quando o
+ * acerto é lançado ou quando se escolhe o mês em que ela paga.
+ */
+export async function pendentesAnteriores(
+  db: DbOrganizacao,
+  organizacaoId: string,
+  competencia: string,
+  apenasDoPreposto?: string | null,
+) {
+  const brutos = await db.pedido.findMany({
+    where: {
+      organizacaoId,
+      status: "ENVIADO",
+      amostra: false,
+      OR: [{ comissaoNaoPaga: true }, { parcelas: { some: { comissaoNaoPaga: true } } }],
+      ...(apenasDoPreposto ? { representanteId: apenasDoPreposto } : {}),
+    },
+    select: CAMPOS_DA_COMISSAO,
+  });
+
+  return (await emItens(db, brutos))
+    .filter((item) => item.comissaoNaoPaga && item.competencia < competencia)
+    .sort(porDataDoItem);
 }
 
 /**

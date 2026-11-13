@@ -9,8 +9,9 @@ import {
   falhou,
   type EstadoFormulario,
 } from "@/lib/erro-formulario";
+import { ehCompetencia, nomeDaCompetencia, problemaNoAdiamento } from "@/lib/adiamento";
 import { exigirNumero, exigirNumeroDe } from "@/lib/numero-br";
-import { problemaNasParcelas } from "@/lib/parcelas";
+import { mesDoRecebimento, problemaNasParcelas } from "@/lib/parcelas";
 import { escopoAtual, exigirAdmin } from "@/lib/sessao";
 
 export type { EstadoFormulario };
@@ -86,7 +87,7 @@ export async function definirMeta(
 }
 
 /**
- * Lê o acerto do formulário: valor recebido, percentual e data de entrega.
+ * Lê o acerto do formulário: valor recebido e percentual.
  *
  * NADA aqui é deduzido. O valor e o percentual são os dois digitados, porque
  * pagar uma base menor e pagar a base cheia com percentual menor são acordos
@@ -96,56 +97,67 @@ export async function definirMeta(
  * O mesmo formulário serve ao pedido inteiro e a cada parcela, então a leitura
  * é uma só — as duas formas de acertar não podem aceitar coisas diferentes.
  *
- * O botão "desfazer acerto" envia o mesmo formulário com `desfazer=sim`: o
- * valor e o % saem, seja o que for que esteja nos campos, e a data de entrega
- * fica como está nela.
+ * Os dois vêm juntos ou não vem nenhum: meio acerto não é acerto. Os dois em
+ * branco deixam o pedido sem acerto — é como se troca só o mês em que a
+ * indústria paga (`lerFechamento`), que vai no mesmo formulário.
+ *
+ * A data de entrega NÃO vem mais aqui: tem o formulário dela (`salvarEntrega`),
+ * porque a mercadoria chega antes do dinheiro e ela não salvava sem o valor.
+ *
+ * O botão "Desfazer acerto" envia o mesmo formulário com `desfazer=sim`: o
+ * valor e o % saem, seja o que for que esteja nos campos.
  */
-function lerAcerto(formData: FormData): {
-  valor: string | null;
-  percentual: string | null;
-  entregueEm: Date | null;
-} {
-  const desfazer = formData.get("desfazer") === "sim";
-  const valor = desfazer
-    ? null
-    : exigirNumero(formData, "valorRecebido", "o valor recebido", {
-        min: 0,
-        exemplo: "1.250,00",
-      });
-  const percentual = desfazer
-    ? null
-    : exigirNumero(formData, "comissaoPercentualRecebido", "o percentual", {
-        min: 0,
-        max: 100,
-        exemplo: "5",
-      });
+function lerAcerto(formData: FormData): { valor: string | null; percentual: string | null } {
+  if (formData.get("desfazer") === "sim") return { valor: null, percentual: null };
 
-  // Meio acerto não é acerto: sem os dois, a comissão recebida não existe. A
-  // frase vai para o campo que ficou vazio.
+  const valor = exigirNumero(formData, "valorRecebido", "o valor da venda", {
+    min: 0,
+    exemplo: "1.250,00",
+  });
+  const percentual = exigirNumero(formData, "comissaoPercentualRecebido", "o percentual", {
+    min: 0,
+    max: 100,
+    exemplo: "5",
+  });
+
+  // A frase vai para o campo que ficou vazio.
   if ((valor === null) !== (percentual === null)) {
     throw new ErroDeCampo(
       valor === null ? "valorRecebido" : "comissaoPercentualRecebido",
       valor === null
-        ? "Informe também o valor recebido — o acerto precisa dos dois. Para desfazer um acerto, use “desfazer acerto”."
-        : "Informe também o percentual — o acerto precisa dos dois. Para desfazer um acerto, use “desfazer acerto”.",
+        ? "Informe o valor da venda sobre a qual a indústria pagou, como 1.250,00 — ou toque em " +
+          "“Pagou o valor todo”. Se ela ainda não pagou, escolha “Ainda não foi pago”."
+        : "Informe também o percentual da comissão, como 5 — o acerto precisa dos dois.",
     );
   }
-
-  const entregaBruta = String(formData.get("entregueEm") ?? "").trim();
-  const entregueEm =
-    entregaBruta === ""
-      ? null
-      : dataDoCampo(
-          entregaBruta,
-          "entregueEm",
-          "Esta data de entrega não é válida. Escolha a data de novo no calendário.",
-        );
 
   return {
     valor: valor === null ? null : String(valor),
     percentual: percentual === null ? null : String(percentual),
-    entregueEm,
   };
+}
+
+/**
+ * "Em que mês a indústria pagou?" — o campo que o acerto mostra quando a linha
+ * estava marcada como não paga ou adiada.
+ *
+ * `undefined`: o formulário não trouxe o campo, e o mês gravado fica como está.
+ * `null`: pagou no próprio mês da comissão, e o adiamento sai.
+ */
+function lerContaEm(formData: FormData, natural: string): string | null | undefined {
+  const bruto = formData.get("contaEm");
+  if (bruto === null) return undefined;
+
+  const mes = String(bruto).trim();
+  if (mes === "" || mes === natural) return null;
+
+  if (!ehCompetencia(mes) || mes < natural) {
+    throw new ErroDeCampo(
+      "contaEm",
+      `Escolha ${nomeDaCompetencia(natural)}, que é o mês desta comissão, ou um mês depois dele.`,
+    );
+  }
+  return mes;
 }
 
 /**
@@ -167,13 +179,64 @@ function lerFechamento(formData: FormData): number | null | undefined {
   });
 }
 
+function iso(data: Date): string {
+  return data.toISOString().slice(0, 10);
+}
+
+/**
+ * Registra o dia em que a indústria entregou a mercadoria — e só isso.
+ *
+ * É controle de entrega: serve para mostrar se a indústria cumpriu o prazo.
+ * Não mexe no mês nem no valor da comissão, e por isso não depende de acerto
+ * nenhum. Era um campo do formulário do acerto, que recusava salvar a data sem
+ * o valor recebido — e a mercadoria quase sempre chega antes do dinheiro.
+ *
+ * Em branco, apaga a data: a entrega lançada no pedido errado se desfaz assim.
+ */
+export async function salvarEntrega(
+  pedidoId: string,
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    await exigirAdmin();
+    const { organizacaoId, db } = await escopoAtual();
+
+    const bruta = String(formData.get("entregueEm") ?? "").trim();
+    const entregueEm =
+      bruta === ""
+        ? null
+        : dataDoCampo(
+            bruta,
+            "entregueEm",
+            "Esta data de entrega não é válida. Escolha a data de novo no calendário.",
+          );
+
+    const { count } = await db.pedido.updateMany({
+      where: { id: pedidoId, organizacaoId },
+      data: { entregueEm },
+    });
+    if (count === 0) throw new ErroParaUsuario(PEDIDO_SUMIU);
+  } catch (erro) {
+    return falhou(erro, formData);
+  }
+
+  revalidatePath("/comissoes");
+  revalidatePath(`/pedidos/${pedidoId}`);
+  return {};
+}
+
 /**
  * Lança o acerto da comissão de um pedido: o que a indústria pagou de fato.
  *
- * Os campos se apagam juntos: deixar tudo em branco desfaz o acerto e o pedido
- * volta a contar só como previsto. No pedido parcelado o acerto é de cada
- * parcela (`salvarAcertoParcela`), e este caminho recusa — um acerto no pedido
- * inteiro ficaria por baixo das parcelas sem contar em lugar nenhum.
+ * No pedido parcelado o acerto é de cada parcela (`salvarAcertoParcela`), e
+ * este caminho recusa — um acerto no pedido inteiro ficaria por baixo das
+ * parcelas sem contar em lugar nenhum.
+ *
+ * Lançar o acerto tira o "não pago": a indústria pagou. O mês para o qual o
+ * pagamento foi adiado FICA (ou vem do formulário, em `contaEm`): é nele que o
+ * dinheiro entrou. Só cai quando o fechamento escolhido aqui empurra o mês da
+ * comissão para além dele — adiado para antes do próprio mês não existe.
  */
 export async function salvarAcerto(
   pedidoId: string,
@@ -197,17 +260,33 @@ export async function salvarAcerto(
 
     const alvo = await db.pedido.findFirst({
       where: { id: pedidoId, organizacaoId },
-      select: { amostra: true },
+      select: {
+        amostra: true,
+        prazoEntrega: true,
+        criadoEm: true,
+        diaFechamentoComissao: true,
+        comissaoAdiadaPara: true,
+      },
     });
-    if (alvo?.amostra) throw new ErroParaUsuario(AMOSTRA_SEM_COMISSAO);
+    if (!alvo) throw new ErroParaUsuario(PEDIDO_SUMIU);
+    if (alvo.amostra) throw new ErroParaUsuario(AMOSTRA_SEM_COMISSAO);
+
+    const natural = mesDoRecebimento(
+      iso(alvo.prazoEntrega ?? alvo.criadoEm),
+      diaFechamento === undefined ? alvo.diaFechamentoComissao : diaFechamento,
+    );
+    const contaEm = lerContaEm(formData, natural);
+    const adiadaPara = contaEm === undefined ? alvo.comissaoAdiadaPara : contaEm;
 
     const { count } = await db.pedido.updateMany({
       where: { id: pedidoId, organizacaoId },
       data: {
         valorRecebido: acerto.valor,
         comissaoPercentualRecebido: acerto.percentual,
-        entregueEm: acerto.entregueEm,
         diaFechamentoComissao: diaFechamento,
+        // Desfazer o acerto não desfaz o atraso: são dois botões.
+        ...(acerto.valor === null ? {} : { comissaoNaoPaga: false }),
+        comissaoAdiadaPara: adiadaPara && adiadaPara > natural ? adiadaPara : null,
       },
     });
 
@@ -217,24 +296,24 @@ export async function salvarAcerto(
   }
 
   revalidatePath("/comissoes");
+  revalidatePath("/");
   revalidatePath(`/pedidos/${pedidoId}`);
   return {};
 }
 
+const PARCELA_SUMIU =
+  "Esta parcela não foi encontrada — o parcelamento pode ter sido refeito em outra tela. " +
+  "Recarregue a página.";
+
 /**
  * O acerto de UMA parcela — o que a indústria pagou quando o cliente pagou
- * aquela parte.
- *
- * A data de entrega continua sendo do pedido (a mercadoria chegou uma vez só),
- * então ela é gravada nele, venha do formulário de qual parcela vier.
+ * aquela parte. Com o atraso dela, como no pedido inteiro (`salvarAcerto`).
  */
 export async function salvarAcertoParcela(
   parcelaId: string,
   _estado: EstadoFormulario,
   formData: FormData,
 ): Promise<EstadoFormulario> {
-  let pedidoId = "";
-
   try {
     // Acertar é do escritório: o preposto lê a comissão, não a lança.
     await exigirAdmin();
@@ -244,34 +323,231 @@ export async function salvarAcertoParcela(
 
     const parcela = await db.parcelaRecebimento.findFirst({
       where: { id: parcelaId, pedido: { organizacaoId } },
-      select: { pedidoId: true },
+      select: {
+        vencimento: true,
+        comissaoAdiadaPara: true,
+        pedido: { select: { diaFechamentoComissao: true } },
+      },
     });
-    if (!parcela) {
-      throw new ErroParaUsuario(
-        "Esta parcela não foi encontrada — o parcelamento pode ter sido refeito em outra tela. " +
-          "Recarregue a página.",
-      );
-    }
-    pedidoId = parcela.pedidoId;
+    if (!parcela) throw new ErroParaUsuario(PARCELA_SUMIU);
+
+    const natural = mesDoRecebimento(iso(parcela.vencimento), parcela.pedido.diaFechamentoComissao);
+    const contaEm = lerContaEm(formData, natural);
 
     await db.parcelaRecebimento.update({
       where: { id: parcelaId },
       data: {
         valorRecebido: acerto.valor,
         comissaoPercentualRecebido: acerto.percentual,
+        ...(acerto.valor === null ? {} : { comissaoNaoPaga: false }),
+        ...(contaEm === undefined ? {} : { comissaoAdiadaPara: contaEm }),
       },
-    });
-
-    await db.pedido.updateMany({
-      where: { id: pedidoId, organizacaoId },
-      data: { entregueEm: acerto.entregueEm },
     });
   } catch (erro) {
     return falhou(erro, formData);
   }
 
   revalidatePath("/comissoes");
-  revalidatePath(`/pedidos/${pedidoId}`);
+  revalidatePath("/");
+  return {};
+}
+
+/* -------------------------------------------------------------------------- */
+/* Pagamento atrasado                                                         */
+/* -------------------------------------------------------------------------- */
+
+/** A linha que atrasou: o pedido inteiro, ou uma parcela dele. */
+type Alvo = { pedido: string } | { parcela: string };
+
+/**
+ * O que a escolha "ainda não foi pago" grava: sem previsão, ou o mês.
+ *
+ * `quando` é o rádio da tela (`nao-pago.tsx`); `mes`, o seletor, que só vale
+ * com "mes". Adiar é para depois do mês da comissão (`problemaNoAdiamento`).
+ */
+function lerAtraso(formData: FormData, natural: string): { naoPaga: boolean; para: string | null } {
+  if (formData.get("quando") !== "mes") return { naoPaga: true, para: null };
+
+  const mes = String(formData.get("mes") ?? "").trim();
+  const problema = problemaNoAdiamento(natural, mes);
+  if (problema) throw new ErroDeCampo("mes", problema);
+
+  return { naoPaga: false, para: mes };
+}
+
+/**
+ * Grava (ou tira, com `atraso` nulo) o atraso de um pedido ou de uma parcela.
+ *
+ * Uma função para os dois alvos e as duas direções: as recusas são as mesmas, e
+ * quatro cópias delas divergiriam na primeira frase corrigida.
+ *
+ * Marcar exige a linha SEM acerto: "não pago" com valor recebido é contradição,
+ * e mudar de mês um dinheiro já conferido pede que a pessoa desfaça o acerto de
+ * propósito — é o mesmo cuidado de parcelar por cima dele. Tirar o atraso não
+ * exige: é como se volta ao mês da comissão um acerto lançado no mês errado.
+ */
+async function gravarAtraso(alvo: Alvo, formData: FormData | null): Promise<void> {
+  // Como o acerto, é do escritório: é ele quem recebe da indústria.
+  await exigirAdmin();
+  const { organizacaoId, db } = await escopoAtual();
+
+  if ("parcela" in alvo) {
+    const parcela = await db.parcelaRecebimento.findFirst({
+      where: { id: alvo.parcela, pedido: { organizacaoId } },
+      select: {
+        numero: true,
+        vencimento: true,
+        valorRecebido: true,
+        pedido: { select: { status: true, diaFechamentoComissao: true } },
+      },
+    });
+    if (!parcela) throw new ErroParaUsuario(PARCELA_SUMIU);
+
+    if (formData === null) {
+      await db.parcelaRecebimento.update({
+        where: { id: alvo.parcela },
+        data: { comissaoNaoPaga: false, comissaoAdiadaPara: null },
+      });
+      return;
+    }
+
+    if (parcela.pedido.status === "CANCELADO") throw new ErroParaUsuario(CANCELADO_SEM_ATRASO);
+    if (parcela.valorRecebido !== null) {
+      throw new ErroParaUsuario(
+        `A parcela ${parcela.numero} já tem acerto lançado. Para marcá-la como não paga, use ` +
+          "“Desfazer acerto” antes, em “Recebi esta parcela”.",
+      );
+    }
+
+    const atraso = lerAtraso(
+      formData,
+      mesDoRecebimento(iso(parcela.vencimento), parcela.pedido.diaFechamentoComissao),
+    );
+    await db.parcelaRecebimento.update({
+      where: { id: alvo.parcela },
+      data: { comissaoNaoPaga: atraso.naoPaga, comissaoAdiadaPara: atraso.para },
+    });
+    return;
+  }
+
+  const pedido = await db.pedido.findFirst({
+    where: { id: alvo.pedido, organizacaoId },
+    select: {
+      status: true,
+      amostra: true,
+      prazoEntrega: true,
+      criadoEm: true,
+      diaFechamentoComissao: true,
+      valorRecebido: true,
+    },
+  });
+  if (!pedido) throw new ErroParaUsuario(PEDIDO_SUMIU);
+
+  if (formData === null) {
+    await db.pedido.updateMany({
+      where: { id: alvo.pedido, organizacaoId },
+      data: { comissaoNaoPaga: false, comissaoAdiadaPara: null },
+    });
+    return;
+  }
+
+  if (pedido.amostra) throw new ErroParaUsuario(AMOSTRA_SEM_COMISSAO);
+  if (pedido.status === "CANCELADO") throw new ErroParaUsuario(CANCELADO_SEM_ATRASO);
+  if ((await db.parcelaRecebimento.count({ where: { pedidoId: alvo.pedido } })) > 0) {
+    throw new ErroParaUsuario(
+      "Este pedido foi parcelado: marque como não paga a parcela que atrasou, nas linhas logo " +
+        "abaixo. Recarregue a página se elas não aparecerem.",
+    );
+  }
+  if (pedido.valorRecebido !== null) {
+    throw new ErroParaUsuario(
+      "Este pedido já tem acerto lançado. Para marcá-lo como não pago, use “Desfazer acerto” " +
+        "antes, em “Recebi”.",
+    );
+  }
+
+  const atraso = lerAtraso(
+    formData,
+    mesDoRecebimento(iso(pedido.prazoEntrega ?? pedido.criadoEm), pedido.diaFechamentoComissao),
+  );
+  await db.pedido.updateMany({
+    where: { id: alvo.pedido, organizacaoId },
+    data: { comissaoNaoPaga: atraso.naoPaga, comissaoAdiadaPara: atraso.para },
+  });
+}
+
+const CANCELADO_SEM_ATRASO =
+  "Pedido cancelado não tem comissão a receber, e por isso não há pagamento a esperar.";
+
+function atrasoGravado() {
+  revalidatePath("/comissoes");
+  // O painel inicial e os gráficos somam por mês, e o mês acabou de mudar.
+  revalidatePath("/");
+  revalidatePath("/graficos");
+}
+
+/**
+ * Marca o pedido como não pago: a indústria atrasou a comissão.
+ *
+ * Sem previsão, ele continua no mês dele, a acertar, e aparece nos meses
+ * seguintes como pendente. Com o mês, a comissão passa a contar nele — e o
+ * pedido continua à vista no mês em que foi entregue, com o selo, fora da soma.
+ */
+export async function marcarNaoPago(
+  pedidoId: string,
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    await gravarAtraso({ pedido: pedidoId }, formData);
+  } catch (erro) {
+    return falhou(erro, formData);
+  }
+  atrasoGravado();
+  return {};
+}
+
+/** O mesmo, para UMA parcela: as outras continuam onde estão. */
+export async function marcarParcelaNaoPaga(
+  parcelaId: string,
+  _estado: EstadoFormulario,
+  formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    await gravarAtraso({ parcela: parcelaId }, formData);
+  } catch (erro) {
+    return falhou(erro, formData);
+  }
+  atrasoGravado();
+  return {};
+}
+
+/** Tira o "não pago" e o adiamento: a comissão volta ao mês dela. */
+export async function desmarcarNaoPago(
+  pedidoId: string,
+  _estado: EstadoFormulario,
+  _formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    await gravarAtraso({ pedido: pedidoId }, null);
+  } catch (erro) {
+    return falhou(erro);
+  }
+  atrasoGravado();
+  return {};
+}
+
+export async function desmarcarParcelaNaoPaga(
+  parcelaId: string,
+  _estado: EstadoFormulario,
+  _formData: FormData,
+): Promise<EstadoFormulario> {
+  try {
+    await gravarAtraso({ parcela: parcelaId }, null);
+  } catch (erro) {
+    return falhou(erro);
+  }
+  atrasoGravado();
   return {};
 }
 
@@ -292,6 +568,10 @@ export async function salvarAcertoParcela(
  *
  * Grava junto quando a indústria paga estas parcelas (`lerFechamento`). É do
  * pedido, que nasce com o da indústria e pode trocar.
+ *
+ * Parcelar tira o atraso marcado no pedido inteiro ("não pago", ou adiado): daqui
+ * em diante quem diz o mês é cada parcela. O atraso de uma parcela fica, a não
+ * ser que a data nova dela já passe do mês para o qual tinha sido adiada.
  */
 export async function salvarParcelas(
   pedidoId: string,
@@ -338,6 +618,7 @@ export async function salvarParcelas(
         subtotalSemIpi: true,
         valorRecebido: true,
         comissaoPercentualRecebido: true,
+        diaFechamentoComissao: true,
       },
     });
     if (!pedido) throw new ErroParaUsuario(PEDIDO_SUMIU);
@@ -348,8 +629,8 @@ export async function salvarParcelas(
 
     if (pedido.valorRecebido !== null || pedido.comissaoPercentualRecebido !== null) {
       throw new ErroParaUsuario(
-        "Este pedido já tem acerto lançado no valor inteiro. Para parcelar, apague antes o valor " +
-          "recebido e o percentual do acerto e salve.",
+        "Este pedido já tem acerto lançado no valor inteiro. Para parcelar, use “Desfazer acerto” " +
+          "antes, em “Recebi”.",
       );
     }
 
@@ -363,9 +644,25 @@ export async function salvarParcelas(
     if (acertadas.length > 0) {
       throw new ErroParaUsuario(
         `A parcela ${acertadas[0].numero} já tem acerto e não pode sair do parcelamento. ` +
-          "Apague antes o acerto dela, ou mantenha a quantidade de parcelas.",
+          "Use “Desfazer acerto” nela antes, ou mantenha a quantidade de parcelas.",
       );
     }
+
+    // A parcela adiada cuja data nova já alcança o mês do adiamento volta ao
+    // normal: "adiada" para o próprio mês, ou para antes dele, não existe.
+    const fechamento = diaFechamento === undefined ? pedido.diaFechamentoComissao : diaFechamento;
+    const adiadas = await db.parcelaRecebimento.findMany({
+      where: { pedidoId, comissaoAdiadaPara: { not: null } },
+      select: { numero: true, comissaoAdiadaPara: true },
+    });
+    const voltamAoNormal = new Set(
+      adiadas
+        .filter((a) => {
+          const nova = parcelas[a.numero - 1];
+          return nova && mesDoRecebimento(nova.vencimento, fechamento) >= a.comissaoAdiadaPara!;
+        })
+        .map((a) => a.numero),
+    );
 
     const data = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 
@@ -375,12 +672,18 @@ export async function salvarParcelas(
       where: { id: pedidoId, organizacaoId },
       data: {
         diaFechamentoComissao: diaFechamento,
+        comissaoNaoPaga: false,
+        comissaoAdiadaPara: null,
         parcelas: {
           deleteMany: { numero: { gt: parcelas.length } },
           upsert: parcelas.map((p) => ({
             where: { pedidoId_numero: { pedidoId, numero: p.numero } },
             create: { numero: p.numero, vencimento: data(p.vencimento), base: p.base },
-            update: { vencimento: data(p.vencimento), base: p.base },
+            update: {
+              vencimento: data(p.vencimento),
+              base: p.base,
+              ...(voltamAoNormal.has(p.numero) ? { comissaoAdiadaPara: null } : {}),
+            },
           })),
         },
       },
@@ -390,6 +693,7 @@ export async function salvarParcelas(
   }
 
   revalidatePath("/comissoes");
+  revalidatePath("/");
   return {};
 }
 
@@ -418,7 +722,8 @@ export async function desfazerParcelas(
     if (acertada) {
       throw new ErroParaUsuario(
         `A parcela ${acertada.numero} já tem acerto lançado. Apague os acertos das parcelas ` +
-          "antes de desfazer o parcelamento — senão o que a indústria pagou se perderia.",
+          "(“Desfazer acerto”, em cada uma) antes de desfazer o parcelamento — senão o que a " +
+          "indústria pagou se perderia.",
       );
     }
 

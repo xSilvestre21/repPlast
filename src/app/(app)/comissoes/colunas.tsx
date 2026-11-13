@@ -21,6 +21,6 @@ export function colunasDaComissao(comPercentual: boolean): ColunaTabela[] {
     { rotulo: "Previsto", alinhamento: "numero", largura: "w-32" },
     { rotulo: "Recebido", alinhamento: "numero", largura: "w-32" },
     { rotulo: "Diferença", alinhamento: "numero", largura: "w-28" },
-    { rotulo: <span className="sr-only">Acerto</span>, alinhamento: "acao", largura: "w-28" },
+    { rotulo: <span className="sr-only">Acerto</span>, alinhamento: "acao", largura: "w-36" },
   ];
 }
