@@ -100,7 +100,9 @@ export function PainelMeta({
           <div>
             <div className="flex items-center gap-2">
               <Placa icone={Wallet} tom="menta" pequena />
-              <span className="rotulo">Comissão do mês</span>
+              {/* "Recebida": a meta daqui se mede pelo que já entrou. No painel
+                  inicial ela se mede pelo previsto, e lá se chama "prevista". */}
+              <span className="rotulo">Comissão recebida no mês</span>
             </div>
             <div className="text-cifra cifra numerico mt-2">
               {formatarMoeda(alcancado)}
@@ -155,8 +157,8 @@ export function PainelMeta({
               ) : (
                 <span className="text-tinta-2">
                   Faltam{" "}
-                  <strong className="text-tinta numerico">{formatarMoeda(falta ?? 0)}</strong> para
-                  a sua meta
+                  <strong className="text-tinta numerico">{formatarMoeda(falta ?? 0)}</strong> de
+                  recebimento para a sua meta
                 </span>
               )}
               <span className="numerico text-tinta-2">{Math.round(progresso)}%</span>

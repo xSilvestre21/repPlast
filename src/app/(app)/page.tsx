@@ -347,9 +347,11 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
                 número ainda vai mudar hoje. Parado, ele seria só um enfeite
                 redondo ao lado de um rótulo.
               */}
+              {/* "Prevista": é o que os pedidos do mês devem render. O "Recebido"
+                  de Comissões é outro número, e não podia ter o mesmo nome. */}
               <Chip>
                 <span className="pulso" aria-hidden="true" />
-                Comissão de {MES.format(new Date())}
+                Comissão prevista de {MES.format(new Date())}
               </Chip>
 
               {/*
@@ -382,10 +384,16 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
                 o único momento em que a tela tem uma notícia: a meta do mês
                 saiu do lugar de "faltam tantos" e virou fato.
               */}
+              {/*
+                "Prevista", com todas as letras: aqui a meta se mede pelo
+                PREVISTO do mês, e em Comissões pelo que já foi RECEBIDO. Com o
+                mesmo nome, "meta batida" aqui e "faltam R$ 2 mil" lá pareciam
+                o sistema se contradizendo.
+              */}
               {progresso?.batida ? (
-                <span className="marcador text-corpo font-semibold">Meta batida</span>
+                <span className="marcador text-corpo font-semibold">Meta prevista batida</span>
               ) : (
-                <span className="rotulo">Sua meta</span>
+                <span className="rotulo">Meta prevista</span>
               )}
               {progresso && (
                 <span
@@ -406,10 +414,14 @@ export default async function Painel({ searchParams }: PageProps<"/">) {
                 />
                 <p className="text-rotulo text-tinta-2 mt-3 numerico">
                   {progresso.batida ? (
-                    <>{moeda(progresso.meta)} — alcançada</>
+                    <>{moeda(progresso.meta)} — alcançada no previsto</>
                   ) : (
-                    <>Faltam {moeda(progresso.falta)}</>
+                    <>Faltam {moeda(progresso.falta)} no previsto</>
                   )}
+                </p>
+                <p className="text-mini text-tinta-2 mt-1.5 leading-relaxed">
+                  Conta o que os pedidos do mês devem render. Em Comissões, a meta conta só o que já foi
+                  recebido.
                 </p>
               </div>
             ) : (

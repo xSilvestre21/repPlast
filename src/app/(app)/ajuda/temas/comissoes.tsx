@@ -94,6 +94,12 @@ export function Comissoes() {
           diz quanto é o que falta e quanto as indústrias pagaram a mais ou a menos.
         </li>
         <li>
+          A <strong className="text-tinta">meta</strong> aparece em dois lugares, medida de dois jeitos: no
+          painel inicial, a <strong className="text-tinta">meta prevista</strong> conta o que os pedidos do mês
+          devem render; em Comissões, ela conta só o que já foi <strong className="text-tinta">recebido</strong>.
+          Por isso a prevista costuma ser batida antes.
+        </li>
+        <li>
           O pedido entra no mês da <strong className="text-tinta">entrega</strong> (ou no mês que o dia de
           faturamento da indústria manda), não no mês em que foi lançado.
         </li>
