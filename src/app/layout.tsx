@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 
 import { SCRIPT_TEMA } from "@/components/alternador-tema";
+import { SCRIPT_EFEITOS } from "@/components/efeitos";
+import { MedidorDeEfeitos } from "@/components/efeitos-do-aparelho";
 import { sessaoAtual } from "@/lib/sessao";
 
 import { classesDasFontes } from "./fontes";
@@ -108,6 +110,11 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           exatamente o mesmo aviso, sem ganho.
         */}
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+        {/*
+          Os efeitos leves do aparelho mais lento (`components/efeitos.ts`),
+          pelo mesmo motivo e do mesmo jeito: decididos antes da primeira pintura.
+        */}
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_EFEITOS }} />
       </head>
       <body className="min-h-full flex flex-col font-sans">
         {/*
@@ -120,6 +127,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           junto com o conteúdo.
         */}
         <div className="aurora" aria-hidden="true" />
+        <MedidorDeEfeitos />
         {children}
       </body>
     </html>

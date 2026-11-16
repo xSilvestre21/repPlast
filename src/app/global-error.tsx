@@ -5,6 +5,7 @@ import { RefreshCw, TriangleAlert } from "lucide-react";
 import { useEffect } from "react";
 
 import { SCRIPT_TEMA } from "@/components/alternador-tema";
+import { SCRIPT_EFEITOS } from "@/components/efeitos";
 import { Botao, EstadoVazio } from "@/components/ui";
 import { CONTROLADOR } from "@/lib/lgpd";
 
@@ -38,6 +39,7 @@ export default function ErroGlobal({
       <head>
         <title>RepPlast</title>
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA }} />
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_EFEITOS }} />
       </head>
       <body className="min-h-full flex flex-col font-sans">
         <div className="aurora" aria-hidden="true" />

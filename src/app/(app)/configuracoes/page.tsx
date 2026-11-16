@@ -1,7 +1,8 @@
-import { KeyRound, Palette, Sparkles, Wind } from "lucide-react";
+import { Gauge, KeyRound, Palette, Sparkles, Wind } from "lucide-react";
 import Link from "next/link";
 
 import { EscolhaTema } from "@/components/alternador-tema";
+import { EscolhaEfeitos } from "@/components/efeitos-do-aparelho";
 
 import { Pagina } from "@/components/pagina";
 import { Botao, BotaoLink, Cabecalho, Mensagem, SecaoCartao } from "@/components/ui";
@@ -250,6 +251,16 @@ export default async function PaginaConfiguracoes({ searchParams }: PageProps<"/
               descricao="Automático segue o modo claro ou escuro do celular (ou do computador). Claro e Escuro fixam, e valem só para este navegador. O sol e a lua, no alto da tela, também fixam."
             >
               <EscolhaTema />
+            </SecaoCartao>
+          </ItemConfiguracao>
+
+          <ItemConfiguracao busca="efeitos visuais leves completos desempenho travando lento lentidão computador antigo desfoque vidro aparelho preferência">
+            <SecaoCartao
+              icone={Gauge}
+              titulo="Efeitos visuais neste aparelho"
+              descricao="Automático mede o aparelho e, se ele for mais lento, troca os desfoques (o vidro da barra do topo, a luz do fundo) por versões leves. As animações continuam. Vale só para este navegador."
+            >
+              <EscolhaEfeitos />
             </SecaoCartao>
           </ItemConfiguracao>
 

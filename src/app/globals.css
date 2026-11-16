@@ -1504,6 +1504,50 @@ body:has(> .entrega.entrega-saindo) > :not(.entrega) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Efeitos leves, no aparelho mais lento                                      */
+/*                                                                            */
+/* Outra coisa que as animações desligadas, e quase o contrário: aqui o       */
+/* MOVIMENTO FICA. Sai o que o navegador repinta por baixo dele a cada        */
+/* quadro — os desfoques —, que é o que faz a entrada de uma página andar aos */
+/* trancos num computador sem aceleração de vídeo. Quem liga é o aparelho     */
+/* (`data-efeitos`, medido em `components/efeitos-do-aparelho.tsx`), não a    */
+/* conta.                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * A luz do topo sem desfoque nem máscara. Os degradês já terminam em
+ * transparente, então a mancha continua sem borda; o que muda é a transição um
+ * pouco menos esfumada entre uma cor e outra.
+ */
+:root[data-efeitos="leves"] .aurora {
+  filter: none;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
+/*
+ * A barra do topo deixa de ser vidro: quase opaca, sem refazer o desfoque do
+ * que passa por baixo a cada quadro de rolagem e de troca de página.
+ */
+:root[data-efeitos="leves"] .barra-topo {
+  background: color-mix(in srgb, var(--papel) 96%, transparent);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* As janelas (diálogo, folha de baixo, gaveta do menu): só o escurecido. */
+:root[data-efeitos="leves"] dialog::backdrop {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* A página por trás do pedido enviado: escurece, sem desfocar. O avião voa igual. */
+:root[data-efeitos="leves"] body:has(> .entrega) > :not(.entrega) {
+  filter: none;
+  transition: none;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Tela de entrada (landing)                                                  */
 /* -------------------------------------------------------------------------- */
 
