@@ -82,17 +82,17 @@ const ADMIN = { ehAdmin: true, comPreposto: true };
 const PREPOSTO = { ehAdmin: false, comPreposto: false };
 
 describe("paridade com a tela de Comissões", () => {
-  it("o administrador vê o líquido do escritório, igual às caixas de lá", () => {
+  it("o administrador vê o total das indústrias, igual às caixas de lá", () => {
     const k = kpisDoMes(
       PEDIDOS.map((p) => itemDoGrafico(p, ADMIN)),
       "2026-10",
     );
     const r = resumirComissao(PEDIDOS);
 
-    expect(k.previsto).toBe(centavos(r.previstoDoEscritorio));
-    expect(k.recebido).toBe(centavos(r.recebidoDoEscritorio));
-    expect(k.aAcertar).toBe(centavos(r.aAcertarDoEscritorio));
-    expect(k.diferenca).toBe(centavos(r.diferencaDoEscritorio));
+    expect(k.previsto).toBe(centavos(r.valor));
+    expect(k.recebido).toBe(centavos(r.recebido));
+    expect(k.aAcertar).toBe(centavos(r.aAcertar));
+    expect(k.diferenca).toBe(centavos(r.diferenca));
   });
 
   it("o preposto vê a fatia dele, igual às caixas da tela dele", () => {

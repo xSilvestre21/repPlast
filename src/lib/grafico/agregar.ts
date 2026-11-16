@@ -46,24 +46,35 @@ export interface Kpis {
   recebido: number;
   /** Previsto dos itens ainda sem acerto. */
   aAcertar: number;
-  /** Recebido menos o previsto DOS ACERTADOS — como em `somarComissao`. */
+  /** Recebido menos previsto, do mês inteiro — como em `somarComissao`. */
   diferenca: number;
   pedidos: number;
   acertados: number;
 }
 
+/**
+ * As quatro caixas do mês, nos números do topo de Comissões: para o
+ * administrador, o que as indústrias pagam (o bruto, a soma dos cartões das
+ * indústrias de lá); para o preposto, a fatia dele — o item dele não tem bruto.
+ */
 export function kpisDoMes(itens: ItemGrafico[], competencia: string): Kpis {
   const doMes = itens.filter((item) => item.competencia === competencia);
   const acertados = doMes.filter((item) => item.recebido !== null);
 
+  const previstoDe = (i: ItemGrafico) => i.bruto ?? i.previsto;
+  const recebidoDe = (i: ItemGrafico) => i.brutoRecebido ?? i.recebido ?? 0;
+
+  const previsto = soma(doMes, previstoDe);
+  const recebido = soma(acertados, recebidoDe);
+
   return {
-    previsto: soma(doMes, (i) => i.previsto),
-    recebido: soma(acertados, (i) => i.recebido!),
+    previsto,
+    recebido,
     aAcertar: soma(
       doMes.filter((i) => i.recebido === null),
-      (i) => i.previsto,
+      previstoDe,
     ),
-    diferenca: soma(acertados, (i) => i.recebido! - i.previsto),
+    diferenca: recebido - previsto,
     pedidos: new Set(doMes.map((i) => i.pedidoId)).size,
     acertados: acertados.length,
   };

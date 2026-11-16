@@ -4,8 +4,9 @@
  * As quatro caixas do topo, agora como "stat tiles": o número do mês, a
  * variação contra o mês anterior e uma linha fina dos últimos doze meses.
  *
- * O número é o mesmo da tela de Comissões — líquido para o administrador,
- * fatia para o preposto (`kpisDoMes`, testado contra `resumirComissao`).
+ * O número é o mesmo do topo de Comissões — o total das indústrias para o
+ * administrador, a fatia para o preposto (`kpisDoMes`, testado contra
+ * `resumirComissao`).
  */
 
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
@@ -24,8 +25,8 @@ type Chave = "previsto" | "recebido" | "aAcertar" | "diferenca";
 const CAIXAS: { chave: Chave; rotulo: string; detalhe: (k: Kpis) => string }[] = [
   { chave: "previsto", rotulo: "Previsto", detalhe: (k) => plural(k.pedidos, "pedido") },
   { chave: "recebido", rotulo: "Recebido", detalhe: (k) => `${plural(k.acertados, "acerto")}` },
-  { chave: "aAcertar", rotulo: "A acertar", detalhe: () => "ainda sem acerto" },
-  { chave: "diferenca", rotulo: "Diferença", detalhe: () => "recebido − previsto dos acertados" },
+  { chave: "aAcertar", rotulo: "A acertar", detalhe: () => "ainda não pagos" },
+  { chave: "diferenca", rotulo: "Diferença", detalhe: () => "recebido − previsto" },
 ];
 
 function plural(n: number, palavra: string) {
@@ -107,7 +108,8 @@ export function FaixaKpis({ base }: { base: BaseDosGraficos }) {
         const valor = atual[chave];
         const antes = anterior[chave];
 
-        // A diferença é um saldo, não um volume: o tom vem do sinal dela.
+        // A diferença é um saldo, não um volume: o tom vem do sinal dela,
+        // como no topo de Comissões.
         const tomValor =
           chave === "diferenca"
             ? valor < 0
@@ -128,7 +130,11 @@ export function FaixaKpis({ base }: { base: BaseDosGraficos }) {
           >
             <div className="flex items-center justify-between gap-2">
               <span className="rotulo">{rotulo}</span>
-              <Variacao atual={valor} anterior={antes} contra={nomeAnterior} invertida={chave === "aAcertar"} />
+              {/* Sem variação na diferença: um saldo que vai de −500 a −5.000
+                  não "caiu 900%" — e com o mês em aberto ela mede espera. */}
+              {chave !== "diferenca" && (
+                <Variacao atual={valor} anterior={antes} contra={nomeAnterior} invertida={chave === "aAcertar"} />
+              )}
             </div>
             <div className={`cifra text-forte mt-1.5 numerico ${tomValor}`}>{moedaDe(valor)}</div>
             <div className="text-mini text-tinta-3 mt-1">{detalhe(atual)}</div>

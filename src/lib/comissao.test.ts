@@ -211,7 +211,9 @@ describe("acerto da comissão", () => {
     expect(r.valor.toFixed(2)).toBe("500.00");
     expect(r.recebido.toFixed(2)).toBe("0.00");
     expect(r.aAcertar.toFixed(2)).toBe("500.00");
-    expect(r.diferenca.toFixed(2)).toBe("0.00");
+    // Nada entrou ainda: falta o previsto inteiro, e nada foi pago a menos.
+    expect(r.diferenca.toFixed(2)).toBe("-500.00");
+    expect(r.diferencaNosAcertados.toFixed(2)).toBe("0.00");
     expect(r.acertados).toBe(0);
   });
 
@@ -220,6 +222,7 @@ describe("acerto da comissão", () => {
 
     expect(r.recebido.toFixed(2)).toBe("300.00");
     expect(r.diferenca.toFixed(2)).toBe("-200.00");
+    expect(r.diferencaNosAcertados.toFixed(2)).toBe("-200.00");
     expect(r.aAcertar.toFixed(2)).toBe("0.00");
   });
 
@@ -236,7 +239,7 @@ describe("acerto da comissão", () => {
     expect(r.diferenca.toFixed(2)).toBe("50.00");
   });
 
-  it("a diferença só olha os pedidos já acertados", () => {
+  it("a diferença é recebido − previsto do mês inteiro", () => {
     const r = somarComissao([
       { ...previsto, acerto: { base: "10000", percentual: 3 } },
       { base: "20000", percentual: 5 },
@@ -244,10 +247,31 @@ describe("acerto da comissão", () => {
 
     expect(r.valor.toFixed(2)).toBe("1500.00");
     expect(r.recebido.toFixed(2)).toBe("300.00");
-    // Os 1.000 do pedido sem acerto não entram como prejuízo.
-    expect(r.diferenca.toFixed(2)).toBe("-200.00");
+    // 300 − 1.500: os 1.000 que ainda não foram pagos e os 200 pagos a menos.
+    expect(r.diferenca.toFixed(2)).toBe("-1200.00");
     expect(r.aAcertar.toFixed(2)).toBe("1000.00");
+    // A parte que é pagamento a menos, só dos pedidos já acertados.
+    expect(r.diferencaNosAcertados.toFixed(2)).toBe("-200.00");
     expect(r.acertados).toBe(1);
+  });
+
+  it("a diferença se explica em duas partes, no centavo", () => {
+    // É a frase da tela: "faltam X: Y ainda não pagos, menos Z pagos a mais".
+    const r = somarComissao([
+      { base: "1234.57", percentual: 3.75, percentualPreposto: 33.33 },
+      {
+        base: "987.65",
+        percentual: 4,
+        percentualPreposto: 66.666,
+        acerto: { base: "1100.01", percentual: 3.5 },
+      },
+      { base: "555.55", percentual: 5, acerto: { base: "500", percentual: 5 } },
+    ]);
+
+    expect(r.diferenca.toString()).toBe(r.diferencaNosAcertados.minus(r.aAcertar).toString());
+    expect(r.diferencaDoPreposto.toString()).toBe(
+      r.diferencaNosAcertadosDoPreposto.minus(r.aAcertarDoPreposto).toString(),
+    );
   });
 });
 
@@ -405,19 +429,20 @@ describe("a visão do preposto tem as quatro caixas na fatia dele", () => {
   it("a acertar e diferença acompanham o rateio", () => {
     const r = somarComissao(pedidos);
 
-    // Total: previsto 1.500, recebido 300, a acertar 1.000, diferença −200.
+    // Total: previsto 1.500, recebido 300, a acertar 1.000, diferença −1.200.
     expect(r.aAcertar.toFixed(2)).toBe("1000.00");
-    expect(r.diferenca.toFixed(2)).toBe("-200.00");
+    expect(r.diferenca.toFixed(2)).toBe("-1200.00");
 
     // Fatia do preposto: metade de cada um.
     expect(r.previstoDoPreposto.toFixed(2)).toBe("750.00");
     expect(r.recebidoDoPreposto.toFixed(2)).toBe("150.00");
     expect(r.aAcertarDoPreposto.toFixed(2)).toBe("500.00");
-    expect(r.diferencaDoPreposto.toFixed(2)).toBe("-100.00");
+    expect(r.diferencaDoPreposto.toFixed(2)).toBe("-600.00");
+    expect(r.diferencaNosAcertadosDoPreposto.toFixed(2)).toBe("-100.00");
   });
 });
 
-describe("a visão do administrador é o que fica com o escritório", () => {
+describe("o que fica com o escritório", () => {
   const pedidos = [
     // Do preposto, acertado a 3% em vez de 5%.
     {
@@ -432,41 +457,19 @@ describe("a visão do administrador é o que fica com o escritório", () => {
     { base: "4000", percentual: 5, acerto: { base: "4000", percentual: 5 } },
   ];
 
-  it("as quatro caixas do escritório são o total menos a fatia do preposto", () => {
+  it("previsto e recebido do escritório são o total menos a fatia do preposto", () => {
     const r = somarComissao(pedidos);
 
-    // Total: previsto 1.700, recebido 500, a acertar 1.000, diferença −200.
-    // Preposto: previsto 750, recebido 150, a acertar 500, diferença −100.
+    // Total: previsto 1.700, recebido 500. Preposto: previsto 750, recebido 150.
     expect(r.previstoDoEscritorio.toFixed(2)).toBe("950.00");
     expect(r.recebidoDoEscritorio.toFixed(2)).toBe("350.00");
-    expect(r.aAcertarDoEscritorio.toFixed(2)).toBe("500.00");
-    expect(r.diferencaDoEscritorio.toFixed(2)).toBe("-100.00");
   });
 
-  it("escritório e preposto somam o total em cada caixa", () => {
-    const r = somarComissao([
-      { base: "1234.57", percentual: 3.75, percentualPreposto: 33.33 },
-      {
-        base: "987.65",
-        percentual: 4,
-        percentualPreposto: 66.666,
-        acerto: { base: "900.01", percentual: 3.5 },
-      },
-    ]);
-
-    expect(r.aAcertarDoPreposto.plus(r.aAcertarDoEscritorio).toString()).toBe(
-      r.aAcertar.toString(),
-    );
-    expect(r.diferencaDoPreposto.plus(r.diferencaDoEscritorio).toString()).toBe(
-      r.diferenca.toString(),
-    );
-  });
-
-  it("sem preposto, a visão do escritório é o total", () => {
-    const r = somarComissao([{ base: "4000", percentual: 5 }]);
+  it("sem preposto, o do escritório é o total", () => {
+    const r = somarComissao([{ base: "4000", percentual: 5, acerto: { base: "4000", percentual: 5 } }]);
 
     expect(r.previstoDoEscritorio.toFixed(2)).toBe(r.valor.toFixed(2));
-    expect(r.aAcertarDoEscritorio.toFixed(2)).toBe(r.aAcertar.toFixed(2));
+    expect(r.recebidoDoEscritorio.toFixed(2)).toBe(r.recebido.toFixed(2));
   });
 });
 
@@ -516,6 +519,27 @@ describe("repasse ao preposto", () => {
 
     expect(s.anterior.toFixed(2)).toBe("-100.00");
     expect(s.aRepassar.toFixed(2)).toBe("100.00");
+  });
+
+  it("diz de que mês vem o saldo anterior, e a soma dos meses é ele", () => {
+    // Agosto: liberados 300, pagos 250 (faltaram 50). Setembro: 200 e 200,
+    // empatado — não aparece. Outubro: liberados 400, pagos 500 (100 a mais).
+    const pago = new Map([
+      ["2026-08", "250"],
+      ["2026-09", "200"],
+      ["2026-10", "500"],
+    ]);
+    const s = saldoDoRepasse(devido, pago, "2026-11");
+
+    expect(s.meses.map((m) => [m.mes, m.devido.toFixed(2), m.pago.toFixed(2), m.ficou.toFixed(2)])).toEqual([
+      ["2026-08", "300.00", "250.00", "50.00"],
+      ["2026-10", "400.00", "500.00", "-100.00"],
+    ]);
+    expect(s.anterior.toFixed(2)).toBe("-50.00");
+  });
+
+  it("sem repasse nenhum, não há mês anterior a mostrar", () => {
+    expect(saldoDoRepasse(devido, new Map(), "2026-10").meses).toEqual([]);
   });
 
   it("um mês antes do primeiro repasse não herda nada", () => {

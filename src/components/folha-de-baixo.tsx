@@ -248,11 +248,17 @@ export function FolhaDeBaixo({
       id={id}
       // O Esc (e o voltar do Android) fecha deslizando, como o X: quem decide é
       // o efeito de `aberto`, e não o fechamento seco do navegador.
+      // Só os desta folha: o React faz o `cancel` e o `close` de uma janela de
+      // dentro (o "tem certeza?" aberto por cima) subirem até aqui, e o
+      // "Cancelar" da pergunta fechava a folha junto.
       onCancel={(evento) => {
+        if (evento.target !== ref.current) return;
         evento.preventDefault();
         aoFechar();
       }}
-      onClose={aoFechar}
+      onClose={(evento) => {
+        if (evento.target === ref.current) aoFechar();
+      }}
       // Toque no fundo escurecido fecha: o alvo só é o próprio <dialog> quando
       // o toque cai fora da caixa de conteúdo.
       onClick={(evento) => {

@@ -53,7 +53,7 @@ export function Comissoes() {
         {comAcerto && (
           <m.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: SUAVE }}>
             <Regua
-              rotulo="Valor recebido (a base que a indústria pagou)"
+              rotulo="Valor da venda que a indústria considerou"
               valor={recebida}
               aoMudar={setRecebida}
               minimo={5000}
@@ -71,14 +71,28 @@ export function Comissoes() {
             valor={<Pulo>{comAcerto ? formatarMoeda(recebido.toFixed(2)) : "—"}</Pulo>}
           />
           <LinhaConta
-            rotulo="A acertar"
+            rotulo="A acertar (ainda não pago)"
             valor={<Pulo>{comAcerto ? formatarMoeda(0) : formatarMoeda(previsto.toFixed(2))}</Pulo>}
+          />
+          <LinhaConta
+            rotulo="Diferença (recebido − previsto)"
+            valor={
+              <Pulo>
+                {formatarMoeda((comAcerto ? recebido.minus(previsto) : previsto.negated()).toFixed(2))}
+              </Pulo>
+            }
             forte
           />
         </div>
       </Quadro>
 
       <ul className="space-y-1.5 text-corpo text-tinta-2 list-disc pl-5 max-w-2xl">
+        <li>
+          A <strong className="text-tinta">Diferença</strong> é sempre o recebido menos o previsto — no topo, no
+          cartão de cada indústria e em cada pedido. Enquanto falta pagar, ela inclui o que falta: o{" "}
+          <strong className="text-tinta">A acertar</strong> mostra só essa parte, e a frase embaixo das caixas
+          diz quanto é o que falta e quanto as indústrias pagaram a mais ou a menos.
+        </li>
         <li>
           O pedido entra no mês da <strong className="text-tinta">entrega</strong> (ou no mês que o dia de
           faturamento da indústria manda), não no mês em que foi lançado.
@@ -88,9 +102,16 @@ export function Comissoes() {
           (22 já acha o 2224) ou troque a <strong className="text-tinta">Ordem</strong> para “Nº do pedido”.
         </li>
         <li>
-          “Lançar acerto” abre o painel do pedido, que pergunta o que aconteceu com o pagamento:{" "}
-          <strong className="text-tinta">Recebi</strong>, <strong className="text-tinta">Ainda não foi pago</strong>{" "}
-          ou <strong className="text-tinta">Recebo em parcelas</strong>.
+          “Lançar acerto” abre uma <strong className="text-tinta">janela por cima da tela</strong>, com o resumo
+          do pedido no alto — cliente, entrega prevista, comissão prevista e em que pé está o pagamento — e a
+          pergunta do que aconteceu: <strong className="text-tinta">Recebi</strong>,{" "}
+          <strong className="text-tinta">Ainda não foi pago</strong> ou{" "}
+          <strong className="text-tinta">Recebo em parcelas</strong>.
+        </li>
+        <li>
+          Antes do botão de salvar, o quadro <strong className="text-tinta">“Ao salvar, fica assim”</strong> mostra
+          a comissão que entra, a diferença para o previsto, o mês em que conta e a parte do preposto. Salvou, a
+          janela fecha e a linha diz “✓ Acerto salvo”. Desistiu? “Fechar” sai sem salvar nada.
         </li>
         <li>
           A indústria pagou base menor ou percentual menor? Em “Recebi” dá para mudar os dois. Lançou errado?
@@ -103,7 +124,7 @@ export function Comissoes() {
           pendente e aparece em “Pendentes de meses anteriores” até você lançar o acerto.
         </li>
         <li>
-          A <strong className="text-tinta">data de entrega</strong> tem o botão dela, no alto do painel. É só
+          A <strong className="text-tinta">data de entrega</strong> tem o botão dela, no fim da janela. É só
           para acompanhar se a indústria entregou no prazo: não é a data do pagamento, não muda a comissão e
           salva mesmo sem você ter recebido.
         </li>
@@ -167,6 +188,19 @@ export function Rateio() {
           você pode lançar um pedido para a carteira do preposto e a parte dele continua dele.
         </li>
         <li>O preposto vê só a carteira e a comissão dele; o que fica com o escritório não aparece para ele.</li>
+        <li>
+          Para pagar o preposto, toque em <strong className="text-tinta">Pagar</strong>, na linha dele em
+          Comissões → “Por preposto”. Abre uma janela com o que ele tem liberado e o que falta pagar; o valor já
+          vem preenchido, e o quadro “Ao registrar, fica assim” diz como fica o saldo antes do clique.
+          Registrado, aparece <strong className="text-tinta">“Pagamento realizado com sucesso”</strong>, com o
+          valor, a data e se ficou tudo quitado ou quanto ainda falta.
+        </li>
+        <li>
+          O <strong className="text-tinta">liberado passou do previsto</strong>? É porque a indústria pagou a mais
+          em algum pedido: a janela diz quais, e o extrato embaixo mostra a diferença de cada um, em verde. Ficou
+          faltando pagar de <strong className="text-tinta">outro mês</strong>? A janela diz que mês, quanto foi
+          liberado e pago nele, e abre a lista dos pedidos e dos pagamentos daquele mês.
+        </li>
       </ul>
 
       <Onde>

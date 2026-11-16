@@ -172,6 +172,7 @@ export function EditorParcelas({
   salvar,
   desfazer,
   aoFechar,
+  aoSalvar,
 }: {
   /** A venda sem IPI do pedido inteiro, "9765.00". */
   venda: string;
@@ -197,7 +198,10 @@ export function EditorParcelas({
   salvar: Acao;
   /** Só quando o pedido já é parcelado. */
   desfazer: Acao | null;
+  /** Fecha sem salvar: o "Cancelar". */
   aoFechar: () => void;
+  /** Salvou ou desfez: a frase que a linha mostra. Sem ele, só fecha. */
+  aoSalvar?: (aviso: string) => void;
 }) {
   const [estado, enviar, salvando] = useActionState(salvar, {});
   const [estadoDesfazer, enviarDesfazer, desfazendo] = useActionState<EstadoFormulario, FormData>(
@@ -262,8 +266,8 @@ export function EditorParcelas({
 
   // Fecha ao salvar sem erro — depois da renderização: `aoFechar` mexe no
   // estado da linha, e não no deste editor (`ao-salvar.ts`).
-  useAoSalvar(estado, aoFechar);
-  useAoSalvar(estadoDesfazer, aoFechar);
+  useAoSalvar(estado, () => (aoSalvar ? aoSalvar("Parcelas salvas") : aoFechar()));
+  useAoSalvar(estadoDesfazer, () => (aoSalvar ? aoSalvar("Parcelamento desfeito") : aoFechar()));
 
   function gerar(listaDias: number[]): Linha[] {
     const valores = dividirIgual(venda, listaDias.length);
@@ -595,7 +599,7 @@ export function EditorParcelas({
           <div
             aria-hidden="true"
             className="grid grid-cols-[2.5rem_minmax(15rem,17rem)_minmax(9rem,1fr)_minmax(7rem,auto)_2rem]
-              gap-3 text-mini font-medium text-tinta-3 max-sm:hidden"
+              gap-3 text-rotulo font-medium text-tinta-2 max-sm:hidden"
           >
             <span />
             <span>Vence em</span>
@@ -733,9 +737,9 @@ export function EditorParcelas({
             último e afastado, como o iOS afasta a ação destrutiva das outras.
           */}
           <div className="flex flex-wrap items-center gap-3 max-sm:flex-col max-sm:items-stretch max-sm:gap-2">
+            {/* O botão preto: é o que grava, e o único que grava. */}
             <Botao
               type="submit"
-              variante="secundaria"
               carregando={salvando}
               disabled={restanteInvalido}
               className="max-sm:w-full max-sm:justify-center max-sm:py-3"
@@ -778,7 +782,7 @@ export function EditorParcelas({
             {perguntaDesfazer.janela}
           </div>
 
-          <p className="text-mini text-tinta-3 leading-relaxed">
+          <p className="text-rotulo text-tinta-2 leading-relaxed">
             Venda de {formatarMoeda(Number(venda))}. Toque na data para trocá-la no calendário. Mude o
             valor de qualquer parcela: a última fica com o restante. Cada parcela conta na comissão do
             mês em que a indústria a paga.

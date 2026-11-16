@@ -8,10 +8,12 @@ import type { ResumoComissao } from "@/lib/comissao";
  * preciso descer até a linha "Total" de cada cartão — ou não saber, no mês de
  * cinco indústrias com o total do topo somando todas juntas.
  *
- * A diferença é a de `resumirComissao`: o recebido contra o previsto SÓ dos
- * pedidos já acertados. Contra o previsto inteiro, o pedido que ainda não foi
- * acertado apareceria como "pagou a menos". O que falta acertar vai embaixo do
- * recebido, para os dois números não serem lidos como a mesma conta.
+ * A diferença é a de `resumirComissao`: recebido − previsto, do mês inteiro — a
+ * mesma do topo da página, que é a soma destes cartões. Enquanto falta pagar,
+ * ela carrega o que falta, e por isso o detalhe embaixo dela a divide em duas
+ * partes: o que ainda não foi pago, em cinza, e o que a indústria pagou a mais
+ * ou a menos no que já pagou, em cor. O número leva vermelho ou verde pelo
+ * sinal, o padrão do app; o detalhe diz quanto dele é só espera.
  *
  * O desenho é o da faixa de totais do topo da página: células coladas, com o
  * fio entre elas. No celular, uma embaixo da outra, com o valor à direita —
@@ -20,18 +22,26 @@ import type { ResumoComissao } from "@/lib/comissao";
 export function ResumoDaIndustria({
   resumo,
   ehAdmin,
+  pendentes,
+  pagos,
 }: {
   resumo: ResumoComissao;
   ehAdmin: boolean;
+  /** Pedidos da indústria com alguma parte ainda sem acerto. */
+  pendentes: number;
+  /** Pedidos da indústria com acerto lançado. */
+  pagos: number;
 }) {
   const previsto = ehAdmin ? resumo.valor : resumo.previstoDoPreposto;
   const recebido = ehAdmin ? resumo.recebido : resumo.recebidoDoPreposto;
   const diferenca = ehAdmin ? resumo.diferenca : resumo.diferencaDoPreposto;
   const aAcertar = ehAdmin ? resumo.aAcertar : resumo.aAcertarDoPreposto;
+  const nosPagos = ehAdmin ? resumo.diferencaNosAcertados : resumo.diferencaNosAcertadosDoPreposto;
   const algumAcerto = resumo.acertados > 0;
 
-  const tomDaDiferenca =
-    !algumAcerto || diferenca.isZero() ? undefined : diferenca.isNegative() ? "perigo" : "verde";
+  // Vermelho abaixo do previsto, verde acima — como no topo e no resto do app.
+  const tomDaDiferenca = diferenca.isZero() ? undefined : diferenca.isNegative() ? "perigo" : "verde";
+  const tomDosPagos = nosPagos.isNegative() ? "perigo" : "verde";
 
   return (
     <dl
@@ -42,57 +52,66 @@ export function ResumoDaIndustria({
       className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-filete border border-filete rounded-suave overflow-hidden
         w-full sm:w-auto sm:min-w-[30rem]"
     >
-      <NumeroDaIndustria
-        rotulo="Previsto"
-        valor={formatarMoeda(previsto.toString())}
-        detalhe={ehAdmin ? "comissão do mês" : "sua fatia"}
-      />
-      <NumeroDaIndustria
-        rotulo="Recebido"
-        valor={algumAcerto ? formatarMoeda(recebido.toString()) : "—"}
-        detalhe={aAcertar.isZero() ? "tudo acertado" : `falta acertar ${formatarMoeda(aAcertar.toString())}`}
-      />
+      <NumeroDaIndustria rotulo="Previsto" valor={formatarMoeda(previsto.toString())}>
+        <Detalhe>{ehAdmin ? "comissão do mês" : "sua fatia"}</Detalhe>
+      </NumeroDaIndustria>
+
+      <NumeroDaIndustria rotulo="Recebido" valor={algumAcerto ? formatarMoeda(recebido.toString()) : "—"}>
+        <Detalhe>
+          {pendentes === 0
+            ? "tudo pago"
+            : pagos === 0
+              ? "nada pago ainda"
+              : pagos === 1
+                ? "1 pedido pago"
+                : `${pagos} pedidos pagos`}
+        </Detalhe>
+      </NumeroDaIndustria>
+
       <NumeroDaIndustria
         rotulo="Diferença"
-        valor={
-          algumAcerto
-            ? `${diferenca.isPositive() && !diferenca.isZero() ? "+" : ""}${formatarMoeda(diferenca.toString())}`
-            : "—"
-        }
+        valor={`${diferenca.isPositive() && !diferenca.isZero() ? "+" : ""}${formatarMoeda(diferenca.toString())}`}
         tom={tomDaDiferenca}
-        detalhe={
-          !algumAcerto
-            ? "nada acertado"
-            : diferenca.isZero()
-              ? "pagou o previsto"
-              : diferenca.isNegative()
-                ? "pagou a menos"
-                : "pagou a mais"
-        }
-      />
+      >
+        {!aAcertar.isZero() && (
+          <Detalhe>{formatarMoeda(aAcertar.toString())} ainda não pagos</Detalhe>
+        )}
+        {!nosPagos.isZero() && (
+          <Detalhe tom={tomDosPagos}>
+            pagou {formatarMoeda(nosPagos.abs().toString())} {nosPagos.isNegative() ? "a menos" : "a mais"}
+          </Detalhe>
+        )}
+        {aAcertar.isZero() && nosPagos.isZero() && <Detalhe>pagou o previsto</Detalhe>}
+      </NumeroDaIndustria>
     </dl>
   );
+}
+
+const CORES = { perigo: "text-perigo", verde: "text-verde" } as const;
+
+function Detalhe({ tom, children }: { tom?: "perigo" | "verde"; children: React.ReactNode }) {
+  return <span className={`block text-mini mt-0.5 numerico ${tom ? CORES[tom] : "text-tinta-2"}`}>{children}</span>;
 }
 
 function NumeroDaIndustria({
   rotulo,
   valor,
-  detalhe,
   tom,
+  children,
 }: {
   rotulo: string;
   valor: string;
-  detalhe: string;
   tom?: "perigo" | "verde";
+  children: React.ReactNode;
 }) {
-  const cor = tom === "perigo" ? "text-perigo" : tom === "verde" ? "text-verde" : "text-tinta";
-
   return (
     <div className="bg-folha px-3.5 py-2.5 flex items-baseline justify-between gap-3 sm:block">
-      <dt className="text-mini text-tinta-3">{rotulo}</dt>
+      <dt className="text-rotulo text-tinta-2">{rotulo}</dt>
       <dd className="text-right sm:text-left sm:mt-1 min-w-0">
-        <span className={`block text-realce sm:text-medio font-semibold numerico ${cor}`}>{valor}</span>
-        <span className={`block text-mini mt-0.5 ${tom ? cor : "text-tinta-3"}`}>{detalhe}</span>
+        <span className={`block text-realce sm:text-medio font-semibold numerico ${tom ? CORES[tom] : "text-tinta"}`}>
+          {valor}
+        </span>
+        {children}
       </dd>
     </div>
   );

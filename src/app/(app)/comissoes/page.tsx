@@ -1,3 +1,4 @@
+import Decimal from "decimal.js";
 import Link from "next/link";
 import { Factory, HandCoins, Hourglass, PiggyBank, Send, Users } from "lucide-react";
 
@@ -23,7 +24,6 @@ import {
   competenciaDe,
   metaVigente,
   progressoDaMeta,
-  type SaldoRepasse,
 } from "@/lib/comissao";
 import {
   acertoDoPedido,
@@ -43,8 +43,9 @@ import {
   saldosDeRepasse,
   type PedidoDaComissao,
   type RepasseLancado,
+  type SaldoComPedidos,
 } from "@/lib/comissao-consulta";
-import { competenciaDoItem } from "@/lib/adiamento";
+import { competenciaDoItem, nomeDaCompetencia } from "@/lib/adiamento";
 import { ratearComissao } from "@/lib/comissao";
 import { mesDoRecebimento } from "@/lib/parcelas";
 import { prepostosComCor } from "@/lib/cores-prepostos";
@@ -69,6 +70,7 @@ import { LinhaComissao } from "./acerto";
 import { MARCADOR_DO_MES, type AcoesDaLinha, type LinhaPedido } from "./linha";
 import { chaveDaLinha } from "./busca";
 import { BuscaComissao, GrupoDaBusca, LinhaDoTotal } from "./busca-comissao";
+import { explicarDiferenca, pedidosNaoPagos } from "./diferenca";
 import { colunasDaComissao } from "./colunas";
 import { FiltroIndustria } from "./filtro-industria";
 import { ordemDoParametro, ordenarPorNumero, type OrdemComissao } from "./ordem";
@@ -94,6 +96,11 @@ function endereco(mes: string, fornecedor: string | null, ordem: OrdemComissao):
 /** "1 pedido", "8 pedidos" — no lugar do "pedido(s)" de formulário. */
 function plural(n: number, palavra: string): string {
   return `${n} ${palavra}${n === 1 ? "" : "s"}`;
+}
+
+/** "+R$ 640,40", "-R$ 94,45", "R$ 0,00" — o sinal diz de que lado ficou. */
+function comSinal(valor: Decimal): string {
+  return `${valor.isPositive() && !valor.isZero() ? "+" : ""}${formatarMoeda(valor.toString())}`;
 }
 
 export default async function PaginaComissoes({ searchParams }: PageProps<"/comissoes">) {
@@ -151,26 +158,29 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
 
   /*
    * As mesmas quatro caixas para os dois papéis, com números diferentes: o
-   * administrador vê o que FICA com o escritório depois da fatia dos prepostos,
-   * o preposto vê o que cabe a ele. Não é a mesma tela com um filtro — são duas
-   * leituras do mês, e mostrar ao preposto o total do escritório seria mostrar
-   * dinheiro que não é dele.
+   * administrador vê o que as INDÚSTRIAS pagam — a soma exata dos cartões das
+   * indústrias, mais abaixo —, o preposto vê o que cabe a ele. Mostrar ao
+   * preposto o total do escritório seria mostrar dinheiro que não é dele.
    *
-   * O bruto da indústria não some do administrador: desce para o detalhe das
-   * caixas, porque é com ele que se confere o extrato da indústria.
+   * O topo do administrador era o que fica com o escritório, e os cartões, o
+   * total: a Diferença lá em cima não batia com nada da tela (a Qualyplast com
+   * +640 e o topo com 509, em outubro/2026). O que fica com o escritório desceu
+   * para o detalhe das caixas.
    */
   const vista = ehAdmin
     ? {
-        previsto: total.previstoDoEscritorio,
-        recebido: total.recebidoDoEscritorio,
-        aAcertar: total.aAcertarDoEscritorio,
-        diferenca: total.diferencaDoEscritorio,
+        previsto: total.valor,
+        recebido: total.recebido,
+        aAcertar: total.aAcertar,
+        diferenca: total.diferenca,
+        nosAcertados: total.diferencaNosAcertados,
       }
     : {
         previsto: total.previstoDoPreposto,
         recebido: total.recebidoDoPreposto,
         aAcertar: total.aAcertarDoPreposto,
         diferenca: total.diferencaDoPreposto,
+        nosAcertados: total.diferencaNosAcertadosDoPreposto,
       };
 
   /*
@@ -194,13 +204,16 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
       (p) => p.fornecedor.id,
     ).entries(),
   ]
-    .map(([, doFornecedor]) => ({
-      fornecedor: doFornecedor[0].fornecedor,
-      pedidos: ordem === "numero" ? ordenarPorNumero(doFornecedor) : doFornecedor,
-      resumo: resumirComissao(
-        doFornecedor.filter((p) => p.status === "ENVIADO" && !foraDaSoma.has(p)),
-      ),
-    }))
+    .map(([, doFornecedor]) => {
+      const naSoma = doFornecedor.filter((p) => p.status === "ENVIADO" && !foraDaSoma.has(p));
+      return {
+        fornecedor: doFornecedor[0].fornecedor,
+        pedidos: ordem === "numero" ? ordenarPorNumero(doFornecedor) : doFornecedor,
+        resumo: resumirComissao(naSoma),
+        pendentes: contarPedidos(naSoma.filter((p) => acertoDoPedido(p) === null)),
+        pagos: contarPedidos(naSoma.filter((p) => acertoDoPedido(p) !== null)),
+      };
+    })
     .sort((a, b) => a.fornecedor.nome.localeCompare(b.fornecedor.nome, "pt-BR"));
 
   /*
@@ -255,7 +268,8 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
         cores.get(id) ?? null,
         pedidosPorPreposto.get(id) ?? [],
         saldos.get(id),
-        repasses.filter((r) => r.prepostoId === id && r.competencia === competencia),
+        repasses.filter((r) => r.prepostoId === id),
+        competencia,
         ehAdmin,
       ),
     }))
@@ -269,7 +283,9 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
           null,
           pedidos,
           saldos.get(usuarioId),
-          repasses.filter((r) => r.competencia === competencia),
+          // Já vieram só os dele (`repassesLancados` com o preposto).
+          repasses,
+          competencia,
           false,
         )
       : null;
@@ -283,9 +299,14 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
     enderecoDoMes: endereco(MARCADOR_DO_MES, escolhida, ordem),
   };
 
-  // O bruto só diz algo quando difere do líquido: num mês sem preposto, ou no
-  // escritório de uma pessoa só, seria o mesmo número repetido embaixo.
-  const brutoVisivel = ehAdmin && !total.previstoDoPreposto.isZero();
+  // O que fica com o escritório só diz algo quando difere do total: num mês
+  // sem preposto, seria o mesmo número repetido embaixo.
+  const comFatiaDePreposto = ehAdmin && !total.previstoDoPreposto.isZero();
+
+  // Os pedidos com alguma parte ainda sem acerto — o cancelado não entra (não
+  // há o que a indústria pague), e duas parcelas do mesmo pedido contam uma vez.
+  const pendentesDoMes = contarPedidos(pedidos.filter((p) => acertoDoPedido(p) === null));
+  const pagosDoMes = contarPedidos(pedidos.filter((p) => acertoDoPedido(p) !== null));
 
   /*
    * A meta DESTE mês, de quem está olhando — não a de hoje. É o que deixa
@@ -293,8 +314,13 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
    */
   const vigente = metaVigente(metas, competencia);
   const meta = vigente?.valor ?? null;
-  // A meta acompanha o RECEBIDO: é o que de fato entrou, não o que deve entrar.
-  const progresso = progressoDaMeta(meta, vista.recebido);
+  /*
+   * A meta acompanha o RECEBIDO: é o que de fato entrou, não o que deve entrar.
+   * E, para o administrador, o que FICA com ele — a fatia do preposto não é
+   * dele. É a conta de `mesesComMetaBatida`, a das marquinhas do seletor.
+   */
+  const alcancado = ehAdmin ? total.recebidoDoEscritorio : total.recebidoDoPreposto;
+  const progresso = progressoDaMeta(meta, alcancado);
 
   const colunas = colunasDaComissao(ehAdmin);
 
@@ -358,7 +384,10 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
         herdadaDe={
           vigente && vigente.desde !== competencia ? nomeDoMes(vigente.desde).toLowerCase() : null
         }
-        alcancado={vista.recebido.toNumber()}
+        alcancado={alcancado.toNumber()}
+        // A meta é do que fica com o escritório; o Recebido logo abaixo é o
+        // total das indústrias. Sem dizer, os dois pareceriam discordar.
+        nota={comFatiaDePreposto ? "o que fica com o escritório, sem a parte dos prepostos" : undefined}
         progresso={progresso?.percentual ?? null}
         batida={progresso?.batida ?? false}
         falta={progresso?.falta.toNumber() ?? null}
@@ -366,10 +395,11 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
       />
 
       {/*
-        Previsto e recebido lado a lado, com a diferença entre eles.
-        Um número só esconderia justamente o que a tela existe para mostrar:
-        quanto do mês ainda está em aberto, e quanto o acerto ficou abaixo do
-        combinado.
+        Previsto e recebido lado a lado, e a diferença entre eles — recebido
+        menos previsto, a conta que se faz de cabeça olhando as duas caixas.
+        "A acertar" é uma PARTE dela (o que ainda não foi pago), e a frase
+        embaixo diz qual é a outra, para as duas não serem lidas como a mesma
+        coisa contada duas vezes.
       */}
       {porFornecedor.length > 0 && (
         <div className="mb-5">
@@ -377,41 +407,48 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
             <Total
               rotulo="Previsto"
               valor={formatarMoeda(vista.previsto.toString())}
-              detalhe={brutoVisivel ? `bruto ${formatarMoeda(total.valor.toString())}` : undefined}
+              detalhe={
+                comFatiaDePreposto
+                  ? `fica com o escritório ${formatarMoeda(total.previstoDoEscritorio.toString())}`
+                  : plural(contarPedidos(pedidos), "pedido")
+              }
             />
             <Total
               rotulo="Recebido"
               valor={formatarMoeda(vista.recebido.toString())}
               detalhe={
-                brutoVisivel ? `bruto ${formatarMoeda(total.recebido.toString())}` : undefined
+                comFatiaDePreposto
+                  ? `fica com o escritório ${formatarMoeda(total.recebidoDoEscritorio.toString())}`
+                  : pendentesDoMes === 0
+                    ? "tudo pago"
+                    : pagosDoMes === 1
+                      ? "1 pedido pago"
+                      : `${pagosDoMes} pedidos pagos`
               }
+            />
+            <Total
+              rotulo="Diferença"
+              valor={comSinal(vista.diferenca)}
+              // Vermelho abaixo do previsto, verde acima — o padrão do app. O
+              // quanto disso é só espera, a frase embaixo diz.
+              tom={vista.diferenca.isZero() ? undefined : vista.diferenca.isNegative() ? "perigo" : "verde"}
+              detalhe="recebido − previsto"
             />
             <Total
               rotulo="A acertar"
               valor={formatarMoeda(vista.aAcertar.toString())}
-              // Os pedidos com alguma parte ainda sem acerto — o cancelado não
-              // entra (não há o que a indústria pague), e duas parcelas
-              // pendentes do mesmo pedido contam uma vez.
-              detalhe={plural(
-                contarPedidos(pedidos.filter((p) => acertoDoPedido(p) === null)),
-                "pedido",
-              )}
-            />
-            <Total
-              rotulo="Diferença"
-              valor={formatarMoeda(vista.diferenca.toString())}
-              tom={
-                vista.diferenca.isZero()
-                  ? undefined
-                  : vista.diferenca.isNegative()
-                    ? "perigo"
-                    : "verde"
-              }
-              detalhe={
-                total.acertados > 0 ? `em ${plural(total.acertados, "acertado")}` : "nada acertado"
-              }
+              detalhe={pendentesDoMes === 0 ? "tudo pago" : pedidosNaoPagos(pendentesDoMes)}
             />
           </GradeTotais>
+          <p className="mt-3 text-corpo text-tinta-2 leading-relaxed numerico">
+            {explicarDiferenca({
+              diferenca: vista.diferenca,
+              aAcertar: vista.aAcertar,
+              nosAcertados: vista.nosAcertados,
+              pendentes: pendentesDoMes,
+              quem: porFornecedor.length === 1 ? "a indústria" : "as indústrias",
+            })}
+          </p>
         </div>
       )}
 
@@ -423,10 +460,15 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
       */}
       {ehAdmin && porPreposto.length > 0 && (
         <Cartao className="p-5 sm:p-6 mb-5">
-          <div className="titulo-regra mb-5">
+          <div className="titulo-regra mb-2">
             <Placa icone={Users} tom="lilas" pequena />
             <h2 className="text-realce font-semibold">Por preposto</h2>
           </div>
+          {/* A palavra que mais confundia, explicada uma vez, em cima de todas. */}
+          <p className="text-corpo text-tinta-2 leading-relaxed mb-5">
+            <strong className="font-semibold text-tinta">Liberado</strong> é a parte do preposto no que a
+            indústria já pagou — é isso que você repassa. Toque em “Pagar” para lançar o pagamento.
+          </p>
 
           <Painel>
             {porPreposto.map(({ id, dados }) => (
@@ -438,10 +480,11 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
                   dados.aRepassar > 0 ? escreverNumeroBr(dados.aRepassar.toFixed(2), 2, 2) : ""
                 }
                 hoje={hoje}
+                nomeDoMes={nomeDoMes(competencia)}
               />
             ))}
 
-            {/* O resto é do escritório, nas mesmas colunas de previsto e devido:
+            {/* O resto é do escritório, nas mesmas colunas de previsto e liberado:
                 é com esses números que os de cima se comparam. */}
             <LinhaDado className="bg-folha">
               <span className="text-corpo font-medium flex-1">Fica com o escritório</span>
@@ -461,7 +504,8 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
                     dos deles. No celular, a grade já alinha sozinha. */}
                 <div className="hidden sm:block w-28" aria-hidden="true" />
                 <div className="hidden sm:block w-28" aria-hidden="true" />
-                <div className="hidden sm:block w-[19px]" aria-hidden="true" />
+                {/* A largura do botão "Pagar" (`LARGURA_DO_BOTAO`, em `repasse.tsx`). */}
+                <div className="hidden sm:block w-32" aria-hidden="true" />
               </ValoresDaLinha>
             </LinhaDado>
           </Painel>
@@ -568,7 +612,7 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
           {/* `gap`, e não `space-y`: o cartão que a busca esconde não deixa a
               margem dele sobrando embaixo do último que ficou. */}
           <div className="flex flex-col gap-5 palco">
-            {grupos.map(({ fornecedor, pedidos: doFornecedor, resumo, linhas }) => (
+            {grupos.map(({ fornecedor, pedidos: doFornecedor, resumo, pendentes: semPagar, pagos, linhas }) => (
               <GrupoDaBusca key={fornecedor.id} fornecedorId={fornecedor.id}>
                 <Cartao className="p-5 sm:p-6">
                   <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
@@ -590,7 +634,7 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
                       </div>
                     </div>
 
-                    <ResumoDaIndustria resumo={resumo} ehAdmin={ehAdmin} />
+                    <ResumoDaIndustria resumo={resumo} ehAdmin={ehAdmin} pendentes={semPagar} pagos={pagos} />
                   </div>
 
                   {/* No celular em pé, cada pedido vira cartão (`.tabela-cartoes`). */}
@@ -623,8 +667,9 @@ export default async function PaginaComissoes({ searchParams }: PageProps<"/comi
 /**
  * A linha "Total" da indústria, nas mesmas colunas das linhas de cima.
  *
- * O recebido e a diferença só existem sobre o que já foi acertado — sem
- * nenhum acerto, um "R$ 0,00" ali diria que a indústria pagou zero.
+ * Sem nenhum acerto, o recebido é um traço — um "R$ 0,00" ali diria que a
+ * indústria pagou zero. A diferença existe sempre: recebido − previsto, a soma
+ * da coluna de cima, onde o pedido ainda não pago entra com o que falta.
  */
 function TotalDaIndustria({
   resumo,
@@ -656,19 +701,10 @@ function TotalDaIndustria({
         alinhamento="numero"
         data-area="diferenca"
         data-rotulo="Diferença"
-        className={
-          !algumAcerto || diferenca.isZero()
-            ? ""
-            : diferenca.isNegative()
-              ? "text-perigo"
-              : "text-verde"
-        }
+        // A mesma regra das caixas: vermelho abaixo do previsto, verde acima.
+        className={diferenca.isZero() ? "" : diferenca.isNegative() ? "text-perigo" : "text-verde"}
       >
-        {algumAcerto ? (
-          `${diferenca.isPositive() && !diferenca.isZero() ? "+" : ""}${formatarMoeda(diferenca.toString())}`
-        ) : (
-          <span className="text-tinta-3">—</span>
-        )}
+        {comSinal(diferenca)}
       </Celula>
       <Celula />
     </LinhaDoTotal>
@@ -816,6 +852,30 @@ function paraLinha(
     lugar,
     // Só na lista de pendentes, que mistura as indústrias numa tabela só.
     industria: lugar === "pendente" ? pedido.fornecedor.nome : null,
+    nomeIndustria: pedido.fornecedor.nome,
+  };
+}
+
+/** A linha de um item no extrato do preposto: a fatia dele no previsto e no acertado. */
+function itemDoExtrato(item: PedidoDaComissao) {
+  const percentualPreposto = percentualPrepostoDoPedido(item);
+  const acerto = acertoDoPedido(item);
+
+  return {
+    chave: `${item.id}:${item.parcela?.id ?? ""}`,
+    pedidoId: item.id,
+    numero: item.numero,
+    parcela: item.parcela ? `${item.parcela.numero}/${item.parcela.total}` : null,
+    cliente: item.cliente.apelido,
+    industria: item.fornecedor.nome,
+    previsto: ratearComissao(
+      item.subtotalSemIpi.toString(),
+      percentualDoPedido(item),
+      percentualPreposto,
+    ).doPreposto.toNumber(),
+    recebido: acerto
+      ? ratearComissao(acerto.base, acerto.percentual, percentualPreposto).doPreposto.toNumber()
+      : null,
   };
 }
 
@@ -824,16 +884,22 @@ function paraLinha(
  *
  * O botão de excluir pagamento só é montado para o administrador — como em
  * `paraLinha`, o que não entra nas props não chega ao navegador do preposto.
+ *
+ * `repassesDele` são TODOS os pagamentos do preposto: os deste mês viram a
+ * lista de pagamentos, e os dos meses anteriores explicam de onde vem o saldo
+ * que ficou ("setembro: liberados R$ 1.000, pagos R$ 800").
  */
 function montarRepasse(
   nome: string,
   cor: string | null,
   itens: PedidoDaComissao[],
-  saldo: SaldoRepasse | undefined,
-  pagamentos: RepasseLancado[],
+  saldo: SaldoComPedidos | undefined,
+  repassesDele: RepasseLancado[],
+  competencia: string,
   ehAdmin: boolean,
 ): DadosRepasse {
   const resumo = resumirComissao(itens);
+  const pagamentosDo = (mes: string) => repassesDele.filter((r) => r.competencia === mes);
 
   return {
     nome,
@@ -844,32 +910,37 @@ function montarRepasse(
     pago: saldo?.pago.toNumber() ?? 0,
     anterior: saldo?.anterior.toNumber() ?? 0,
     aRepassar: saldo?.aRepassar.toNumber() ?? 0,
-    extrato: itens.map((item) => {
-      const percentualPreposto = percentualPrepostoDoPedido(item);
-      const acerto = acertoDoPedido(item);
-
-      return {
-        chave: `${item.id}:${item.parcela?.id ?? ""}`,
-        pedidoId: item.id,
-        numero: item.numero,
-        parcela: item.parcela ? `${item.parcela.numero}/${item.parcela.total}` : null,
-        cliente: item.cliente.apelido,
-        previsto: ratearComissao(
-          item.subtotalSemIpi.toString(),
-          percentualDoPedido(item),
-          percentualPreposto,
-        ).doPreposto.toNumber(),
-        recebido: acerto
-          ? ratearComissao(acerto.base, acerto.percentual, percentualPreposto).doPreposto.toNumber()
-          : null,
-      };
-    }),
-    pagamentos: pagamentos.map((p) => ({
+    extrato: itens.map(itemDoExtrato),
+    pagamentos: pagamentosDo(competencia).map((p) => ({
       id: p.id,
       pagoEm: iso(p.pagoEm)!,
       valor: Number(p.valor.toString()),
       observacao: p.observacao,
       excluir: ehAdmin ? excluirRepasse.bind(null, p.id) : null,
+    })),
+    /*
+     * De onde vem o saldo de meses anteriores: cada mês em que sobrou ou
+     * faltou, com os pedidos liberados nele (os que a indústria pagou) e os
+     * pagamentos lançados para ele. Sem botão de excluir: o pagamento de outro
+     * mês se corrige no mês dele.
+     */
+    anteriores: (saldo?.meses ?? []).map((m) => ({
+      mes: m.mes,
+      nome: nomeDaCompetencia(m.mes),
+      liberado: m.devido.toNumber(),
+      pago: m.pago.toNumber(),
+      ficou: m.ficou.toNumber(),
+      pedidos: (saldo?.itensPorMes.get(m.mes) ?? [])
+        .filter((item) => acertoDoPedido(item) !== null)
+        .sort((a, b) => a.numero - b.numero || (a.parcela?.numero ?? 0) - (b.parcela?.numero ?? 0))
+        .map(itemDoExtrato),
+      pagamentos: pagamentosDo(m.mes).map((p) => ({
+        id: p.id,
+        pagoEm: iso(p.pagoEm)!,
+        valor: Number(p.valor.toString()),
+        observacao: p.observacao,
+        excluir: null,
+      })),
     })),
   };
 }

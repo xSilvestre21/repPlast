@@ -80,22 +80,35 @@ export function Escolhas<T extends string>({
                 andar(i, -1);
               }
             }}
+            // O marcado se vê de longe: borda dupla (a borda e o anel) e a
+            // bolinha preenchida. Só o fundo azul a 9% passava despercebido.
             className={`flex items-start gap-3 rounded-suave border px-3.5 py-3 text-left cursor-pointer
               transition-colors duration-200 ${
                 marcada
-                  ? "border-carimbo bg-carimbo-fraco"
-                  : "border-filete bg-folha hover:border-filete-forte"
+                  ? "border-carimbo ring-1 ring-carimbo bg-carimbo-fraco"
+                  : "border-filete-forte bg-folha hover:border-tinta-3"
               }`}
           >
-            <Glifo
-              size={18}
-              strokeWidth={2}
+            {/* A bolinha de rádio, a marca que todo formulário usa para "escolha uma". */}
+            <span
               aria-hidden="true"
-              className={`shrink-0 mt-0.5 ${marcada ? "text-carimbo" : "text-tinta-3"}`}
-            />
+              className={`shrink-0 mt-0.5 grid place-items-center size-[18px] rounded-full border-2 transition-colors ${
+                marcada ? "border-carimbo" : "border-tinta-3"
+              }`}
+            >
+              {marcada && <span className="size-2 rounded-full bg-carimbo" />}
+            </span>
             <span className="min-w-0">
-              <span className="block text-corpo font-semibold text-tinta">{opcao.titulo}</span>
-              <span className="block text-mini text-tinta-2 leading-snug mt-0.5">{opcao.descricao}</span>
+              <span className="flex items-center gap-1.5 text-corpo font-semibold text-tinta">
+                <Glifo
+                  size={16}
+                  strokeWidth={2}
+                  aria-hidden="true"
+                  className={`shrink-0 ${marcada ? "text-carimbo" : "text-tinta-2"}`}
+                />
+                {opcao.titulo}
+              </span>
+              <span className="block text-rotulo text-tinta-2 leading-snug mt-0.5">{opcao.descricao}</span>
             </span>
             {opcao.leva && (
               <ChevronRight

@@ -94,12 +94,20 @@ export interface ResumoComissao {
   /** Previsto dos pedidos que ainda não têm acerto. */
   aAcertar: Decimal;
   /**
-   * Recebido menos o previsto DOS PEDIDOS JÁ ACERTADOS.
+   * Recebido menos previsto, do mês inteiro — a conta que se faz de cabeça
+   * olhando as duas caixas, por decisão do usuário.
    *
-   * Comparar com o previsto total daria um número sem sentido enquanto o mês
-   * corre: pedido ainda não acertado apareceria como prejuízo.
+   * Enquanto o mês corre, ela carrega o que ainda não foi pago: por isso a
+   * tela mostra ao lado o `aAcertar` e explica a diferença em duas partes
+   * (`diferenca = diferencaNosAcertados − aAcertar`). Era só a segunda parte,
+   * e o topo mostrava um número que ninguém conseguia refazer.
    */
   diferenca: Decimal;
+  /**
+   * Recebido menos o previsto DOS PEDIDOS JÁ ACERTADOS: quanto a indústria
+   * pagou a mais (ou a menos) no que já pagou.
+   */
+  diferencaNosAcertados: Decimal;
   acertados: number;
 
   /** Rateio do previsto: o que sai para os prepostos e o que fica na casa. */
@@ -117,13 +125,7 @@ export interface ResumoComissao {
    */
   aAcertarDoPreposto: Decimal;
   diferencaDoPreposto: Decimal;
-  /**
-   * As mesmas duas caixas, no que fica com o escritório — a leitura do
-   * administrador. São RESÍDUO do total menos a fatia do preposto, como em
-   * `ratearComissao`: preposto + escritório fecha no centavo com o total.
-   */
-  aAcertarDoEscritorio: Decimal;
-  diferencaDoEscritorio: Decimal;
+  diferencaNosAcertadosDoPreposto: Decimal;
 }
 
 /**
@@ -170,27 +172,22 @@ export function somarComissao(pedidos: PedidoComissionavel[]): ResumoComissao {
   const recebidoDoPreposto = somarFatia(comAcerto, (p) => p.acerto!);
   const previstoDoPrepostoNosAcertados = somarFatia(comAcerto, (p) => p);
 
-  const aAcertar = valor.minus(previstoDosAcertados);
-  const diferenca = recebido.minus(previstoDosAcertados);
-  const aAcertarDoPreposto = previstoDoPreposto.minus(previstoDoPrepostoNosAcertados);
-  const diferencaDoPreposto = recebidoDoPreposto.minus(previstoDoPrepostoNosAcertados);
-
   return {
     base,
     valor,
     percentualMedio: base.isZero() ? zero : valor.dividedBy(base).times(100),
     recebido,
-    aAcertar,
-    diferenca,
+    aAcertar: valor.minus(previstoDosAcertados),
+    diferenca: recebido.minus(valor),
+    diferencaNosAcertados: recebido.minus(previstoDosAcertados),
     acertados: comAcerto.length,
     previstoDoPreposto,
     previstoDoEscritorio: valor.minus(previstoDoPreposto),
     recebidoDoPreposto,
     recebidoDoEscritorio: recebido.minus(recebidoDoPreposto),
-    aAcertarDoPreposto,
-    diferencaDoPreposto,
-    aAcertarDoEscritorio: aAcertar.minus(aAcertarDoPreposto),
-    diferencaDoEscritorio: diferenca.minus(diferencaDoPreposto),
+    aAcertarDoPreposto: previstoDoPreposto.minus(previstoDoPrepostoNosAcertados),
+    diferencaDoPreposto: recebidoDoPreposto.minus(previstoDoPreposto),
+    diferencaNosAcertadosDoPreposto: recebidoDoPreposto.minus(previstoDoPrepostoNosAcertados),
   };
 }
 
@@ -207,6 +204,23 @@ export interface SaldoRepasse {
   anterior: Decimal;
   /** `anterior + devido - pago`. Negativo quando o escritório pagou adiantado. */
   aRepassar: Decimal;
+  /**
+   * O `anterior` mês a mês: de onde ele vem. Só os meses em que sobrou ou
+   * faltou alguma coisa (`ficou` diferente de zero), do mais antigo ao mais
+   * novo. A soma dos `ficou` é o `anterior`, no centavo.
+   */
+  meses: MesDoSaldo[];
+}
+
+export interface MesDoSaldo {
+  /** "AAAA-MM". */
+  mes: string;
+  /** O liberado naquele mês: a fatia do preposto no que a indústria pagou. */
+  devido: Decimal;
+  /** Os repasses lançados para aquele mês. */
+  pago: Decimal;
+  /** `devido - pago`: positivo ficou faltando, negativo foi pago a mais. */
+  ficou: Decimal;
 }
 
 /**
@@ -231,18 +245,29 @@ export function saldoDoRepasse(
   const zero = new Decimal(0);
   const inicio = [...pagoPorMes.keys()].sort()[0];
 
-  let anterior = zero;
+  /*
+   * O saldo anterior é a soma, mês a mês, do que ficou: liberado menos pago.
+   * Guardar cada mês em vez de só a soma é o que deixa a tela dizer de onde
+   * veio a dívida — "setembro: liberados R$ 1.000, pagos R$ 800".
+   */
+  const meses: MesDoSaldo[] = [];
   if (inicio !== undefined) {
     const noIntervalo = (mes: string) => mes >= inicio && mes < competencia;
+    const todos = [...new Set([...devidoPorMes.keys(), ...pagoPorMes.keys()])].filter(noIntervalo).sort();
 
-    for (const [mes, valor] of devidoPorMes) if (noIntervalo(mes)) anterior = anterior.plus(valor);
-    for (const [mes, valor] of pagoPorMes) if (noIntervalo(mes)) anterior = anterior.minus(valor);
+    for (const mes of todos) {
+      const devidoNoMes = new Decimal(devidoPorMes.get(mes) ?? 0);
+      const pagoNoMes = new Decimal(pagoPorMes.get(mes) ?? 0);
+      const ficou = devidoNoMes.minus(pagoNoMes);
+      if (!ficou.isZero()) meses.push({ mes, devido: devidoNoMes, pago: pagoNoMes, ficou });
+    }
   }
+  const anterior = meses.reduce((acc, m) => acc.plus(m.ficou), zero);
 
   const devido = new Decimal(devidoPorMes.get(competencia) ?? 0);
   const pago = new Decimal(pagoPorMes.get(competencia) ?? 0);
 
-  return { devido, pago, anterior, aRepassar: anterior.plus(devido).minus(pago) };
+  return { devido, pago, anterior, aRepassar: anterior.plus(devido).minus(pago), meses };
 }
 
 /* -------------------------------------------------------------------------- */

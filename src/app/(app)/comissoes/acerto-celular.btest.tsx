@@ -56,6 +56,7 @@ const PEDIDO: LinhaPedido = {
   hoje: "2026-10",
   lugar: "no-mes",
   industria: null,
+  nomeIndustria: "QUALYPLAST",
 };
 
 const NADA = async () => ({});
@@ -116,8 +117,10 @@ describe("apuração no celular em pé", () => {
 
     const folha = page.getByRole("dialog");
     await expect.element(folha).toBeVisible();
-    await expect.element(folha.getByRole("heading", { name: "Pedido #2300" })).toBeVisible();
-    await expect.element(folha.getByText("Venda sobre a qual a indústria pagou")).toBeVisible();
+    await expect.element(folha.getByRole("heading", { name: "Acerto do pedido #2300" })).toBeVisible();
+    // O resumo do pedido no alto, com a entrega prevista.
+    await expect.element(folha.getByText("Entrega prevista")).toBeVisible();
+    await expect.element(folha.getByText("Valor da venda", { exact: true })).toBeVisible();
 
     // As três respostas, uma embaixo da outra e sem passar da folha.
     const caixa = document.querySelector("dialog")!.getBoundingClientRect();
@@ -134,7 +137,8 @@ describe("apuração no celular em pé", () => {
     // A linha do painel da tela larga não existe aqui.
     expect(document.querySelector("tr[hidden]")).toBeNull();
 
-    await folha.getByRole("button", { name: "Fechar" }).click();
+    // O "Fechar" grande no pé da folha (o X do canto tem o mesmo nome).
+    await folha.getByRole("button", { name: "Fechar", exact: true }).last().click();
     await expect.element(folha).not.toBeInTheDocument();
   });
 
@@ -179,7 +183,7 @@ describe("apuração no celular em pé", () => {
     await montar();
 
     await page.getByRole("button", { name: "Acertar" }).click();
-    const folha = page.getByRole("dialog", { name: /Pedido #2300/ });
+    const folha = page.getByRole("dialog", { name: /pedido #2300/ });
     await folha.getByRole("radio", { name: /^Ainda não foi pago/ }).click();
 
     await expect.element(folha.getByRole("heading", { name: "Ainda não foi pago" })).toBeVisible();

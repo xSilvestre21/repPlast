@@ -54,6 +54,7 @@ export function PainelMeta({
   progresso,
   batida,
   falta,
+  nota,
   definirMeta,
 }: {
   competencia: string;
@@ -66,6 +67,8 @@ export function PainelMeta({
   progresso: number | null;
   batida: boolean;
   falta: number | null;
+  /** O que o número grande mede, quando não é o mesmo da caixa "Recebido". */
+  nota?: string;
   definirMeta: (estado: EstadoFormulario, formData: FormData) => Promise<EstadoFormulario>;
 }) {
   const [estado, enviar, salvando] = useActionState(definirMeta, {});
@@ -102,6 +105,7 @@ export function PainelMeta({
             <div className="text-cifra cifra numerico mt-2">
               {formatarMoeda(alcancado)}
             </div>
+            {nota && <p className="text-corpo text-tinta-2 mt-1">{nota}</p>}
           </div>
 
           {!comFormulario && (

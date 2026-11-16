@@ -23,6 +23,7 @@ import { useActionState, useState } from "react";
 import { useAoSalvar } from "@/components/ao-salvar";
 import { CampoMes } from "@/components/campo-mes";
 import { ErroGeral, Formulario } from "@/components/formulario";
+import { usePerguntaAntes } from "@/components/pergunta-antes";
 import { Botao, MensagemErro, formatarMoeda } from "@/components/ui";
 import {
   mesSugerido,
@@ -61,7 +62,8 @@ export function NaoPago({
   previsto: number;
   marcar: Acao;
   desmarcar: Acao;
-  aoSalvar: () => void;
+  /** Salvou: a frase que a linha mostra depois que a janela fecha. */
+  aoSalvar: (aviso: string) => void;
 }) {
   const [estado, enviar, salvando] = useActionState(marcar, {});
   const [estadoDesmarcar, enviarDesmarcar, desmarcando] = useActionState(desmarcar, {});
@@ -70,29 +72,70 @@ export function NaoPago({
   const [quando, setQuando] = useState<Quando>(atraso.para ? "mes" : "sem-previsao");
   const [mes, setMes] = useState(() => mesSugerido(mesNatural, hoje, atraso.para));
 
-  // Fecha ao salvar sem erro — depois da renderização (`ao-salvar.ts`).
-  useAoSalvar(estado, aoSalvar);
-  useAoSalvar(estadoDesmarcar, aoSalvar);
-
   const feminino = oQue === "a parcela";
   const doMes = nomeDaCompetencia(mesNatural);
   const opcoes = mesesParaAdiar(mesNatural, hoje);
   const Sujeito = feminino ? "A parcela" : "O pedido";
 
+  // Fecha ao salvar sem erro — depois da renderização (`ao-salvar.ts`).
+  useAoSalvar(estado, () =>
+    aoSalvar(
+      quando === "mes"
+        ? `Pagamento marcado para ${nomeDaCompetencia(mes)}`
+        : feminino
+          ? "Marcada como não paga"
+          : "Marcado como não pago",
+    ),
+  );
+  useAoSalvar(estadoDesmarcar, () =>
+    aoSalvar(atraso.para ? `A comissão voltou para ${doMes}` : "Marca de “não pago” tirada"),
+  );
+
+  /*
+   * Tirar a marca salvava direto, num botão ao lado do "Salvar". Agora
+   * pergunta, dizendo o que muda — e só depois do sim o envio segue.
+   */
+  const perguntaDesmarcar = usePerguntaAntes(
+    marcado
+      ? atraso.para
+        ? {
+            titulo: `Voltar a comissão para ${doMes}?`,
+            texto:
+              `A comissão sai de ${nomeDaCompetencia(atraso.para)} e volta a contar em ${doMes}, ` +
+              `o mês ${feminino ? "da parcela" : "do pedido"}. O selo “Pagamento adiado” sai.`,
+            rotulo: "Voltar para " + nomeCurtoDaCompetencia(mesNatural, hoje),
+            perigo: false,
+          }
+        : {
+            titulo: `Tirar o “${feminino ? "não paga" : "não pago"}”?`,
+            texto:
+              `O selo sai, e ${feminino ? "a parcela" : "o pedido"} volta a ficar só como “A acertar” em ` +
+              `${doMes}. Nos meses seguintes, ${feminino ? "ela" : "ele"} deixa de aparecer em “Pendentes de ` +
+              "meses anteriores”.",
+            rotulo: "Tirar a marca",
+            perigo: false,
+          }
+      : undefined,
+  );
+
   const botaoDesmarcar = (
-    <Botao
-      type="submit"
-      formAction={enviarDesmarcar}
-      variante="secundaria"
-      tamanho="compacto"
-      icone={Undo2}
-      carregando={desmarcando}
-      className="max-sm:w-full max-sm:py-3"
-    >
-      {atraso.para
-        ? `Voltar a comissão para ${nomeCurtoDaCompetencia(mesNatural, hoje)}`
-        : "Tirar o “não pago”"}
-    </Botao>
+    <>
+      <Botao
+        type="submit"
+        formAction={enviarDesmarcar}
+        onClick={perguntaDesmarcar.aoClicar}
+        variante="secundaria"
+        tamanho="compacto"
+        icone={Undo2}
+        carregando={desmarcando}
+        className="max-sm:w-full max-sm:py-3"
+      >
+        {atraso.para
+          ? `Voltar a comissão para ${nomeCurtoDaCompetencia(mesNatural, hoje)}`
+          : "Tirar o “não pago”"}
+      </Botao>
+      {perguntaDesmarcar.janela}
+    </>
   );
 
   /*

@@ -14,14 +14,19 @@
  *   - o acerto lançado errado tem volta: "Desfazer acerto" pergunta antes e
  *     envia `desfazer=sim`, mesmo com o % ainda preenchido no campo;
  *   - o pedido sem parcelas diz em que mês a comissão dele conta, e muda na
- *     hora quando se troca a exceção do fechamento.
+ *     hora quando se troca a exceção do fechamento — recolhida atrás de "Mudar
+ *     o mês", e enviada mesmo recolhida;
+ *   - a coluna Diferença é recebido − previsto: o pedido não pago mostra o que
+ *     falta, em cinza, com "não pago"; o pago, em cor;
+ *   - o painel começa pela pergunta do pagamento, a entrega vem no fim, e um
+ *     valor de venda bem abaixo do pedido avisa que pode ser a comissão.
  *
  * Rode com:  npm run test:navegador
  */
 
 import { describe, expect, test, vi } from "vitest";
 import { render } from "vitest-browser-react";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 
 import { type AcoesDaLinha, type LinhaPedido, LinhaComissao } from "./acerto";
 
@@ -61,6 +66,7 @@ const PEDIDO: LinhaPedido = {
   hoje: "2026-12",
   lugar: "no-mes",
   industria: null,
+  nomeIndustria: "QUALYPLAST",
 };
 
 const ACERTADO: LinhaPedido = {
@@ -115,10 +121,16 @@ const escolha = (nome: string | RegExp) => page.getByRole("radio", { name: nome 
 describe("salvar fecha o painel sem o aviso do React", () => {
   const AVISO = /while rendering a different component/;
 
-  for (const [caso, pedido, salvar, acao] of [
-    ["o acerto", PEDIDO, "Salvar acerto", "acerto"],
-    ["o “não pago”", PEDIDO, "Marcar como não pago", "naoPago"],
-    ["o desmarcar", { ...PEDIDO, atraso: { naoPaga: true, para: null } }, "Tirar o “não pago”", "desmarcarNaoPago"],
+  for (const [caso, pedido, salvar, acao, aviso] of [
+    ["o acerto", PEDIDO, "Salvar acerto", "acerto", "Acerto salvo"],
+    ["o “não pago”", PEDIDO, "Marcar como não pago", "naoPago", "Marcado como não pago"],
+    [
+      "o desmarcar",
+      { ...PEDIDO, atraso: { naoPaga: true, para: null } },
+      "Tirar o “não pago”",
+      "desmarcarNaoPago",
+      "Marca de “não pago” tirada",
+    ],
   ] as const) {
     test(caso, async () => {
       const erros = vi.spyOn(console, "error");
@@ -128,12 +140,13 @@ describe("salvar fecha o painel sem o aviso do React", () => {
       if (acao === "acerto") await page.getByRole("button", { name: /^Pagou o valor todo/ }).click();
       else await escolha(/^Ainda não foi pago/).click();
       await page.getByRole("button", { name: salvar }).click();
+      // Tirar a marca pergunta antes (`nao-pago.tsx`).
+      if (acao === "desmarcarNaoPago") await page.getByRole("button", { name: "Tirar a marca" }).click();
 
       await enviado(acoes[acao]);
-      // O painel fechou: o botão da linha diz que está fechado.
-      await expect
-        .element(page.getByRole("button", { name: "Lançar acerto" }))
-        .toHaveAttribute("aria-expanded", "false");
+      // A janela fechou, e a linha diz o que foi salvo.
+      await expect.element(page.getByRole("dialog")).not.toBeInTheDocument();
+      await expect.element(page.getByRole("status").getByText(aviso)).toBeVisible();
       expect(erros.mock.calls.map((c) => String(c[0])).filter((m) => AVISO.test(m))).toEqual([]);
       erros.mockRestore();
     });
@@ -289,6 +302,13 @@ describe("ainda não foi pago", () => {
 
     await escolha(/^Ainda não foi pago/).click();
     await page.getByRole("button", { name: "Tirar o “não pago”" }).click();
+
+    // Pergunta antes, dizendo o que muda — e só o sim envia.
+    const pergunta = page.getByRole("dialog", { name: "Tirar o “não pago”?" });
+    await expect.element(pergunta.getByText(/volta a ficar só como “A acertar”/)).toBeVisible();
+    expect(acoes.desmarcarNaoPago).not.toHaveBeenCalled();
+    await pergunta.getByRole("button", { name: "Tirar a marca" }).click();
+
     await enviado(acoes.desmarcarNaoPago);
     expect(acoes.naoPago).not.toHaveBeenCalled();
   });
@@ -315,7 +335,12 @@ describe("os selos do pagamento que atrasou", () => {
 
     // A mesma pílula do mês em que recebe; o mês vai no link.
     await expect.element(page.getByText("Pagamento adiado")).toBeVisible();
-    await expect.element(page.getByText("conta em dezembro")).toBeVisible();
+    // O valor fica apagado, numa linha só — o mês está no selo, não embaixo dele.
+    const previsto = document.querySelector<HTMLElement>('td[data-area="previsto"]')!;
+    expect(previsto.querySelector(".text-tinta-3")!.getAttribute("title")).toBe(
+      "Conta em dezembro de 2026 — fora da soma deste mês",
+    );
+    expect(previsto.querySelector(".block")).toBeNull();
     await expect
       .element(page.getByRole("link", { name: "recebe em dezembro" }))
       .toHaveAttribute("href", "/comissoes?mes=2026-12");
@@ -419,7 +444,10 @@ describe("desfazer o parcelamento com parcela já acertada", () => {
     await page.getByRole("button", { name: "Lançar acerto" }).click();
     await escolha(/^Editar as 3 parcelas/).click();
     await page.getByRole("button", { name: "Desfazer parcelamento" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "Desfazer parcelamento" }).click();
+    await page
+      .getByRole("dialog", { name: "Desfazer o parcelamento?" })
+      .getByRole("button", { name: "Desfazer parcelamento" })
+      .click();
 
     await enviado(acoes.desfazerParcelas);
   });
@@ -432,8 +460,11 @@ describe("desfazer acerto", () => {
     await page.getByRole("button", { name: "Ver acerto" }).click();
     await page.getByRole("button", { name: "Desfazer acerto" }).click();
 
-    await expect.element(page.getByText("Desfazer o acerto do pedido #142?")).toBeVisible();
-    await expect.element(page.getByText(/volta a contar só como previsto/)).toBeVisible();
+    const pergunta = page.getByRole("dialog", { name: "Desfazer o acerto do pedido #142?" });
+    await expect.element(pergunta).toBeVisible();
+    // Diz, linha por linha, o que se apaga e para onde o pedido volta.
+    await expect.element(pergunta.getByText(/o valor recebido \(R\$\s500,00\) e o % do acerto são apagados/)).toBeVisible();
+    await expect.element(pergunta.getByText(/volta para “A acertar”/)).toBeVisible();
     await page.getByRole("button", { name: "Cancelar" }).click();
     expect(acoes.acerto).not.toHaveBeenCalled();
   });
@@ -443,7 +474,10 @@ describe("desfazer acerto", () => {
 
     await page.getByRole("button", { name: "Ver acerto" }).click();
     await page.getByRole("button", { name: "Desfazer acerto" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "Desfazer acerto" }).click();
+    await page
+      .getByRole("dialog", { name: "Desfazer o acerto do pedido #142?" })
+      .getByRole("button", { name: "Desfazer acerto" })
+      .click();
 
     const formData = await enviado(acoes.acerto);
     expect(formData.get("desfazer")).toBe("sim");
@@ -465,17 +499,25 @@ describe("quando a indústria paga o pedido inteiro", () => {
     // Entregue em 15/10 com fechamento 30: a linha avisa e o painel diz novembro.
     await expect.element(page.getByText("paga após faturar")).toBeInTheDocument();
     await page.getByRole("button", { name: "Lançar acerto" }).click();
-    await expect.element(page.getByText("novembro de 2026")).toBeVisible();
+    await expect.element(page.getByText(/deste pedido conta em\s+novembro de 2026/)).toBeVisible();
+    await expect.element(page.getByText(/porque a indústria paga no mês seguinte/)).toBeVisible();
 
-    // A exceção, trocada ali mesmo.
-    await page.getByRole("button", { name: "no mês do vencimento" }).click();
-    await expect.element(page.getByText("outubro de 2026")).toBeVisible();
+    // A exceção fica recolhida (`hidden`, fora até da leitura de tela): no
+    // caso comum ninguém mexe nela.
+    const vencimento = page.getByRole("button", { name: "no mês do vencimento" });
+    await expect.element(vencimento).not.toBeInTheDocument();
+
+    // E se troca ali mesmo, depois de "Mudar o mês".
+    await page.getByRole("button", { name: "Mudar o mês" }).click();
+    await vencimento.click();
+    await expect.element(page.getByText(/deste pedido conta em\s+outubro de 2026/)).toBeVisible();
   });
 
   test("manda a escolha junto com o acerto", async () => {
     const acoes = abrir({ ...PEDIDO, fechamento: "30", mesNatural: "2026-11" });
 
     await page.getByRole("button", { name: "Lançar acerto" }).click();
+    await page.getByRole("button", { name: "Mudar o mês" }).click();
     await page.getByRole("textbox", { name: "Fatura até o dia" }).fill("10");
     await page.getByRole("button", { name: "Salvar acerto" }).click();
 
@@ -483,5 +525,168 @@ describe("quando a indústria paga o pedido inteiro", () => {
     expect(formData.get("pagamento")).toBe("seguinte");
     expect(formData.get("diaFechamentoComissao")).toBe("10");
     expect(formData.get("desfazer")).toBeNull();
+  });
+
+  test("recolhida, a escolha vai no envio do mesmo jeito", async () => {
+    const acoes = abrir({ ...PEDIDO, fechamento: "30", mesNatural: "2026-11" });
+
+    await page.getByRole("button", { name: "Lançar acerto" }).click();
+    await page.getByRole("button", { name: /^Pagou o valor todo/ }).click();
+    await page.getByRole("button", { name: "Salvar acerto" }).click();
+
+    // Sem abrir "Mudar o mês", o pedido continua com o fechamento dele.
+    const formData = await enviado(acoes.acerto);
+    expect(formData.get("pagamento")).toBe("seguinte");
+    expect(formData.get("diaFechamentoComissao")).toBe("30");
+  });
+});
+
+describe("a diferença na linha", () => {
+  /** A célula da Diferença da linha do pedido. */
+  const diferenca = () => document.querySelector<HTMLElement>('td[data-area="diferenca"]')!;
+  const texto = () => diferenca().textContent!.replace(/\u00a0/g, " ");
+
+  test("o não pago mostra o que falta, em cinza, e diz que não foi pago", async () => {
+    abrir(PEDIDO);
+
+    await expect.element(page.getByText("não pago", { exact: true })).toBeInTheDocument();
+    expect(texto()).toContain("-R$ 50,00");
+    // Cinza, e não vermelho: a indústria não pagou a menos, ainda não pagou.
+    expect(diferenca().className).not.toContain("text-perigo");
+    expect(diferenca().querySelector(".text-perigo")).toBeNull();
+  });
+
+  test("o pago mostra recebido − previsto, colorido", async () => {
+    abrir({ ...ACERTADO, recebido: 45 });
+
+    await expect.element(page.getByRole("button", { name: "Ver acerto" })).toBeVisible();
+    expect(texto()).toBe("-R$ 5,00");
+    expect(diferenca().className).toContain("text-perigo");
+  });
+});
+
+describe("o painel começa pelo pagamento", () => {
+  test("a pergunta do pagamento vem antes da entrega", async () => {
+    abrir(PEDIDO);
+    await page.getByRole("button", { name: "Lançar acerto" }).click();
+
+    const pergunta = page.getByRole("heading", { name: "O que aconteceu com o pagamento?" }).element();
+    const entrega = page.getByRole("heading", { name: "Entrega da mercadoria (opcional)" }).element();
+    expect(pergunta.getBoundingClientRect().bottom).toBeLessThan(entrega.getBoundingClientRect().top);
+  });
+
+  test("valor bem abaixo da venda: avisa que pode ser a comissão", async () => {
+    abrir(PEDIDO);
+    await page.getByRole("button", { name: "Lançar acerto" }).click();
+
+    // A venda é 1.000,00 e a comissão prevista, 50,00 — o que se digita por engano.
+    await page.getByLabelText(/^Valor da venda/).fill("50,00");
+
+    await expect.element(page.getByText(/Confira se não digitou a comissão/)).toBeVisible();
+
+    // O valor cheio tira o aviso.
+    await page.getByRole("button", { name: /^Pagou o valor todo/ }).click();
+    await expect.element(page.getByText(/Confira se não digitou a comissão/)).not.toBeInTheDocument();
+  });
+});
+
+/*
+ * A janela por cima. O painel abria embaixo da linha e ficava aberto depois do
+ * serviço feito; quem usa pouco o computador se perdia.
+ */
+describe("a janela do acerto", () => {
+  const janela = () => page.getByRole("dialog", { name: "Acerto do pedido #142" });
+  const texto = (el: Element) => el.textContent!.replace(/\u00a0/g, " ");
+
+  test("abre por cima, com o resumo do pedido e a entrega prevista", async () => {
+    abrir({ ...PEDIDO, entregueEm: "2026-10-20" });
+    await page.getByRole("button", { name: "Lançar acerto" }).click();
+
+    await expect.element(janela()).toBeVisible();
+    await expect.element(page.getByLabelText("Resumo do pedido #142")).toBeVisible();
+    const tudo = texto(page.getByLabelText("Resumo do pedido #142").element());
+    expect(tudo).toContain("Entrega prevista15/10/2026");
+    expect(tudo).toContain("Entregue em20/10/2026");
+    expect(tudo).toContain("5 dias de atraso");
+    expect(tudo).toContain("IndústriaQUALYPLAST");
+    expect(tudo).toContain("Comissão prevista");
+    expect(tudo).toContain("SituaçãoAinda não pago");
+  });
+
+  test("“Ao salvar, fica assim” diz a comissão e a parte do preposto", async () => {
+    abrir({ ...PEDIDO, preposto: "Iara Celina", percentualPreposto: "40", rateio: { preposto: 20, escritorio: 30 } });
+    await page.getByRole("button", { name: "Lançar acerto" }).click();
+    await page.getByRole("button", { name: /^Pagou o valor todo/ }).click();
+
+    await expect.element(janela().getByText("Ao salvar, fica assim:")).toBeVisible();
+    // 1.000,00 × 5% = 50,00; 40% disso é da Iara.
+    expect(texto(janela().getByText(/^Iara:/).element())).toContain("R$ 20,00 liberados para repasse");
+  });
+
+  test("um clique fora não fecha; “Fechar”, sim, sem salvar nada", async () => {
+    const acoes = abrir(PEDIDO);
+    await page.getByRole("button", { name: "Lançar acerto" }).click();
+
+    await userEvent.click(janela(), { position: { x: 4, y: 4 } });
+    await expect.element(janela()).toBeVisible();
+
+    await janela().getByRole("button", { name: "Fechar", exact: true }).last().click();
+    await expect.element(janela()).not.toBeInTheDocument();
+    expect(acoes.acerto).not.toHaveBeenCalled();
+  });
+
+  test("o “Cancelar” do “Desfazer acerto?” fecha só a pergunta, e não a janela", async () => {
+    abrir(ACERTADO);
+    await page.getByRole("button", { name: "Ver acerto" }).click();
+    await page.getByRole("button", { name: "Desfazer acerto" }).click();
+
+    const pergunta = page.getByRole("dialog", { name: "Desfazer o acerto do pedido #142?" });
+    await pergunta.getByRole("button", { name: "Cancelar" }).click();
+    await expect.element(pergunta).not.toBeInTheDocument();
+    await expect.element(janela()).toBeVisible();
+  });
+
+  test("desfeito, a janela fecha e a linha diz “Acerto desfeito”", async () => {
+    const acoes = abrir(ACERTADO);
+    await page.getByRole("button", { name: "Ver acerto" }).click();
+    await page.getByRole("button", { name: "Desfazer acerto" }).click();
+    await page
+      .getByRole("dialog", { name: "Desfazer o acerto do pedido #142?" })
+      .getByRole("button", { name: "Desfazer acerto" })
+      .click();
+
+    await enviado(acoes.acerto);
+    await expect.element(janela()).not.toBeInTheDocument();
+    await expect.element(page.getByRole("status").getByText("Acerto desfeito")).toBeVisible();
+  });
+});
+
+describe("os botões da linha", () => {
+  test("“Lançar acerto” e “Ver acerto” têm a mesma largura", async () => {
+    const acoes = Object.fromEntries(
+      ["acerto", "entrega", "naoPago", "desmarcarNaoPago", "parcelas", "desfazerParcelas"].map((k) => [
+        k,
+        vi.fn(async () => ({})),
+      ]),
+    ) as unknown as AcoesDaLinha;
+    await render(
+      <table>
+        <tbody>
+          <LinhaComissao pedido={PEDIDO} comPercentual acoes={acoes} enderecoDoMes="/comissoes?mes=__MES__" />
+          <LinhaComissao
+            pedido={{ ...ACERTADO, id: "p2", numero: 143 }}
+            comPercentual
+            acoes={acoes}
+            enderecoDoMes="/comissoes?mes=__MES__"
+          />
+        </tbody>
+      </table>,
+    );
+
+    await expect.element(page.getByRole("button", { name: "Ver acerto" })).toBeVisible();
+    const lancar = page.getByRole("button", { name: "Lançar acerto" }).element().getBoundingClientRect();
+    const ver = page.getByRole("button", { name: "Ver acerto" }).element().getBoundingClientRect();
+    expect(lancar.width).toBeGreaterThan(0);
+    expect(ver.width).toBe(lancar.width);
   });
 });

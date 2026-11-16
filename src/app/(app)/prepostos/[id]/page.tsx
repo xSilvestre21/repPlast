@@ -324,7 +324,7 @@ export default async function PaginaPreposto({
                 <Valor rotulo="Prevista" valor={comissao.prevista} nota="a fatia dele no que vendeu" />
                 <Valor rotulo="Recebida" valor={comissao.recebida} nota="no que a indústria já acertou" tom="verde" />
                 <Valor
-                  rotulo="A repassar"
+                  rotulo="Falta pagar"
                   valor={comissao.aRepassar}
                   nota="o que o escritório deve a ele"
                   tom={Number(comissao.aRepassar) > 0 ? "sol" : undefined}

@@ -1,16 +1,17 @@
 "use client";
 
 /**
- * A linha de um pedido na apuração, com o acerto embutido.
+ * A linha de um pedido na apuração, e a janela do acerto que ela abre.
  *
- * O acerto abre DENTRO da linha em vez de numa janela sobreposta. Conferir o
- * extrato da indústria é ler uma lista e ir lançando: uma janela por pedido
- * obrigaria a abrir e fechar quinze vezes, perdendo de vista a lista que se
- * está conferindo.
+ * O acerto abria DENTRO da lista, embaixo da linha, para conferir o extrato da
+ * indústria sem perder a lista de vista. Observando quem usa pouco o
+ * computador, o painel ficava aberto depois do serviço feito e a pessoa se
+ * perdia. Agora abre uma janela por cima (`janela-da-linha.tsx`), com o resumo
+ * do pedido no alto e um "Fechar" à vista; salvar fecha a janela e deixa um
+ * "✓ Acerto salvo" na linha, para a pessoa saber que deu certo.
  *
  * No celular em pé a linha vira cartão (`.tabela-cartoes`, em `globals.css`) e
- * o acerto abre numa folha que sobe de baixo: dentro do cartão, o formulário
- * herdava a largura da tabela e saía cortado.
+ * o acerto abre na folha que sobe de baixo.
  *
  * Enquanto não há acerto, a linha mostra só o previsto — que é a verdade
  * daquele momento: o pedido foi enviado e ainda não foi pago.
@@ -23,7 +24,6 @@ import {
   Ban,
   CalendarClock,
   Check,
-  ChevronDown,
   Clock,
   Forward,
   Hourglass,
@@ -34,19 +34,18 @@ import {
 import Link from "next/link";
 import { useId, useState } from "react";
 
-import { FolhaDeBaixo } from "@/components/folha-de-baixo";
-import { useTelaEstreita } from "@/components/tela-estreita";
 import { SeloStatus } from "@/components/selo-status";
 import { Botao, Celula, Selo, formatarMoeda, formatarPercentual, type TomSelo } from "@/components/ui";
-import { nomeCurtoDaCompetencia } from "@/lib/adiamento";
+import { nomeCurtoDaCompetencia, nomeDaCompetencia } from "@/lib/adiamento";
 import { pontualidadeEntrega } from "@/lib/comissao";
 
 import { BolinhaPreposto } from "@/components/bolinha-preposto";
 import { chaveDaLinha } from "./busca";
 import { useLinhaVisivel } from "./busca-comissao";
-import { colunasDaComissao } from "./colunas";
+import { JanelaDaLinha } from "./janela-da-linha";
 import { MARCADOR_DO_MES, type AcoesDaLinha, type LinhaPedido } from "./linha";
 import { PainelAcerto, type VistaDoPainel } from "./painel-acerto";
+import { AvisoDeSalvo, useAvisoDeSalvo } from "./aviso-de-salvo";
 
 export type { AcoesDaLinha, LinhaPedido };
 
@@ -213,34 +212,39 @@ export function LinhaComissao({
   /*
    * O painel só é montado quando a linha abre pela primeira vez: num mês de
    * sessenta pedidos, eram sessenta formulários escondidos, cada um com o seu
-   * calendário. Depois de aberto ele FICA montado — fechar e reabrir não apaga
-   * o que foi digitado nem o erro da última tentativa.
+   * calendário. No celular, depois de aberto ele FICA montado na folha — fechar
+   * e reabrir não apaga o que foi digitado. No computador a janela o desmonta
+   * ao fechar (`janela-da-linha.tsx`).
    */
   const [jaAbriu, setJaAbriu] = useState(false);
-  /** O que o painel está mostrando, para o título da folha do celular. */
+  /** O que o painel está mostrando, para o título da janela. */
   const [vista, setVista] = useState<VistaDoPainel>("recebi");
   const painel = useId();
-  const estreita = useTelaEstreita();
-  // A busca da tela (`busca-comissao.tsx`) esconde a linha, sem desmontá-la:
-  // o acerto aberto continua com o que foi digitado quando ela volta.
+  // "✓ Acerto salvo" embaixo do botão, depois que a janela fecha.
+  const salvo = useAvisoDeSalvo();
+  // A busca da tela (`busca-comissao.tsx`) esconde a linha, sem desmontá-la.
   // (a lista de pendentes fica fora da busca, e lá a linha está sempre à vista.)
   const visivel = useLinhaVisivel(chaveDaLinha(pedido.id, pedido.parcela?.numero ?? null));
 
   const fechamentoGravado = pedido.fechamento !== "";
   const pagaAposFaturar = !pedido.parcela && fechamentoGravado && pedido.atraso.para === null;
 
-  const diferenca = acertado ? pedido.recebido! - pedido.previsto : 0;
-  const colunas = colunasDaComissao(comPercentual).length;
-
   /*
-   * O painel do acerto. Um elemento só, posto na linha da tabela (tela larga)
-   * ou na folha que sobe de baixo (celular).
+   * Recebido − previsto, a conta do topo e da linha Total: o pedido ainda não
+   * pago entra com o que falta (−previsto), em cinza, e a coluna soma o Total.
+   * Em centavos, para "0,1 + 0,2" não virar uma diferença de um centavo.
    */
+  const diferenca = Math.round(((pedido.recebido ?? 0) - pedido.previsto) * 100) / 100;
+
   const conteudoDoPainel = jaAbriu && pedido.podeAcertar && (
     <PainelAcerto
       pedido={pedido}
       acoes={acoes}
       aoFechar={() => setAberto(false)}
+      aoSalvar={(aviso) => {
+        setAberto(false);
+        salvo.avisar(aviso);
+      }}
       aoMudarDeVista={setVista}
     />
   );
@@ -374,15 +378,22 @@ export function LinhaComissao({
           ) : foraDaSoma ? (
             /*
               O valor continua à vista — é o que a indústria deve —, mas
-              apagado e com a nota: ele não entra no total DESTE mês, e sem
-              isso a soma das linhas não bateria com o total embaixo.
+              apagado: ele não entra no total DESTE mês. O mês em que conta
+              já está no selo sob o cliente ("recebe em dezembro"); a nota
+              "conta em dezembro" aqui embaixo do valor deixava a célula com
+              duas linhas e o valor fora do centro da linha. Fica no `title`
+              (o mouse em cima) e para o leitor de tela.
             */
-            <>
-              <span className="text-tinta-3">{formatarMoeda(pedido.previsto)}</span>
-              <span className="block text-mini text-tinta-3 mt-0.5">
-                conta em {nomeCurtoDaCompetencia(pedido.atraso.para!, pedido.mesDaTela)}
+            <span
+              className="text-tinta-3"
+              title={`Conta em ${nomeDaCompetencia(pedido.atraso.para!)} — fora da soma deste mês`}
+            >
+              {formatarMoeda(pedido.previsto)}
+              <span className="sr-only">
+                {" "}
+                (conta em {nomeCurtoDaCompetencia(pedido.atraso.para!, pedido.mesDaTela)})
               </span>
-            </>
+            </span>
           ) : (
             <>
               <span className="font-medium">{formatarMoeda(pedido.previsto)}</span>
@@ -412,7 +423,21 @@ export function LinhaComissao({
             !acertado || foraDaSoma || diferenca === 0 ? "" : diferenca < 0 ? "text-perigo" : "text-verde"
           }
         >
-          {acertado && !foraDaSoma ? `${diferenca > 0 ? "+" : ""}${formatarMoeda(diferenca)}` : TRACO}
+          {/* O cancelado e o adiado para outro mês estão fora da soma: traço. */}
+          {cancelado || foraDaSoma ? (
+            TRACO
+          ) : acertado ? (
+            `${diferenca > 0 ? "+" : ""}${formatarMoeda(diferenca)}`
+          ) : (
+            /*
+              Cinza, e não vermelho: a indústria não pagou a menos, ainda não
+              pagou. A palavra embaixo diz isso.
+            */
+            <span className="text-tinta-3">
+              {formatarMoeda(diferenca)}
+              <span className="block text-mini mt-0.5">não pago</span>
+            </span>
+          )}
         </Celula>
 
         <Celula alinhamento="acao" data-area="acao">
@@ -431,60 +456,44 @@ export function LinhaComissao({
                 variante="secundaria"
                 tamanho="compacto"
                 onClick={() => {
-                  setAberto((a) => !a);
+                  setAberto(true);
                   setJaAbriu(true);
                 }}
-                aria-expanded={aberto}
-                aria-controls={painel}
-                className="px-3 max-sm:px-3.5"
+                aria-haspopup="dialog"
+                // Largura fixa: "Lançar acerto" e "Ver acerto" do mesmo tamanho,
+                // um embaixo do outro na coluna, em vez de botões de tamanhos
+                // diferentes conforme a palavra.
+                className="w-32 max-sm:w-24 px-2"
               >
                 {/* No cartão do celular a ação tem um terço da largura: o
                     rótulo inteiro passava por cima do nome do cliente. */}
-                <span className="max-sm:hidden">{acertado ? "Ver acerto" : "Lançar acerto"}</span>
-                <span className="sm:hidden">{acertado ? "Acerto" : "Acertar"}</span>
-                <ChevronDown
-                  size={13}
-                  strokeWidth={2}
-                  aria-hidden="true"
-                  className={`transition-transform duration-200 max-sm:hidden ${aberto ? "rotate-180" : ""}`}
-                />
+                {/* 13px, e não os 12px do botão compacto: é o que mais se usa
+                    na tela, e precisa ser lido sem esforço. Num `span`, para
+                    o tamanho não brigar com o do botão. */}
+                <span className="max-sm:hidden text-rotulo">{acertado ? "Ver acerto" : "Lançar acerto"}</span>
+                <span className="sm:hidden text-rotulo">{acertado ? "Acerto" : "Acertar"}</span>
               </Botao>
-              {estreita && (
-                <FolhaDeBaixo
-                  id={painel}
-                  aberto={aberto}
-                  aoFechar={() => setAberto(false)}
-                  titulo={
-                    vista === "parcelas"
-                      ? `Parcelas do pedido #${pedido.numero}`
-                      : pedido.parcela
-                        ? `Parcela ${pedido.parcela.numero} de ${pedido.parcela.total} do pedido #${pedido.numero}`
-                        : `Pedido #${pedido.numero}`
-                  }
-                  descricao={`${pedido.apelidoCliente} · previsto ${formatarMoeda(pedido.previsto)}`}
-                >
-                  {conteudoDoPainel}
-                </FolhaDeBaixo>
-              )}
+              <AvisoDeSalvo aviso={salvo.aviso} />
+              <JanelaDaLinha
+                id={painel}
+                aberto={aberto}
+                aoFechar={() => setAberto(false)}
+                titulo={
+                  vista === "parcelas"
+                    ? `Parcelas do pedido #${pedido.numero}`
+                    : pedido.parcela
+                      ? `Acerto da parcela ${pedido.parcela.numero} de ${pedido.parcela.total} do pedido #${pedido.numero}`
+                      : `Acerto do pedido #${pedido.numero}`
+                }
+                descricao={`${pedido.apelidoCliente} · ${pedido.nomeIndustria}`}
+              >
+                {conteudoDoPainel}
+              </JanelaDaLinha>
               </>
             )
           )}
         </Celula>
       </tr>
-
-      {/*
-        `hidden`, e não desmontar: o formulário guarda o que foi digitado e o
-        erro da última tentativa enquanto a pessoa fecha e reabre a linha. No
-        celular em pé esta linha não existe: o painel vai para a folha que sobe
-        de baixo, montada na célula da ação.
-      */}
-      {!estreita && (
-        <tr id={painel} hidden={!aberto || !pedido.podeAcertar || !visivel}>
-          <td colSpan={colunas} className="px-3 pb-4 pt-1">
-            <div className="rounded-suave border border-filete bg-folha-2 p-4">{conteudoDoPainel}</div>
-          </td>
-        </tr>
-      )}
     </>
   );
 }

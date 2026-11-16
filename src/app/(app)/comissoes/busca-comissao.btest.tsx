@@ -60,6 +60,7 @@ const BASE: LinhaPedido = {
   hoje: "2026-10",
   lugar: "no-mes",
   industria: null,
+  nomeIndustria: "QUALYPLAST",
 };
 
 const NADA = async () => ({});
@@ -214,28 +215,4 @@ describe("busca de Comissões", () => {
     await expect.element(page.getByText("Nada encontrado")).not.toBeInTheDocument();
   });
 
-  test("o acerto aberto guarda o que foi digitado enquanto a busca o esconde", async () => {
-    const container = await abrir();
-
-    // Abre o acerto do #77 e digita o valor recebido.
-    const linha77 = linhasDo(container, 77)[0];
-    (linha77.querySelector("button") as HTMLButtonElement).click();
-    const painel = linha77.nextElementSibling as HTMLTableRowElement;
-    // O painel só é montado quando a linha abre pela primeira vez.
-    await expect.poll(() => painel.querySelector('input[name="valorRecebido"]')).not.toBeNull();
-    const campo = painel.querySelector<HTMLInputElement>('input[name="valorRecebido"]')!;
-    await expect.poll(() => visivel(campo)).toBe(true);
-    await userEvent.fill(campo, "12345");
-    const digitado = campo.value;
-    expect(digitado).not.toBe("");
-
-    await buscar("142");
-    await expect.poll(() => visivel(linha77) || visivel(painel)).toBe(false);
-
-    await buscar("");
-    await expect.poll(() => visivel(campo)).toBe(true);
-    // O mesmo nó, com o mesmo valor: a linha não foi desmontada.
-    expect(painel.isConnected).toBe(true);
-    expect(campo.value).toBe(digitado);
-  });
 });

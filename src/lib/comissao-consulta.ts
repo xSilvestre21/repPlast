@@ -696,7 +696,7 @@ export async function saldosDeRepasse(
   doMes: PedidoDaComissao[],
   repasses: RepasseLancado[],
   apenasDoPreposto?: string | null,
-): Promise<Map<string, SaldoRepasse>> {
+): Promise<Map<string, SaldoComPedidos>> {
   const inicio = repasses.map((r) => r.competencia).sort()[0];
   const anteriores =
     inicio !== undefined && inicio < competencia
@@ -735,10 +735,29 @@ export async function saldosDeRepasse(
 
   const prepostos = new Set([...devido.keys(), ...pago.keys()]);
 
+  // Os itens de cada mês anterior, por preposto: é o que a tela lista em "de
+  // onde vem o saldo de meses anteriores". Já foram buscados para a conta.
+  const itensAnteriores = Map.groupBy(
+    anteriores.filter((p) => prepostoDoPedido(p)),
+    (p) => prepostoDoPedido(p)!.id,
+  );
+
   return new Map(
     [...prepostos].map((id) => [
       id,
-      saldoDoRepasse(devido.get(id) ?? new Map(), pago.get(id) ?? new Map(), competencia),
+      {
+        ...saldoDoRepasse(devido.get(id) ?? new Map(), pago.get(id) ?? new Map(), competencia),
+        itensPorMes: Map.groupBy(itensAnteriores.get(id) ?? [], (p) => p.competencia),
+      },
     ]),
   );
 }
+
+/**
+ * O saldo, com os itens de cada mês anterior — para a tela mostrar de que
+ * pedidos veio o que ficou faltando (ou o que foi pago a mais).
+ */
+export type SaldoComPedidos = SaldoRepasse & {
+  /** "AAAA-MM" → os itens do preposto naquele mês. Só dos meses antes da tela. */
+  itensPorMes: Map<string, PedidoDaComissao[]>;
+};

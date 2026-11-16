@@ -172,11 +172,11 @@ export function relatorioDosGraficos(
         detalhe: `${dados.pedidosDoMes} ${dados.pedidosDoMes === 1 ? "pedido" : "pedidos"} no mês`,
       },
       { rotulo: "Recebido", valor: moeda(dados.vista.recebido), tom: "verde" },
-      { rotulo: "A acertar", valor: moeda(dados.vista.aAcertar), detalhe: "ainda sem acerto" },
+      { rotulo: "A acertar", valor: moeda(dados.vista.aAcertar), detalhe: "ainda não pagos" },
       {
         rotulo: "Diferença",
         valor: moeda(dados.vista.diferenca),
-        detalhe: "recebido − previsto dos acertados",
+        detalhe: "recebido − previsto",
         tom: tomDoSaldo(Number(dados.vista.diferenca.toString())),
       },
     ],

@@ -102,6 +102,8 @@ export type LinhaPedido = {
   lugar: "no-mes" | "adiada-daqui" | "pendente";
   /** O nome da indústria, na lista de pendentes — lá as indústrias se misturam. */
   industria: string | null;
+  /** O nome da indústria sempre: o resumo da janela do acerto o mostra. */
+  nomeIndustria: string;
 };
 
 /**
