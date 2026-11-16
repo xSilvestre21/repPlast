@@ -20,8 +20,12 @@
 import "server-only";
 
 import { PrismaPg } from "@prisma/adapter-pg";
+import { attachDatabasePool } from "@vercel/functions";
+import { Pool } from "pg";
 
 import { PrismaClient } from "@/generated/prisma/client";
+
+import { comSegundaTentativa } from "./erro-de-conexao";
 
 const globalParaPrisma = globalThis as unknown as { prismaBase?: PrismaClient };
 
@@ -58,8 +62,40 @@ function criarCliente() {
     );
   }
 
+  /*
+   * O pool é criado aqui, e não pelo adaptador, por causa do Vercel.
+   *
+   * Lá a instância é SUSPENSA entre uma requisição e outra, com as conexões
+   * ociosas ainda abertas — o relógio que as fecharia não corre com ela
+   * parada. O banco as derruba do lado dele, e a requisição seguinte pegava um
+   * soquete morto: a tela caía em "Esta tela não carregou" e abria no "Tentar
+   * de novo", que já usava conexão nova. `attachDatabasePool` segura a
+   * instância acordada só até as ociosas fecharem — por isso o prazo curto lá.
+   * Fora do Vercel (a AWS, um processo que não dorme) ele não faz nada, e o
+   * prazo fica no padrão do `pg`.
+   *
+   * `keepAlive` faz o sistema operacional notar a conexão que caiu sem aviso;
+   * o limite para conectar troca uma espera sem fim por um erro que a segunda
+   * tentativa (`comContexto`) resolve.
+   */
+  const noVercel = Boolean(process.env.VERCEL);
+  const pool = new Pool({
+    connectionString,
+    keepAlive: true,
+    connectionTimeoutMillis: 10_000,
+    ...(noVercel ? { idleTimeoutMillis: 5_000 } : {}),
+  });
+
+  // Conexão ociosa que cai emite "error" no pool; sem ouvinte, o Node trata
+  // como exceção não capturada e derruba o processo. O pool já a descarta.
+  pool.on("error", (erro) => {
+    console.warn("Conexão ociosa com o banco caiu:", erro.message);
+  });
+
+  if (noVercel) attachDatabasePool(pool);
+
   return new PrismaClient({
-    adapter: new PrismaPg({ connectionString }),
+    adapter: new PrismaPg(pool),
     // Toda query passa por uma transação (é como o contexto de tenant é
     // aplicado — ver `comContexto`), então são 4 idas ao banco por operação.
     // Com o banco em outra região os limites padrão do Prisma (2s para obter a
@@ -108,9 +144,11 @@ function comContexto(opcoes: {
     query: {
       $allModels: {
         async $allOperations({
+          operation,
           args,
           query,
         }: {
+          operation: string;
           args: unknown;
           query: (a: unknown) => Promise<unknown>;
         }) {
@@ -132,14 +170,22 @@ function comContexto(opcoes: {
           const usuarioId = opcoes.ator?.usuarioId ?? "";
           const papel = opcoes.ator?.papel ?? "";
 
-          const preparo =
-            opcoes.trocarPapel && PAPEL_APP
-              ? prismaBase.$executeRaw`SELECT set_config('role', ${PAPEL_APP}, TRUE), set_config(${opcoes.chave}, ${opcoes.valor}, TRUE), set_config('app.usuario_id', ${usuarioId}, TRUE), set_config('app.papel', ${papel}, TRUE)`
-              : prismaBase.$executeRaw`SELECT set_config(${opcoes.chave}, ${opcoes.valor}, TRUE)`;
+          // Função, e não valor: a segunda tentativa monta a transação de novo,
+          // do preâmbulo à consulta.
+          const executar = async () => {
+            const preparo =
+              opcoes.trocarPapel && PAPEL_APP
+                ? prismaBase.$executeRaw`SELECT set_config('role', ${PAPEL_APP}, TRUE), set_config(${opcoes.chave}, ${opcoes.valor}, TRUE), set_config('app.usuario_id', ${usuarioId}, TRUE), set_config('app.papel', ${papel}, TRUE)`
+                : prismaBase.$executeRaw`SELECT set_config(${opcoes.chave}, ${opcoes.valor}, TRUE)`;
 
-          const resultados = await prismaBase.$transaction([preparo, query(args) as never]);
+            const resultados = await prismaBase.$transaction([preparo, query(args) as never]);
 
-          return resultados[resultados.length - 1];
+            return resultados[resultados.length - 1];
+          };
+
+          // Leitura que pegou uma conexão morta tenta mais uma vez; escrita,
+          // nunca (`comSegundaTentativa`, em `erro-de-conexao.ts`).
+          return comSegundaTentativa(operation, executar);
         },
       },
     },
