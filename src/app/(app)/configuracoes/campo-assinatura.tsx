@@ -18,7 +18,7 @@ import { useEffect, useId, useRef, useState, type ClipboardEvent } from "react";
 
 import { CLASSE_CONTROLE, CLASSE_ERRO } from "@/components/controle";
 import { PreviaAssinatura } from "@/components/previa-assinatura";
-import { BotaoTexto, RodapeCampo, Rotulo } from "@/components/ui";
+import { Botao, RodapeCampo, Rotulo } from "@/components/ui";
 import type { Provedor } from "@/lib/provedores-email";
 
 /**
@@ -226,15 +226,16 @@ export function CampoAssinatura({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-4 mt-2">
-        <BotaoTexto
+      <div className="flex flex-wrap items-center gap-3 mt-3">
+        <Botao
           type="button"
+          variante="secundaria"
+          tamanho="compacto"
+          icone={ImagePlus}
           onClick={() => arquivo.current?.click()}
-          className="inline-flex items-center gap-1"
         >
-          <ImagePlus size={12} aria-hidden="true" />
           Adicionar imagem
-        </BotaoTexto>
+        </Botao>
         <input
           ref={arquivo}
           type="file"
@@ -247,10 +248,9 @@ export function CampoAssinatura({
           }}
         />
         {html.trim() !== "" && (
-          <BotaoTexto type="button" onClick={remover} perigoso className="inline-flex items-center gap-1">
-            <Trash2 size={12} aria-hidden="true" />
+          <Botao type="button" variante="perigo" tamanho="compacto" icone={Trash2} onClick={remover}>
             Remover assinatura
-          </BotaoTexto>
+          </Botao>
         )}
       </div>
     </div>

@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { AcaoComRecusa } from "@/components/acao-com-recusa";
-import { Botao, BotaoTexto, Campo } from "@/components/ui";
+import { Botao, Campo } from "@/components/ui";
 import type { EstadoFormulario } from "@/lib/erro-formulario";
 import { LIMITE_DO_MOTIVO } from "@/lib/motivo";
 
@@ -163,9 +163,9 @@ export function CancelarPedido({ acao }: { acao: AcaoDeStatus }) {
           variante="perigo"
           icone="cancelar"
         />
-        <BotaoTexto type="button" onClick={() => setEscrevendo(false)}>
-          voltar
-        </BotaoTexto>
+        <Botao type="button" variante="secundaria" tamanho="compacto" onClick={() => setEscrevendo(false)}>
+          Voltar
+        </Botao>
         </div>
       </div>
     </AcaoComRecusa>

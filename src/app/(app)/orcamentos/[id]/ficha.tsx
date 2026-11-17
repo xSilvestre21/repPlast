@@ -16,6 +16,7 @@ import {
   FileSignature,
   Handshake,
   PackagePlus,
+  RotateCcw,
   ScrollText,
   ThumbsDown,
   Timer,
@@ -31,7 +32,6 @@ import {
   AreaTexto,
   Botao,
   BotaoLink,
-  BotaoTexto,
   Campo,
   SecaoCartao,
 } from "@/components/ui";
@@ -220,7 +220,9 @@ export function DesfechoProposta({
 
   const reabrirProposta = (
     <AcaoComRecusa acao={reabrir} alinhamento="inicio" className="self-center">
-      <BotaoTexto type="submit">reabrir a proposta</BotaoTexto>
+      <Botao type="submit" variante="secundaria" tamanho="compacto" icone={RotateCcw}>
+        Reabrir a proposta
+      </Botao>
     </AcaoComRecusa>
   );
 
@@ -253,9 +255,9 @@ export function DesfechoProposta({
               <Botao type="submit" variante="secundaria" icone={ThumbsDown}>
                 Marcar como recusada
               </Botao>
-              <BotaoTexto type="button" onClick={() => setRecusando(false)}>
-                voltar
-              </BotaoTexto>
+              <Botao type="button" variante="secundaria" tamanho="compacto" onClick={() => setRecusando(false)}>
+                Voltar
+              </Botao>
             </div>
           </AcaoComRecusa>
         ) : (
@@ -282,10 +284,9 @@ export function DesfechoProposta({
               Recusou
             </Botao>
             <AcaoComRecusa acao={vencer} alinhamento="inicio" className="self-center">
-              <BotaoTexto type="submit">
-                <Timer size={12} className="inline mr-1" aria-hidden="true" />
-                marcar como vencida
-              </BotaoTexto>
+              <Botao type="submit" variante="secundaria" tamanho="compacto" icone={Timer}>
+                Marcar como vencida
+              </Botao>
             </AcaoComRecusa>
           </div>
         )}

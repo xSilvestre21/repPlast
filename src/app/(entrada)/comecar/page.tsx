@@ -1,5 +1,4 @@
 import { Check, CreditCard, Lock } from "lucide-react";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { CartoesPlanos } from "@/components/entrada/cartoes-planos";
@@ -7,7 +6,7 @@ import { LinhaDoTeste } from "@/components/entrada/linha-do-teste";
 import { Movimento } from "@/components/entrada/movimento";
 import { SemScriptRevela } from "@/components/entrada/revelar";
 import { TopoEntrada } from "@/components/entrada/topo-entrada";
-import { Cartao } from "@/components/ui";
+import { BotaoLink, Cartao } from "@/components/ui";
 import { DESTAQUE_SUPORTE, planoDaUrl, type Plano } from "@/lib/planos";
 import { inicioDa, sessaoAtual } from "@/lib/sessao";
 import { datasDoTeste, DIAS_DE_TESTE } from "@/lib/teste-gratis";
@@ -40,15 +39,12 @@ export default async function PaginaComecar({ searchParams }: PageProps<"/comeca
 
 function LinkEntrar() {
   return (
-    <p className="text-corpo text-tinta-2 mt-8 text-center">
-      Já tem conta?{" "}
-      <Link
-        href="/entrar"
-        className="text-carimbo font-medium underline underline-offset-4 decoration-carimbo/35 hover:decoration-carimbo"
-      >
+    <div className="mt-8 flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
+      <p className="text-corpo text-tinta-2">Já tem conta?</p>
+      <BotaoLink href="/entrar" variante="secundaria" tamanho="compacto">
         Entrar
-      </Link>
-    </p>
+      </BotaoLink>
+    </div>
   );
 }
 
@@ -120,12 +116,9 @@ function PassoCadastro({ plano }: { plano: Plano }) {
               </li>
             ))}
           </ul>
-          <Link
-            href="/comecar"
-            className="inline-block mt-5 text-rotulo text-carimbo font-medium underline underline-offset-4 decoration-carimbo/35 hover:decoration-carimbo"
-          >
+          <BotaoLink href="/comecar" variante="secundaria" tamanho="compacto" className="mt-5">
             Trocar plano
-          </Link>
+          </BotaoLink>
         </div>
 
         <ul className="mt-6 space-y-2.5 max-w-md">

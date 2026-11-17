@@ -1,8 +1,9 @@
+import { Ban, LogOut } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { AcaoComRecusa } from "@/components/acao-com-recusa";
 import { TopoEntrada } from "@/components/entrada/topo-entrada";
-import { BotaoTexto, Cartao } from "@/components/ui";
+import { Botao, Cartao } from "@/components/ui";
 import { assinaturaLiberada } from "@/lib/acesso-assinatura";
 import { PLANOS } from "@/lib/planos";
 import { sessaoAtual } from "@/lib/sessao";
@@ -132,9 +133,9 @@ export default async function PaginaAssinatura({ searchParams }: PageProps<"/ass
                           desistir: "Manter a assinatura",
                         }}
                       >
-                        <BotaoTexto type="submit" perigoso>
+                        <Botao type="submit" variante="perigo" tamanho="compacto" icone={Ban}>
                           Cancelar a assinatura
-                        </BotaoTexto>
+                        </Botao>
                       </AcaoComRecusa>
                     </div>
                   )}
@@ -149,7 +150,9 @@ export default async function PaginaAssinatura({ searchParams }: PageProps<"/ass
           )}
 
           <form action={sair} className="mt-6 text-center">
-            <BotaoTexto type="submit">Sair e entrar com outra conta</BotaoTexto>
+            <Botao type="submit" variante="secundaria" tamanho="compacto" icone={LogOut}>
+              Sair e entrar com outra conta
+            </Botao>
           </form>
         </Cartao>
       </div>

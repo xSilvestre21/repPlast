@@ -8,7 +8,6 @@ import { CampoMoeda } from "@/components/campo-mascarado";
 import {
   Barra,
   Botao,
-  BotaoTexto,
   Cartao,
   EspacoDoRotulo,
   Placa,
@@ -123,14 +122,16 @@ export function PainelMeta({
               {herdadaDe && (
                 <div className="text-mini text-tinta-3">desde {herdadaDe}</div>
               )}
-              <BotaoTexto
+              <Botao
                 type="button"
+                variante="secundaria"
+                tamanho="compacto"
+                icone={Pencil}
                 onClick={() => setEditando(true)}
-                className="mt-0.5 inline-flex items-center gap-1"
+                className="mt-2"
               >
-                <Pencil size={11} aria-hidden="true" />
-                alterar
-              </BotaoTexto>
+                Alterar meta
+              </Botao>
             </div>
           )}
         </div>
@@ -192,8 +193,8 @@ export function PainelMeta({
                   className="flex-1 min-w-48"
                 />
 
-                {/* O par de sempre: a ação e, ao lado, o "voltar atrás" em texto
-                    — como em recusar orçamento e cancelar pedido. */}
+                {/* O par de sempre: a ação e, ao lado, o "voltar atrás" num
+                    botão menor — como em recusar orçamento e cancelar pedido. */}
                 <div>
                   <EspacoDoRotulo />
                   <div className="flex items-center gap-3 h-11">
@@ -202,9 +203,14 @@ export function PainelMeta({
                     </Botao>
 
                     {meta !== null && (
-                      <BotaoTexto type="button" onClick={() => setEditando(false)}>
-                        cancelar
-                      </BotaoTexto>
+                      <Botao
+                        type="button"
+                        variante="secundaria"
+                        tamanho="compacto"
+                        onClick={() => setEditando(false)}
+                      >
+                        Cancelar
+                      </Botao>
                     )}
                   </div>
                 </div>

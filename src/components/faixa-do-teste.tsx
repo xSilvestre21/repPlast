@@ -8,7 +8,8 @@
  */
 
 import { ArrowRight, Gift } from "lucide-react";
-import Link from "next/link";
+
+import { BotaoLink } from "@/components/ui";
 
 export function FaixaDoTeste({
   dias,
@@ -41,10 +42,7 @@ export function FaixaDoTeste({
           <span className="numerico">{ultimoDia}</span> e não paga nada.
         </span>
       </p>
-      <Link
-        href="/configuracoes#escritorio"
-        className="group inline-flex items-center gap-1.5 text-rotulo font-semibold text-tinta underline underline-offset-4 decoration-tinta/30 hover:decoration-tinta"
-      >
+      <BotaoLink href="/configuracoes#escritorio" variante="secundaria" tamanho="compacto" className="group">
         Ver o plano
         <ArrowRight
           size={14}
@@ -52,7 +50,7 @@ export function FaixaDoTeste({
           aria-hidden="true"
           className="transition-transform duration-200 group-hover:translate-x-0.5"
         />
-      </Link>
+      </BotaoLink>
     </aside>
   );
 }

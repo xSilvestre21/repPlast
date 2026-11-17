@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { TopoEntrada } from "@/components/entrada/topo-entrada";
-import { Cartao, MensagemErro } from "@/components/ui";
+import { BotaoLink, Cartao, MensagemErro } from "@/components/ui";
 import { donoDoLink, LINK_VENCIDO } from "@/lib/redefinicao-senha";
 import { inicioDa, sessaoAtual } from "@/lib/sessao";
 
@@ -50,14 +49,10 @@ export default async function PaginaRedefinirSenha({ params }: PageProps<"/redef
           ) : (
             <div className="mt-6 space-y-5">
               <MensagemErro>{LINK_VENCIDO}</MensagemErro>
-              <p className="text-center">
-                <Link
-                  href="/esqueci-senha"
-                  className="text-carimbo font-medium underline underline-offset-4 decoration-carimbo/35 hover:decoration-carimbo"
-                >
-                  Pedir um link novo
-                </Link>
-              </p>
+              {/* A única saída da tela: o botão preto. */}
+              <BotaoLink href="/esqueci-senha" className="w-full">
+                Pedir um link novo
+              </BotaoLink>
             </div>
           )}
         </Cartao>

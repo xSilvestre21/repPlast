@@ -16,7 +16,7 @@ import { CampoData } from "@/components/campo-data";
 import { CampoHora } from "@/components/campo-hora";
 import { SelecaoBuscavel, type OpcaoBuscavel } from "@/components/selecao-buscavel";
 import { ErroGeral, Formulario } from "@/components/formulario";
-import { AreaTexto, Botao, BotaoTexto, Campo } from "@/components/ui";
+import { AreaTexto, Botao, Campo } from "@/components/ui";
 import type { Importancia } from "@/lib/agenda";
 import type { DataIso } from "@/lib/calendario";
 
@@ -201,9 +201,9 @@ export function FormularioCompromisso({
         <Botao type="submit" carregando={salvando}>
           {compromisso ? "Salvar alterações" : "Marcar compromisso"}
         </Botao>
-        <BotaoTexto type="button" onClick={aoTerminar}>
-          cancelar
-        </BotaoTexto>
+        <Botao type="button" variante="secundaria" tamanho="compacto" onClick={aoTerminar}>
+          Cancelar
+        </Botao>
       </div>
     </Formulario>
   );

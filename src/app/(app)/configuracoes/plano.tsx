@@ -17,10 +17,10 @@
  * nos dois sentidos, e cancelar diz com todas as letras que nada é cobrado.
  */
 
-import { Check, Gem } from "lucide-react";
+import { Ban, Check, Gem } from "lucide-react";
 
 import { AcaoComRecusa } from "@/components/acao-com-recusa";
-import { Botao, BotaoTexto, formatarMoeda, Mensagem, SecaoCartao, Selo } from "@/components/ui";
+import { Botao, formatarMoeda, Mensagem, SecaoCartao, Selo } from "@/components/ui";
 import type { EstadoFormulario } from "@/lib/erro-formulario";
 import { type CodigoPlano, PLANOS, valorMensal } from "@/lib/planos";
 
@@ -192,9 +192,9 @@ export function CartaoPlano({
                       }
                 }
               >
-                <BotaoTexto type="submit" perigoso>
+                <Botao type="submit" variante="perigo" tamanho="compacto" icone={Ban}>
                   Cancelar a assinatura
-                </BotaoTexto>
+                </Botao>
               </AcaoComRecusa>
             </div>
           )}

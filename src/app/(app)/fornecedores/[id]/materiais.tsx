@@ -15,7 +15,7 @@
  * do material ao lado. Coluna de tabela alinha sozinha.
  */
 
-import { Check, ChevronDown, Layers, Loader2 } from "lucide-react";
+import { Check, ChevronDown, Layers, Loader2, Trash2 } from "lucide-react";
 import { Fragment, useActionState, useEffect, useId, useRef, useState } from "react";
 
 import { AcaoComRecusa } from "@/components/acao-com-recusa";
@@ -23,7 +23,6 @@ import { ErroGeral, Formulario } from "@/components/formulario";
 import { filtrarNumero } from "@/components/so-numeros";
 import {
   Botao,
-  BotaoTexto,
   CLASSE_CONTROLE_CELULA,
   CLASSE_ERRO,
   Campo,
@@ -323,9 +322,17 @@ function LinhaMaterial({
                 }}
               >
                 <input type="hidden" name="materialId" value={material.id} />
-                <BotaoTexto type="submit" perigoso aria-label={`Remover material ${material.nome}`}>
-                  remover
-                </BotaoTexto>
+                {/* Só a lixeira num círculo vermelho: com a palavra, o botão
+                    não cabia na coluna de ações e a tabela rolava de lado. */}
+                <Botao
+                  type="submit"
+                  variante="perigo"
+                  tamanho="compacto"
+                  icone={Trash2}
+                  aria-label={`Remover material ${material.nome}`}
+                  title="Remover"
+                  className="size-8 p-0"
+                />
               </AcaoComRecusa>
             </div>
           </Celula>

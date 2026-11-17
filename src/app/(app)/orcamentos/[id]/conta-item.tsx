@@ -11,6 +11,7 @@
  * cliente sem redigitar.
  */
 
+import { RotateCcw } from "lucide-react";
 import { useActionState, useMemo, useState } from "react";
 
 import { CampoAcabamento, EscolhaMaoDeObra } from "@/components/campo-acabamento";
@@ -26,7 +27,6 @@ import { type OpcaoBuscavel, SelecaoBuscavel } from "@/components/selecao-buscav
 import { ErroGeral, Formulario } from "@/components/formulario";
 import {
   Botao,
-  BotaoTexto,
   Campo,
   EspacoDoRotulo,
   Selecao,
@@ -674,9 +674,7 @@ export function ContaItem({
               className="font-mono"
             />
             {descricaoManual !== null && descricaoGerada !== "" && descricaoManual !== descricaoGerada && (
-              <BotaoTexto type="button" onClick={() => setDescricaoManual(null)} className="mt-2">
-                Voltar para a gerada: <span className="font-mono">{descricaoGerada}</span>
-              </BotaoTexto>
+              <VoltarParaGerada gerada={descricaoGerada} aoVoltar={() => setDescricaoManual(null)} />
             )}
           </div>
 
@@ -799,5 +797,21 @@ function CampoNumero({
       value={conta[nome]}
       onChange={(e) => alterar(nome)(e.target.value)}
     />
+  );
+}
+
+/**
+ * Desfaz a edição à mão da descrição. Botão de verdade com o nome da ação, e a
+ * descrição gerada ao lado: dentro da pílula, um texto comprido não quebra.
+ * Mesma forma do cadastro de produto (`produtos/formulario.tsx`).
+ */
+function VoltarParaGerada({ gerada, aoVoltar }: { gerada: string; aoVoltar: () => void }) {
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      <Botao type="button" variante="secundaria" tamanho="compacto" icone={RotateCcw} onClick={aoVoltar}>
+        Voltar para a descrição gerada
+      </Botao>
+      <span className="min-w-0 break-words font-mono text-mini text-tinta-2">{gerada}</span>
+    </div>
   );
 }

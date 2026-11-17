@@ -8,6 +8,7 @@
  * Rode com:  npm run test:navegador
  */
 
+import { useState } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { render } from "vitest-browser-react";
@@ -346,5 +347,63 @@ describe("a tampa na linha", () => {
 
     await expect.element(tela.getByText("Tampa:")).not.toBeInTheDocument();
     await expect.element(tela.getByText(/mão de obra/)).not.toBeInTheDocument();
+  });
+});
+
+describe("cobrar ou tirar o IPI de todos", () => {
+  /*
+   * O servidor de mentira: as ações mudam os itens e a tabela é desenhada de
+   * novo com eles, como faz o `revalidatePath` depois da ação de verdade.
+   */
+  function Pedido({ inicial }: { inicial: ItemPedido[] }) {
+    const [itens, setItens] = useState(inicial);
+    return (
+      <SecaoItens
+        itens={itens}
+        produtos={[]}
+        totais={{ subtotalSemIpi: "0", valorIpi: "0", totalGeral: "0", ipiPercentual: "10" }}
+        editavel
+        adicionar={acao}
+        atualizar={async (_estado, formData) => {
+          const id = formData.get("itemId");
+          const comIpi = formData.get("comIpiItem") === "on";
+          setItens((atual) => atual.map((i) => (i.id === id ? { ...i, comIpi } : i)));
+          return {};
+        }}
+        remover={acao}
+        definirIpiDeTodos={async (_estado, formData) => {
+          const comIpi = formData.get("ligado") === "1";
+          setItens((atual) => atual.map((i) => ({ ...i, comIpi })));
+          return {};
+        }}
+      />
+    );
+  }
+
+  const OUTRA: ItemPedido = { ...LINHA, id: "i2", codigoFornecedor: "F-2", descricao: "Bombona 20L", comIpi: false };
+  const caixa = (tela: Awaited<ReturnType<typeof render>>, descricao: string) =>
+    tela.getByRole("checkbox", { name: `Cobrar IPI de ${descricao}` });
+
+  test("o botão marca a caixa de cada linha, e depois desmarca", async () => {
+    const tela = await render(<Pedido inicial={[LINHA, OUTRA]} />);
+
+    await tela.getByRole("button", { name: "Cobrar IPI em todos" }).click();
+    await expect.element(caixa(tela, LINHA.descricao)).toBeChecked();
+    await expect.element(caixa(tela, OUTRA.descricao)).toBeChecked();
+
+    await tela.getByRole("button", { name: "Tirar o IPI de todos" }).click();
+    await expect.element(caixa(tela, LINHA.descricao)).not.toBeChecked();
+    await expect.element(caixa(tela, OUTRA.descricao)).not.toBeChecked();
+  });
+
+  test("também numa caixa que a pessoa já tinha mexido", async () => {
+    const tela = await render(<Pedido inicial={[LINHA, OUTRA]} />);
+
+    await caixa(tela, LINHA.descricao).click();
+    await expect.element(caixa(tela, LINHA.descricao)).not.toBeChecked();
+
+    await tela.getByRole("button", { name: "Cobrar IPI em todos" }).click();
+    await expect.element(caixa(tela, LINHA.descricao)).toBeChecked();
+    await expect.element(caixa(tela, OUTRA.descricao)).toBeChecked();
   });
 });

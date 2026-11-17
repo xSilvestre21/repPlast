@@ -12,7 +12,7 @@ import { Perguntas } from "@/components/entrada/perguntas";
 import { Recursos } from "@/components/entrada/recursos";
 import { Revelar, SemScriptRevela } from "@/components/entrada/revelar";
 import { TopoEntrada } from "@/components/entrada/topo-entrada";
-import { Cartao, Mensagem, Placa } from "@/components/ui";
+import { BotaoLink, Cartao, Mensagem, Placa } from "@/components/ui";
 import { CONTROLADOR } from "@/lib/lgpd";
 import { inicioDa, sessaoAtual } from "@/lib/sessao";
 import { DIAS_DE_TESTE } from "@/lib/teste-gratis";
@@ -177,15 +177,12 @@ export default async function PaginaEntrar({ searchParams }: PageProps<"/entrar"
               )}
               <FormularioEntrada acao={entrar} rotulo="Entrar" />
 
-              <p className="text-corpo text-tinta-2 mt-7 text-center">
-                Ainda não tem conta?{" "}
-                <Link
-                  href="/comecar"
-                  className="text-carimbo font-medium underline underline-offset-4 decoration-carimbo/35 hover:decoration-carimbo"
-                >
+              <div className="mt-7 border-t border-filete pt-6 text-center">
+                <p className="text-corpo text-tinta-2">Ainda não tem conta?</p>
+                <BotaoLink href="/comecar" variante="secundaria" className="mt-3 w-full">
                   Criar um escritório
-                </Link>
-              </p>
+                </BotaoLink>
+              </div>
             </Cartao>
           </div>
         </div>

@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { TopoEntrada } from "@/components/entrada/topo-entrada";
-import { Cartao, MensagemErro } from "@/components/ui";
+import { BotaoLink, Cartao, MensagemErro } from "@/components/ui";
 import { LINK_TROCA_VENCIDO, pedidoDoLink } from "@/lib/troca-email";
 
 import { confirmarTrocaEmail } from "../../acoes";
@@ -47,14 +46,10 @@ export default async function PaginaConfirmarEmail({ params }: PageProps<"/confi
           ) : (
             <div className="mt-6 space-y-5">
               <MensagemErro>{LINK_TROCA_VENCIDO}</MensagemErro>
-              <p className="text-center">
-                <Link
-                  href="/entrar"
-                  className="text-carimbo font-medium underline underline-offset-4 decoration-carimbo/35 hover:decoration-carimbo"
-                >
-                  Ir para a tela de entrar
-                </Link>
-              </p>
+              {/* A única saída da tela: o botão preto. */}
+              <BotaoLink href="/entrar" className="w-full">
+                Ir para a tela de entrar
+              </BotaoLink>
             </div>
           )}
         </Cartao>

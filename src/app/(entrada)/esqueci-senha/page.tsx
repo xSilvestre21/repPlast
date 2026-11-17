@@ -1,8 +1,8 @@
-import Link from "next/link";
+import { ArrowLeft, RotateCcw } from "lucide-react";
 import { redirect } from "next/navigation";
 
 import { TopoEntrada } from "@/components/entrada/topo-entrada";
-import { Cartao, Mensagem } from "@/components/ui";
+import { BotaoLink, Cartao, Mensagem } from "@/components/ui";
 import { VALIDADE_MIN } from "@/lib/redefinicao-senha";
 import { inicioDa, sessaoAtual } from "@/lib/sessao";
 
@@ -33,15 +33,12 @@ export default async function PaginaEsqueciSenha({ searchParams }: PageProps<"/e
                 Se houver uma conta com este e-mail, enviamos um link para criar uma senha nova. Ele
                 vale por {VALIDADE_MIN} minutos — confira também a caixa de spam.
               </Mensagem>
-              <p className="text-corpo text-tinta-2">
-                Não chegou em alguns minutos?{" "}
-                <Link
-                  href="/esqueci-senha"
-                  className="text-carimbo font-medium underline underline-offset-4 decoration-carimbo/35 hover:decoration-carimbo"
-                >
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <p className="text-corpo text-tinta-2">Não chegou em alguns minutos?</p>
+                <BotaoLink href="/esqueci-senha" variante="secundaria" tamanho="compacto" icone={RotateCcw}>
                   Pedir de novo
-                </Link>
-              </p>
+                </BotaoLink>
+              </div>
             </div>
           ) : (
             <>
@@ -52,14 +49,11 @@ export default async function PaginaEsqueciSenha({ searchParams }: PageProps<"/e
             </>
           )}
 
-          <p className="text-corpo text-tinta-2 mt-7 text-center">
-            <Link
-              href="/entrar"
-              className="text-carimbo font-medium underline underline-offset-4 decoration-carimbo/35 hover:decoration-carimbo"
-            >
+          <div className="mt-7 flex justify-center">
+            <BotaoLink href="/entrar" variante="secundaria" tamanho="compacto" icone={ArrowLeft}>
               Voltar para entrar
-            </Link>
-          </p>
+            </BotaoLink>
+          </div>
         </Cartao>
       </div>
     </>

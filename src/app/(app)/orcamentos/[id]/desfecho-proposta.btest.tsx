@@ -134,13 +134,13 @@ describe("proposta fechada", () => {
 
     await expect.element(tela.getByRole("heading", { name: "Recusada" })).toBeVisible();
     await expect.element(tela.getByRole("textbox", { name: /Por que o cliente recusou/ })).toHaveValue("Preço");
-    await expect.element(tela.getByRole("button", { name: "reabrir a proposta" })).toBeVisible();
+    await expect.element(tela.getByRole("button", { name: "Reabrir a proposta" })).toBeVisible();
   });
 
   test("vencida deixa reabrir", async () => {
     const { tela } = await abrir({ status: "EXPIRADO" });
 
     await expect.element(tela.getByRole("heading", { name: "Vencida" })).toBeVisible();
-    await expect.element(tela.getByRole("button", { name: "reabrir a proposta" })).toBeVisible();
+    await expect.element(tela.getByRole("button", { name: "Reabrir a proposta" })).toBeVisible();
   });
 });

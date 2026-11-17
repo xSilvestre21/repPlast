@@ -9,13 +9,13 @@ import {
   Layers,
   Package,
   Paintbrush,
+  RotateCcw,
   Ruler,
 } from "lucide-react";
 import { useActionState, useMemo, useState } from "react";
 
 import {
   Botao,
-  BotaoTexto,
   Campo,
   Cartao,
   SecaoCartao,
@@ -1064,13 +1064,20 @@ export function FormularioProduto({
             />
 
             {descricaoDivergente && (
-              <BotaoTexto
-                type="button"
-                onClick={() => setDescricaoManual(null)}
-                className="mt-2"
-              >
-                Voltar para a gerada: <span className="font-mono">{descricaoGerada}</span>
-              </BotaoTexto>
+              // Botão de verdade com o nome da ação, e a descrição gerada ao lado:
+              // dentro da pílula, um texto comprido não quebra.
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                <Botao
+                  type="button"
+                  variante="secundaria"
+                  tamanho="compacto"
+                  icone={RotateCcw}
+                  onClick={() => setDescricaoManual(null)}
+                >
+                  Voltar para a descrição gerada
+                </Botao>
+                <span className="min-w-0 break-words font-mono text-mini text-tinta-2">{descricaoGerada}</span>
+              </div>
             )}
 
             {/*

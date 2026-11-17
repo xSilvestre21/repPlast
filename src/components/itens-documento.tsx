@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useActionState, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useActionState, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { ListOrdered, Package } from "lucide-react";
+import { ListOrdered, Package, Trash2 } from "lucide-react";
 
 import {
   Botao,
-  BotaoTexto,
   CLASSE_CONTROLE_CELULA,
   CLASSE_ERRO,
   Campo,
@@ -210,32 +209,7 @@ export function SecaoItens({
             ...(semPreco ? [] : [
             { rotulo: rotuloPreco, alinhamento: "numero" as const },
             { rotulo: "TOT S/IPI", alinhamento: "numero" as const },
-            {
-              alinhamento: "numero" as const,
-              rotulo: (
-                <span className="whitespace-nowrap">
-                  IPI
-                  {/*
-                    O atalho fica no CABEÇALHO da coluna que ele governa, e só
-                    aparece com item na tabela. É o que substitui o antigo
-                    interruptor do pedido: isentar doze linhas continua sendo
-                    um clique, mas agora a decisão mora onde ela se lê.
-                  */}
-                  {editavel && itens.length > 0 && (
-                    <AcaoComRecusa acao={definirIpiDeTodos} className="ml-2 align-baseline">
-                      <input
-                        type="hidden"
-                        name="ligado"
-                        value={itens.every((i) => i.comIpi) ? "0" : "1"}
-                      />
-                      <BotaoTexto type="submit">
-                        {itens.every((i) => i.comIpi) ? "nenhum" : "todos"}
-                      </BotaoTexto>
-                    </AcaoComRecusa>
-                  )}
-                </span>
-              ),
-            },
+            { rotulo: "IPI", alinhamento: "numero" as const },
             { rotulo: "TOTAL", alinhamento: "numero" as const },
             ]),
             ...(editavel ? [{ rotulo: "", alinhamento: "acao" as const }] : []),
@@ -266,17 +240,33 @@ export function SecaoItens({
           <span className="text-tinta-2">Subtotal s/ IPI:</span>
           <span className="w-32 text-right">{formatarMoeda(totais.subtotalSemIpi)}</span>
         </div>
-        <div className="flex gap-8">
-          <span className="text-tinta-2">
-            {/*
-              O rótulo lê o ESTADO DAS LINHAS, e não um campo do pedido:
-              "Sem IPI" agora significa que nenhuma linha é tributada.
-            */}
-            {itens.length > 0 && itens.every((i) => !i.comIpi)
-              ? "Sem IPI:"
-              : `IPI (${Number(totais.ipiPercentual).toLocaleString("pt-BR")}%):`}
-          </span>
-          <span className="w-32 text-right">{formatarMoeda(totais.valorIpi)}</span>
+        {/*
+          Marcar ou desmarcar o IPI de todas as linhas mora AO LADO do valor do
+          IPI: é o número que o clique muda. Já morou no cabeçalho da coluna,
+          onde o botão alargava a tabela até ela rolar de lado — e no celular,
+          onde o cabeçalho some, nem aparecia.
+        */}
+        <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-2">
+          {editavel && itens.length > 0 && (
+            <AcaoComRecusa acao={definirIpiDeTodos}>
+              <input type="hidden" name="ligado" value={itens.every((i) => i.comIpi) ? "0" : "1"} />
+              <Botao type="submit" variante="secundaria" tamanho="compacto" className="py-1.5">
+                {itens.every((i) => i.comIpi) ? "Tirar o IPI de todos" : "Cobrar IPI em todos"}
+              </Botao>
+            </AcaoComRecusa>
+          )}
+          <div className="flex gap-8">
+            <span className="text-tinta-2">
+              {/*
+                O rótulo lê o ESTADO DAS LINHAS, e não um campo do pedido:
+                "Sem IPI" agora significa que nenhuma linha é tributada.
+              */}
+              {itens.length > 0 && itens.every((i) => !i.comIpi)
+                ? "Sem IPI:"
+                : `IPI (${Number(totais.ipiPercentual).toLocaleString("pt-BR")}%):`}
+            </span>
+            <span className="w-32 text-right">{formatarMoeda(totais.valorIpi)}</span>
+          </div>
         </div>
         <div className="flex gap-8 text-medio font-semibold mt-1">
           <span>TOTAL GERAL:</span>
@@ -412,6 +402,20 @@ function LinhaItem({
    * num campo que se lê `1.000` teria a linha regravada sem ter mudado nada.
    */
   const valorAoEntrar = useRef("");
+
+  /*
+   * A caixa do IPI acompanha o que está salvo.
+   *
+   * Ela não é controlada — marcar já grava —, e uma caixa assim não muda
+   * sozinha quando o item volta do servidor: o React só troca o
+   * `defaultChecked`, que deixa de valer depois que a caixa foi marcada uma
+   * vez. Era o "Cobrar IPI em todos" mudando o valor do IPI e deixando as
+   * caixas como estavam.
+   */
+  const caixaIpi = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (caixaIpi.current) caixaIpi.current.checked = item.comIpi;
+  }, [item.comIpi]);
 
   /**
    * Grava a linha, e só se houve mudança.
@@ -565,6 +569,7 @@ function LinhaItem({
             title={item.comIpi ? "Tributado. Desmarque para isentar." : "Isento de IPI."}
           >
             <input
+              ref={caixaIpi}
               form={`item-${item.id}`}
               type="checkbox"
               name={CAMPO_IPI}
@@ -615,14 +620,23 @@ function LinhaItem({
             }}
           >
             <input type="hidden" name="itemId" value={item.id} />
-            <BotaoTexto
+            {/*
+              Na tabela, só a lixeira num círculo vermelho: com a palavra, a
+              coluna da ação alargava a tabela até ela rolar de lado. No cartão
+              do celular sobra espaço, e a palavra volta.
+            */}
+            <Botao
               type="submit"
-              perigoso
+              variante="perigo"
+              tamanho="compacto"
+              icone={Trash2}
               disabled={salvando}
               aria-label={`Remover ${item.descricao}`}
+              title="Remover"
+              className="sm:size-8 sm:p-0"
             >
-              remover
-            </BotaoTexto>
+              <span className="sm:hidden">Remover</span>
+            </Botao>
           </AcaoComRecusa>
         </Celula>
       )}

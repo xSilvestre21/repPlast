@@ -554,22 +554,13 @@ export function BotaoLink({
   );
 }
 
-/** Ação discreta dentro de uma linha de tabela ou lista. */
-export function BotaoTexto({
-  perigoso = false,
-  className = "",
-  ...props
-}: ComponentProps<"button"> & { perigoso?: boolean }) {
-  return (
-    <button
-      {...props}
-      className={`relative alvo-toque text-mini font-medium text-tinta-3 underline underline-offset-2
-        decoration-filete-forte transition-colors px-0.5 cursor-pointer disabled:opacity-50 ${
-          perigoso ? "hover:text-perigo" : "hover:text-carimbo"
-        } ${className}`}
-    />
-  );
-}
+/*
+ * Não existe mais o "botão de texto" — a palavra cinza e sublinhada que fazia
+ * as vezes de ação ("cancelar", "remover", "alterar"). Quem não usa
+ * computador todo dia não a reconhecia como botão. Ação discreta é o `Botao`
+ * `secundaria` (ou `perigo`, se apaga) no tamanho `compacto`, com um rótulo
+ * que diz o que faz. Sublinhado fica para o link no meio de uma frase.
+ */
 
 /* -------------------------------------------------------------------------- */
 /* Listas e tabelas                                                           */

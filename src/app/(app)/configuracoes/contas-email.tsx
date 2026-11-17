@@ -11,13 +11,12 @@
  * dela: mexer numa assinatura não pede a senha nem testa a conexão de novo.
  */
 
-import { AtSign, Check, Mail, Pencil, PenLine, PlugZap, Plus, Star, X } from "lucide-react";
+import { AtSign, Check, Mail, Pencil, PenLine, PlugZap, Plus, Star, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { type ReactNode, startTransition, useActionState, useEffect, useRef, useState } from "react";
 
 import {
   Botao,
-  BotaoTexto,
   Campo,
   CampoSenha,
   EstadoVazio,
@@ -207,20 +206,22 @@ function LinhaConta({ conta }: { conta: ContaVisivel }) {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-start gap-2">
           <form action={testar}>
-            <BotaoTexto type="submit" disabled={testando}>
+            <Botao type="submit" variante="secundaria" tamanho="compacto" icone={PlugZap} carregando={testando}>
               {testando ? "Testando…" : "Testar"}
-            </BotaoTexto>
+            </Botao>
           </form>
           {!conta.padrao && (
             <AcaoComRecusa acao={conta.tornarPadrao}>
-              <BotaoTexto type="submit">Tornar padrão</BotaoTexto>
+              <Botao type="submit" variante="secundaria" tamanho="compacto" icone={Star}>
+                Tornar padrão
+              </Botao>
             </AcaoComRecusa>
           )}
-          <BotaoTexto type="button" onClick={() => setEditando(true)}>
+          <Botao type="button" variante="secundaria" tamanho="compacto" icone={Pencil} onClick={() => setEditando(true)}>
             Editar
-          </BotaoTexto>
+          </Botao>
           <AcaoComRecusa
             acao={conta.excluir}
             confirmar={{
@@ -233,9 +234,9 @@ function LinhaConta({ conta }: { conta: ContaVisivel }) {
               rotulo: "Excluir",
             }}
           >
-            <BotaoTexto type="submit" perigoso>
+            <Botao type="submit" variante="perigo" tamanho="compacto" icone={Trash2}>
               Excluir
-            </BotaoTexto>
+            </Botao>
           </AcaoComRecusa>
         </div>
       </div>
@@ -291,10 +292,15 @@ function ListaAssinaturas({ conta }: { conta: ContaVisivel }) {
           cancelar={() => setAdicionando(false)}
         />
       ) : (
-        <BotaoTexto type="button" onClick={() => setAdicionando(true)} className="inline-flex items-center gap-1">
-          <Plus size={12} aria-hidden="true" />
+        <Botao
+          type="button"
+          variante="secundaria"
+          tamanho="compacto"
+          icone={Plus}
+          onClick={() => setAdicionando(true)}
+        >
           {assinaturas.length === 0 ? "Adicionar assinatura" : "Adicionar outra assinatura"}
-        </BotaoTexto>
+        </Botao>
       )}
     </div>
   );
@@ -330,15 +336,17 @@ function LinhaAssinatura({ assinatura, provedor }: { assinatura: AssinaturaVisiv
           </Selo>
         )}
       </span>
-      <span className="flex flex-wrap items-center gap-3">
+      <span className="flex flex-wrap items-start gap-2">
         {!assinatura.padrao && (
           <AcaoComRecusa acao={assinatura.tornarPadrao}>
-            <BotaoTexto type="submit">Tornar padrão</BotaoTexto>
+            <Botao type="submit" variante="secundaria" tamanho="compacto" icone={Star}>
+              Tornar padrão
+            </Botao>
           </AcaoComRecusa>
         )}
-        <BotaoTexto type="button" onClick={() => setEditando(true)}>
+        <Botao type="button" variante="secundaria" tamanho="compacto" icone={Pencil} onClick={() => setEditando(true)}>
           Editar
-        </BotaoTexto>
+        </Botao>
         <AcaoComRecusa
           acao={assinatura.excluir}
           confirmar={{
@@ -350,9 +358,9 @@ function LinhaAssinatura({ assinatura, provedor }: { assinatura: AssinaturaVisiv
             rotulo: "Excluir",
           }}
         >
-          <BotaoTexto type="submit" perigoso>
+          <Botao type="submit" variante="perigo" tamanho="compacto" icone={Trash2}>
             Excluir
-          </BotaoTexto>
+          </Botao>
         </AcaoComRecusa>
       </span>
     </li>

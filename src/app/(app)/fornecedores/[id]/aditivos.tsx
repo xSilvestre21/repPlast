@@ -2,13 +2,12 @@
 
 import { useActionState } from "react";
 
-import { FlaskConical } from "lucide-react";
+import { FlaskConical, Trash2 } from "lucide-react";
 
 import { AcaoComRecusa } from "@/components/acao-com-recusa";
 import { ErroGeral, Formulario } from "@/components/formulario";
 import {
   Botao,
-  BotaoTexto,
   Campo,
   CorpoLinha,
   EstadoVazio,
@@ -85,9 +84,15 @@ export function SecaoAditivos({
                     }}
                   >
                     <input type="hidden" name="aditivoId" value={aditivo.id} />
-                    <BotaoTexto type="submit" perigoso aria-label={`Remover aditivo ${aditivo.nome}`}>
-                      remover
-                    </BotaoTexto>
+                    <Botao
+                      type="submit"
+                      variante="perigo"
+                      tamanho="compacto"
+                      icone={Trash2}
+                      aria-label={`Remover aditivo ${aditivo.nome}`}
+                    >
+                      Remover
+                    </Botao>
                   </AcaoComRecusa>
                 )}
               </div>

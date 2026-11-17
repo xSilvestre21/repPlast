@@ -1,10 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useActionState } from "react";
 
 import { ErroGeral, Formulario } from "@/components/formulario";
-import { Botao, CampoSenha, Mensagem } from "@/components/ui";
+import { Botao, BotaoLink, CampoSenha, Mensagem } from "@/components/ui";
 import { TAMANHO_MINIMO_SENHA } from "@/lib/senha-regras";
 
 import type { EstadoFormulario } from "./acoes";
@@ -54,12 +53,9 @@ export function FormularioSenha({ acao, primeiroAcesso }: { acao: Acao; primeiro
           {enviando ? "Salvando…" : primeiroAcesso ? "Criar minha senha" : "Trocar senha"}
         </Botao>
         {primeiroAcesso && (
-          <Link
-            href="/"
-            className="text-corpo text-tinta-2 underline underline-offset-4 decoration-tinta-3/40 hover:text-carimbo"
-          >
+          <BotaoLink href="/" variante="secundaria" tamanho="compacto">
             Agora não
-          </Link>
+          </BotaoLink>
         )}
       </div>
     </Formulario>

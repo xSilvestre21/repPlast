@@ -139,7 +139,7 @@ async function exigirAberto(db: DbOrganizacao, orcamentoId: string, organizacaoI
   if (orcamento.status !== "ABERTO") {
     throw new ErroParaUsuario(
       "Esta proposta já foi fechada (aceita, recusada ou vencida) e não pode mais ser alterada. " +
-        "Para mexer nela, clique antes em “reabrir a proposta”.",
+        "Para mexer nela, clique antes em “Reabrir a proposta”.",
     );
   }
 
@@ -539,7 +539,7 @@ async function excluirOrcamentoDoBanco(orcamentoId: string) {
   if (orcamento.status === "ACEITO" || orcamento.status === "RECUSADO") {
     throw new ErroParaUsuario(
       "Proposta aceita ou recusada não pode ser excluída. Para descartá-la, clique antes em " +
-        "“reabrir a proposta” e depois exclua.",
+        "“Reabrir a proposta” e depois exclua.",
     );
   }
 
@@ -983,7 +983,7 @@ async function gerarPedido(orcamentoId: string): Promise<string> {
   }
   if (orcamento.status === "RECUSADO") {
     throw new ErroParaUsuario(
-      "Esta proposta está marcada como recusada. Clique em “reabrir a proposta” e depois em " +
+      "Esta proposta está marcada como recusada. Clique em “Reabrir a proposta” e depois em " +
         "“Aceitar e gerar pedido”.",
     );
   }

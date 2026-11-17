@@ -2,11 +2,11 @@
 
 import { useActionState, useRef, useState } from "react";
 
-import { ImageUp } from "lucide-react";
+import { ImageUp, Trash2 } from "lucide-react";
 
 import { ErroGeral, Formulario } from "@/components/formulario";
 import { usePerguntaAntes } from "@/components/pergunta-antes";
-import { Botao, BotaoTexto, RodapeCampo, SecaoCartao } from "@/components/ui";
+import { Botao, RodapeCampo, SecaoCartao } from "@/components/ui";
 import { erroDoCampo } from "@/lib/erro-formulario";
 
 import type { EstadoFormulario } from "../acoes";
@@ -117,15 +117,17 @@ export function SecaoLogo({
               </Botao>
 
               {temLogo && (
-                <BotaoTexto
-                  perigoso
+                <Botao
                   type="submit"
+                  variante="perigo"
+                  tamanho="compacto"
+                  icone={Trash2}
                   formAction={remover}
                   formNoValidate
                   onClick={perguntaRemover.aoClicar}
                 >
-                  remover logo atual
-                </BotaoTexto>
+                  Remover o logo atual
+                </Botao>
               )}
               {perguntaRemover.janela}
             </div>
