@@ -59,10 +59,16 @@ WORKDIR /app
 # O banco gerenciado da AWS assina o certificado com a CA dela, que o Node não
 # conhece: sem `NODE_EXTRA_CA_CERTS`, a primeira consulta cai em "self-signed
 # certificate in certificate chain" (a URL usa sslmode=verify-full).
+#
+# O relógio no horário de Brasília: "hoje", o mês atual e a data impressa no
+# PDF da proposta e do pedido saem do relógio do servidor, e o do container é
+# UTC — que vira o dia às 21h. O Node lê o `TZ` com a tabela de fusos dele,
+# sem precisar do `tzdata`; o servidor confere na subida (`lib/ambiente.ts`).
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
     HOSTNAME=0.0.0.0 \
+    TZ=America/Sao_Paulo \
     NODE_EXTRA_CA_CERTS=/app/certificados/rds-global-bundle.pem
 
 ADD --chmod=644 https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem /app/certificados/rds-global-bundle.pem

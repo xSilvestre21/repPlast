@@ -13,7 +13,9 @@
  *   - sem o SMTP do sistema, o "Esqueceu sua senha?" responde que mandou o
  *     e-mail, e não manda;
  *   - sem `ROTINA_TOKEN`, a rotina diária recusa o cron, e o e-mail de "o teste
- *     grátis está acabando" nunca sai.
+ *     grátis está acabando" nunca sai;
+ *   - sem `TZ`, o container fica em UTC, e depois das 21h o "hoje" do
+ *     calendário e a data do PDF da proposta já são amanhã (`problemaNoFuso`).
  *
  * Fora do Vercel (a hospedagem de verdade), a falta impede o servidor de
  * subir, e o deploy volta para a versão anterior. No Vercel, que é só a
@@ -74,6 +76,10 @@ const ESQUEMA = z.object({
   ),
   ASAAS_WEBHOOK_TOKEN: obrigatoria("o token que o Asaas manda no webhook"),
   SISTEMA_SMTP_HOST: obrigatoria('o servidor de e-mail do "Esqueceu sua senha?"'),
+  // O SES (e qualquer SMTP de verdade) recusa envio sem login. Sem os dois, o
+  // erro só apareceria quando alguém pedisse uma senha nova.
+  SISTEMA_SMTP_USUARIO: obrigatoria('o usuário SMTP do "Esqueceu sua senha?" (no SES, a credencial SMTP)'),
+  SISTEMA_SMTP_SENHA: obrigatoria('a senha SMTP do "Esqueceu sua senha?" (no SES, a credencial SMTP)'),
   SISTEMA_EMAIL_REMETENTE: obrigatoria('o remetente do "Esqueceu sua senha?"'),
   SISTEMA_SMTP_PORTA: z
     .string()
@@ -105,11 +111,38 @@ export function problemasDoAmbiente(ambiente: Record<string, string | undefined>
   return problemas;
 }
 
+/** O horário do sistema: o de Brasília, que é o de quem usa. */
+export const FUSO_DO_SISTEMA = "America/Sao_Paulo";
+
+/**
+ * O servidor está no horário de Brasília?
+ *
+ * "Hoje" (`hojeIso`), o mês atual (`competenciaDe(new Date())`) e a data
+ * impressa no PDF da proposta e do pedido saem do relógio do servidor. No PC,
+ * onde o sistema foi feito e conferido, ele é o de Brasília; num container ele
+ * é UTC, que vira o dia às 21h — a proposta das 22h sairia datada de amanhã, e
+ * no último dia do mês o painel abriria no mês seguinte. O `Dockerfile` fixa o
+ * `TZ`; isto garante que ele valeu.
+ */
+export function problemaNoFuso(fuso: string): string | null {
+  if (fuso === FUSO_DO_SISTEMA) return null;
+  return (
+    `TZ: o servidor está em ${fuso || "um fuso desconhecido"}, e não no horário de Brasília — ` +
+    `defina TZ=${FUSO_DO_SISTEMA} (a imagem do Dockerfile já define)`
+  );
+}
+
 /** Na subida, em produção: recusa (ou, no Vercel, avisa) o ambiente incompleto. */
 export function conferirAmbiente(): void {
   if (process.env.NODE_ENV !== "production") return;
 
   const problemas = problemasDoAmbiente(process.env);
+  // O Vercel não deixa trocar o fuso: lá é sempre UTC. É só a demonstração, e
+  // avisar a cada subida gastaria a cota do Sentry repetindo a mesma coisa.
+  if (!process.env.VERCEL) {
+    const fuso = problemaNoFuso(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    if (fuso) problemas.push(fuso);
+  }
   if (problemas.length === 0) return;
 
   const mensagem = `[ambiente] variáveis de produção com problema:\n  - ${problemas.join("\n  - ")}`;

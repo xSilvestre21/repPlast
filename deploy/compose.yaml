@@ -13,6 +13,15 @@
 
 name: repplast
 
+# O teto de log de cada serviço: 5 arquivos de 20 MB, e o mais velho sai. Sem
+# ele o Docker guarda tudo — e o Caddy escreve uma linha por acesso, o que
+# enchia o disco da instância aos poucos. Vale para os três serviços.
+x-logs: &logs
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
 services:
   app:
     image: ${IMAGEM:?defina IMAGEM no .env}
@@ -28,11 +37,7 @@ services:
     stop_grace_period: 30s
     expose:
       - "3000"
-    logging:
-      driver: json-file
-      options:
-        max-size: "20m"
-        max-file: "5"
+    logging: *logs
 
   caddy:
     image: caddy:2
@@ -50,6 +55,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_dados:/data
       - caddy_config:/config
+    logging: *logs
 
   # As migrations e o papel restrito, antes de cada versão nova. Só roda quando
   # chamado (`docker compose run --rm migrar`), nunca no `up`.
@@ -59,6 +65,7 @@ services:
       - path: app.env
         format: raw
     profiles: ["manual"]
+    logging: *logs
 
 volumes:
   caddy_dados:

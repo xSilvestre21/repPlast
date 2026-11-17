@@ -49,6 +49,13 @@ while [ "$i" -lt 24 ]; do
   estado="$([ -n "$id" ] && docker inspect --format '{{.State.Health.Status}}' "$id" 2>/dev/null || echo ausente)"
   if [ "$estado" = "healthy" ]; then
     echo "No ar: $COMMIT"
+    # As versões anteriores saem do disco. Cada uma fica com nome
+    # (`<ECR>:<commit>`), e o `prune` só apaga imagem sem nome: a instância
+    # enchia um pouco a cada deploy. Voltar uma versão continua funcionando —
+    # o `docker compose pull` acima baixa de novo do ECR.
+    docker image ls --format '{{.Repository}}:{{.Tag}}' "$REPOSITORIO" \
+      | grep -v -x -F -e "$REPOSITORIO:$COMMIT" -e "$REPOSITORIO:$COMMIT-migrador" \
+      | xargs -r docker image rm > /dev/null 2>&1 || true
     docker image prune -f > /dev/null
     exit 0
   fi

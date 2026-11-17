@@ -402,6 +402,11 @@ escrito (`format: raw`), diferente do `.env` do PC.
 Faltou alguma, ou está errada (`APP_DB_ROLE` vazio, chave com a barra, `APP_URL` sem https)? O
 servidor **não sobe** e diz qual (`src/lib/ambiente.ts`) — e o deploy volta para a versão anterior.
 
+O fuso não vai no `app.env`: a imagem já traz `TZ=America/Sao_Paulo` (`Dockerfile`). "Hoje", o mês
+atual e a data do PDF da proposta e do pedido saem do relógio do servidor, e em UTC eles viram o dia
+às 21h. Se o fuso não valer, o servidor também não sobe. O Vercel não deixa trocar o fuso: na
+demonstração, depois das 21h, as datas já são as de amanhã.
+
 ### O webhook do Asaas de produção
 
 Painel do Asaas → Integrações → Webhooks: URL `https://<domínio>/api/asaas/webhook`, o token de

@@ -124,6 +124,10 @@ O erro aparece **embaixo do campo que o causou**, em português, dizendo o que f
   controlado só volta preenchido pelo `valores` do estado (o `Campo` já faz isso pelo `name`)
 - Botão ao lado de campo: linha com `items-start` e `<EspacoDoRotulo />` sobre o botão — com
   `items-end`, a frase de erro embaixo da caixa empurra o botão para baixo
+- "Hoje" e o mês atual no servidor (`hojeIso`, `competenciaDe(new Date())`, a data do PDF) usam
+  o relógio local: o PC e a imagem Docker (`TZ=America/Sao_Paulo`) estão em Brasília, mas o
+  Vercel e o CI são UTC — não contar com o fuso num teste, e a subida recusa outro fuso
+  (`problemaNoFuso`, em `lib/ambiente.ts`)
 
 ## Git Commits
 
