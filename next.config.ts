@@ -105,6 +105,11 @@ const nextConfig: NextConfig = {
     // um preposto aparece na próxima ida à aba. Salvar algo aqui mesmo já
     // descarta o que foi guardado (`revalidatePath` nas ações).
     staleTimes: { static: 30 },
+    // Avisa (no `next dev`, no `next build` e no painel do navegador) quando a
+    // versão instalada do Next tem falha de segurança publicada, e é a regra
+    // que o `next upgrade --agent` usa: subir só até a versão segura. Já é o
+    // padrão; fica escrito para ninguém desligar sem ver.
+    agentUpgrade: "security",
   },
   turbopack: {
     // Sem isto o Turbopack sobe a árvore procurando lockfile e encontra um
