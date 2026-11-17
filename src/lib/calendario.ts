@@ -11,11 +11,16 @@ export type DataIso = string;
 
 const FORMATO = /^(\d{4})-(\d{2})-(\d{2})$/;
 
+/**
+ * A data, ou `null` se ela não existe. O `Date` não recusa 31/02 — vira 03/03
+ * sem avisar —, então a volta para texto tem de dar a mesma data.
+ */
 function paraData(iso: DataIso): Date | null {
   const partes = FORMATO.exec(iso);
   if (!partes) return null;
   const data = new Date(Date.UTC(+partes[1], +partes[2] - 1, +partes[3], 12));
-  return Number.isNaN(data.getTime()) ? null : data;
+  if (Number.isNaN(data.getTime())) return null;
+  return paraIso(data) === iso ? data : null;
 }
 
 function paraIso(data: Date): DataIso {
@@ -24,6 +29,92 @@ function paraIso(data: Date): DataIso {
 
 export function dataValida(iso: string): boolean {
   return paraData(iso) !== null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* A data digitada                                                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A data pontuada enquanto se digita: as barras entram sozinhas, e "15102026"
+ * aparece "15/10/2026" — como `mascararHora` faz com os dois-pontos.
+ *
+ * Trabalha sobre os DÍGITOS. A barra (ou ponto, ou traço) que a pessoa
+ * escreveu só serve para fechar um dia ou mês de um dígito: colar "5/3/26" dá
+ * "05/03/26", e não "53/26". Onde só cabe uma leitura, ela é completada na
+ * hora:
+ *
+ *   - o dia começando de 4 a 9 só pode ter um dígito ("5" → "05/");
+ *   - os dois primeiros passando de 31: o primeiro é o dia ("35" → "03/05/");
+ *   - o mês começando de 2 a 9 também ("153" → "15/03/").
+ *
+ * Nunca passa de "dd/mm/aaaa". Colar "2026-10-15", como sai de planilha e de
+ * sistema, também dá "15/10/2026".
+ */
+export function mascararData(texto: string): string {
+  const limpo = texto.trim();
+  if (FORMATO.test(limpo)) return dataDigitada(limpo);
+
+  const partes = limpo.split(/\D+/);
+  let digitos = "";
+  partes.forEach((parte, i) => {
+    digitos += parte;
+    const fechada = i < partes.length - 1;
+    // "5/" ou "15/3/": o separador fechou o dia ou o mês com um dígito só.
+    if (fechada && parte !== "" && (digitos.length === 1 || digitos.length === 3)) {
+      digitos = `${digitos.slice(0, -1)}0${digitos.slice(-1)}`;
+    }
+  });
+  if (digitos === "") return "";
+
+  if (Number(digitos[0]) > 3 || (digitos.length >= 2 && Number(digitos.slice(0, 2)) > 31)) {
+    digitos = `0${digitos}`;
+  }
+  if (digitos.length >= 3 && Number(digitos[2]) > 1) {
+    digitos = `${digitos.slice(0, 2)}0${digitos.slice(2)}`;
+  }
+
+  digitos = digitos.slice(0, 8);
+  if (digitos.length < 2) return digitos;
+  if (digitos.length < 4) return `${digitos.slice(0, 2)}/${digitos.slice(2)}`;
+  return `${digitos.slice(0, 2)}/${digitos.slice(2, 4)}/${digitos.slice(4)}`;
+}
+
+/**
+ * A data como a pessoa escreveu, ou `null` quando ela não existe.
+ *
+ * Aceita "15102026", "151026" (o ano é 2026) e "1510" (o ano de `hoje`), com
+ * ou sem as barras. O ano vai de 2000 a 2099 — "0026" é engano de digitação,
+ * não o ano 26.
+ */
+export function lerData(texto: string, hoje: DataIso): DataIso | null {
+  const [dia = "", mes = "", ano = ""] = mascararData(texto).split("/");
+  if (dia.length !== 2 || mes.length !== 2) return null;
+
+  let anoInteiro: string;
+  if (ano === "") anoInteiro = hoje.slice(0, 4);
+  else if (ano.length === 2) anoInteiro = `20${ano}`;
+  else if (ano.length === 4 && ano.startsWith("20")) anoInteiro = ano;
+  else return null;
+
+  const iso = `${anoInteiro}-${mes}-${dia}`;
+  return dataValida(iso) ? iso : null;
+}
+
+/**
+ * Se o texto já é uma data COMPLETA, com o ano de quatro dígitos — para valer
+ * enquanto a pessoa digita. "15/10" e "15/10/20" ainda estão no caminho de
+ * "15/10/2026": lidos ao pé da letra, o calendário pularia de ano à toa a cada
+ * tecla. No Enter vale `lerData`, que aceita tudo.
+ */
+export function dataCompleta(texto: string): DataIso | null {
+  const pontuado = mascararData(texto);
+  return /^\d{2}\/\d{2}\/\d{4}$/.test(pontuado) ? lerData(pontuado, "2000-01-01") : null;
+}
+
+/** "2026-10-15" → "15/10/2026", como a caixa de digitar mostra. */
+export function dataDigitada(iso: DataIso | ""): string {
+  return iso ? `${iso.slice(8)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : "";
 }
 
 /** Hoje no relógio de quem está usando — não em UTC, que já virou o dia às 21h. */

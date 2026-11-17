@@ -11,11 +11,22 @@
  * que é como o prazo de entrega é combinado com a indústria. Os feriados do mês
  * aparecem marcados na grade e listados embaixo dela.
  *
+ * Quem já sabe a data DIGITA, como no `CampoHora`: no topo do calendário há
+ * uma caixa, e "15102026" vira "15/10/2026" sem a pessoa escrever as barras
+ * (`mascararData`). Data completa é PRÉVIA — o calendário pula para o mês e
+ * acende o dia. Vira valor ao confirmar: Enter ou clique fora. Esc desiste.
+ * Clicar num dia ou num atalho continua escolhendo na hora.
+ *
+ * Aberto com o mouse ou o teclado, a caixa já vem focada e selecionada: é só
+ * sair digitando. Com o dedo não — o teclado do celular subiria por cima do
+ * calendário, que é o jeito de quem está no celular; quer digitar, toca nela.
+ *
  * No formulário continua saindo `aaaa-mm-dd` num input escondido: a Server
  * Action do outro lado não muda. As contas são as de `lib/calendario.ts`.
  *
- * Teclado: setas andam pelos dias, PageUp/PageDown trocam o mês, Enter
- * escolhe, Esc fecha e devolve o foco ao campo.
+ * Teclado: digitar e Enter confirma; seta para baixo desce para a grade, onde
+ * as setas andam pelos dias, PageUp/PageDown trocam o mês e Enter escolhe; Esc
+ * fecha e devolve o foco ao campo.
  */
 
 import { CalendarDays, ChevronLeft, ChevronRight, X } from "lucide-react";
@@ -23,7 +34,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import {
+  dataCompleta,
   dataCurta,
+  dataDigitada,
   dataPorExtenso,
   dataValida,
   diasUteisEntre,
@@ -32,6 +45,8 @@ import {
   feriadosDoAno,
   hojeIso,
   inicioDoMes,
+  lerData,
+  mascararData,
   nomeDoFeriado,
   nomeDoMes,
   semanasDoMes,
@@ -55,7 +70,7 @@ const DIAS_DA_SEMANA = ["D", "S", "T", "Q", "Q", "S", "S"];
 const NOMES_DOS_DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
 
 /** Espaço que o calendário aberto ocupa — abaixo dele não cabendo, abre para cima. */
-const ALTURA_CALENDARIO = 480;
+const ALTURA_CALENDARIO = 560;
 const LARGURA_CALENDARIO = 304;
 
 export function CampoData({
@@ -112,11 +127,25 @@ export function CampoData({
    * é onde o erro de um dia entra.
    */
   const [contagem, setContagem] = useState<"corridos" | "uteis">("corridos");
+  /** A data que o calendário mostra acesa enquanto está aberto — ainda não é o valor. */
+  const [previa, setPrevia] = useState<DataIso | "">("");
+  /** O texto da caixa de digitar, como está — pode estar no meio de "15/10/2". */
+  const [digitado, setDigitado] = useState("");
+  const [naoEntendi, setNaoEntendi] = useState(false);
 
   const raizRef = useRef<HTMLDivElement>(null);
   const botaoRef = useRef<HTMLButtonElement>(null);
   const gradeRef = useRef<HTMLDivElement>(null);
   const calendarioRef = useRef<HTMLDivElement>(null);
+  const digitarRef = useRef<HTMLInputElement>(null);
+  /** Aberto com o dedo: a caixa de digitar não ganha o foco (ver o topo). */
+  const abertoComODedo = useRef(false);
+  /**
+   * O foco está andando pela grade (setas, PageUp): o dia novo recebe o foco.
+   * Fora dela não — digitar uma data muda o dia destacado, e o foco sairia da
+   * caixa no meio da digitação.
+   */
+  const focoNaGrade = useRef(false);
   const idCalendario = useId();
 
   const hoje = hojeIso();
@@ -150,6 +179,10 @@ export function CampoData({
   function abrir() {
     medir();
     setFoco(valor || hoje);
+    setPrevia(valor);
+    setDigitado(dataDigitada(valor));
+    setNaoEntendi(false);
+    focoNaGrade.current = false;
     setAberto(true);
   }
 
@@ -163,6 +196,75 @@ export function CampoData({
     fechar();
   }
 
+  /** O que está na caixa, se der para entender: vazio é "sem data"; ilegível é `null`. */
+  function dataDaCaixa(): DataIso | null {
+    return digitado.trim() === "" ? "" : lerData(digitado, hoje);
+  }
+
+  /** Enter: confirma o que está na caixa, ou avisa que não deu. */
+  function confirmar() {
+    const data = dataDaCaixa();
+    if (data === null) setNaoEntendi(true);
+    else escolher(data);
+  }
+
+  /**
+   * Enquanto digita, a data já completa entra na prévia: o calendário vai para
+   * o mês dela e acende o dia. O aviso de "não existe" só aparece no Enter — no
+   * meio de "15/10/2" a data ainda não está errada, só incompleta.
+   */
+  function aoDigitar(texto: string) {
+    const pontuado = mascararData(texto);
+    setDigitado(pontuado);
+    setNaoEntendi(false);
+    const data = dataCompleta(pontuado);
+    if (data) {
+      setPrevia(data);
+      setFoco(data);
+    }
+  }
+
+  function aoTeclarNaDigitacao(evento: React.KeyboardEvent<HTMLInputElement>) {
+    // Apagar logo depois da barra leva o dígito junto: sem isso a máscara a
+    // poria de volta, e o Backspace pareceria não funcionar.
+    const caixa = evento.currentTarget;
+    if (
+      evento.key === "Backspace" &&
+      digitado.endsWith("/") &&
+      caixa.selectionStart === digitado.length &&
+      caixa.selectionEnd === digitado.length
+    ) {
+      evento.preventDefault();
+      aoDigitar(digitado.slice(0, -2));
+      return;
+    }
+
+    if (evento.key === "Enter") {
+      // Dentro de um formulário, Enter enviaria tudo — aqui ele confirma a data.
+      evento.preventDefault();
+      confirmar();
+    }
+    if (evento.key === "ArrowDown") {
+      evento.preventDefault();
+      focoNaGrade.current = true;
+      gradeRef.current?.querySelector<HTMLButtonElement>(`[data-dia="${foco}"]`)?.focus();
+    }
+  }
+
+  /*
+   * Clique fora também confirma — quem digitou e clicou no formulário espera
+   * ver a data lá. O que não deu para entender fica de fora: o calendário já
+   * está fechando e não tem onde avisar, então vale o que já era.
+   */
+  const aoClicarFora = useRef(() => {});
+  useEffect(() => {
+    aoClicarFora.current = () => {
+      const data = dataDaCaixa();
+      if (data !== null && data !== valor) setValor(data);
+      setAberto(false);
+    };
+  });
+
   useCamadaDeTopo(calendarioRef, lugar, aberto, medir);
 
   /* Clique fora fecha, sem roubar o foco de onde a pessoa clicou. */
@@ -172,7 +274,7 @@ export function CampoData({
       const alvo = evento.target as Node;
       // O calendário está no <body>, fora da raiz: os dois contam como "dentro".
       if (!raizRef.current?.contains(alvo) && !calendarioRef.current?.contains(alvo)) {
-        setAberto(false);
+        aoClicarFora.current();
       }
     };
     document.addEventListener("pointerdown", fora);
@@ -199,11 +301,21 @@ export function CampoData({
   }, [aberto, paraCima, mesMostrado, contagem]);
 
   /*
-   * O foco do teclado acompanha o dia destacado, inclusive ao trocar de mês.
-   * Só o do teclado: aberto com o dedo, o dia não vem aceso (`foco.ts`).
+   * Abriu com o mouse ou o teclado: o foco vai para a caixa de digitar, com o
+   * texto selecionado — o primeiro número digitado já substitui o que estava.
    */
   useEffect(() => {
-    if (!aberto) return;
+    if (!aberto || abertoComODedo.current) return;
+    digitarRef.current?.focus({ preventScroll: true });
+    digitarRef.current?.select();
+  }, [aberto]);
+
+  /*
+   * Andando pela grade, o foco do teclado acompanha o dia destacado, inclusive
+   * ao trocar de mês. Só o do teclado: com o dedo, o dia não vem aceso (`foco.ts`).
+   */
+  useEffect(() => {
+    if (!aberto || !focoNaGrade.current) return;
     focarSePuder(gradeRef.current?.querySelector<HTMLButtonElement>(`[data-dia="${foco}"]`));
   }, [aberto, foco]);
 
@@ -249,6 +361,12 @@ export function CampoData({
         data-invalido={erro ? "" : undefined}
         aria-describedby={erro || dica ? `${idCalendario}-rodape` : undefined}
         disabled={disabled}
+        onPointerDown={(evento) => {
+          abertoComODedo.current = evento.pointerType === "touch";
+        }}
+        onKeyDown={() => {
+          abertoComODedo.current = false;
+        }}
         onClick={() => (aberto ? fechar() : abrir())}
         className={`${CLASSE_CONTROLE} ${erro ? CLASSE_ERRO : ""} flex items-center gap-2.5 text-left`}
       >
@@ -287,7 +405,52 @@ export function CampoData({
             popover={lugar.emDialogo ? "manual" : undefined}
             style={estiloDoLugar(lugar, LARGURA_CALENDARIO)}
             className="folha absolute z-50 scroll-mb-4 scroll-mt-20 p-3"
+            onFocus={(evento) => {
+              focoNaGrade.current = gradeRef.current?.contains(evento.target) ?? false;
+            }}
           >
+            {/*
+              A data, grande — e é aqui que se digita, como na hora. Parece o
+              número de resposta, não uma caixa de formulário: o traço azul
+              embaixo só acende com o foco.
+            */}
+            <div className="px-1 pb-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <input
+                  ref={digitarRef}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={digitado}
+                  onChange={(evento) => aoDigitar(evento.target.value)}
+                  onKeyDown={aoTeclarNaDigitacao}
+                  placeholder="dd/mm/aaaa"
+                  aria-label={`${rotulo}: digitar a data`}
+                  aria-invalid={naoEntendi || undefined}
+                  aria-describedby={`${idCalendario}-digitar`}
+                  // Sem o contorno de foco global: aqui o traço azul embaixo
+                  // é o indicador. Inline porque a regra global, fora das
+                  // camadas, vence o `outline-none` do Tailwind.
+                  style={{ outline: "none" }}
+                  className={`w-0 min-w-0 flex-1 bg-transparent text-forte font-bold text-tinta numerico
+                    placeholder:font-normal placeholder:text-tinta-3 border-b-2 transition-colors ${
+                      naoEntendi ? "border-perigo" : "border-transparent focus:border-carimbo"
+                    }`}
+                />
+                <span className="shrink-0 text-mini text-tinta-3" aria-live="polite">
+                  {previa ? distanciaDeHoje(previa, hoje) : "sem data"}
+                </span>
+              </div>
+              <p
+                id={`${idCalendario}-digitar`}
+                className={`mt-1 text-mini ${naoEntendi ? "text-perigo" : "text-tinta-3"}`}
+              >
+                {naoEntendi
+                  ? "Essa data não existe. Digite dia, mês e ano só com números, como 15102026."
+                  : "Digite só os números — 15102026 vira 15/10/2026 — e Enter, ou escolha abaixo."}
+              </p>
+            </div>
+
             <div className="mb-2 flex items-center justify-between">
               <button
                 type="button"
@@ -328,7 +491,7 @@ export function CampoData({
                 <div key={semana[0]} role="row" className="grid grid-cols-7 gap-y-0.5">
                   {semana.map((dia) => {
                     const doMes = dia.slice(0, 7) === mesMostrado;
-                    const escolhido = dia === valor;
+                    const escolhido = dia === previa;
                     const ehHoje = dia === hoje;
                     const feriado = nomeDoFeriado(dia);
                     return (
@@ -430,7 +593,7 @@ export function CampoData({
                       title={dataCurta(alvo)}
                       onClick={() => escolher(alvo)}
                       className={`rounded-full border px-2.5 py-1 text-mini transition-colors ${
-                        alvo === valor
+                        alvo === previa
                           ? "border-carimbo bg-carimbo-fraco text-carimbo"
                           : "border-filete text-tinta-2 hover:border-carimbo hover:text-tinta"
                       }`}

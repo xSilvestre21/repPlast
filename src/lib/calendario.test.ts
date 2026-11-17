@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  dataCompleta,
   dataCurta,
+  dataDigitada,
   dataValida,
+  lerData,
+  mascararData,
   diasUteisEntre,
   ehDiaUtil,
   nomeDoFeriado,
@@ -36,6 +40,105 @@ describe("contas de data", () => {
     expect(dataValida("2026-10-09")).toBe(true);
     expect(dataValida("")).toBe(false);
     expect(dataValida("09/10/2026")).toBe(false);
+  });
+
+  it("recusa a data que não existe — o Date a empurraria para o mês seguinte", () => {
+    expect(dataValida("2026-02-31")).toBe(false);
+    expect(dataValida("2026-02-29")).toBe(false);
+    expect(dataValida("2028-02-29")).toBe(true);
+    expect(dataValida("2026-13-01")).toBe(false);
+  });
+});
+
+describe("data digitada", () => {
+  const HOJE = "2026-11-17";
+
+  describe("mascararData", () => {
+    it("põe as barras sozinha enquanto se digita", () => {
+      const passos = ["1", "15/", "15/1", "15/10/", "15/10/2", "15/10/20", "15/10/202", "15/10/2026"];
+      let texto = "";
+      for (const [i, digito] of [..."15102026"].entries()) {
+        texto = mascararData(texto + digito);
+        expect(texto, `depois de ${i + 1} dígitos`).toBe(passos[i]);
+      }
+    });
+
+    it("nunca passa de dd/mm/aaaa", () => {
+      expect(mascararData("1510202699")).toBe("15/10/2026");
+    });
+
+    it("completa com zero onde só cabe uma leitura", () => {
+      expect(mascararData("5")).toBe("05/");
+      expect(mascararData("35")).toBe("03/05/");
+      expect(mascararData("153")).toBe("15/03/");
+      expect(mascararData("1532026")).toBe("15/03/2026");
+      expect(mascararData("31")).toBe("31/");
+      expect(mascararData("1513")).toBe("15/13/");
+    });
+
+    it("a barra que a pessoa escreveu fecha o dia ou o mês de um dígito", () => {
+      expect(mascararData("1/10/2026")).toBe("01/10/2026");
+      expect(mascararData("5/3/26")).toBe("05/03/26");
+      expect(mascararData("15.1")).toBe("15/1");
+      expect(mascararData("15-3-")).toBe("15/03/");
+    });
+
+    it("colar no formato de planilha também serve", () => {
+      expect(mascararData("2026-10-15")).toBe("15/10/2026");
+    });
+
+    it("pontuar de novo o que já está pontuado não muda nada", () => {
+      for (const texto of ["15/", "15/1", "05/03/", "15/10/2026", "03/05/26"]) {
+        expect(mascararData(texto), texto).toBe(texto);
+      }
+    });
+
+    it("sem número, fica vazio", () => {
+      expect(mascararData("")).toBe("");
+      expect(mascararData("abc")).toBe("");
+    });
+  });
+
+  describe("lerData", () => {
+    it("aceita a data inteira, com ou sem barras", () => {
+      for (const texto of ["15102026", "15/10/2026", " 15/10/2026 ", "15.10.2026"]) {
+        expect(lerData(texto, HOJE), texto).toBe("2026-10-15");
+      }
+    });
+
+    it("ano de dois dígitos é deste século", () => {
+      expect(lerData("151027", HOJE)).toBe("2027-10-15");
+      expect(lerData("5/3/26", HOJE)).toBe("2026-03-05");
+    });
+
+    it("sem o ano, é o ano de hoje", () => {
+      expect(lerData("1510", HOJE)).toBe("2026-10-15");
+      expect(lerData("3112", HOJE)).toBe("2026-12-31");
+    });
+
+    it("recusa a data que não existe", () => {
+      for (const texto of ["31022026", "29022026", "15132026", "00102026", "15", "1510202", "15100026", "15101999", ""]) {
+        expect(lerData(texto, HOJE), texto).toBeNull();
+      }
+    });
+
+    it("29 de fevereiro vale no ano bissexto", () => {
+      expect(lerData("29022028", HOJE)).toBe("2028-02-29");
+    });
+  });
+
+  describe("dataCompleta", () => {
+    it("vale só com o ano de quatro dígitos", () => {
+      expect(dataCompleta("15/10/2026")).toBe("2026-10-15");
+      expect(dataCompleta("15/10/")).toBeNull();
+      expect(dataCompleta("15/10/20")).toBeNull();
+      expect(dataCompleta("31/02/2026")).toBeNull();
+    });
+  });
+
+  it("dataDigitada é o caminho de volta", () => {
+    expect(dataDigitada("2026-10-15")).toBe("15/10/2026");
+    expect(dataDigitada("")).toBe("");
   });
 });
 
