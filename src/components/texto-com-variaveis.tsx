@@ -24,6 +24,7 @@ import {
   type Gatilho,
 } from "@/lib/sugestao-variaveis";
 
+import { faixaVisivel } from "./camada-flutuante";
 import { useCampoDoFormulario } from "./contexto-formulario";
 import { CLASSE_CONTROLE, CLASSE_ERRO, RodapeCampo, Rotulo } from "./ui";
 
@@ -81,12 +82,26 @@ function posicaoDoCaractere(campo: Controle, indice: number) {
   const posicao = {
     esquerda: marca.offsetLeft - campo.scrollLeft,
     baixo: marca.offsetTop - campo.scrollTop + linha,
+    linha,
   };
   espelho.remove();
   return posicao;
 }
 
 const LARGURA_LISTA = 336;
+/** O quanto a lista gostaria de ocupar, o mínimo útil, e a folga da borda — os da `SelecaoBuscavel`. */
+const ALTURA_LISTA = 320;
+const ALTURA_MINIMA = 120;
+const FOLGA = 12;
+
+type Posicao = {
+  esquerda: number;
+  /** O pé da linha da chave, de onde a lista desce. */
+  baixo: number;
+  linha: number;
+  paraCima: boolean;
+  altura: number;
+};
 
 export function TextoComVariaveis({
   name,
@@ -120,7 +135,13 @@ export function TextoComVariaveis({
 
   const [gatilho, setGatilho] = useState<Gatilho | null>(null);
   const [destaque, setDestaque] = useState(0);
-  const [posicao, setPosicao] = useState({ esquerda: 0, baixo: 0 });
+  const [posicao, setPosicao] = useState<Posicao>({
+    esquerda: 0,
+    baixo: 0,
+    linha: 0,
+    paraCima: false,
+    altura: ALTURA_LISTA,
+  });
   /** Onde o cursor tem de ficar depois da próxima troca de valor. */
   const cursorPendente = useRef<number | null>(null);
   /** A chave que a pessoa dispensou com Esc — mexer o cursor não reabre. */
@@ -154,9 +175,30 @@ export function TextoComVariaveis({
 
     const lugar = posicaoDoCaractere(campo, novo.inicio);
     const largura = caixaRef.current?.clientWidth ?? LARGURA_LISTA;
+    const baixo = Math.min(lugar.baixo, campo.clientHeight);
+
+    /*
+     * Para que lado abre: descia sempre, e com a mensagem no fim da página a
+     * lista nascia metade fora da tela. A conta é a da lista de busca: sobe
+     * quando em cima cabe mais, e a altura é a que cabe (`faixaVisivel`).
+     */
+    const caixa = caixaRef.current?.getBoundingClientRect();
+    let paraCima = false;
+    let altura = ALTURA_LISTA;
+    if (caixa) {
+      const faixa = faixaVisivel(campo, { presoNaJanela: true });
+      const abaixo = faixa.base - (caixa.top + baixo) - FOLGA;
+      const acima = caixa.top + baixo - lugar.linha - faixa.topo - FOLGA;
+      paraCima = abaixo < Math.min(ALTURA_LISTA, acima) && acima > abaixo;
+      altura = Math.max(ALTURA_MINIMA, Math.min(ALTURA_LISTA, paraCima ? acima : abaixo));
+    }
+
     setPosicao({
       esquerda: Math.max(0, Math.min(lugar.esquerda, largura - LARGURA_LISTA)),
-      baixo: Math.min(lugar.baixo, campo.clientHeight),
+      baixo,
+      linha: lugar.linha,
+      paraCima,
+      altura,
     });
   }
 
@@ -300,14 +342,22 @@ export function TextoComVariaveis({
 
         {aberto && (
           <div
-            className="folha absolute z-50 mt-1 overflow-hidden"
-            style={{ left: posicao.esquerda, top: posicao.baixo, width: LARGURA_LISTA }}
+            className="folha absolute z-50 overflow-hidden"
+            style={{
+              left: posicao.esquerda,
+              width: LARGURA_LISTA,
+              // Para cima, o pé da lista fica logo acima da linha da chave.
+              ...(posicao.paraCima
+                ? { top: posicao.baixo - posicao.linha - 4, transform: "translateY(-100%)" }
+                : { top: posicao.baixo + 4 }),
+            }}
           >
             <ul
               ref={listaRef}
               id={idLista}
               role="listbox"
-              className="max-h-80 overflow-y-auto py-1"
+              style={{ maxHeight: posicao.altura }}
+              className="overflow-y-auto py-1"
             >
               {opcoes.length === 0 && (
                 <li className="px-3.5 py-2 text-corpo text-tinta-3">

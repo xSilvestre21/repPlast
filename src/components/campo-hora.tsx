@@ -134,7 +134,14 @@ export function CampoHora({
    */
   function medir() {
     if (!botaoRef.current) return;
-    setLugar(medirLugar(botaoRef.current, { largura: LARGURA, altura: ALTURA, alinhar: "direita" }));
+    setLugar(
+      medirLugar(botaoRef.current, {
+        largura: LARGURA,
+        altura: ALTURA,
+        alinhar: "direita",
+        cartao: cartaoRef.current,
+      }),
+    );
   }
 
   function abrir() {
@@ -265,10 +272,16 @@ export function CampoHora({
      primeiro número digitado já substitui o que estava. */
   useEffect(() => {
     if (!aberto) return;
-    if (!lugar.paraCima) cartaoRef.current?.scrollIntoView({ block: "nearest" });
     digitarRef.current?.focus();
     digitarRef.current?.select();
-  }, [aberto, lugar.paraCima]);
+  }, [aberto]);
+
+  /* Aberto para baixo sem espaço, rola o mínimo para ele caber na tela. */
+  useEffect(() => {
+    if (aberto && lugar.alturaReal && !lugar.paraCima) {
+      cartaoRef.current?.scrollIntoView({ block: "nearest" });
+    }
+  }, [aberto, lugar.alturaReal, lugar.paraCima]);
 
   function aoTeclarNaGrade(evento: React.KeyboardEvent<HTMLDivElement>) {
     const passos: Record<string, number> = {

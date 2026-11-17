@@ -121,7 +121,14 @@ export function CampoMes({
 
   function medir() {
     if (!botaoRef.current) return;
-    setLugar(medirLugar(botaoRef.current, { largura: LARGURA, altura: ALTURA, alinhar: "esquerda" }));
+    setLugar(
+      medirLugar(botaoRef.current, {
+        largura: LARGURA,
+        altura: ALTURA,
+        alinhar: "esquerda",
+        cartao: cartaoRef.current,
+      }),
+    );
   }
 
   function abrir() {
@@ -161,8 +168,10 @@ export function CampoMes({
   const ano = Number(foco.slice(0, 4));
 
   useEffect(() => {
-    if (aberto && !lugar.paraCima) cartaoRef.current?.scrollIntoView({ block: "nearest" });
-  }, [aberto, lugar.paraCima]);
+    if (aberto && lugar.alturaReal && !lugar.paraCima) {
+      cartaoRef.current?.scrollIntoView({ block: "nearest" });
+    }
+  }, [aberto, lugar.alturaReal, lugar.paraCima]);
 
   // O foco do teclado acompanha o mês destacado, inclusive ao trocar de ano.
   useEffect(() => {

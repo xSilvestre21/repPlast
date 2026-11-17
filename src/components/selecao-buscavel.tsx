@@ -22,6 +22,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { achatar } from "@/lib/busca";
 
+import { faixaVisivel } from "./camada-flutuante";
 import { useCampoDoFormulario } from "./contexto-formulario";
 import { CLASSE_CONTROLE, CLASSE_ERRO, RodapeCampo, Rotulo } from "./ui";
 
@@ -72,8 +73,11 @@ type Posicao = { paraCima: boolean; altura: number };
  */
 function medir(campo: HTMLInputElement, lado: LadoDaLista): Posicao {
   const caixa = campo.getBoundingClientRect();
-  const abaixo = window.innerHeight - caixa.bottom - FOLGA;
-  const acima = caixa.top - FOLGA;
+  // A lista mora no formulário: numa janela modal, quem a corta é a borda da
+  // janela — centralizada, ela termina bem antes da tela (`faixaVisivel`).
+  const faixa = faixaVisivel(campo, { presoNaJanela: true });
+  const abaixo = faixa.base - caixa.bottom - FOLGA;
+  const acima = caixa.top - faixa.topo - FOLGA;
 
   // No automático, só sobe quando subir de fato ajuda: caber em cima E caber
   // pior embaixo. Com lado declarado, a medida decide só o TAMANHO.
@@ -83,8 +87,10 @@ function medir(campo: HTMLInputElement, lado: LadoDaLista): Posicao {
   const disponivel = paraCima ? acima : abaixo;
 
   // O piso ganha do espaço disponível de propósito: uma lista de vinte pixels
-  // não serve a ninguém, e é melhor ela rolar por dentro.
-  return { paraCima, altura: Math.max(ALTURA_MINIMA, Math.min(ALTURA_DESEJADA, disponivel)) };
+  // não serve a ninguém, e é melhor ela rolar por dentro. Menos subindo numa
+  // janela: o que passa da borda de cima dela não se alcança rolando.
+  const piso = paraCima && campo.closest("dialog[open]") ? Math.min(ALTURA_MINIMA, disponivel) : ALTURA_MINIMA;
+  return { paraCima, altura: Math.max(piso, Math.min(ALTURA_DESEJADA, disponivel)) };
 }
 
 export function SelecaoBuscavel({

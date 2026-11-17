@@ -172,6 +172,7 @@ export function CampoData({
         largura: LARGURA_CALENDARIO,
         altura: ALTURA_CALENDARIO,
         alinhar: "esquerda",
+        cartao: calendarioRef.current,
       }),
     );
   }
@@ -297,8 +298,10 @@ export function CampoData({
    * novo quando ele muda de altura (outro mês com mais feriados, outra contagem).
    */
   useEffect(() => {
-    if (aberto && !paraCima) calendarioRef.current?.scrollIntoView({ block: "nearest" });
-  }, [aberto, paraCima, mesMostrado, contagem]);
+    if (aberto && lugar.alturaReal && !paraCima) {
+      calendarioRef.current?.scrollIntoView({ block: "nearest" });
+    }
+  }, [aberto, lugar.alturaReal, paraCima, mesMostrado, contagem]);
 
   /*
    * Abriu com o mouse ou o teclado: o foco vai para a caixa de digitar, com o
