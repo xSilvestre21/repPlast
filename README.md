@@ -349,6 +349,7 @@ com o Asaas sandbox.
 | `deploy/publicar.sh` | Põe uma versão no ar — ou volta uma: migrations, troca, espera o `/api/saude` |
 | `deploy/backup.sh` | `pg_dump` semanal para o S3 (o Lightsail guarda só 7 dias) |
 | `api/rotinas/lembrete-do-teste` | A rotina diária do e-mail "o teste grátis está acabando", chamada pelo cron do host |
+| `api/rotinas/conferencia-asaas` | A conferência diária de cada escritório com o Asaas, chamada pelo cron do host |
 | `.github/workflows/ci.yml` | As quatro baterias num Postgres com dono sem superusuário, como o da AWS |
 | `.github/workflows/deploy.yml` | Depois do CI verde na `main`: imagens no ECR e `publicar.sh` por SSH |
 
@@ -428,6 +429,38 @@ do próprio `app.env`, e o segredo nem passa pelo host.
 
 Cada escritório recebe uma vez só: chamar duas vezes no mesmo dia não repete o e-mail. Faltou um
 dia (o servidor fora do ar), o do dia seguinte ainda chega antes da cobrança.
+
+### A conferência diária com o Asaas
+
+O Asaas repete o webhook que falha, mas depois de várias falhas **pausa a fila inteira** — e um
+evento que o sistema não soube ligar ao escritório nunca muda nada. Toda manhã, às 7h de Brasília
+(10h UTC), cada escritório é comparado com a assinatura dele no Asaas
+(`lib/conferencia-asaas.ts`), e o que o aviso perdido teria feito, a conferência faz:
+
+- **libera** quem tem cobrança paga e nenhuma vencida, e estava bloqueado (aguardando ou em atraso);
+- **bloqueia** quem tem cobrança vencida (vira "em atraso") ou a assinatura encerrada no Asaas
+  (vira "cancelada", com o prazo do mês pago, se houver) — perguntando ao Asaas duas vezes antes;
+- **liga** a assinatura nova de quem assinou de novo e o aviso não ligou.
+
+Só grava se o escritório não mudou desde a leitura (o webhook pode chegar no meio). Não corrige,
+só **alerta**: o valor da mensalidade diferente do plano com os prepostos ativos, o escritório
+cancelado com a assinatura ainda cobrando no Asaas, e o escritório liberado sem assinatura
+nenhuma. Toda correção e todo alerta vão para o Sentry; a resposta inteira, com os nomes, fica no
+log do cron, na instância.
+
+```
+0 10 * * *  cd /opt/repplast && docker compose exec -T app node -e "fetch('http://127.0.0.1:3000/api/rotinas/conferencia-asaas',{method:'POST',headers:{authorization:'Bearer '+process.env.ROTINA_TOKEN}}).then(async r=>console.log(new Date().toISOString(),r.status,await r.text()))" >> $HOME/repplast-conferencia.log 2>&1
+```
+
+**Escritório sem cobrança.** Quem usa o sistema sem pagar, por decisão sua, leva a marca
+`semCobranca` e fica fora da conferência — sem ela, vira o alerta "liberado sem nenhuma
+assinatura" todo dia. O Val & Amaral já nasce marcado (migration `escritorio_sem_cobranca`). Para
+marcar outro, no banco, com o escape administrativo (o escritório não consegue se marcar sozinho):
+
+```sql
+SELECT set_config('app.bypass_rls', 'on', false);
+UPDATE organizacao SET "semCobranca" = true WHERE nome = 'Nome do escritório';
+```
 
 ### Publicar e voltar
 

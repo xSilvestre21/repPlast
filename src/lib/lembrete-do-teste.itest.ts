@@ -24,7 +24,8 @@ vi.mock("./email-sistema", () => ({
 }));
 
 import { dbAdministrativo } from "./db";
-import { enviarLembretesDoTeste, tokenDaRotinaConfere } from "./lembrete-do-teste";
+import { enviarLembretesDoTeste } from "./lembrete-do-teste";
+import { tokenDaRotinaConfere } from "./token-da-rotina";
 
 const admin = dbAdministrativo();
 const sufixo = randomUUID().slice(0, 8);

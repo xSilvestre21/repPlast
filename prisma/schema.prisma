@@ -209,6 +209,11 @@ model Organizacao {
   /// Quando saiu o e-mail avisando que o teste está acabando — é o que impede
   /// a rotina diária de mandar duas vezes (`api/rotinas/lembrete-do-teste`).
   lembreteTesteEm DateTime?
+  /// Usa o sistema sem pagar, por decisão do dono do RepPlast (o Val & Amaral).
+  /// A conferência diária com o Asaas (`lib/conferencia-asaas.ts`) pula quem
+  /// tem a marca — sem ela, escritório liberado sem assinatura vira alerta. Só
+  /// muda pelo caminho administrativo, como o resto da cobrança.
+  semCobranca     Boolean   @default(false)
 
   /// Contador do número do orçamento. É POR ESCRITÓRIO, e não por indústria
   /// como o do pedido: o orçamento é documento do representante para o cliente,

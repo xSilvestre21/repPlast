@@ -1,4 +1,5 @@
-import { enviarLembretesDoTeste, tokenDaRotinaConfere } from "@/lib/lembrete-do-teste";
+import { enviarLembretesDoTeste } from "@/lib/lembrete-do-teste";
+import { tokenDaRotinaConfere } from "@/lib/token-da-rotina";
 
 /**
  * A rotina diária do e-mail "o teste grátis está acabando"

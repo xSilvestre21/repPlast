@@ -70,6 +70,18 @@ export function pagamentoConfigurado(): boolean {
 }
 
 async function chamar<T>(caminho: string, init: { method: "GET" | "POST" | "DELETE"; corpo?: unknown }): Promise<T> {
+  return (await chamarOuNada<T>(caminho, { ...init, nadaNo404: false })) as T;
+}
+
+/**
+ * O mesmo, mas com `nadaNo404` o 404 volta como `null`, sem ir para o log: é a
+ * resposta esperada para a assinatura removida, que a conferência diária
+ * pergunta todo dia — como erro, cada escritório cancelado viraria um alerta.
+ */
+async function chamarOuNada<T>(
+  caminho: string,
+  init: { method: "GET" | "POST" | "DELETE"; corpo?: unknown; nadaNo404: boolean },
+): Promise<T | null> {
   const { url, chave } = configuracao();
 
   const resposta = await fetch(`${url}${caminho}`, {
@@ -83,6 +95,7 @@ async function chamar<T>(caminho: string, init: { method: "GET" | "POST" | "DELE
     cache: "no-store",
   });
 
+  if (resposta.status === 404 && init.nadaNo404) return null;
   if (!resposta.ok) {
     const corpo = await resposta.text().catch(() => "");
     console.error(`[asaas] ${init.method} ${caminho} → ${resposta.status}`, corpo);
@@ -241,6 +254,52 @@ export async function proximoVencimento(assinaturaId: string): Promise<string> {
  */
 export async function removerAssinatura(assinaturaId: string): Promise<void> {
   await chamar(`/v3/subscriptions/${encodeURIComponent(assinaturaId)}`, { method: "DELETE" });
+}
+
+/** Uma assinatura como o Asaas a vê agora — o que a conferência diária compara. */
+export interface AssinaturaNoAsaas {
+  /** ACTIVE e não removida: é a que ainda gera cobranças. */
+  ativa: boolean;
+  valor: Decimal;
+}
+
+/**
+ * A assinatura, ou `null` quando o Asaas não a conhece mais (404). A removida
+ * ainda pode voltar, com `deleted`, e também não está ativa.
+ */
+export async function assinaturaNoAsaas(assinaturaId: string): Promise<AssinaturaNoAsaas | null> {
+  const assinatura = await chamarOuNada<{ status: string; deleted?: boolean; value: number }>(
+    `/v3/subscriptions/${encodeURIComponent(assinaturaId)}`,
+    { method: "GET", nadaNo404: true },
+  );
+  if (!assinatura) return null;
+
+  return {
+    ativa: assinatura.status === "ACTIVE" && !assinatura.deleted,
+    valor: new Decimal(assinatura.value),
+  };
+}
+
+/** Uma cobrança da assinatura: o status do Asaas (PENDING, CONFIRMED, OVERDUE…) e o vencimento. */
+export interface CobrancaNoAsaas {
+  id: string;
+  status: string;
+  vencimento: string;
+}
+
+/**
+ * As cobranças que a assinatura já gerou (as futuras ainda não existem). Cem
+ * por página, o máximo do Asaas: oito anos de mensalidade numa ida só.
+ */
+export async function cobrancasDaAssinatura(assinaturaId: string): Promise<CobrancaNoAsaas[]> {
+  const lista = await chamar<{ data: { id: string; status: string; dueDate: string; deleted?: boolean }[] }>(
+    `/v3/subscriptions/${encodeURIComponent(assinaturaId)}/payments?limit=100`,
+    { method: "GET" },
+  );
+
+  return lista.data
+    .filter((cobranca) => !cobranca.deleted)
+    .map((cobranca) => ({ id: cobranca.id, status: cobranca.status, vencimento: cobranca.dueDate }));
 }
 
 /**

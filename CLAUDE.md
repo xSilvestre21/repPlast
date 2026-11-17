@@ -83,8 +83,9 @@ O erro aparece **embaixo do campo que o causou**, em português, dizendo o que f
   `SISTEMA_SMTP_PORTA`, `SISTEMA_SMTP_USUARIO`, `SISTEMA_SMTP_SENHA`, `SISTEMA_EMAIL_REMETENTE`; o
   link usa `APP_URL` (obrigatória em produção — nunca o `Host` da requisição). Ver README,
   "Esqueceu sua senha?"
-- Rotina diária: `ROTINA_TOKEN` (o cron do host chama `api/rotinas/lembrete-do-teste` com ele). Ver
-  README, "A rotina diária"
+- Rotinas diárias: `ROTINA_TOKEN` (o cron do host chama `api/rotinas/lembrete-do-teste` e
+  `api/rotinas/conferencia-asaas` com ele). Ver README, "A rotina diária" e "A conferência diária
+  com o Asaas"
 - Monitoramento (Sentry, só em produção): `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`,
   `SENTRY_AUTH_TOKEN` (segredo do build — Vercel ou GitHub Actions; source maps),
   `SENTRY_ENVIRONMENT`/`NEXT_PUBLIC_SENTRY_ENVIRONMENT` (o nome do ambiente) e `SENTRY_RELEASE` (o

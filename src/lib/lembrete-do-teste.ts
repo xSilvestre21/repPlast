@@ -15,8 +15,6 @@
 
 import "server-only";
 
-import { timingSafeEqual } from "node:crypto";
-
 import { dbAdministrativo } from "./db";
 import { enviarDoSistema, urlDoSistema } from "./email-sistema";
 import { montarEmailSistema } from "./email-sistema-html";
@@ -28,17 +26,6 @@ import { escreverDia, ultimoDiaGratis } from "./teste-gratis";
 const ANTECEDENCIA_MS = 48 * 60 * 60 * 1000;
 
 const MOEDA = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
-
-/** `Authorization: Bearer <ROTINA_TOKEN>`, comparado em tempo constante. */
-export function tokenDaRotinaConfere(cabecalho: string | null): boolean {
-  const esperado = process.env.ROTINA_TOKEN?.trim();
-  const recebido = cabecalho?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
-  if (!esperado || !recebido) return false;
-
-  const a = Buffer.from(esperado);
-  const b = Buffer.from(recebido);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
 
 export async function enviarLembretesDoTeste(agora: Date = new Date()): Promise<{ avisados: number }> {
   const db = dbAdministrativo();
